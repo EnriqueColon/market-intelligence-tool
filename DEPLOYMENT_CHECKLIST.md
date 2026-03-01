@@ -30,6 +30,12 @@ Platform-provided:
 - `VERCEL_URL`
 - `NODE_ENV`
 
+## Feature Flags
+- `ENABLED_TABS=news,market-analytics,market-research`
+
+Used to control which tabs appear in production.  
+Value is a comma-separated list of feature keys.
+
 ## API & Runtime Notes
 - Route handlers use Node runtime explicitly where needed via `export const runtime = "nodejs"`.
 - `app/api/cbre-automate/route.ts` is intentionally disabled on Vercel (`501`) because it relies on spawning a detached local process.
