@@ -1,0 +1,39 @@
+ffiec:
+  enabled: true
+  mode: api
+  auth:
+    user_id_env: FFIEC_USER_ID
+    token_env: FFIEC_TOKEN
+  params:
+    reporting_periods: ["latest"]
+    fields:
+      - RCFD1766
+      - RCFD1410
+      - RCFD1415
+      - RCFD4638
+      - RCFD3123
+
+census_resconst:
+  enabled: true
+  mode: api
+  auth:
+    api_key_env: CENSUS_API_KEY
+  params:
+    geography: ["us"]
+    metrics: ["permits", "starts", "completions"]
+
+ucc:
+  enabled: false
+  mode: per_state
+  states:
+    FL:
+      mode: scrape
+      base_url: "https://www.sunbiz.org/"
+
+foreclosures:
+  enabled: false
+  mode: per_county
+  counties:
+    "Miami-Dade,FL":
+      mode: scrape
+      portal_url: "<TODO>"

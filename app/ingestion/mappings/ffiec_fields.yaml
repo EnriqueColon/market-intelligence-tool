@@ -1,0 +1,16 @@
+fields:
+  - code: RCFD1766
+    name: Total_CRE_Loans
+    units: USD
+  - code: RCFD1410
+    name: Total_Loans_Leases
+    units: USD
+  - code: RCFD1415
+    name: Nonaccrual_Loans_Leases
+    units: USD
+  - code: RCFD4638
+    name: Net_Charge_Offs
+    units: USD
+  - code: RCFD3123
+    name: Loan_Loss_Allowance
+    units: USD

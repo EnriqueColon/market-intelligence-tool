@@ -1,0 +1,30 @@
+{
+  "jll-global-outlook-2026": {
+    "reportId": "jll-global-outlook-2026",
+    "summary": "JLL's Global Real Estate Outlook 2026 identifies six transformative forces reshaping commercial real estate: rising cost pressures driving efficiency focus, intensifying supply shortages for quality space, experience becoming the primary value driver, AI moving from pilots to implementation, buildings converging with power systems, and democratization of real estate investing. The outlook is more positive than 2025, supported by improving economic fundamentals, though organizations must strategically adapt to evolving market dynamics.",
+    "bullets": [
+      "Cost management is the top priority for 72% of corporate real estate leaders, requiring scrutiny of expenses, space optimization, and operational efficiency improvements as construction costs rise 2.7-6% globally[1]",
+      "Supply shortages will intensify across property types—office completions falling 75% in the U.S., European construction at lowest levels since 2010, with acute scarcity in Tokyo, New York, and London driving higher rental rates[1]",
+      "Experience is now the decisive value driver; 67% of employees want vibrant neighborhoods, and offices in lifestyle districts command 32% rental premiums, requiring focus on wellness, personalization, and amenity access[1]",
+      "AI adoption faces a critical reckoning in 2026—while 92% of occupiers launched pilots, only 5% achieved program goals; 60% of investors lack unified technology strategy and 70% of occupiers lack change management frameworks[1]",
+      "Energy convergence and democratization are reshaping investment: buildings shift from passive consumers to active energy resources (25-50% revenue uplift potential), while regulatory changes enable retail investors to access private real estate through 401(k)s and blockchain platforms[1]"
+    ],
+    "lastFetched": "2026-02-17T18:22:12.862Z",
+    "source": "page",
+    "error": null
+  },
+  "jll-debt-spotlight-2025-2026": {
+    "reportId": "jll-debt-spotlight-2025-2026",
+    "summary": "JLL's debt analysis highlights a structural shift toward private credit strategies as traditional lending becomes more cautious. With $3.1 trillion in global real estate debt maturing by end-2025 and a projected $270-570 billion refinancing shortfall, investors face significant opportunities across the capital stack. Credit strategies are outperforming equity on absolute yield (15 bps advantage) in the elevated interest rate environment, while more conservative underwriting (55% LTV vs. 67% pre-GFC) has reduced systemic risk.",
+    "bullets": [
+      "**Debt maturity wall and refinancing gap**: $3.1 trillion in global real estate assets have maturing debt by end-2025 ($2.1 trillion in loans, 77% in US); refinancing shortfall estimated at $270-570 billion requiring new equity injection, particularly for assets financed 2019-2021 at peak valuations",
+      "**Private credit proliferation**: Since 2020, $137.2 billion raised across 430+ closed-end debt funds (16% of CRE fundraising); debt strategies now outperform equity on absolute yield by 15 bps in current rate environment, attracting institutional capital deployment",
+      "**Sector maturity rankings**: Living/multi-housing sector leads maturities at 25% globally, followed by office at 23%; living sector shows resilience with strong 2025 investment activity, while office faces greater refinancing pressure",
+      "**Conservative lending cycle reduces systemic risk**: Average US LTV of 55% (14 points below 2007 peak) and diversified lender base (debt funds, insurers, agencies) versus pre-GFC CMBS concentration (54%) indicate more balanced market structure",
+      "**Actionable opportunities**: Mezzanine financing, rescue capital, and distressed debt structures positioned to capitalize on maturity-driven transactions; private credit expected to proliferate as traditional lenders remain subdued, particularly in Asia Pacific"
+    ],
+    "lastFetched": "2026-02-17T18:25:02.080Z",
+    "source": "page",
+    "error": null
+  }
+}

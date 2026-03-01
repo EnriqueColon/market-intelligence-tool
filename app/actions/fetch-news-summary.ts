@@ -1,0 +1,499 @@
+"use server"
+
+import { classifyArticleAccess, type AccessStatus, KNOWN_PAYWALL_DOMAINS } from "@/app/actions/news-access"
+import { findOpenBackfillSources } from "@/app/actions/fetch-open-backfill"
+
+export type NewsSummaryInput = {
+  title: string
+  url?: string
+  source?: string
+  date?: string
+  summary?: string
+}
+
+export type NewsBrief = {
+  title: string
+  url?: string
+  source?: string
+  date?: string
+
+  access_status: AccessStatus
+  detection_reason: string
+  http_status: number
+  content_length_chars: number
+  extracted_text_length_chars: number
+
+  summarization_mode: "full_summary" | "intelligence_brief" | "paywall_signal"
+  confidence_label: "High" | "Medium" | "Low"
+
+  banner?: string
+  executiveSummary: string
+  keyBullets: string[]
+  whyItMatters: string[]
+  entities: string[]
+  redFlags: string[]
+  followUps: string[]
+  confidence: number
+  generatedAt: string
+  relatedOpenSources?: Array<{ title: string; url: string }>
+  notes: string[]
+}
+
+function asStringArray(value: unknown, max = 10): string[] {
+  if (!Array.isArray(value)) return []
+  const out: string[] = []
+  for (const item of value) {
+    if (typeof item !== "string") continue
+    const cleaned = item.replace(/^\s*[-•]\s*/g, "").trim()
+    if (!cleaned) continue
+    out.push(cleaned)
+    if (out.length >= max) break
+  }
+  return out
+}
+
+function clampNumber(n: unknown, lo: number, hi: number, fallback: number) {
+  const v = typeof n === "number" ? n : typeof n === "string" ? Number(n) : NaN
+  if (Number.isNaN(v)) return fallback
+  return Math.max(lo, Math.min(hi, v))
+}
+
+function normalizeUrlForKey(url: string) {
+  const raw = (url || "").trim()
+  if (!raw) return ""
+  try {
+    const u = new URL(raw)
+    u.hash = ""
+    const dropPrefixes = ["utm_", "utm-", "fbclid", "gclid", "mc_cid", "mc_eid", "cmpid"]
+    const keys = Array.from(u.searchParams.keys())
+    for (const k of keys) {
+      const lk = k.toLowerCase()
+      if (dropPrefixes.some((p) => lk.startsWith(p))) u.searchParams.delete(k)
+    }
+    u.hostname = u.hostname.replace(/^www\./, "").toLowerCase()
+    if (u.pathname !== "/" && u.pathname.endsWith("/")) u.pathname = u.pathname.slice(0, -1)
+    return u.toString()
+  } catch {
+    return raw
+  }
+}
+
+function safeHost(url: string) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "").toLowerCase()
+  } catch {
+    return ""
+  }
+}
+
+function isKnownPaywallHost(host: string) {
+  return (KNOWN_PAYWALL_DOMAINS as readonly string[]).some((d) => host === d || host.endsWith(`.${d}`))
+}
+
+function parseRelatedFromModel(value: unknown): Array<{ title: string; url: string }> {
+  if (!Array.isArray(value)) return []
+  const out: Array<{ title: string; url: string }> = []
+  for (const v of value) {
+    if (!v || typeof v !== "object") continue
+    const title = typeof (v as any).title === "string" ? (v as any).title.trim() : ""
+    const url = typeof (v as any).url === "string" ? (v as any).url.trim() : ""
+    if (!title || !url) continue
+    out.push({ title, url })
+    if (out.length >= 6) break
+  }
+  return out
+}
+
+async function validateOpenSources(
+  sources: Array<{ title: string; url: string }>
+): Promise<Array<{ title: string; url: string }>> {
+  // Concurrency-limited validation to keep latency bounded.
+  const out: Array<{ title: string; url: string }> = []
+  const seen = new Set<string>()
+  let idx = 0
+  const limit = 4
+
+  const worker = async () => {
+    while (idx < sources.length) {
+      const i = idx
+      idx += 1
+      const s = sources[i]
+      const u = normalizeUrlForKey(s.url)
+      if (!u) continue
+      const host = safeHost(u)
+      if (!host) continue
+      if (host === "news.google.com" || host.endsWith(".news.google.com")) continue
+      if (isKnownPaywallHost(host)) continue
+      if (seen.has(u)) continue
+      try {
+        const c = await classifyArticleAccess({ url: u, title: s.title, includeExtractedText: false })
+        if (c.access_status === "paywalled") continue
+        const resolved = normalizeUrlForKey((c.resolved_url || u).trim())
+        const resolvedHost = safeHost(resolved)
+        if (!resolved || !resolvedHost) continue
+        if (resolvedHost === "news.google.com" || resolvedHost.endsWith(".news.google.com")) continue
+        if (isKnownPaywallHost(resolvedHost)) continue
+        if (seen.has(resolved)) continue
+        seen.add(resolved)
+        out.push({ title: s.title, url: resolved })
+      } catch {
+        // If we can't fetch/classify (bot checks, transient network), still include the link
+        // as long as it passes domain filters. The user can click to validate.
+        seen.add(u)
+        out.push({ title: s.title, url: u })
+      }
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(limit, sources.length) }, () => worker()))
+  return out.slice(0, 5)
+}
+
+function safeTruncate(text: string, maxChars: number) {
+  if (text.length <= maxChars) return text
+  return `${text.slice(0, maxChars)}\n\n[TRUNCATED]`
+}
+
+function tokenize(title: string) {
+  return (title || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]+/g, " ")
+    .split(" ")
+    .filter((t) => t.length >= 5)
+    .slice(0, 8)
+}
+
+async function fetchRelatedFromRss(level: "national" | "florida" | "miami", title: string, excludeUrl?: string) {
+  // Preferred but optional: find related open-ish sources from the same feed (not web search).
+  try {
+    const tokens = tokenize(title).slice(0, 4)
+    if (!tokens.length) return []
+    const q = tokens.join(" ")
+    const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=en-US&gl=US&ceid=US:en`
+    const res = await fetch(rssUrl, { cache: "no-store" })
+    if (!res.ok) return []
+    const xml = await res.text()
+    const itemRegex = /<item>([\s\S]*?)<\/item>/g
+    const extractTag = (block: string, tag: string) => {
+      const pattern = `<(?:[a-zA-Z0-9]+:)?${tag}>([\\s\\S]*?)</(?:[a-zA-Z0-9]+:)?${tag}>`
+      const match = block.match(new RegExp(pattern, "i"))
+      if (!match) return ""
+      return match[1].replace(/<!\\[CDATA\\[(.*?)\\]\\]>/g, "$1").trim()
+    }
+    const rawItems: Array<{ title: string; url: string }> = []
+    let m: RegExpExecArray | null
+    while ((m = itemRegex.exec(xml))) {
+      const block = m[1]
+      const t = extractTag(block, "title") || "Untitled"
+      const u = extractTag(block, "link") || ""
+      if (!u) continue
+      if (excludeUrl && u === excludeUrl) continue
+      rawItems.push({ title: t, url: u })
+      if (rawItems.length >= 10) break
+    }
+
+    const out: Array<{ title: string; url: string }> = []
+    for (const it of rawItems) {
+      try {
+        const c = await classifyArticleAccess({ url: it.url, title: it.title, includeExtractedText: false })
+        const resolved = (c.resolved_url || it.url || "").trim()
+        const host = (() => {
+          try {
+            return new URL(resolved).hostname.replace(/^www\./, "").toLowerCase()
+          } catch {
+            return ""
+          }
+        })()
+        if (host === "news.google.com" || host.endsWith(".news.google.com")) continue
+        const isKnownPaywall = (KNOWN_PAYWALL_DOMAINS as readonly string[]).some(
+          (d) => host === d || host.endsWith(`.${d}`)
+        )
+        if (c.access_status === "paywalled") continue
+        if (isKnownPaywall) continue
+        out.push({ title: it.title, url: resolved })
+        if (out.length >= 3) break
+      } catch {
+        // ignore
+      }
+    }
+
+    return out
+  } catch {
+    return []
+  }
+}
+
+async function callPerplexityJson(prompt: string, notes: string[]) {
+  const API_KEY = process.env.PERPLEXITY_API_KEY?.trim()
+  if (!API_KEY) return null
+  try {
+    const res = await fetch("https://api.perplexity.ai/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "sonar",
+        messages: [
+          { role: "system", content: "Return ONLY valid JSON. Do not invent facts." },
+          { role: "user", content: prompt },
+        ],
+        temperature: 0.2,
+        max_tokens: 1200,
+      }),
+      cache: "no-store",
+    })
+    if (!res.ok) {
+      notes.push(`Perplexity error: ${res.status}`)
+      return null
+    }
+    const data = await res.json()
+    const content = data?.choices?.[0]?.message?.content
+    if (typeof content !== "string") return null
+    const match = content.match(/\{[\s\S]*\}/)
+    if (!match) return null
+    return JSON.parse(match[0])
+  } catch (err) {
+    const message = err instanceof Error ? err.message : typeof err === "string" ? err : "Unknown error"
+    notes.push(`Perplexity call failed: ${message}`)
+    return null
+  }
+}
+
+export async function summarizeNewsItem(
+  input: NewsSummaryInput & { level?: "national" | "florida" | "miami" }
+): Promise<NewsBrief> {
+  const notes: string[] = []
+  const title = (input.title || "").trim() || "Untitled"
+  const url = (input.url || "").trim() || undefined
+  const source = input.source
+  const date = input.date
+  const snippet = (input.summary || "").trim()
+
+  const access = url
+    ? await classifyArticleAccess({ url, title, includeExtractedText: true })
+    : {
+        access_status: "partial" as const,
+        http_status: 0,
+        content_length_chars: 0,
+        extracted_text_length_chars: snippet.length,
+        detection_reason: "missing_url",
+        extracted_text: snippet,
+      }
+
+  const access_status = access.access_status
+  const summarization_mode =
+    access_status === "open"
+      ? "full_summary"
+      : access_status === "partial"
+        ? "intelligence_brief"
+        : "paywall_signal"
+  const confidence_label: "High" | "Medium" | "Low" =
+    access_status === "open" ? "High" : access_status === "partial" ? "Medium" : "Low"
+
+  const banner =
+    access_status === "open"
+      ? undefined
+      : "This source is paywalled or limited-access. This brief uses only publicly available information."
+
+  const extractedText = (access.extracted_text || "").trim()
+  const clippedText = extractedText ? safeTruncate(extractedText, 18_000) : ""
+
+  // Optional related sources (open/partial only) when access is limited.
+  const rssRelated =
+    access_status === "open" ? [] : await fetchRelatedFromRss(input.level ?? "national", title, url)
+
+  const backfillRelated =
+    access_status === "open"
+      ? []
+      : await findOpenBackfillSources({
+          title,
+          date,
+          level: input.level ?? "national",
+          excludeUrl: url,
+        })
+
+  if (summarization_mode === "paywall_signal") {
+    // Try to provide actionable open alternatives even when the main link is blocked.
+    const relatedPrompt = `You are a market intelligence analyst. The primary source is paywalled/blocked.
+Find 3-5 RELATED OPEN-ACCESS sources (avoid paywalls) from the past 7 days that likely cover the same topic/event.
+Return ONLY valid JSON:
+{
+  "relatedOpenSources": [{"title": "...", "url": "https://..."}]
+}
+
+HEADLINE: ${title}
+SOURCE: ${source || "Unknown"}
+DATE: ${date || "Unknown"}
+SNIPPET: ${snippet || "[none]"}`
+
+    const relatedParsed = await callPerplexityJson(relatedPrompt, notes)
+    const modelRelated = parseRelatedFromModel(relatedParsed?.relatedOpenSources)
+    const validatedModelRelated = modelRelated.length ? await validateOpenSources(modelRelated) : []
+    const merged = [...backfillRelated, ...rssRelated, ...validatedModelRelated]
+    const relatedOpenSources = merged.length ? merged.slice(0, 5) : undefined
+
+    return {
+      title,
+      url,
+      source,
+      date,
+      access_status,
+      detection_reason: access.detection_reason,
+      http_status: access.http_status,
+      content_length_chars: access.content_length_chars,
+      extracted_text_length_chars: access.extracted_text_length_chars,
+      summarization_mode,
+      confidence_label,
+      banner:
+        "This source is paywalled or limited-access. This brief is grounded in open sources (when available) plus any public snippet/preview.",
+      executiveSummary: snippet
+        ? `${title} — ${snippet}`.slice(0, 360)
+        : `${title}. This page appears paywalled or blocked; summary uses only public info.`.slice(0, 360),
+      keyBullets: [
+        `Access: paywalled/blocked (${access.detection_reason}).`,
+        source ? `Source: ${source}.` : "Source not provided.",
+        date ? `Date: ${date}.` : "Date not provided.",
+      ],
+      whyItMatters: [
+        "This headline may signal distress activity (special servicing, delinquencies, note sales, refinancing stress).",
+        "Use open sources to confirm the facts before acting.",
+      ],
+      entities: [],
+      redFlags: [
+        "The full article could not be accessed; key details may be missing.",
+        "Treat conclusions as directional until validated by an open source.",
+      ],
+      followUps: [
+        "Find 1–2 open sources covering the same event.",
+        "Confirm asset type, location, transaction size, and named counterparties.",
+      ],
+      confidence: 20,
+      generatedAt: new Date().toISOString(),
+      relatedOpenSources,
+      notes,
+    }
+  }
+
+  if (summarization_mode === "intelligence_brief") {
+    const prompt = `You are a meticulous market intelligence analyst focused on distressed commercial real estate debt and related counterparties.
+
+The source is limited-access or only partially readable. Create a "bullet-proof" briefing using ONLY publicly available information below.
+Do NOT invent facts. If uncertain, put it in redFlags and lower confidence.
+
+TITLE: ${title}
+SOURCE: ${source || "Unknown"}
+DATE: ${date || "Unknown"}
+SNIPPET/PREVIEW: ${snippet || "[none]"}
+PARTIAL EXTRACTED TEXT (may be limited): ${clippedText || "[none]"}
+
+Return JSON with EXACT keys:
+{
+  "executiveSummary": "2-4 sentences, plain English, no hype",
+  "keyBullets": ["... up to 8 bullets ..."],
+  "whyItMatters": ["... up to 6 bullets ..."],
+  "entities": ["... named entities if present ..."],
+  "redFlags": ["... uncertainties, missing info, access limits ..."],
+  "followUps": ["... concrete questions to validate/act ..."],
+  "relatedOpenSources": [{"title":"...","url":"..."}],
+  "confidence": 0-100
+}`
+    const parsed = await callPerplexityJson(prompt, notes)
+    const exec =
+      parsed && typeof parsed.executiveSummary === "string" && parsed.executiveSummary.trim()
+        ? parsed.executiveSummary.trim()
+        : (snippet ? `${title} — ${snippet}` : title).slice(0, 320)
+
+    const modelRelated = parseRelatedFromModel(parsed?.relatedOpenSources)
+    const validatedModelRelated = modelRelated.length ? await validateOpenSources(modelRelated) : []
+    const merged = [...backfillRelated, ...rssRelated, ...validatedModelRelated]
+    const relatedOpenSources = merged.length ? merged.slice(0, 5) : undefined
+
+    return {
+      title,
+      url,
+      source,
+      date,
+      access_status,
+      detection_reason: access.detection_reason,
+      http_status: access.http_status,
+      content_length_chars: access.content_length_chars,
+      extracted_text_length_chars: access.extracted_text_length_chars,
+      summarization_mode,
+      confidence_label,
+      banner,
+      executiveSummary: exec,
+      keyBullets: asStringArray(parsed?.keyBullets, 8),
+      whyItMatters: asStringArray(parsed?.whyItMatters, 6),
+      entities: asStringArray(parsed?.entities, 12),
+      redFlags: asStringArray(parsed?.redFlags, 8),
+      followUps: asStringArray(parsed?.followUps, 8),
+      confidence: clampNumber(parsed?.confidence, 0, 100, snippet ? 55 : 45),
+      generatedAt: new Date().toISOString(),
+      relatedOpenSources,
+      notes,
+    }
+  }
+
+  // full_summary
+  const prompt = `You are a meticulous market intelligence analyst focused on distressed commercial real estate debt and related counterparties.
+
+Summarize the content below into a "bullet-proof" briefing.
+Do NOT invent facts. If key details are missing, put them in redFlags and lower confidence.
+
+TITLE: ${title}
+SOURCE: ${source || "Unknown"}
+DATE: ${date || "Unknown"}
+
+EXTRACTED TEXT (publicly fetched):
+${clippedText || "[No extracted text]"}
+
+Return JSON with EXACT keys:
+{
+  "executiveSummary": "2-4 sentences, plain English, no hype",
+  "keyBullets": ["... up to 8 bullets ..."],
+  "whyItMatters": ["... up to 6 bullets ..."],
+  "entities": ["... named entities if present ..."],
+  "redFlags": ["... uncertainties, missing info, access limits ..."],
+  "followUps": ["... concrete questions to validate/act ..."],
+  "relatedOpenSources": [{"title":"...","url":"..."}],
+  "confidence": 0-100
+}`
+  const parsed = await callPerplexityJson(prompt, notes)
+  const exec =
+    parsed && typeof parsed.executiveSummary === "string" && parsed.executiveSummary.trim()
+      ? parsed.executiveSummary.trim()
+      : (snippet || title).slice(0, 320)
+
+  const modelRelated = parseRelatedFromModel(parsed?.relatedOpenSources)
+  const validatedModelRelated = modelRelated.length ? await validateOpenSources(modelRelated) : []
+  const merged = [...backfillRelated, ...rssRelated, ...validatedModelRelated]
+  const relatedOpenSources = merged.length ? merged.slice(0, 5) : undefined
+
+  return {
+    title,
+    url,
+    source,
+    date,
+    access_status,
+    detection_reason: access.detection_reason,
+    http_status: access.http_status,
+    content_length_chars: access.content_length_chars,
+    extracted_text_length_chars: access.extracted_text_length_chars,
+    summarization_mode,
+    confidence_label,
+    banner,
+    executiveSummary: exec,
+    keyBullets: asStringArray(parsed?.keyBullets, 8),
+    whyItMatters: asStringArray(parsed?.whyItMatters, 6),
+    entities: asStringArray(parsed?.entities, 12),
+    redFlags: asStringArray(parsed?.redFlags, 8),
+    followUps: asStringArray(parsed?.followUps, 8),
+    confidence: clampNumber(parsed?.confidence, 0, 100, 70),
+    generatedAt: new Date().toISOString(),
+    relatedOpenSources,
+    notes,
+  }
+}
+

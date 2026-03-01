@@ -1,0 +1,63 @@
+{
+  "cacheKey": "industry_outlook:v1",
+  "cachedAt": "2026-02-19T15:27:07.480Z",
+  "payload": {
+    "keyThemes": [
+      "Distress and refinancing pressure in CRE debt",
+      "Selective liquidity and loan workouts",
+      "Note sales and foreclosure pipelines"
+    ],
+    "facts": {
+      "national": "Insufficient retrieved sources to report verified facts.",
+      "florida": "Insufficient retrieved sources to report verified facts.",
+      "miami": "Insufficient retrieved sources to report verified facts."
+    },
+    "analysis": {
+      "national": "LLM analysis (assumptions noted): Assumption: insufficient sources retrieved; unable to provide a verified outlook.",
+      "florida": "LLM analysis (assumptions noted): Assumption: insufficient sources retrieved; unable to provide a verified outlook.",
+      "miami": "LLM analysis (assumptions noted): Assumption: insufficient sources retrieved; unable to provide a verified outlook."
+    },
+    "sources": [
+      {
+        "title": "Lenders to Commercial Real Estate Owners: Pay Up Now - The Wall Street Journal",
+        "url": "https://news.google.com/rss/articles/CBMiqwNBVV95cUxOQVE2S2pxaVQ2VjAxRm5DOW4xdmU1ZkdhS1NVZmFlNnUyY2ZDdDNOVUYxVkVhN01sQ1NrUmdyWWhBamdSVE9UU0ZwYTRJdE5LM0gybFVSYnZaTlRsd3dMMDdkTDVteUFlaHpIY3hiR2Rfal84SVhHa0J1YTUxY0JEWHpqYlVnak9ObHAwM0NxalE0cnhEYjhCeEJKaDJDaTBOSzkxTEkwR2x1a3gzbGtWQ0xMaHNvbUh3UnIyRTRraGl1LVprQm5ydm5TS2VuLTRnOXlLUkd2MWNiQXBfYm90LUNnVGVkUUdfei14TGhZRktpYTJCdUR5MFNYREliR0xqd0VHQW5mcUVMT01wV2NtU2QwNGVWMVg3VjNBLVJaQXIydWlUTk03VlBuaUhsUk5qUVpBaE51SkwyVGhrV21YdlRXeXRYX0Y2czFnQUZBYW9iYzViSTdsbzdsV0xwNmdqVTRjbTVYdEdRVEM2LTVmbEhQbEd6d29sMkM3ZVc4ZGFUVzlqbDFnaUhrOFIzbjhHYjh2Wl9TSlhod3YtQ29INjI5VlE2U25KS0I0?oc=5"
+      },
+      {
+        "title": "Delinquency Rates for Commercial Properties Decreased in the Third Quarter of 2025 - mba.org",
+        "url": "https://news.google.com/rss/articles/CBMi3gFBVV95cUxNSjl3Umt1NkN2emgwU254SzdKS0MwdWVyOFF6MXpBOUYwWVNsaUppc3MtYWpfd3V5eXZUWFJOYTdYcXRzREU5R0VVUU9FSXljS29Zc2w3eDhPUWZhdUV4ZXRySG5SRXBiYWliZ2VXUjFIc1F5NkZtb3ZET2dsVkRIbjlBU3ZtQzQ3VFh0UmN6czNLcWVSaGpFRzAxYzE2WG9BRm96VjdWWlVSZ01WVDR0cUc1bW8wa1RZdzY2YzFpZUNsR1o4THdrajhyZjRvSndkNlNmYTlZNERlcUFvNXc?oc=5"
+      },
+      {
+        "title": "Multifamily drives increase in CRE servicing, delinquency rates - Multifamily Dive",
+        "url": "https://news.google.com/rss/articles/CBMinAFBVV95cUxOQmsxaFB6Y1hoSzA0a2xfVkEzbTY3czFWUVRQZFVSR0pVZ3hoU2tQTEE5bTRSd1RxcDFIc3czOENxZUJxLUQ3dXhieXoyaktOdjZzdk1sR1VObEtGQ3NiNzZ6YmM0UE9NWGU0TDBrRGVMMkFkUGVRVVhzTVd6and2VjlVbWNzUnE0eGFibTdFaENXZUNGb0Y3TkRhRDk?oc=5"
+      },
+      {
+        "title": "2026 commercial real estate outlook - Deloitte",
+        "url": "https://news.google.com/rss/articles/CBMipgFBVV95cUxPRGxXd0k5OHVzU0hSeGtXUTFuRVJTdUpIVnZsc3pxWjJRdUlmSVF0ZWJ2bUxsR2EtOWUyVjdqVW5Gc291TW8tTkxEanZDWlphbEdGcG9jYll1QUhwR0NJekRvMlFJMjJwbEtxTlFuMTItRGdWUE1aVFdHdXowclhxdkdvRWVKcURaU3Y1SHBOVzMwTG80d3lXdzhISGQ4TElGQWY0elVn?oc=5"
+      },
+      {
+        "title": "Miami Beach condo-hotel files for bankruptcy to stop $24 million foreclosure - The Business Journals",
+        "url": "https://news.google.com/rss/articles/CBMiqgFBVV95cUxPb1k3QUtabnN0R0JacFh2WUtTTnQ4UldHQW1TcDlDTFlCOEx3UHZsaFNsX2pOWmVZTWZFc3FIVk50d3lLdEVaUDZpWXN4N19rTmFWV2dnc09IYXdxb3VqdjFRZ001UFhSXy11bC0zcHZwTkpIRDUwN0tuUFBhR08tY29mYUpnYnlid0tnYkVPYXRJdFVtSElKU0R2bTRtSWxwcDU2STlNYWRDUQ?oc=5"
+      },
+      {
+        "title": "Miami Resort Hit With $23.67M Foreclosure Judgment - Connect CRE",
+        "url": "https://news.google.com/rss/articles/CBMiiwFBVV95cUxQZTEwY2FlWGtRbV9FTDhhb1pnS2JiWENycW9OV2VkOWNRTDRhNEUxQ1NubmlDdk9MaTZJRlB5OUQtMEZENXRoT2V2NTRHeE1QbFNfNGhRdkFDVVRCbFJIeVBaV0pBamo4UGY2R3JWUHc4UTgwOWVIWEE2THVjS1FYMHk1X1NMdVRULTVj?oc=5"
+      },
+      {
+        "title": "Oceanfront resort could be seized in $26 million foreclosure lawsuit - The Business Journals",
+        "url": "https://news.google.com/rss/articles/CBMirAFBVV95cUxPTDg0STViTTl0WTl1UlhHbm5nclAtbWZvOUxLbnQ1SkRob28xOGFOLTRLTV9rcUVHcldzQlYxNndoQ05fT2xrb1dHdTZxNmkwMC1pRlk5U3ZPMWNCa1o3T3lmc3NUc3BOYzduNkpSRmNMTnZ3aVpCc2VDT0dVQTVQaGZlRmM0WmVuNUYwaGJHZ21KMDZCM2pfM3JLOWxDWFhrdFdabS15V1VpTldj?oc=5"
+      },
+      {
+        "title": "What CREFC Miami Revealed About CRE Debt Markets In 2026 - Altus Group",
+        "url": "https://news.google.com/rss/articles/CBMimAFBVV95cUxPcUM1NHd0QzE0M0x1SW43T3JPSXZDMkZuWkhNUFVOZlprWVRnYy1fZG5fSEUxWFIxTi1GeXdMTHF2TFF1NE5JZVE1MHU4dVBLeF9MS2dMMFlqR3V4VmNLNGN5VldwY0htZEdFWHpILU44NkQxaTFBY0h1VU9vZkp5NE9CajBJMDlwWF9LTHVsdHFrVDkxcXJLQg?oc=5"
+      },
+      {
+        "title": "U.S. East Coast Office CRE Recovery: Running at Different Speeds - TD Economics - Canada",
+        "url": "https://news.google.com/rss/articles/CBMigwFBVV95cUxPZllULUFVblNMaW9JSmF3RVR1aXpSbnhRaGdHelZDRFJiM3hCa3BpVlpvRDBDck8zNHRqaDFaZkpZT2ZDVnJ4eFhhMHdSSGFOTmdtR0dLTC1tSUZ1VTV5c0RzaFlBWU0xTmRIeWQ2eXJOZHgwQUZCVVJRV0VWeUo3emJLcw?oc=5"
+      },
+      {
+        "title": "Former NFL, UCF player's shuttered Miami Grill in Orlando faces foreclosure sale - The Business Journals",
+        "url": "https://news.google.com/rss/articles/CBMiqAFBVV95cUxOSFB2Smd4TWRUa0phSmlUV04ySk5xeXpCUENEbzZFOGRrT0NSbXh6cmIySTgzaW9uVEoyRlFDajd3Q1B0dHFWLXQyenVkUjdpazM5dHdwb3ljRnJWXy1yeEhLQjFDRGR3YWo4UmVyR2NDV3pFM1VIT2VVekEzVkx0b2pVX2xBV3p5VmNPY3N5MWJtY0M0Ql9uclJWbFV5MHZ3WjFqRzV0S3M?oc=5"
+      }
+    ]
+  }
+}

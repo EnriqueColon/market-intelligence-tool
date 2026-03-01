@@ -1,0 +1,453 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  /* Elementor-style: Safe Harbor / firm colors */
+  --color-primary: #006D95;
+  --color-secondary: #003664;
+  --color-text: #000000;
+  --color-accent: #1C92A8;
+  --color-white: #FFFFFF;
+  --color-muted: #A3A3A3;
+  /* Typography */
+  --font-heading: "Trebuchet MS", system-ui, sans-serif;
+  --font-body: var(--font-montserrat, "Montserrat"), system-ui, sans-serif;
+  --text-primary-size: 44px;
+  --text-secondary-size: 38px;
+  --text-body-size: 16px;
+  --text-accent-size: 15px;
+  /* Layout */
+  --container-max-width: 1100px;
+  --section-padding-y: 100px;
+  --section-padding-x: 20px;
+  --widgets-spacing: 20px;
+  --row-gap: 60px;
+  /* Theme mapping */
+  --background: oklch(1 0 0);
+  --foreground: var(--color-text);
+  --card: oklch(1 0 0);
+  --card-foreground: var(--color-text);
+  --popover: oklch(1 0 0);
+  --popover-foreground: var(--color-text);
+  --primary: var(--color-primary);
+  --primary-foreground: var(--color-white);
+  --secondary: var(--color-secondary);
+  --secondary-foreground: var(--color-white);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: var(--color-muted);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: var(--color-primary);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.577 0.245 27.325);
+  --border: rgba(0, 109, 149, 0.35);
+  --input: rgba(0, 109, 149, 0.35);
+  --ring: rgba(0, 109, 149, 0.4);
+  --chart-1: #006D95;
+  --chart-2: #0088b3;
+  --chart-3: #005a7a;
+  --chart-4: #00a3cc;
+  --chart-5: #004d6b;
+  --radius: 0.625rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: #006D95;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.145 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.145 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.985 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.396 0.141 25.723);
+  --destructive-foreground: oklch(0.637 0.237 25.331);
+  --border: oklch(0.269 0 0);
+  --input: oklch(0.269 0 0);
+  --ring: oklch(0.439 0 0);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: #006D95;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(0.269 0 0);
+  --sidebar-ring: oklch(0.439 0 0);
+}
+
+@theme inline {
+  /* Elementor-style typography */
+  --font-heading: "Trebuchet MS", system-ui, sans-serif;
+  --font-body: var(--font-montserrat, "Montserrat"), system-ui, sans-serif;
+  /* Elementor-style: #006D95 primary, #000000 text */
+  --color-background: var(--background);
+  --color-foreground: #000000;
+  --color-card: var(--card);
+  --color-card-foreground: #006D95;
+  --color-popover: var(--popover);
+  --color-popover-foreground: #006D95;
+  --color-primary: #006D95;
+  --color-primary-foreground: #FFFFFF;
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: #006D95;
+  --color-muted: var(--muted);
+  --color-muted-foreground: rgba(0, 109, 149, 0.85);
+  --color-accent: var(--accent);
+  --color-accent-foreground: #006D95;
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: rgba(0, 109, 149, 0.35);
+  --color-input: rgba(0, 109, 149, 0.35);
+  --color-ring: rgba(0, 109, 149, 0.4);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-body);
+    font-size: var(--text-body-size);
+    line-height: 1.5;
+    color: var(--color-text);
+  }
+}
+
+/* Elementor-style typography utilities */
+.font-heading {
+  font-family: var(--font-heading);
+}
+.font-body {
+  font-family: var(--font-body);
+}
+
+/* Force firm colors at root */
+html:not(.dark) {
+  --foreground: #000000;
+  --primary: #006D95;
+  --primary-foreground: #FFFFFF;
+  --border: rgba(0, 109, 149, 0.35);
+  --muted-foreground: #A3A3A3;
+}
+
+/* CBRE Find tool – full color schema: #006D95, #FFFFFF */
+.cbre-find-tool {
+  --cbre-primary: #006D95;
+  --cbre-primary-foreground: #FFFFFF;
+}
+.cbre-find-tool {
+  border: 2px solid var(--cbre-primary) !important;
+  background: linear-gradient(to bottom, rgba(0, 109, 149, 0.04), var(--background)) !important;
+}
+.cbre-find-tool [data-slot="dialog-title"] {
+  color: var(--cbre-primary) !important;
+}
+.cbre-find-tool [data-slot="dialog-description"] {
+  color: var(--cbre-primary) !important;
+  opacity: 0.9;
+}
+.cbre-find-tool [data-slot="tabs-list"] {
+  background: rgba(0, 109, 149, 0.08) !important;
+  border: 1px solid var(--cbre-primary) !important;
+}
+.cbre-find-tool [data-slot="tabs-trigger"] {
+  color: var(--cbre-primary) !important;
+}
+.cbre-find-tool [data-slot="tabs-trigger"][data-state="active"] {
+  background: var(--cbre-primary) !important;
+  color: var(--cbre-primary-foreground) !important;
+  border-color: var(--cbre-primary) !important;
+}
+.cbre-find-tool select,
+.cbre-find-tool input {
+  border-color: var(--cbre-primary) !important;
+}
+.cbre-find-tool select:focus,
+.cbre-find-tool input:focus {
+  border-color: var(--cbre-primary) !important;
+  box-shadow: 0 0 0 2px rgba(0, 109, 149, 0.25) !important;
+  outline: none !important;
+}
+.cbre-find-tool label {
+  color: var(--cbre-primary) !important;
+}
+.cbre-find-tool button[data-slot="button"]:not([class*="ghost"]) {
+  background: var(--cbre-primary) !important;
+  color: var(--cbre-primary-foreground) !important;
+  border-color: var(--cbre-primary) !important;
+}
+.cbre-find-tool button[data-slot="button"]:not([class*="ghost"]):hover {
+  background: #005a7a !important;
+  border-color: #005a7a !important;
+  color: var(--cbre-primary-foreground) !important;
+}
+.cbre-find-tool button[data-slot="button"][class*="outline"] {
+  background: transparent !important;
+  border-color: var(--cbre-primary) !important;
+  color: var(--cbre-primary) !important;
+}
+.cbre-find-tool button[data-slot="button"][class*="outline"]:hover {
+  background: rgba(0, 109, 149, 0.1) !important;
+}
+.cbre-find-tool button[data-slot="button"][class*="ghost"] {
+  color: var(--cbre-primary) !important;
+  border-color: transparent !important;
+}
+.cbre-find-tool button[data-slot="button"][class*="ghost"]:hover {
+  background: rgba(0, 109, 149, 0.08) !important;
+  color: var(--cbre-primary) !important;
+}
+.cbre-find-tool a {
+  color: var(--cbre-primary) !important;
+}
+.cbre-find-tool [data-slot="badge"] {
+  background: var(--cbre-primary) !important;
+  color: var(--cbre-primary-foreground) !important;
+  border-color: var(--cbre-primary) !important;
+}
+.cbre-find-tool [data-slot="badge"][class*="secondary"] {
+  background: rgba(0, 109, 149, 0.2) !important;
+  color: var(--cbre-primary) !important;
+}
+.cbre-find-tool [data-slot="badge"][class*="outline"] {
+  border-color: var(--cbre-primary) !important;
+  color: var(--cbre-primary) !important;
+}
+.cbre-find-tool li {
+  border-color: var(--cbre-primary) !important;
+}
+.cbre-find-tool .border-t {
+  border-color: var(--cbre-primary) !important;
+}
+.cbre-find-tool .text-muted-foreground {
+  color: var(--cbre-primary) !important;
+  opacity: 0.9;
+}
+.cbre-find-tool .space-y-3 > p.text-sm.font-medium {
+  color: var(--cbre-primary) !important;
+}
+
+/* Market Intelligence Tool – Elementor-style: #006D95, #003664, #000 */
+.market-intelligence-tool {
+  --mit-foreground: #000000;
+  --mit-foreground-muted: #A3A3A3;
+  --mit-accent: #006D95;
+  --mit-secondary: #003664;
+  --mit-border: rgba(0, 109, 149, 0.18);
+  --mit-border-strong: rgba(0, 109, 149, 0.35);
+  --mit-bg-subtle: rgba(0, 109, 149, 0.04);
+  --mit-bg-card: #ffffff;
+}
+.market-intelligence-tool,
+.market-intelligence-tool .text-foreground {
+  color: var(--mit-foreground) !important;
+}
+.market-intelligence-tool .text-muted-foreground {
+  color: var(--mit-foreground-muted) !important;
+}
+.market-intelligence-tool {
+  background: #fafbfc !important;
+}
+.market-intelligence-tool [class*="border-border"],
+.market-intelligence-tool [class*="border-input"] {
+  border-color: var(--mit-border) !important;
+}
+.market-intelligence-tool [data-slot="card"],
+.market-intelligence-tool .border-\[\#006D95\] {
+  border-color: var(--mit-border-strong) !important;
+}
+.market-intelligence-tool [data-slot="card"] {
+  background: var(--mit-bg-card) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+}
+.market-intelligence-tool .text-primary,
+.market-intelligence-tool a.text-primary,
+.market-intelligence-tool a[class*="underline"] {
+  color: var(--mit-accent) !important;
+}
+.market-intelligence-tool a:hover {
+  color: #005a7a !important;
+}
+/* Form elements */
+.market-intelligence-tool input,
+.market-intelligence-tool select,
+.market-intelligence-tool textarea {
+  border-color: var(--mit-border-strong) !important;
+  color: var(--mit-foreground) !important;
+  background: #ffffff !important;
+}
+.market-intelligence-tool input::placeholder,
+.market-intelligence-tool textarea::placeholder {
+  color: var(--mit-foreground-muted) !important;
+}
+.market-intelligence-tool input:focus,
+.market-intelligence-tool select:focus,
+.market-intelligence-tool textarea:focus {
+  border-color: #006D95 !important;
+  box-shadow: 0 0 0 2px rgba(0, 109, 149, 0.25) !important;
+  outline: none !important;
+}
+.market-intelligence-tool select option {
+  background: #ffffff;
+  color: var(--mit-foreground);
+}
+/* Buttons */
+.market-intelligence-tool button[data-slot="button"]:not([class*="ghost"]):not([class*="outline"]) {
+  background: #006D95 !important;
+  color: #FFFFFF !important;
+  border-color: #006D95 !important;
+}
+.market-intelligence-tool button[data-slot="button"]:not([class*="ghost"]):not([class*="outline"]):hover {
+  background: #005a7a !important;
+  border-color: #005a7a !important;
+  color: #FFFFFF !important;
+}
+.market-intelligence-tool button[data-slot="button"][class*="outline"] {
+  background: transparent !important;
+  border-color: #006D95 !important;
+  color: #006D95 !important;
+}
+.market-intelligence-tool button[data-slot="button"][class*="outline"]:hover {
+  background: rgba(0, 109, 149, 0.08) !important;
+  color: #006D95 !important;
+}
+.market-intelligence-tool button[data-slot="button"][class*="ghost"] {
+  color: #006D95 !important;
+}
+.market-intelligence-tool button[data-slot="button"][class*="ghost"]:hover {
+  background: rgba(0, 109, 149, 0.08) !important;
+  color: #006D95 !important;
+}
+/* Tables */
+.market-intelligence-tool [role="columnheader"],
+.market-intelligence-tool th {
+  color: var(--mit-accent) !important;
+  border-color: var(--mit-border) !important;
+  font-weight: 600 !important;
+}
+.market-intelligence-tool td {
+  border-color: var(--mit-border) !important;
+  color: var(--mit-foreground) !important;
+}
+.market-intelligence-tool table {
+  border-color: var(--mit-border) !important;
+}
+/* Badges */
+.market-intelligence-tool [data-slot="badge"] {
+  border-color: #006D95 !important;
+}
+.market-intelligence-tool [data-slot="badge"]:not([class*="outline"]):not([class*="secondary"]) {
+  background: #006D95 !important;
+  color: #FFFFFF !important;
+}
+.market-intelligence-tool [data-slot="badge"][class*="secondary"] {
+  background: rgba(0, 109, 149, 0.15) !important;
+  color: #006D95 !important;
+}
+.market-intelligence-tool [data-slot="badge"][class*="outline"] {
+  color: #006D95 !important;
+  background: transparent !important;
+}
+/* Accordion */
+.market-intelligence-tool [data-slot="accordion-trigger"],
+.market-intelligence-tool [data-state="open"] [data-slot="accordion-trigger"] {
+  color: var(--mit-foreground) !important;
+  font-weight: 500 !important;
+}
+.market-intelligence-tool [data-slot="accordion-item"],
+.market-intelligence-tool [data-slot="accordion-content"] {
+  border-color: var(--mit-border) !important;
+}
+/* Labels */
+.market-intelligence-tool label {
+  color: var(--mit-foreground) !important;
+  font-weight: 500 !important;
+}
+/* Tabs (nested, e.g. Article Digest) */
+.market-intelligence-tool [data-slot="tabs-list"] {
+  background: #ffffff !important;
+  border: 1px solid var(--mit-border) !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+}
+.market-intelligence-tool [data-slot="tabs-trigger"] {
+  color: var(--mit-foreground-muted) !important;
+  font-weight: 500 !important;
+  text-decoration: none !important;
+  height: auto !important;
+}
+.market-intelligence-tool [data-slot="tabs-trigger"]:hover {
+  text-decoration: none !important;
+}
+.market-intelligence-tool [data-slot="tabs-trigger"][data-state="active"] {
+  background: var(--mit-accent) !important;
+  color: #FFFFFF !important;
+  border-color: transparent !important;
+}
+/* Headings – accent color for visual hierarchy */
+.market-intelligence-tool h1,
+.market-intelligence-tool h2 {
+  color: var(--mit-accent) !important;
+  font-weight: 600 !important;
+}
+.market-intelligence-tool h3,
+.market-intelligence-tool h4 {
+  color: var(--mit-foreground) !important;
+  font-weight: 600 !important;
+}
+/* Skeleton / loading */
+.market-intelligence-tool .bg-muted {
+  background: rgba(0, 109, 149, 0.1) !important;
+}
+.market-intelligence-tool .bg-muted\/30 {
+  background: rgba(0, 109, 149, 0.06) !important;
+}
+
+/* Sticky table headers for Market Analytics */
+table[data-sticky-headers] thead th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #ffffff;
+  box-shadow: 0 1px 0 0 hsl(var(--border));
+}
+.dark table[data-sticky-headers] thead th {
+  background: rgb(2 6 23);
+}
