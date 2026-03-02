@@ -54,6 +54,24 @@ type IngestionLimits = {
   maxAcceptedPerProducer: number
 }
 
+type DebugItem = {
+  title: string
+  landingUrl: string
+  producer: string
+  note?: string
+  score?: number
+  reasons?: string[]
+  documentUrl?: string
+  documentType?: "pdf" | "html"
+  blockedHost?: string
+}
+
+type ProducerDebugBucket = {
+  rejectedIrrelevant: DebugItem[]
+  blockedAllowlist: DebugItem[]
+  accepted: DebugItem[]
+}
+
 function parseIntEnv(name: string, fallback: number): number {
   const raw = process.env[name]
   if (!raw) return fallback
@@ -106,6 +124,11 @@ async function fetchHtml(url: string): Promise<string | null> {
   }
 }
 
+function pushBounded<T>(arr: T[], item: T, limit = 5): void {
+  if (arr.length >= limit) return
+  arr.push(item)
+}
+
 export async function runInstitutionalResearchIngestion(): Promise<IngestionRunResult> {
   const limits = getIngestionLimits()
   const startedAt = new Date()
@@ -119,6 +142,7 @@ export async function runInstitutionalResearchIngestion(): Promise<IngestionRunR
   let skipped = 0
   let stopReason: string | null = null
   const acceptedByProducer: Record<string, number> = {}
+  const debugByProducer: Record<string, ProducerDebugBucket> = {}
 
   const planned = ADAPTERS.slice(0, limits.maxProducers)
   console.log("[ingestion] start", {
@@ -149,8 +173,16 @@ export async function runInstitutionalResearchIngestion(): Promise<IngestionRunR
     let producerUpdated = 0
     let producerSkipped = 0
     let producerRejectedIrrelevant = 0
+    const producerId = adapter.producerId
+    const producerDebug =
+      debugByProducer[producerId] ??
+      (debugByProducer[producerId] = {
+        rejectedIrrelevant: [],
+        blockedAllowlist: [],
+        accepted: [],
+      })
 
-    console.log("[ingestion] producer start", { producer: adapter.producerId })
+    console.log("[ingestion] producer start", { producer: producerId })
 
     for (const seedUrl of adapter.seedUrls) {
       if (shouldStop()) break
@@ -192,12 +224,20 @@ export async function runInstitutionalResearchIngestion(): Promise<IngestionRunR
         producerProcessed += 1
 
         const rel = scoreDistressedCreRelevance({
-          producerId: adapter.producerId,
+          producerId,
           title: report.title,
           landingUrl: report.landingUrl,
           publishedDate: report.publishedDate,
         })
         if (!rel.isRelevant) {
+          pushBounded(producerDebug.rejectedIrrelevant, {
+            title: report.title,
+            landingUrl: report.landingUrl,
+            producer: producerId,
+            score: rel.score,
+            reasons: rel.reasons,
+            note: "irrelevant",
+          })
           skipped += 1
           producerSkipped += 1
           producerRejectedIrrelevant += 1
@@ -206,10 +246,10 @@ export async function runInstitutionalResearchIngestion(): Promise<IngestionRunR
 
         let resolved: Awaited<ReturnType<typeof resolveReportDocument>>
         try {
-          resolved = await resolveReportDocument(report.landingUrl, adapter.producerId)
+          resolved = await resolveReportDocument(report.landingUrl, producerId)
         } catch (err) {
           errors.push({
-            producer: adapter.producerId,
+            producer: producerId,
             stage: "resolve",
             url: report.landingUrl,
             message: err instanceof Error ? err.message : String(err),
@@ -220,12 +260,25 @@ export async function runInstitutionalResearchIngestion(): Promise<IngestionRunR
         }
 
         if (resolved.blockedByAllowlist) {
+          let blockedHost = ""
+          try {
+            blockedHost = new URL(resolved.documentUrl).hostname
+          } catch {
+            blockedHost = ""
+          }
+          pushBounded(producerDebug.blockedAllowlist, {
+            title: report.title,
+            landingUrl: report.landingUrl,
+            producer: producerId,
+            documentUrl: resolved.documentUrl,
+            blockedHost,
+            note: "blockedByAllowlist",
+          })
           skipped += 1
           producerSkipped += 1
           continue
         }
 
-        const producerId = adapter.producerId
         if ((acceptedByProducer[producerId] || 0) >= limits.maxAcceptedPerProducer) {
           skipped += 1
           producerSkipped += 1
@@ -256,9 +309,16 @@ export async function runInstitutionalResearchIngestion(): Promise<IngestionRunR
             producerUpdated += 1
           }
           acceptedByProducer[producerId] = (acceptedByProducer[producerId] || 0) + 1
+          pushBounded(producerDebug.accepted, {
+            title: report.title,
+            landingUrl: report.landingUrl,
+            producer: producerId,
+            documentUrl: resolved.documentUrl,
+            documentType: resolved.documentType,
+          })
         } catch (err) {
           errors.push({
-            producer: adapter.producerId,
+            producer: producerId,
             stage: "upsert",
             url: report.landingUrl,
             message: err instanceof Error ? err.message : String(err),
@@ -277,7 +337,13 @@ export async function runInstitutionalResearchIngestion(): Promise<IngestionRunR
       updated: producerUpdated,
       skipped: producerSkipped,
       producerRejectedIrrelevant,
-      producerAccepted: acceptedByProducer[adapter.producerId] || 0,
+      producerAccepted: acceptedByProducer[producerId] || 0,
+      rejectedIrrelevantCount: producerDebug.rejectedIrrelevant.length,
+      blockedAllowlistCount: producerDebug.blockedAllowlist.length,
+      acceptedCount: producerDebug.accepted.length,
+      rejectedIrrelevantSamples: producerDebug.rejectedIrrelevant,
+      blockedAllowlistSamples: producerDebug.blockedAllowlist,
+      acceptedSamples: producerDebug.accepted,
     })
   }
 
@@ -300,6 +366,30 @@ export async function runInstitutionalResearchIngestion(): Promise<IngestionRunR
     skipped,
     errors,
   }
+  const debugSummaryByProducer = Object.fromEntries(
+    Object.entries(debugByProducer).map(([producer, bucket]) => [
+      producer,
+      {
+        rejectedIrrelevantCount: bucket.rejectedIrrelevant.length,
+        blockedAllowlistCount: bucket.blockedAllowlist.length,
+        acceptedCount: bucket.accepted.length,
+      },
+    ])
+  )
+  console.log("[ingestion] final debug summary", {
+    stopReason,
+    elapsedMs,
+    totals: {
+      producersPlanned: planned.length,
+      producersRun,
+      candidatesFound,
+      processed,
+      inserted,
+      updated,
+      skipped,
+    },
+    debugSummaryByProducer,
+  })
   console.log("[ingestion] end", summary)
   return summary
 }
