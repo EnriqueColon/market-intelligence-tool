@@ -1,4 +1,3 @@
-import { FETCH_HEADERS } from "@/lib/report-scraper"
 import { fetchWithTimeout } from "@/lib/http"
 
 export type SitemapEntry = { loc: string; lastmod?: string }
@@ -12,9 +11,24 @@ export async function fetchSitemapXml(url: string): Promise<string | null> {
     const res = await fetchWithTimeout(url, {
       timeoutMs: 8000,
       cache: "no-store",
-      headers: FETCH_HEADERS,
+      redirect: "follow",
+      headers: {
+        accept: "application/xml,text/xml;q=0.9,*/*;q=0.8",
+        "accept-language": "en-US,en;q=0.9",
+        "user-agent":
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+      },
     })
-    if (!res.ok) return null
+    if (!res.ok) {
+      const body = await res.text().catch(() => "")
+      console.error("[sitemap] fetch failed", {
+        url,
+        status: res.status,
+        ct: res.headers.get("content-type"),
+        body: body.slice(0, 200),
+      })
+      return null
+    }
     return await res.text()
   } catch {
     return null
