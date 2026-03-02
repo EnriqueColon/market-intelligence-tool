@@ -11,6 +11,11 @@ export type UpsertResearchReportInput = {
   tags?: Record<string, unknown>
 }
 
+export type UpsertResearchReportResult = {
+  id: number
+  action: "inserted" | "updated"
+}
+
 function urlHash(url: string): string {
   return createHash("sha256").update(url).digest("hex")
 }
@@ -22,9 +27,9 @@ function normalizeDate(input?: string): string | null {
   return d.toISOString().slice(0, 10)
 }
 
-export async function upsertResearchReport(input: UpsertResearchReportInput): Promise<number> {
+export async function upsertResearchReport(input: UpsertResearchReportInput): Promise<UpsertResearchReportResult> {
   const hash = urlHash(input.documentUrl || input.landingUrl)
-  const rows = await sql<{ id: number }>`
+  const rows = await sql<{ id: number; inserted: boolean }>`
     INSERT INTO research_reports (
       producer,
       title,
@@ -62,7 +67,11 @@ export async function upsertResearchReport(input: UpsertResearchReportInput): Pr
         ELSE research_reports.tags || EXCLUDED.tags
       END,
       last_seen_at = now()
-    RETURNING id
+    RETURNING id, (xmax = 0) AS inserted
   `
-  return rows.rows[0].id
+  const row = rows.rows[0]
+  return {
+    id: row.id,
+    action: row.inserted ? "inserted" : "updated",
+  }
 }

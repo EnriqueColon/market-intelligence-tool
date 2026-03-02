@@ -1,4 +1,5 @@
 import { FETCH_HEADERS } from "@/lib/report-scraper"
+import { fetchWithTimeout } from "@/lib/http"
 import { resolveReportDocument } from "@/lib/report-resolver"
 import { upsertResearchReport } from "@/app/ingestion/storage/upsert-report"
 import { federalReserveSource } from "@/app/ingestion/sources/federal-reserve"
@@ -22,6 +23,51 @@ const ADAPTERS: ProducerAdapter[] = [
   uliSource,
 ]
 
+type IngestionError = {
+  producer: string
+  stage: "seed_fetch" | "extract" | "resolve" | "upsert"
+  url?: string
+  message: string
+}
+
+export type IngestionRunResult = {
+  ok: true
+  startedAt: string
+  finishedAt: string
+  elapsedMs: number
+  producersPlanned: number
+  producersRun: number
+  candidatesFound: number
+  processed: number
+  inserted: number
+  updated: number
+  skipped: number
+  errors: IngestionError[]
+}
+
+type IngestionLimits = {
+  maxProducers: number
+  maxReportsPerProducer: number
+  maxTotalReports: number
+  timeoutMs: number
+}
+
+function parseIntEnv(name: string, fallback: number): number {
+  const raw = process.env[name]
+  if (!raw) return fallback
+  const parsed = Number.parseInt(raw, 10)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+}
+
+function getIngestionLimits(): IngestionLimits {
+  return {
+    maxProducers: parseIntEnv("INGESTION_MAX_PRODUCERS", 3),
+    maxReportsPerProducer: parseIntEnv("INGESTION_MAX_REPORTS_PER_PRODUCER", 5),
+    maxTotalReports: parseIntEnv("INGESTION_MAX_TOTAL_REPORTS", 15),
+    timeoutMs: parseIntEnv("INGESTION_TIMEOUT_MS", 20000),
+  }
+}
+
 function deriveTags(title: string, producer: string) {
   const t = `${title} ${producer}`.toLowerCase()
   const assetType =
@@ -44,10 +90,10 @@ function deriveTags(title: string, producer: string) {
 
 async function fetchHtml(url: string): Promise<string | null> {
   try {
-    const res = await fetch(url, {
+    const res = await fetchWithTimeout(url, {
       cache: "no-store",
       headers: FETCH_HEADERS,
-      signal: AbortSignal.timeout(15000),
+      timeoutMs: 8000,
     })
     if (!res.ok) return null
     return await res.text()
@@ -57,25 +103,112 @@ async function fetchHtml(url: string): Promise<string | null> {
   }
 }
 
-export async function runInstitutionalResearchIngestion(): Promise<{
-  ok: boolean
-  scanned: number
-  upserted: number
-}> {
-  let scanned = 0
-  let upserted = 0
+export async function runInstitutionalResearchIngestion(): Promise<IngestionRunResult> {
+  const limits = getIngestionLimits()
+  const startedAt = new Date()
+  const startedMs = Date.now()
+  const errors: IngestionError[] = []
+  let producersRun = 0
+  let candidatesFound = 0
+  let processed = 0
+  let inserted = 0
+  let updated = 0
+  let skipped = 0
+  let stopReason: string | null = null
 
-  for (const adapter of ADAPTERS) {
+  const planned = ADAPTERS.slice(0, limits.maxProducers)
+  console.log("[ingestion] start", {
+    limits,
+    producersPlanned: planned.map((p) => p.producerId),
+  })
+
+  const shouldStop = (): boolean => {
+    const elapsed = Date.now() - startedMs
+    if (elapsed > limits.timeoutMs) {
+      stopReason = "time budget reached"
+      return true
+    }
+    if (processed >= limits.maxTotalReports) {
+      stopReason = "max total reached"
+      return true
+    }
+    return false
+  }
+
+  for (const adapter of planned) {
+    if (shouldStop()) break
+    producersRun += 1
+    let producerCandidates = 0
+    let producerProcessed = 0
+    let producerInserted = 0
+    let producerUpdated = 0
+    let producerSkipped = 0
+
+    console.log("[ingestion] producer start", { producer: adapter.producerId })
+
     for (const seedUrl of adapter.seedUrls) {
+      if (shouldStop()) break
       const html = await fetchHtml(seedUrl)
-      if (!html) continue
-      const reports = adapter.extractReports(html, seedUrl)
-      for (const report of reports) {
-        scanned += 1
+      if (!html) {
+        errors.push({
+          producer: adapter.producerId,
+          stage: "seed_fetch",
+          url: seedUrl,
+          message: "Seed page fetch failed or timed out.",
+        })
+        continue
+      }
+
+      let extracted: ReturnType<ProducerAdapter["extractReports"]> = []
+      try {
+        extracted = adapter.extractReports(html, seedUrl)
+      } catch (err) {
+        errors.push({
+          producer: adapter.producerId,
+          stage: "extract",
+          url: seedUrl,
+          message: err instanceof Error ? err.message : String(err),
+        })
+        continue
+      }
+
+      const limited = extracted.slice(0, limits.maxReportsPerProducer - producerCandidates)
+      producerCandidates += limited.length
+      candidatesFound += limited.length
+
+      for (const report of limited) {
+        if (shouldStop()) break
+        if (processed >= limits.maxTotalReports) {
+          stopReason = "max total reached"
+          break
+        }
+        processed += 1
+        producerProcessed += 1
+
+        let resolved: Awaited<ReturnType<typeof resolveReportDocument>>
         try {
-          const resolved = await resolveReportDocument(report.landingUrl, adapter.producerId)
+          resolved = await resolveReportDocument(report.landingUrl, adapter.producerId)
+        } catch (err) {
+          errors.push({
+            producer: adapter.producerId,
+            stage: "resolve",
+            url: report.landingUrl,
+            message: err instanceof Error ? err.message : String(err),
+          })
+          skipped += 1
+          producerSkipped += 1
+          continue
+        }
+
+        if (resolved.blockedByAllowlist) {
+          skipped += 1
+          producerSkipped += 1
+          continue
+        }
+
+        try {
           const tags = deriveTags(report.title, adapter.producerId)
-          await upsertResearchReport({
+          const result = await upsertResearchReport({
             producer: adapter.producerId,
             title: report.title,
             landingUrl: report.landingUrl,
@@ -84,13 +217,55 @@ export async function runInstitutionalResearchIngestion(): Promise<{
             publishedDate: report.publishedDate,
             tags,
           })
-          upserted += 1
+          if (result.action === "inserted") {
+            inserted += 1
+            producerInserted += 1
+          } else {
+            updated += 1
+            producerUpdated += 1
+          }
         } catch (err) {
-          console.error("[ingestion] Upsert failed:", adapter.producerId, report.landingUrl, err)
+          errors.push({
+            producer: adapter.producerId,
+            stage: "upsert",
+            url: report.landingUrl,
+            message: err instanceof Error ? err.message : String(err),
+          })
+          skipped += 1
+          producerSkipped += 1
         }
       }
     }
+
+    console.log("[ingestion] producer end", {
+      producer: adapter.producerId,
+      candidatesFound: producerCandidates,
+      processed: producerProcessed,
+      inserted: producerInserted,
+      updated: producerUpdated,
+      skipped: producerSkipped,
+    })
   }
 
-  return { ok: true, scanned, upserted }
+  const finishedAt = new Date()
+  const elapsedMs = Date.now() - startedMs
+  if (stopReason) {
+    console.log("[ingestion] stop reason", { reason: stopReason, elapsedMs })
+  }
+  const summary: IngestionRunResult = {
+    ok: true,
+    startedAt: startedAt.toISOString(),
+    finishedAt: finishedAt.toISOString(),
+    elapsedMs,
+    producersPlanned: planned.length,
+    producersRun,
+    candidatesFound,
+    processed,
+    inserted,
+    updated,
+    skipped,
+    errors,
+  }
+  console.log("[ingestion] end", summary)
+  return summary
 }

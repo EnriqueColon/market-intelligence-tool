@@ -1,5 +1,6 @@
 import * as cheerio from "cheerio"
 import { FETCH_HEADERS } from "@/lib/report-scraper"
+import { fetchWithTimeout } from "@/lib/http"
 import { isAssetUrlAllowedFromLanding, isHostnameAllowed, extractHostname } from "@/lib/domain-allowlist"
 import { getLandingDomainsForEntity, type EntityId } from "@/lib/entity-sources"
 
@@ -32,11 +33,11 @@ function scorePdfCandidate(href: string, linkText: string): number {
 
 async function isPdfUrl(url: string): Promise<boolean> {
   try {
-    const head = await fetch(url, {
+    const head = await fetchWithTimeout(url, {
       method: "HEAD",
       cache: "no-store",
       headers: FETCH_HEADERS,
-      signal: AbortSignal.timeout(8000),
+      timeoutMs: 8000,
     })
     if (head.ok) {
       const ct = (head.headers.get("content-type") || "").toLowerCase()
@@ -47,10 +48,10 @@ async function isPdfUrl(url: string): Promise<boolean> {
   }
 
   try {
-    const getRes = await fetch(url, {
+    const getRes = await fetchWithTimeout(url, {
       cache: "no-store",
       headers: FETCH_HEADERS,
-      signal: AbortSignal.timeout(10000),
+      timeoutMs: 8000,
     })
     if (!getRes.ok) return false
     const ct = (getRes.headers.get("content-type") || "").toLowerCase()
@@ -82,10 +83,10 @@ export async function resolveReportDocument(landingUrl: string, entityId: Entity
   }
 
   try {
-    const res = await fetch(landingUrl, {
+    const res = await fetchWithTimeout(landingUrl, {
       cache: "no-store",
       headers: FETCH_HEADERS,
-      signal: AbortSignal.timeout(12000),
+      timeoutMs: 8000,
     })
     if (!res.ok) {
       return { landingUrl, documentUrl: landingUrl, documentType: "html" }

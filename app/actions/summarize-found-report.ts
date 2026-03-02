@@ -161,7 +161,7 @@ export async function summarizeFoundReport(
 
     if (isDbEnabled()) {
       try {
-        const reportRowId = await upsertResearchReport({
+        const reportRow = await upsertResearchReport({
           producer: sourceLabel,
           title,
           landingUrl,
@@ -178,7 +178,7 @@ export async function summarizeFoundReport(
             model_provider
           )
           VALUES (
-            ${reportRowId},
+            ${reportRow.id},
             ${JSON.stringify(summaryJson)}::jsonb,
             ${"perplexity"}
           )
