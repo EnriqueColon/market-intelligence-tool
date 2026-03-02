@@ -321,6 +321,7 @@ export async function runInstitutionalResearchIngestion(): Promise<IngestionRunR
     }
 
     if (producerId === "cbre") {
+      console.log("[ingestion][cbre] USING COVEO PATH")
       const queries = getCbreCoveoQueries()
       const merged: ExtractedReport[] = []
       let rawResultsCount = 0
@@ -361,6 +362,9 @@ export async function runInstitutionalResearchIngestion(): Promise<IngestionRunR
       await processReports(limited)
     } else {
       for (const seedUrl of adapter.seedUrls) {
+        if (producerId === "cbre") {
+          console.log("[ingestion][cbre] USING LEGACY SEED FETCH PATH")
+        }
         if (shouldStop()) break
         const html = await fetchHtml(seedUrl)
         if (!html) {
