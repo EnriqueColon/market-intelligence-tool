@@ -6,13 +6,13 @@ import { upsertResearchReport } from "@/app/ingestion/storage/upsert-report"
 import { federalReserveSource } from "@/app/ingestion/sources/federal-reserve"
 import { fdicSource } from "@/app/ingestion/sources/fdic"
 import { cbreSource } from "@/app/ingestion/sources/cbre"
-import { fetchCbreCoveoResults } from "@/app/ingestion/sources/cbre-coveo"
 import { jllSource } from "@/app/ingestion/sources/jll"
 import { cushmanWakefieldSource } from "@/app/ingestion/sources/cushman-wakefield"
 import { colliersSource } from "@/app/ingestion/sources/colliers"
 import { naiopSource } from "@/app/ingestion/sources/naiop"
 import { uliSource } from "@/app/ingestion/sources/uli"
 import type { ExtractedReport, ProducerAdapter } from "@/app/ingestion/sources/types"
+import { fetchSitemapXml, getSitemapEntries, type SitemapEntry } from "@/lib/sitemaps"
 
 const ADAPTERS: ProducerAdapter[] = [
   federalReserveSource,
@@ -27,7 +27,7 @@ const ADAPTERS: ProducerAdapter[] = [
 
 type IngestionError = {
   producer: string
-  stage: "seed_fetch" | "extract" | "resolve" | "upsert"
+  stage: "seed_fetch" | "extract" | "resolve" | "upsert" | "sitemap_fetch"
   url?: string
   message: string
 }
@@ -130,23 +130,49 @@ function pushBounded<T>(arr: T[], item: T, limit = 5): void {
   arr.push(item)
 }
 
-const DEFAULT_CBRE_COVEO_QUERIES = [
-  "south florida",
-  "florida",
-  "us multifamily",
-  "us industrial",
-  "us office",
-  "us retail",
+type SitemapProducerConfig = {
+  producerId: string
+  sitemapUrls: string[]
+  pathAllowPrefixes: string[]
+}
+
+const SITEMAP_PRODUCER_CONFIGS: SitemapProducerConfig[] = [
+  {
+    producerId: "cbre",
+    sitemapUrls: [
+      "https://www.cbre.com/shared-sitemap/books.xml",
+      "https://www.cbre.com/shared-sitemap/reports.xml",
+    ],
+    pathAllowPrefixes: [
+      "https://www.cbre.com/insights/books/",
+      "https://www.cbre.com/insights/reports/",
+    ],
+  },
 ]
 
-function getCbreCoveoQueries(): string[] {
-  const raw = process.env.CBRE_COVEO_QUERIES?.trim()
-  if (!raw) return DEFAULT_CBRE_COVEO_QUERIES
-  const parsed = raw
-    .split(",")
-    .map((q) => q.trim())
-    .filter(Boolean)
-  return parsed.length > 0 ? parsed : DEFAULT_CBRE_COVEO_QUERIES
+function getSitemapConfigForProducer(producerId: string): SitemapProducerConfig | null {
+  return SITEMAP_PRODUCER_CONFIGS.find((c) => c.producerId === producerId) ?? null
+}
+
+function isWithinLastMonths(dateStr: string, months: number): boolean {
+  const ts = Date.parse(dateStr)
+  if (!Number.isFinite(ts)) return false
+  const now = Date.now()
+  const cutoff = new Date(now)
+  cutoff.setMonth(cutoff.getMonth() - months)
+  return ts >= cutoff.getTime()
+}
+
+function deriveTitleFromUrl(url: string): string {
+  try {
+    const u = new URL(url)
+    const parts = u.pathname.split("/").filter(Boolean)
+    const slug = (parts[parts.length - 1] || "").replace(/\.[a-z0-9]+$/i, "")
+    const normalized = slug.replace(/[-_]+/g, " ").trim()
+    return normalized || u.hostname
+  } catch {
+    return url
+  }
 }
 
 export async function runInstitutionalResearchIngestion(): Promise<IngestionRunResult> {
@@ -321,45 +347,84 @@ export async function runInstitutionalResearchIngestion(): Promise<IngestionRunR
     }
 
     if (producerId === "cbre") {
-      console.log("[ingestion][cbre] USING COVEO PATH")
-      const queries = getCbreCoveoQueries()
-      const merged: ExtractedReport[] = []
-      let rawResultsCount = 0
-      let queriesRun = 0
-
-      for (const query of queries) {
-        if (shouldStop()) break
-        try {
-          const results = await fetchCbreCoveoResults({
-            query,
-            numberOfResults: 9,
-            firstResult: 0,
-          })
-          queriesRun += 1
-          rawResultsCount += results.length
-          merged.push(...results)
-        } catch (err) {
-          errors.push({
-            producer: producerId,
-            stage: "extract",
-            url: query,
-            message: err instanceof Error ? err.message : String(err),
-          })
+      console.log("[ingestion][cbre] USING SITEMAP PATH")
+      const sitemapConfig = getSitemapConfigForProducer(producerId)
+      if (!sitemapConfig) {
+        errors.push({
+          producer: producerId,
+          stage: "extract",
+          url: "",
+          message: "No sitemap config for producer",
+        })
+      } else {
+        const healthySitemaps: string[] = []
+        for (const sitemapUrl of sitemapConfig.sitemapUrls) {
+          if (shouldStop()) break
+          const xml = await fetchSitemapXml(sitemapUrl)
+          if (!xml) {
+            errors.push({
+              producer: producerId,
+              stage: "sitemap_fetch",
+              url: sitemapUrl,
+              message: "Failed to fetch sitemap XML",
+            })
+            continue
+          }
+          healthySitemaps.push(sitemapUrl)
         }
-      }
 
-      const deduped = Array.from(new Map(merged.map((r) => [r.landingUrl, r])).values())
-      const limited = deduped.slice(0, limits.maxReportsPerProducer)
-      producerCandidates += limited.length
-      candidatesFound += limited.length
-      console.log("[ingestion] cbre coveo", {
-        queriesRun,
-        queries,
-        rawResultsCount,
-        dedupedCount: deduped.length,
-        finalCandidateCount: limited.length,
-      })
-      await processReports(limited)
+        const sitemapEntries: SitemapEntry[] = await getSitemapEntries(healthySitemaps, 500)
+        const afterPrefix = sitemapEntries.filter((e) =>
+          sitemapConfig.pathAllowPrefixes.some((prefix) => e.loc.startsWith(prefix))
+        )
+        const afterRecency = afterPrefix.filter(
+          (e) => !e.lastmod || isWithinLastMonths(e.lastmod, 18)
+        )
+
+        const scored = afterRecency.map((entry) => {
+          const title = deriveTitleFromUrl(entry.loc)
+          const rel = scoreDistressedCreRelevance({
+            producerId,
+            title,
+            landingUrl: entry.loc,
+            publishedDate: entry.lastmod,
+          })
+          return { entry, title, rel }
+        })
+        const afterRelevance = scored.filter((s) => s.rel.isRelevant)
+
+        afterRelevance.sort((a, b) => {
+          const aHas = Boolean(a.entry.lastmod)
+          const bHas = Boolean(b.entry.lastmod)
+          if (aHas !== bHas) return aHas ? -1 : 1
+          if (aHas && bHas) {
+            const ad = Date.parse(a.entry.lastmod!)
+            const bd = Date.parse(b.entry.lastmod!)
+            if (Number.isFinite(ad) && Number.isFinite(bd) && ad !== bd) return bd - ad
+          }
+          if (a.rel.score !== b.rel.score) return b.rel.score - a.rel.score
+          return a.entry.loc.localeCompare(b.entry.loc)
+        })
+
+        const selected = afterRelevance
+          .slice(0, limits.maxReportsPerProducer)
+          .map((s): ExtractedReport => ({
+            title: s.title,
+            landingUrl: s.entry.loc,
+            publishedDate: s.entry.lastmod,
+          }))
+
+        producerCandidates += selected.length
+        candidatesFound += selected.length
+        console.log("[ingestion][cbre] sitemap discovery", {
+          sitemapEntriesFetched: sitemapEntries.length,
+          afterPrefixFilter: afterPrefix.length,
+          afterRecencyFilter: afterRecency.length,
+          afterRelevanceFilter: afterRelevance.length,
+          finalSelected: selected.length,
+        })
+        await processReports(selected)
+      }
     } else {
       for (const seedUrl of adapter.seedUrls) {
         if (producerId === "cbre") {
