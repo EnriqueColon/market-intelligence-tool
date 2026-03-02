@@ -1,6 +1,7 @@
 import { FETCH_HEADERS } from "@/lib/report-scraper"
 import { fetchWithTimeout } from "@/lib/http"
 import { resolveReportDocument } from "@/lib/report-resolver"
+import { scoreDistressedCreRelevance } from "@/app/ingestion/relevance"
 import { upsertResearchReport } from "@/app/ingestion/storage/upsert-report"
 import { federalReserveSource } from "@/app/ingestion/sources/federal-reserve"
 import { fdicSource } from "@/app/ingestion/sources/fdic"
@@ -50,6 +51,7 @@ type IngestionLimits = {
   maxReportsPerProducer: number
   maxTotalReports: number
   timeoutMs: number
+  maxAcceptedPerProducer: number
 }
 
 function parseIntEnv(name: string, fallback: number): number {
@@ -65,6 +67,7 @@ function getIngestionLimits(): IngestionLimits {
     maxReportsPerProducer: parseIntEnv("INGESTION_MAX_REPORTS_PER_PRODUCER", 5),
     maxTotalReports: parseIntEnv("INGESTION_MAX_TOTAL_REPORTS", 15),
     timeoutMs: parseIntEnv("INGESTION_TIMEOUT_MS", 20000),
+    maxAcceptedPerProducer: parseIntEnv("INGESTION_MAX_ACCEPTED_PER_PRODUCER", 3),
   }
 }
 
@@ -115,10 +118,12 @@ export async function runInstitutionalResearchIngestion(): Promise<IngestionRunR
   let updated = 0
   let skipped = 0
   let stopReason: string | null = null
+  const acceptedByProducer: Record<string, number> = {}
 
   const planned = ADAPTERS.slice(0, limits.maxProducers)
   console.log("[ingestion] start", {
     limits,
+    maxAcceptedPerProducer: limits.maxAcceptedPerProducer,
     producersPlanned: planned.map((p) => p.producerId),
   })
 
@@ -143,6 +148,7 @@ export async function runInstitutionalResearchIngestion(): Promise<IngestionRunR
     let producerInserted = 0
     let producerUpdated = 0
     let producerSkipped = 0
+    let producerRejectedIrrelevant = 0
 
     console.log("[ingestion] producer start", { producer: adapter.producerId })
 
@@ -185,6 +191,19 @@ export async function runInstitutionalResearchIngestion(): Promise<IngestionRunR
         processed += 1
         producerProcessed += 1
 
+        const rel = scoreDistressedCreRelevance({
+          producerId: adapter.producerId,
+          title: report.title,
+          landingUrl: report.landingUrl,
+          publishedDate: report.publishedDate,
+        })
+        if (!rel.isRelevant) {
+          skipped += 1
+          producerSkipped += 1
+          producerRejectedIrrelevant += 1
+          continue
+        }
+
         let resolved: Awaited<ReturnType<typeof resolveReportDocument>>
         try {
           resolved = await resolveReportDocument(report.landingUrl, adapter.producerId)
@@ -206,8 +225,20 @@ export async function runInstitutionalResearchIngestion(): Promise<IngestionRunR
           continue
         }
 
+        const producerId = adapter.producerId
+        if ((acceptedByProducer[producerId] || 0) >= limits.maxAcceptedPerProducer) {
+          skipped += 1
+          producerSkipped += 1
+          continue
+        }
+
         try {
-          const tags = deriveTags(report.title, adapter.producerId)
+          const baseTags = deriveTags(report.title, adapter.producerId)
+          const tags = {
+            ...baseTags,
+            relevance: rel,
+            topic: "distressed_cre_debt_v1",
+          }
           const result = await upsertResearchReport({
             producer: adapter.producerId,
             title: report.title,
@@ -224,6 +255,7 @@ export async function runInstitutionalResearchIngestion(): Promise<IngestionRunR
             updated += 1
             producerUpdated += 1
           }
+          acceptedByProducer[producerId] = (acceptedByProducer[producerId] || 0) + 1
         } catch (err) {
           errors.push({
             producer: adapter.producerId,
@@ -244,6 +276,8 @@ export async function runInstitutionalResearchIngestion(): Promise<IngestionRunR
       inserted: producerInserted,
       updated: producerUpdated,
       skipped: producerSkipped,
+      producerRejectedIrrelevant,
+      producerAccepted: acceptedByProducer[adapter.producerId] || 0,
     })
   }
 
