@@ -42,7 +42,26 @@ export async function fetchCbreCoveoResults(params: {
   })
 
   if (!res.ok) {
-    throw new Error(`CBRE Coveo request failed: ${res.status}`)
+    const bodyText = await res.text().catch(() => "")
+    const headerNames = ["cf-ray", "server", "via"]
+    const akamaiHeaders: Array<[string, string]> = []
+    for (const [k, v] of res.headers.entries()) {
+      if (k.toLowerCase().startsWith("x-akamai")) {
+        akamaiHeaders.push([k, v])
+      }
+    }
+    const debugHeaders = {
+      ...(headerNames.reduce<Record<string, string>>((acc, name) => {
+        const value = res.headers.get(name)
+        if (value) acc[name] = value
+        return acc
+      }, {})),
+      ...Object.fromEntries(akamaiHeaders.slice(0, 6)),
+    }
+    if (Object.keys(debugHeaders).length > 0) {
+      console.log("[ingestion][cbre] Coveo non-OK headers", debugHeaders)
+    }
+    throw new Error(`CBRE Coveo ${res.status}: ${bodyText.slice(0, 300)}`)
   }
 
   const data = (await res.json()) as {
