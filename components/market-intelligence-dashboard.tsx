@@ -13,7 +13,7 @@ import { ArticleDigest } from "@/components/article-digest"
 import { IndustryOutlook } from "@/components/industry-outlook"
 import { SendNewsEmailButton } from "@/components/send-news-email-button"
 import { SearchIndustryReports } from "@/components/search-industry-reports"
-import { MarketResearchReports } from "@/components/market-research-reports"
+import { InstitutionalResearchFeed } from "@/components/institutional-research-feed"
 
 const LEVEL_OPTIONS = [
   { value: "national", label: "National" },
@@ -32,7 +32,11 @@ export type EnabledTabs = {
   legal: boolean
 }
 
-export function MarketIntelligenceDashboard({ enabledTabs }: { enabledTabs: EnabledTabs }) {
+export function MarketIntelligenceDashboard({
+  enabledTabs,
+}: {
+  enabledTabs: EnabledTabs
+}) {
   const [level, setLevel] = useState<LevelOption>("national")
 
   const availableTabs = useMemo(() => {
@@ -161,11 +165,15 @@ export function MarketIntelligenceDashboard({ enabledTabs }: { enabledTabs: Enab
                     <h2 className="font-heading text-xl font-medium uppercase text-[#006D95] leading-[1.3]">Market Research</h2>
                   </div>
                   <p className="text-sm text-muted-foreground">
-                    Search approved sources and browse curated industry reports: mortgage broker rankings, CBRE & JLL outlooks, and sector rankings.
+                    Institutional research feed with durable persistence, PDF-first resolution, and executive-ready summaries.
                   </p>
                 </div>
+                <InstitutionalResearchFeed />
                 <SearchIndustryReports />
-                <MarketResearchReports />
+                <div className="rounded-lg border border-slate-200/80 bg-slate-50/30 p-6">
+                  <h3 className="text-base font-semibold text-slate-800">Saved / Bookmarked</h3>
+                  <p className="text-sm text-slate-600 mt-1">Coming soon in a follow-up iteration.</p>
+                </div>
               </TabsContent>
             )}
 

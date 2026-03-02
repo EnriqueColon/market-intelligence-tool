@@ -3,7 +3,11 @@
  * Allows exact match or subdomain of each listed domain.
  */
 
-import { getDomainsForEntity, type EntityId } from "./entity-sources.ts"
+import {
+  getAssetDomainsForEntity,
+  getLandingDomainsForEntity,
+  type EntityId,
+} from "./entity-sources"
 
 /**
  * Extract hostname from URL (no port, lowercase).
@@ -42,9 +46,32 @@ export function filterByAllowlist<T extends { url: string }>(
   items: T[],
   entityId: EntityId
 ): T[] {
-  const domains = getDomainsForEntity(entityId)
+  const domains = getLandingDomainsForEntity(entityId)
   return items.filter((item) => {
     const hostname = extractHostname(item.url)
     return isHostnameAllowed(hostname, domains)
   })
+}
+
+export function isLandingUrlAllowed(url: string, entityId: EntityId): boolean {
+  const hostname = extractHostname(url)
+  return isHostnameAllowed(hostname, getLandingDomainsForEntity(entityId))
+}
+
+export function isAssetUrlAllowed(url: string, entityId: EntityId): boolean {
+  const hostname = extractHostname(url)
+  return isHostnameAllowed(hostname, getAssetDomainsForEntity(entityId))
+}
+
+/**
+ * Strict rule:
+ * - landing URL must be allowlisted landing domain
+ * - extracted asset/PDF URL must be allowlisted asset domain
+ */
+export function isAssetUrlAllowedFromLanding(
+  landingUrl: string,
+  assetUrl: string,
+  entityId: EntityId
+): boolean {
+  return isLandingUrlAllowed(landingUrl, entityId) && isAssetUrlAllowed(assetUrl, entityId)
 }

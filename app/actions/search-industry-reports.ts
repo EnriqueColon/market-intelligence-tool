@@ -1,69 +1,102 @@
 "use server"
 
-import * as fs from "fs/promises"
-import * as path from "path"
+import { createHash } from "crypto"
 import { buildSearchQuery } from "@/lib/google-query-builder"
 import { filterByAllowlist, extractHostname } from "@/lib/domain-allowlist"
 import type { EntityId } from "@/lib/entity-sources"
+import { resolveReportDocument } from "@/lib/report-resolver"
+import { isDbEnabled, sql } from "@/lib/db"
+import { getSearchCache, setSearchCache } from "@/lib/market-research-memory"
 
 export type SearchResult = {
   id: string
   title: string
   snippet: string
   url: string
+  landingUrl: string
+  documentUrl: string
+  documentType: "pdf" | "html"
   domain: string
   inferredDate?: string
+  blockedByAllowlist?: boolean
 }
 
 export type SearchIndustryReportsResult =
   | { ok: true; results: SearchResult[] }
   | { ok: false; error: string }
 
-const CACHE_PATH = path.join(process.cwd(), "data", "search-cache.json")
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000 // 24 hours
 
-type CacheEntry = { results: SearchResult[]; cachedAt: number }
-
-function cacheKey(entityId: string, query: string, preferPdf: boolean): string {
-  return `${entityId}:${query.trim().toLowerCase()}:${preferPdf}`
+function queryHash(entityId: string, query: string, preferPdf: boolean): string {
+  const payload = JSON.stringify({
+    entityId,
+    query: query.trim().toLowerCase(),
+    preferPdf: Boolean(preferPdf),
+  })
+  return createHash("sha256").update(payload).digest("hex")
 }
 
 async function getCached(entityId: string, query: string, preferPdf: boolean): Promise<SearchResult[] | null> {
-  try {
-    const raw = await fs.readFile(CACHE_PATH, "utf-8")
-    const cache = JSON.parse(raw) as Record<string, CacheEntry>
-    const key = cacheKey(entityId, query, preferPdf)
-    const entry = cache[key]
-    if (!entry || Date.now() - entry.cachedAt > CACHE_TTL_MS) return null
-    return entry.results
-  } catch {
+  const hash = queryHash(entityId, query, preferPdf)
+
+  if (isDbEnabled()) {
+    try {
+      const rows = await sql<{
+        results_json: SearchResult[]
+        created_at: string
+      }>`
+        SELECT results_json, created_at
+        FROM research_search_cache
+        WHERE query_hash = ${hash}
+        LIMIT 1
+      `
+      const row = rows.rows[0]
+      if (!row) return null
+      const createdAt = Date.parse(row.created_at)
+      if (Number.isFinite(createdAt) && Date.now() - createdAt <= CACHE_TTL_MS) {
+        return row.results_json ?? null
+      }
+      return null
+    } catch (err) {
+      console.error("[search-industry-reports] DB read failed:", err)
+      return null
+    }
+  }
+
+  if (process.env.NODE_ENV === "production") {
     return null
   }
+  return getSearchCache(hash, CACHE_TTL_MS)
 }
 
-async function setCache(
-  entityId: string,
-  query: string,
-  preferPdf: boolean,
-  results: SearchResult[]
-): Promise<void> {
-  try {
-    const dir = path.dirname(CACHE_PATH)
-    await fs.mkdir(dir, { recursive: true })
-    let cache: Record<string, CacheEntry> = {}
+async function setCache(entityId: string, query: string, preferPdf: boolean, results: SearchResult[]): Promise<void> {
+  const hash = queryHash(entityId, query, preferPdf)
+  const queryJson = {
+    entityId,
+    query: query.trim(),
+    preferPdf,
+  }
+
+  if (isDbEnabled()) {
     try {
-      const raw = await fs.readFile(CACHE_PATH, "utf-8")
-      cache = JSON.parse(raw)
-    } catch {
-      /* file may not exist */
+      await sql`
+        INSERT INTO research_search_cache (query_hash, query_json, results_json)
+        VALUES (${hash}, ${JSON.stringify(queryJson)}::jsonb, ${JSON.stringify(results)}::jsonb)
+        ON CONFLICT (query_hash)
+        DO UPDATE SET
+          query_json = EXCLUDED.query_json,
+          results_json = EXCLUDED.results_json,
+          created_at = now()
+      `
+      return
+    } catch (err) {
+      console.error("[search-industry-reports] DB write failed:", err)
+      return
     }
-    cache[cacheKey(entityId, query, preferPdf)] = {
-      results,
-      cachedAt: Date.now(),
-    }
-    await fs.writeFile(CACHE_PATH, JSON.stringify(cache, null, 2), "utf-8")
-  } catch (err) {
-    console.warn("[search-industry-reports] Could not write cache:", err)
+  }
+
+  if (process.env.NODE_ENV !== "production") {
+    setSearchCache(hash, results)
   }
 }
 
@@ -98,6 +131,13 @@ export async function searchIndustryReports(
     return {
       ok: false,
       error: "Google Custom Search is not configured. Add GOOGLE_CSE_ID and GOOGLE_API_KEY to .env.local.",
+    }
+  }
+
+  if (!isDbEnabled() && process.env.NODE_ENV === "production") {
+    return {
+      ok: false,
+      error: "Database is required in production. Configure POSTGRES_URL for Market Research search persistence.",
     }
   }
 
@@ -151,14 +191,28 @@ export async function searchIndustryReports(
 
     const filtered = filterByAllowlist(withUrl, entityId)
 
-    const results: SearchResult[] = filtered.map((item, idx) => ({
-      id: `sr-${entityId}-${idx}-${Date.now()}`,
-      title: item.title,
-      snippet: item.snippet,
-      url: item.url,
-      domain: extractHostname(item.url),
-      inferredDate: inferDateFromSnippet(item.snippet),
-    }))
+    const enriched = await Promise.all(
+      filtered.map(async (item, idx) => {
+        const resolved = await resolveReportDocument(item.url, entityId)
+        const result: SearchResult = {
+          id: `sr-${entityId}-${idx}-${Date.now()}`,
+          title: item.title,
+          snippet: item.snippet,
+          url: item.url,
+          landingUrl: item.url,
+          documentUrl: resolved.documentUrl,
+          documentType: resolved.documentType,
+          domain: extractHostname(item.url),
+          inferredDate: inferDateFromSnippet(item.snippet),
+          blockedByAllowlist: resolved.blockedByAllowlist,
+        }
+        return result
+      })
+    )
+
+    const results = preferPdf
+      ? enriched.filter((r) => r.documentType === "pdf")
+      : enriched
 
     await setCache(entityId, trimmed, preferPdf, results)
 

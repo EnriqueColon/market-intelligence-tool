@@ -29,6 +29,7 @@ interface CbreFindDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   report?: ReportEntry | null
+  isVercel?: boolean
 }
 
 const DEFAULT_QUERY: CbreQuery = {
@@ -51,7 +52,7 @@ function getDirectReportUrl(report: ReportEntry | null | undefined): string | nu
   return url.toLowerCase().includes("cbre.com") ? url : null
 }
 
-export function CbreFindDialog({ open, onOpenChange, report }: CbreFindDialogProps) {
+export function CbreFindDialog({ open, onOpenChange, report, isVercel = false }: CbreFindDialogProps) {
   const [query, setQuery] = useState<CbreQuery>(DEFAULT_QUERY)
   const [results, setResults] = useState<CbreLinkCandidate[] | null>(null)
   const [automating, setAutomating] = useState(false)
@@ -314,15 +315,21 @@ export function CbreFindDialog({ open, onOpenChange, report }: CbreFindDialogPro
             <ExternalLink className="h-4 w-4" />
             Open Best Match
           </Button>
-          <Button
-            onClick={handleOpenWithAutomation}
-            disabled={automating}
-            className="gap-2 !bg-[#FFFFFF] !text-[#006D95] hover:!bg-[#FFFFFF]/90 !border-[#FFFFFF]"
-            title="Opens a browser on your machine, navigates to CBRE, and applies your selected filters. Requires local dev server."
-          >
-            <Bot className="h-4 w-4" />
-            {automating ? "Starting…" : "Open CBRE & Apply Filters"}
-          </Button>
+          {!isVercel ? (
+            <Button
+              onClick={handleOpenWithAutomation}
+              disabled={automating}
+              className="gap-2 !bg-[#FFFFFF] !text-[#006D95] hover:!bg-[#FFFFFF]/90 !border-[#FFFFFF]"
+              title="Opens a browser on your machine, navigates to CBRE, and applies your selected filters. Requires local dev server."
+            >
+              <Bot className="h-4 w-4" />
+              {automating ? "Starting…" : "Open CBRE & Apply Filters"}
+            </Button>
+          ) : (
+            <span className="inline-flex items-center rounded-md border !border-[#FFFFFF] px-3 py-2 text-xs !text-[#FFFFFF]">
+              Local-only automation
+            </span>
+          )}
           <Button
             variant="outline"
             onClick={handleOpenSection}

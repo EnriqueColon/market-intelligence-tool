@@ -5,7 +5,7 @@
 - Install command: `npm install`
 - Build command: `npm run build`
 - Start command (local prod validation): `npm run start`
-- Next.js version: `15.2.4` (unchanged)
+- Next.js version: `15.5.12`
 
 ## Required Environment Variables (names only)
 Server-only (do **not** expose as `NEXT_PUBLIC_*`):
@@ -14,6 +14,9 @@ Server-only (do **not** expose as `NEXT_PUBLIC_*`):
 - `OPENAI_API_KEY`
 - `GOOGLE_API_KEY`
 - `GOOGLE_CSE_ID`
+- `POSTGRES_URL` (from Vercel Postgres integration)
+- `ADMIN_INIT_TOKEN` (required to initialize Market Research DB tables)
+- `INGESTION_TOKEN` (required for protected ingestion run endpoint)
 - `FRED_API_KEY`
 - `LEGISCAN_API_KEY`
 - `FFIEC_USER_ID`
@@ -40,6 +43,8 @@ Value is a comma-separated list of feature keys.
 - Route handlers use Node runtime explicitly where needed via `export const runtime = "nodejs"`.
 - `app/api/cbre-automate/route.ts` is intentionally disabled on Vercel (`501`) because it relies on spawning a detached local process.
 - `app/api/report/market-analytics-pdf/route.ts` uses Playwright and Node runtime.
+- `app/api/admin/init-db/route.ts` initializes `research_reports`, `research_summaries`, and `research_search_cache` tables (protected by `x-admin-init-token` header).
+- `app/api/ingestion/run/route.ts` runs institutional research ingestion (protected by `x-ingestion-token` header).
 
 ## Known Persistence Risks (Vercel Ephemeral Filesystem)
 The following use local files and/or SQLite; on Vercel these writes are ephemeral and not durable across deployments/instances:

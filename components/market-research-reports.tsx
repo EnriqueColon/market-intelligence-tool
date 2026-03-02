@@ -25,9 +25,11 @@ function isCbreReport(report: ReportEntry): boolean {
 function ReportCard({
   report,
   aiSummary,
+  isVercel,
 }: {
   report: ReportEntry
   aiSummary?: ReportSummaryEntry | null
+  isVercel?: boolean
 }) {
   const [summaryOpen, setSummaryOpen] = useState(false)
   const [cbreFindOpen, setCbreFindOpen] = useState(false)
@@ -233,13 +235,14 @@ function ReportCard({
           open={cbreFindOpen}
           onOpenChange={setCbreFindOpen}
           report={report}
+          isVercel={isVercel}
         />
       )}
     </div>
   )
 }
 
-export function MarketResearchReports() {
+export function MarketResearchReports({ isVercel = false }: { isVercel?: boolean }) {
   const [summaries, setSummaries] = useState<Record<string, ReportSummaryEntry>>({})
 
   useEffect(() => {
@@ -273,6 +276,7 @@ export function MarketResearchReports() {
                     key={report.id}
                     report={report}
                     aiSummary={summaries[report.id]}
+                    isVercel={isVercel}
                   />
                 ))}
               </div>

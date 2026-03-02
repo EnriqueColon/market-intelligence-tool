@@ -5,9 +5,14 @@
 
 export type EntityId =
   | "all"
-  | "watchlist"
+  | "federalreserve"
+  | "fdic"
   | "cbre"
   | "jll"
+  | "cushmanwakefield"
+  | "colliers"
+  | "naiop"
+  | "uli"
   | "mba"
   | "mhn"
   | "commercialsearch"
@@ -15,58 +20,122 @@ export type EntityId =
 export type EntityRecord = {
   id: EntityId
   label: string
-  /** Base domains for this entity. Subdomains are allowed (e.g. www.cbre.com, us.cbre.com). */
-  domains: string[]
+  /** Landing/report pages for this entity. Subdomains are allowed. */
+  landingDomains: string[]
+  /**
+   * Asset domains where PDFs can live for this entity.
+   * Keep strict and only include known, expected hosts.
+   */
+  assetDomains: string[]
 }
 
 /** Allowed domains per entity. Subdomains of each are allowed. */
 export const ENTITY_SOURCES: EntityRecord[] = [
   {
+    id: "federalreserve",
+    label: "Federal Reserve",
+    landingDomains: ["federalreserve.gov"],
+    assetDomains: ["federalreserve.gov"],
+  },
+  {
+    id: "fdic",
+    label: "FDIC",
+    landingDomains: ["fdic.gov"],
+    assetDomains: ["fdic.gov"],
+  },
+  {
     id: "cbre",
     label: "CBRE",
-    domains: ["cbre.com", "cbre.us"],
+    landingDomains: ["cbre.com", "cbre.us"],
+    assetDomains: ["cbre.com", "cbre.us", "cbre-propertysearch.com"],
   },
   {
     id: "jll",
     label: "JLL",
-    domains: ["jll.com"],
+    landingDomains: ["jll.com"],
+    assetDomains: ["jll.com"],
+  },
+  {
+    id: "cushmanwakefield",
+    label: "Cushman & Wakefield",
+    landingDomains: ["cushmanwakefield.com"],
+    assetDomains: ["cushmanwakefield.com"],
+  },
+  {
+    id: "colliers",
+    label: "Colliers",
+    landingDomains: ["colliers.com"],
+    assetDomains: ["colliers.com"],
+  },
+  {
+    id: "naiop",
+    label: "NAIOP",
+    landingDomains: ["naiop.org"],
+    assetDomains: ["naiop.org"],
+  },
+  {
+    id: "uli",
+    label: "ULI",
+    landingDomains: ["uli.org"],
+    assetDomains: ["uli.org"],
   },
   {
     id: "mba",
     label: "MBA",
-    domains: ["mba.org"],
+    landingDomains: ["mba.org"],
+    assetDomains: ["mba.org"],
   },
   {
     id: "mhn",
     label: "MHN",
-    domains: ["multihousingnews.com"],
+    landingDomains: ["multihousingnews.com"],
+    assetDomains: ["multihousingnews.com"],
   },
   {
     id: "commercialsearch",
     label: "CommercialSearch",
-    domains: ["commercialsearch.com"],
+    landingDomains: ["commercialsearch.com"],
+    assetDomains: ["commercialsearch.com"],
   },
 ]
 
-/** Watchlist = CBRE + JLL (main CRE research firms). */
-export const WATCHLIST_ENTITY_IDS: EntityId[] = ["cbre", "jll"]
+const PRIMARY_V1_ENTITY_IDS: EntityId[] = [
+  "federalreserve",
+  "fdic",
+  "cbre",
+  "jll",
+  "cushmanwakefield",
+  "colliers",
+  "naiop",
+  "uli",
+]
 
-/** Get domains for entityId. For "all" returns all domains; for "watchlist" returns watchlist domains. */
+/** Get domains for entityId. For "all" returns all domains. */
 export function getDomainsForEntity(entityId: EntityId): string[] {
+  return getLandingDomainsForEntity(entityId)
+}
+
+/** Get landing domains for entityId. */
+export function getLandingDomainsForEntity(entityId: EntityId): string[] {
   if (entityId === "all") {
-    return ENTITY_SOURCES.flatMap((e) => e.domains)
-  }
-  if (entityId === "watchlist") {
-    return ENTITY_SOURCES.filter((e) => WATCHLIST_ENTITY_IDS.includes(e.id)).flatMap((e) => e.domains)
+    return ENTITY_SOURCES.filter((e) => PRIMARY_V1_ENTITY_IDS.includes(e.id)).flatMap((e) => e.landingDomains)
   }
   const entity = ENTITY_SOURCES.find((e) => e.id === entityId)
-  return entity ? entity.domains : []
+  return entity ? entity.landingDomains : []
+}
+
+/** Get asset domains for entityId. */
+export function getAssetDomainsForEntity(entityId: EntityId): string[] {
+  if (entityId === "all") {
+    return ENTITY_SOURCES.filter((e) => PRIMARY_V1_ENTITY_IDS.includes(e.id)).flatMap((e) => e.assetDomains)
+  }
+  const entity = ENTITY_SOURCES.find((e) => e.id === entityId)
+  return entity ? entity.assetDomains : []
 }
 
 /** Get entity label for display. */
 export function getEntityLabel(entityId: EntityId): string {
   if (entityId === "all") return "All (Approved Sources)"
-  if (entityId === "watchlist") return "Watchlist (Approved Sources)"
   const entity = ENTITY_SOURCES.find((e) => e.id === entityId)
   return entity ? entity.label : "Unknown"
 }
@@ -74,6 +143,7 @@ export function getEntityLabel(entityId: EntityId): string {
 /** Dropdown options for the Search UI. */
 export const ENTITY_DROPDOWN_OPTIONS: { value: EntityId; label: string }[] = [
   { value: "all", label: "All (Approved Sources)" },
-  { value: "watchlist", label: "Watchlist (Approved Sources)" },
-  ...ENTITY_SOURCES.map((e) => ({ value: e.id as EntityId, label: e.label })),
+  ...ENTITY_SOURCES
+    .filter((e) => PRIMARY_V1_ENTITY_IDS.includes(e.id))
+    .map((e) => ({ value: e.id, label: e.label })),
 ]

@@ -12,7 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { ExternalLink, Loader2, Search, Sparkles, Bookmark } from "lucide-react"
+import { ExternalLink, Loader2, Search, Sparkles } from "lucide-react"
 import { ENTITY_DROPDOWN_OPTIONS, type EntityId } from "@/lib/entity-sources"
 import {
   searchIndustryReports,
@@ -33,15 +33,13 @@ function SearchResultRow({
   entityId,
   summaryCache,
   onSummaryReady,
-  saved,
-  onSave,
+  preferPdf,
 }: {
   result: SearchResult
   entityId: EntityId
   summaryCache: ReportSummaryEntry | null
   onSummaryReady: (url: string, summary: ReportSummaryEntry) => void
-  saved: boolean
-  onSave: (result: SearchResult) => void
+  preferPdf: boolean
 }) {
   const [status, setStatus] = useState<ResultStatus>(summaryCache ? "done" : "idle")
   const [error, setError] = useState<string | null>(null)
@@ -55,7 +53,11 @@ function SearchResultRow({
     }
     setStatus("summarizing")
     setError(null)
-    const res = await summarizeFoundReport(result.url, result.title, entityId)
+    const res = await summarizeFoundReport(result.url, result.title, entityId, {
+      documentUrl: result.documentUrl,
+      documentType: result.documentType,
+      publishedDate: result.inferredDate,
+    })
     if (res.ok) {
       setSummary(res.summary)
       setStatus("done")
@@ -99,7 +101,7 @@ function SearchResultRow({
               size="sm"
               className="text-xs h-8"
               onClick={handleSummarize}
-              disabled={status === "summarizing"}
+              disabled={status === "summarizing" || (!summary && preferPdf && result.documentType !== "pdf")}
             >
               {status === "summarizing" ? (
                 <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
@@ -115,20 +117,27 @@ function SearchResultRow({
                 </>
               )}
             </Button>
-            <Button
-              variant={saved ? "default" : "secondary"}
-              size="sm"
-              className="text-xs h-8"
-              onClick={() => onSave(result)}
-            >
-              <Bookmark className={`h-3.5 w-3.5 mr-1 ${saved ? "fill-current" : ""}`} />
-              {saved ? "Saved" : "Save"}
-            </Button>
           </div>
           {status === "failed" && error && (
             <p className="text-[10px] text-destructive max-w-[200px] text-right">{error}</p>
           )}
         </div>
+          <div className="flex items-center gap-2 mt-1">
+            {result.documentType === "pdf" ? (
+              <span className="inline-flex items-center rounded-md bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-700">
+                PDF ✅
+              </span>
+            ) : (
+              <span className="inline-flex items-center rounded-md bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700">
+                No PDF ⚠️
+              </span>
+            )}
+            {result.blockedByAllowlist && (
+              <span className="inline-flex items-center rounded-md bg-rose-100 px-2 py-0.5 text-[10px] font-medium text-rose-700">
+                Blocked by allowlist
+              </span>
+            )}
+          </div>
       </div>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -195,7 +204,6 @@ export function SearchIndustryReports() {
   const [status, setStatus] = useState<"idle" | "searching" | "done" | "failed">("idle")
   const [error, setError] = useState<string | null>(null)
   const [summaryCache, setSummaryCache] = useState<Record<string, ReportSummaryEntry>>({})
-  const [savedUrls, setSavedUrls] = useState<Set<string>>(new Set())
 
   const handleSearch = useCallback(async () => {
     const trimmed = query.trim()
@@ -223,16 +231,12 @@ export function SearchIndustryReports() {
     setSummaryCache((prev) => ({ ...prev, [url]: summary }))
   }, [])
 
-  const handleSave = useCallback((result: SearchResult) => {
-    setSavedUrls((prev) => new Set(prev).add(result.url))
-  }, [])
-
   return (
     <Card className="p-6 border-slate-200/80 bg-slate-50/30">
       <div className="mb-4">
         <h3 className="text-base font-semibold text-slate-800">Search Industry Reports</h3>
         <p className="text-sm text-slate-600 mt-1">
-          Search approved sources (CBRE, JLL, MBA, MHN, CommercialSearch) via Google. Results are strictly filtered to allowed domains. Summarize on demand; summaries are cached.
+          Secondary ad-hoc search over approved sources. Results are strict-allowlist filtered, resolved to real documents (PDF-first), and summarized with durable persistence.
         </p>
       </div>
 
@@ -308,8 +312,7 @@ export function SearchIndustryReports() {
               entityId={entityId}
               summaryCache={summaryCache[result.url] ?? null}
               onSummaryReady={handleSummaryReady}
-              saved={savedUrls.has(result.url)}
-              onSave={handleSave}
+              preferPdf={preferPdf}
             />
           ))}
         </div>
