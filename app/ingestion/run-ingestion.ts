@@ -6,12 +6,13 @@ import { upsertResearchReport } from "@/app/ingestion/storage/upsert-report"
 import { federalReserveSource } from "@/app/ingestion/sources/federal-reserve"
 import { fdicSource } from "@/app/ingestion/sources/fdic"
 import { cbreSource } from "@/app/ingestion/sources/cbre"
+import { fetchCbreCoveoResults } from "@/app/ingestion/sources/cbre-coveo"
 import { jllSource } from "@/app/ingestion/sources/jll"
 import { cushmanWakefieldSource } from "@/app/ingestion/sources/cushman-wakefield"
 import { colliersSource } from "@/app/ingestion/sources/colliers"
 import { naiopSource } from "@/app/ingestion/sources/naiop"
 import { uliSource } from "@/app/ingestion/sources/uli"
-import type { ProducerAdapter } from "@/app/ingestion/sources/types"
+import type { ExtractedReport, ProducerAdapter } from "@/app/ingestion/sources/types"
 
 const ADAPTERS: ProducerAdapter[] = [
   federalReserveSource,
@@ -129,6 +130,25 @@ function pushBounded<T>(arr: T[], item: T, limit = 5): void {
   arr.push(item)
 }
 
+const DEFAULT_CBRE_COVEO_QUERIES = [
+  "south florida",
+  "florida",
+  "us multifamily",
+  "us industrial",
+  "us office",
+  "us retail",
+]
+
+function getCbreCoveoQueries(): string[] {
+  const raw = process.env.CBRE_COVEO_QUERIES?.trim()
+  if (!raw) return DEFAULT_CBRE_COVEO_QUERIES
+  const parsed = raw
+    .split(",")
+    .map((q) => q.trim())
+    .filter(Boolean)
+  return parsed.length > 0 ? parsed : DEFAULT_CBRE_COVEO_QUERIES
+}
+
 export async function runInstitutionalResearchIngestion(): Promise<IngestionRunResult> {
   const limits = getIngestionLimits()
   const startedAt = new Date()
@@ -184,37 +204,8 @@ export async function runInstitutionalResearchIngestion(): Promise<IngestionRunR
 
     console.log("[ingestion] producer start", { producer: producerId })
 
-    for (const seedUrl of adapter.seedUrls) {
-      if (shouldStop()) break
-      const html = await fetchHtml(seedUrl)
-      if (!html) {
-        errors.push({
-          producer: adapter.producerId,
-          stage: "seed_fetch",
-          url: seedUrl,
-          message: "Seed page fetch failed or timed out.",
-        })
-        continue
-      }
-
-      let extracted: ReturnType<ProducerAdapter["extractReports"]> = []
-      try {
-        extracted = adapter.extractReports(html, seedUrl)
-      } catch (err) {
-        errors.push({
-          producer: adapter.producerId,
-          stage: "extract",
-          url: seedUrl,
-          message: err instanceof Error ? err.message : String(err),
-        })
-        continue
-      }
-
-      const limited = extracted.slice(0, limits.maxReportsPerProducer - producerCandidates)
-      producerCandidates += limited.length
-      candidatesFound += limited.length
-
-      for (const report of limited) {
+    const processReports = async (reports: ExtractedReport[]) => {
+      for (const report of reports) {
         if (shouldStop()) break
         if (processed >= limits.maxTotalReports) {
           stopReason = "max total reached"
@@ -326,6 +317,79 @@ export async function runInstitutionalResearchIngestion(): Promise<IngestionRunR
           skipped += 1
           producerSkipped += 1
         }
+      }
+    }
+
+    if (producerId === "cbre") {
+      const queries = getCbreCoveoQueries()
+      const merged: ExtractedReport[] = []
+      let rawResultsCount = 0
+      let queriesRun = 0
+
+      for (const query of queries) {
+        if (shouldStop()) break
+        try {
+          const results = await fetchCbreCoveoResults({
+            query,
+            numberOfResults: 9,
+            firstResult: 0,
+          })
+          queriesRun += 1
+          rawResultsCount += results.length
+          merged.push(...results)
+        } catch (err) {
+          errors.push({
+            producer: producerId,
+            stage: "extract",
+            url: query,
+            message: err instanceof Error ? err.message : String(err),
+          })
+        }
+      }
+
+      const deduped = Array.from(new Map(merged.map((r) => [r.landingUrl, r])).values())
+      const limited = deduped.slice(0, limits.maxReportsPerProducer)
+      producerCandidates += limited.length
+      candidatesFound += limited.length
+      console.log("[ingestion] cbre coveo", {
+        queriesRun,
+        queries,
+        rawResultsCount,
+        dedupedCount: deduped.length,
+        finalCandidateCount: limited.length,
+      })
+      await processReports(limited)
+    } else {
+      for (const seedUrl of adapter.seedUrls) {
+        if (shouldStop()) break
+        const html = await fetchHtml(seedUrl)
+        if (!html) {
+          errors.push({
+            producer: adapter.producerId,
+            stage: "seed_fetch",
+            url: seedUrl,
+            message: "Seed page fetch failed or timed out.",
+          })
+          continue
+        }
+
+        let extracted: ReturnType<ProducerAdapter["extractReports"]> = []
+        try {
+          extracted = adapter.extractReports(html, seedUrl)
+        } catch (err) {
+          errors.push({
+            producer: adapter.producerId,
+            stage: "extract",
+            url: seedUrl,
+            message: err instanceof Error ? err.message : String(err),
+          })
+          continue
+        }
+
+        const limited = extracted.slice(0, limits.maxReportsPerProducer - producerCandidates)
+        producerCandidates += limited.length
+        candidatesFound += limited.length
+        await processReports(limited)
       }
     }
 
