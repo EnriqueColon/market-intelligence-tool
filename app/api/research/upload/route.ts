@@ -18,7 +18,9 @@ function humanizeFilename(name: string): string {
 }
 
 export async function POST(request: NextRequest) {
-  const token = request.headers.get("x-admin-upload-token")
+  const token =
+    request.headers.get("x-admin-upload-token") ||
+    new URL(request.url).searchParams.get("token")
   if (!token || token !== process.env.ADMIN_UPLOAD_TOKEN) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
