@@ -19,12 +19,15 @@ function humanizeFilename(name: string): string {
 export async function POST(request: NextRequest) {
   try {
     const blobToken = process.env.BLOB_READ_WRITE_TOKEN?.trim()
+    const adminEnvToken = process.env.ADMIN_UPLOAD_TOKEN?.trim() || ""
     if (!blobToken) {
       return NextResponse.json(
         { ok: false, error: "Blob is not configured: missing BLOB_READ_WRITE_TOKEN at runtime." },
         { status: 500 }
       )
     }
+    const requestTokenHeader = request.headers.get("x-admin-upload-token")?.trim() || ""
+    const requestTokenQuery = new URL(request.url).searchParams.get("token")?.trim() || ""
 
     const body = (await request.json()) as HandleUploadBody
     const json = await handleUpload({
@@ -39,9 +42,20 @@ export async function POST(request: NextRequest) {
             return {}
           }
         })()
-        const adminToken =
-          typeof parsed.adminToken === "string" ? parsed.adminToken : ""
-        if (!adminToken || adminToken !== process.env.ADMIN_UPLOAD_TOKEN) {
+        const payloadToken =
+          typeof parsed.adminToken === "string" ? parsed.adminToken.trim() : ""
+
+        const authorized =
+          (adminEnvToken && payloadToken === adminEnvToken) ||
+          (adminEnvToken && requestTokenHeader === adminEnvToken) ||
+          (adminEnvToken && requestTokenQuery === adminEnvToken)
+
+        if (!authorized) {
+          console.error("[research-upload] Unauthorized token handshake", {
+            hasPayloadToken: Boolean(payloadToken),
+            hasHeaderToken: Boolean(requestTokenHeader),
+            hasQueryToken: Boolean(requestTokenQuery),
+          })
           throw new Error("Unauthorized")
         }
         const originalFilename =
