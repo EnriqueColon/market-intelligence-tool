@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
+import { upload } from "@vercel/blob/client"
 
 type LibraryItem = {
   id: number
@@ -14,7 +15,7 @@ type LibraryItem = {
 
 type UploadResult = {
   ok: boolean
-  uploaded?: Array<{ title: string; url: string; id: number }>
+  uploaded?: Array<{ title: string; url: string; id?: number }>
   failed?: Array<{ filename: string; error: string }>
   error?: string
 }
@@ -100,24 +101,72 @@ export function MarketResearchLibrary() {
       return
     }
 
+    const MAX_FILE_SIZE = 25 * 1024 * 1024
+    const MAX_FILES = 15
+    if (files.length > MAX_FILES) {
+      setUploadResult({ ok: false, error: `Too many files. Max ${MAX_FILES} per request.` })
+      return
+    }
+
     setUploading(true)
     setUploadResult(null)
+    const uploaded: Array<{ title: string; url: string }> = []
+    const failed: Array<{ filename: string; error: string }> = []
+
+    const now = new Date()
+    const yyyy = String(now.getUTCFullYear())
+    const mm = String(now.getUTCMonth() + 1).padStart(2, "0")
+
+    const humanizeFilename = (name: string) =>
+      name.replace(/\.pdf$/i, "").replace(/[-_]+/g, " ").replace(/\s+/g, " ").trim()
+
+    const safeFilename = (name: string) => {
+      const lower = name.toLowerCase().trim().replace(/\s+/g, "-")
+      const cleaned = lower.replace(/[^a-z0-9._-]/g, "")
+      return cleaned || `report-${Date.now()}.pdf`
+    }
+
     try {
-      const formData = new FormData()
-      for (const file of files) formData.append("files", file)
-      const res = await fetch("/api/research/upload", {
-        method: "POST",
-        headers: {
-          "x-admin-upload-token": uploadToken.trim(),
-        },
-        body: formData,
-      })
-      const data = await readJsonSafe<UploadResult>(res)
-      setUploadResult(data)
-      if (res.ok && data.ok) {
-        setFiles([])
-        await loadLibrary()
+      for (const file of files) {
+        const filename = file.name || "unnamed.pdf"
+        const lower = filename.toLowerCase()
+        if (!(file.type === "application/pdf" || lower.endsWith(".pdf"))) {
+          failed.push({ filename, error: "Only PDF files are allowed." })
+          continue
+        }
+        if (file.size > MAX_FILE_SIZE) {
+          failed.push({ filename, error: "File exceeds 25MB limit." })
+          continue
+        }
+
+        const pathname = `market-research/${yyyy}/${mm}/${Date.now()}-${safeFilename(filename)}`
+        try {
+          const blob = await upload(pathname, file, {
+            access: "public",
+            handleUploadUrl: "/api/research/upload",
+            headers: {
+              "x-admin-upload-token": uploadToken.trim(),
+            },
+            clientPayload: JSON.stringify({
+              originalFilename: filename,
+              title: humanizeFilename(filename) || "Untitled Report",
+            }),
+          })
+          uploaded.push({
+            title: humanizeFilename(filename) || "Untitled Report",
+            url: blob.url,
+          })
+        } catch (err) {
+          failed.push({
+            filename,
+            error: err instanceof Error ? err.message : "Upload failed.",
+          })
+        }
       }
+
+      setUploadResult({ ok: failed.length === 0, uploaded, failed })
+      setFiles([])
+      await loadLibrary()
     } catch (err) {
       setUploadResult({
         ok: false,
@@ -126,7 +175,7 @@ export function MarketResearchLibrary() {
     } finally {
       setUploading(false)
     }
-  }, [files, loadLibrary, readJsonSafe, uploadToken])
+  }, [files, loadLibrary, uploadToken])
 
   return (
     <div className="space-y-6">
