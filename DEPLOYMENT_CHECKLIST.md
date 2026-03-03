@@ -17,6 +17,7 @@ Server-only (do **not** expose as `NEXT_PUBLIC_*`):
 - `POSTGRES_URL` (from Vercel Postgres integration)
 - `ADMIN_INIT_TOKEN` (required to initialize Market Research DB tables)
 - `INGESTION_TOKEN` (required for protected ingestion run endpoint)
+- `ADMIN_UPLOAD_TOKEN` (required for protected manual PDF upload endpoint)
 - `FRED_API_KEY`
 - `LEGISCAN_API_KEY`
 - `FFIEC_USER_ID`
@@ -24,6 +25,7 @@ Server-only (do **not** expose as `NEXT_PUBLIC_*`):
 - `CENSUS_API_KEY`
 - `FDIC_API_URL` (optional override; defaults to FDIC public endpoint)
 - `FDIC_API_KEY` (optional; reserved for future FDIC auth requirements)
+- Vercel Blob store connection (required for `@vercel/blob` uploads; ensure Blob is enabled in project)
 
 Client-visible (safe to expose):
 - `NEXT_PUBLIC_NONCURRENT_DEBUG` (optional debug-only flag)
@@ -45,6 +47,8 @@ Value is a comma-separated list of feature keys.
 - `app/api/report/market-analytics-pdf/route.ts` uses Playwright and Node runtime.
 - `app/api/admin/init-db/route.ts` initializes `research_reports`, `research_summaries`, and `research_search_cache` tables (protected by `x-admin-init-token` header).
 - `app/api/ingestion/run/route.ts` runs institutional research ingestion (protected by `x-ingestion-token` header).
+- `app/api/research/upload/route.ts` handles admin PDF uploads to Vercel Blob (protected by `x-admin-upload-token` header).
+- `app/api/research/reports/route.ts` returns Market Research report library items and summary status.
 
 ## Known Persistence Risks (Vercel Ephemeral Filesystem)
 The following use local files and/or SQLite; on Vercel these writes are ephemeral and not durable across deployments/instances:

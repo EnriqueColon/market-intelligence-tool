@@ -12,6 +12,7 @@ import { InvestingBusinessMentions } from "@/components/investing-business-menti
 import { ArticleDigest } from "@/components/article-digest"
 import { IndustryOutlook } from "@/components/industry-outlook"
 import { SendNewsEmailButton } from "@/components/send-news-email-button"
+import { MarketResearchLibrary } from "@/components/market-research-library"
 
 const LEVEL_OPTIONS = [
   { value: "national", label: "National" },
@@ -166,24 +167,7 @@ export function MarketIntelligenceDashboard({
                     Curated institutional reports (PDF) will be uploaded here.
                   </p>
                 </div>
-                <div className="rounded-lg border border-slate-200/80 bg-slate-50/30 p-6">
-                  <h3 className="text-base font-semibold text-slate-800">Under Construction</h3>
-                  <ul className="mt-3 space-y-2 text-sm text-slate-600">
-                    <li>Manual PDF upload pipeline: pending</li>
-                    <li>Summaries: pending</li>
-                    <li>Access control: pending</li>
-                  </ul>
-                  <div className="mt-5">
-                    <button
-                      type="button"
-                      disabled
-                      className="rounded-md bg-slate-300 px-4 py-2 text-sm font-medium text-white cursor-not-allowed"
-                    >
-                      Upload report (admin)
-                    </button>
-                    <p className="mt-2 text-xs text-slate-500">Coming next</p>
-                  </div>
-                </div>
+                <MarketResearchLibrary />
               </TabsContent>
             )}
 
