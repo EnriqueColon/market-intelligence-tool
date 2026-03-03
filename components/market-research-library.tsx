@@ -30,6 +30,7 @@ export function MarketResearchLibrary() {
   const [uploadToken, setUploadToken] = useState("")
   const [files, setFiles] = useState<File[]>([])
   const [uploading, setUploading] = useState(false)
+  const [uploadStatus, setUploadStatus] = useState<string>("")
   const [uploadResult, setUploadResult] = useState<UploadResult | null>(null)
 
   useEffect(() => {
@@ -109,6 +110,7 @@ export function MarketResearchLibrary() {
     }
 
     setUploading(true)
+    setUploadStatus("Starting upload...")
     setUploadResult(null)
     const uploaded: Array<{ title: string; url: string }> = []
     const failed: Array<{ filename: string; error: string }> = []
@@ -127,8 +129,22 @@ export function MarketResearchLibrary() {
     }
 
     try {
+      const withTimeout = async <T,>(
+        task: Promise<T>,
+        timeoutMs: number,
+        message: string
+      ): Promise<T> => {
+        return await Promise.race([
+          task,
+          new Promise<T>((_, reject) =>
+            setTimeout(() => reject(new Error(message)), timeoutMs)
+          ),
+        ])
+      }
+
       for (const file of files) {
         const filename = file.name || "unnamed.pdf"
+        setUploadStatus(`Uploading ${filename}...`)
         const lower = filename.toLowerCase()
         if (!(file.type === "application/pdf" || lower.endsWith(".pdf"))) {
           failed.push({ filename, error: "Only PDF files are allowed." })
@@ -141,28 +157,37 @@ export function MarketResearchLibrary() {
 
         const pathname = `market-research/${yyyy}/${mm}/${Date.now()}-${safeFilename(filename)}`
         try {
-          const blob = await upload(pathname, file, {
-            access: "public",
-            handleUploadUrl: "/api/research/upload",
-            clientPayload: JSON.stringify({
-              adminToken: uploadToken.trim(),
-              originalFilename: filename,
-              title: humanizeFilename(filename) || "Untitled Report",
+          const blob = await withTimeout(
+            upload(pathname, file, {
+              access: "public",
+              handleUploadUrl: "/api/research/upload",
+              clientPayload: JSON.stringify({
+                adminToken: uploadToken.trim(),
+                originalFilename: filename,
+                title: humanizeFilename(filename) || "Untitled Report",
+              }),
             }),
-          })
-          const registerRes = await fetch("/api/research/register-upload", {
-            method: "POST",
-            headers: {
-              "content-type": "application/json",
-              "x-admin-upload-token": uploadToken.trim(),
-            },
-            body: JSON.stringify({
-              url: blob.url,
-              pathname: blob.pathname,
-              originalFilename: filename,
-              title: humanizeFilename(filename) || "Untitled Report",
+            90000,
+            "Upload timed out after 90 seconds."
+          )
+          setUploadStatus(`Registering ${filename}...`)
+          const registerRes = await withTimeout(
+            fetch("/api/research/register-upload", {
+              method: "POST",
+              headers: {
+                "content-type": "application/json",
+                "x-admin-upload-token": uploadToken.trim(),
+              },
+              body: JSON.stringify({
+                url: blob.url,
+                pathname: blob.pathname,
+                originalFilename: filename,
+                title: humanizeFilename(filename) || "Untitled Report",
+              }),
             }),
-          })
+            20000,
+            "Registration timed out after 20 seconds."
+          )
           const registerJson = await readJsonSafe<{
             ok: boolean
             id?: number
@@ -186,13 +211,15 @@ export function MarketResearchLibrary() {
 
       setUploadResult({ ok: failed.length === 0, uploaded, failed })
       setFiles([])
-      await loadLibrary()
+      setUploadStatus("Refreshing library...")
+      void loadLibrary()
     } catch (err) {
       setUploadResult({
         ok: false,
         error: err instanceof Error ? err.message : "Upload failed.",
       })
     } finally {
+      setUploadStatus("")
       setUploading(false)
     }
   }, [files, loadLibrary, readJsonSafe, uploadToken])
@@ -340,6 +367,9 @@ export function MarketResearchLibrary() {
           >
             {uploading ? "Uploading..." : "Upload PDFs"}
           </button>
+          {uploading && uploadStatus && (
+            <p className="text-xs text-slate-500">{uploadStatus}</p>
+          )}
         </div>
 
         {uploadResult && (
