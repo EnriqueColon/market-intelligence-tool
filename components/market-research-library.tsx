@@ -21,7 +21,7 @@ type UploadResult = {
 
 export function MarketResearchLibrary() {
   const [q, setQ] = useState("")
-  const [producer, setProducer] = useState("all")
+  const [producer, setProducer] = useState("manual")
   const [loading, setLoading] = useState(false)
   const [items, setItems] = useState<LibraryItem[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -42,6 +42,15 @@ export function MarketResearchLibrary() {
     window.sessionStorage.setItem("adminUploadToken", uploadToken)
   }, [uploadToken])
 
+  const readJsonSafe = useCallback(async <T,>(res: Response): Promise<T> => {
+    const raw = await res.text()
+    try {
+      return JSON.parse(raw) as T
+    } catch {
+      throw new Error(raw.slice(0, 300) || "Non-JSON response from server.")
+    }
+  }, [])
+
   const loadLibrary = useCallback(async () => {
     setLoading(true)
     setError(null)
@@ -52,11 +61,11 @@ export function MarketResearchLibrary() {
       const res = await fetch(`/api/research/reports?${params.toString()}`, {
         cache: "no-store",
       })
-      const data = (await res.json()) as {
+      const data = await readJsonSafe<{
         ok: boolean
         items?: LibraryItem[]
         error?: string
-      }
+      }>(res)
       if (!res.ok || !data.ok) {
         setError(data.error || "Failed to load report library.")
         setItems([])
@@ -69,7 +78,7 @@ export function MarketResearchLibrary() {
     } finally {
       setLoading(false)
     }
-  }, [q, producer])
+  }, [q, producer, readJsonSafe])
 
   useEffect(() => {
     loadLibrary()
@@ -77,6 +86,7 @@ export function MarketResearchLibrary() {
 
   const producerOptions = useMemo(() => {
     const unique = new Set(items.map((i) => i.producer))
+    unique.add("manual")
     return ["all", ...Array.from(unique).sort((a, b) => a.localeCompare(b))]
   }, [items])
 
@@ -102,7 +112,7 @@ export function MarketResearchLibrary() {
         },
         body: formData,
       })
-      const data = (await res.json()) as UploadResult
+      const data = await readJsonSafe<UploadResult>(res)
       setUploadResult(data)
       if (res.ok && data.ok) {
         setFiles([])
@@ -116,7 +126,7 @@ export function MarketResearchLibrary() {
     } finally {
       setUploading(false)
     }
-  }, [files, loadLibrary, uploadToken])
+  }, [files, loadLibrary, readJsonSafe, uploadToken])
 
   return (
     <div className="space-y-6">
