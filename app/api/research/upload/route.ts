@@ -18,13 +18,6 @@ function humanizeFilename(name: string): string {
 }
 
 export async function POST(request: NextRequest) {
-  const token =
-    request.headers.get("x-admin-upload-token") ||
-    new URL(request.url).searchParams.get("token")
-  if (!token || token !== process.env.ADMIN_UPLOAD_TOKEN) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
-
   try {
     const body = (await request.json()) as HandleUploadBody
     const json = await handleUpload({
@@ -38,6 +31,11 @@ export async function POST(request: NextRequest) {
             return {}
           }
         })()
+        const adminToken =
+          typeof parsed.adminToken === "string" ? parsed.adminToken : ""
+        if (!adminToken || adminToken !== process.env.ADMIN_UPLOAD_TOKEN) {
+          throw new Error("Unauthorized")
+        }
         const originalFilename =
           typeof parsed.originalFilename === "string" ? parsed.originalFilename : pathname
         const safe = safeFilename(originalFilename || pathname)
@@ -86,9 +84,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(json)
   } catch (err) {
     console.error("[research-upload] Failed:", err)
+    const message = err instanceof Error ? err.message : "Failed to process upload request."
+    const status = /unauthorized/i.test(message) ? 401 : 500
     return NextResponse.json(
-      { ok: false, error: err instanceof Error ? err.message : "Failed to process upload request." },
-      { status: 500 }
+      { ok: false, error: message },
+      { status }
     )
   }
 }

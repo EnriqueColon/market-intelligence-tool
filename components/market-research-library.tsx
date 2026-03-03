@@ -141,14 +141,11 @@ export function MarketResearchLibrary() {
 
         const pathname = `market-research/${yyyy}/${mm}/${Date.now()}-${safeFilename(filename)}`
         try {
-          const tokenParam = encodeURIComponent(uploadToken.trim())
           const blob = await upload(pathname, file, {
             access: "public",
-            handleUploadUrl: `/api/research/upload?token=${tokenParam}`,
-            headers: {
-              "x-admin-upload-token": uploadToken.trim(),
-            },
+            handleUploadUrl: "/api/research/upload",
             clientPayload: JSON.stringify({
+              adminToken: uploadToken.trim(),
               originalFilename: filename,
               title: humanizeFilename(filename) || "Untitled Report",
             }),
