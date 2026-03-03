@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
 import { handleUpload, type HandleUploadBody } from "@vercel/blob/client"
-import { upsertResearchReport } from "@/app/ingestion/storage/upsert-report"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -19,8 +18,17 @@ function humanizeFilename(name: string): string {
 
 export async function POST(request: NextRequest) {
   try {
+    const blobToken = process.env.BLOB_READ_WRITE_TOKEN?.trim()
+    if (!blobToken) {
+      return NextResponse.json(
+        { ok: false, error: "Blob is not configured: missing BLOB_READ_WRITE_TOKEN at runtime." },
+        { status: 500 }
+      )
+    }
+
     const body = (await request.json()) as HandleUploadBody
     const json = await handleUpload({
+      token: blobToken,
       body,
       request,
       onBeforeGenerateToken: async (pathname, clientPayload) => {
@@ -50,34 +58,11 @@ export async function POST(request: NextRequest) {
           }),
         }
       },
-      onUploadCompleted: async ({ blob, tokenPayload }) => {
-        const payload = (() => {
-          try {
-            return tokenPayload ? (JSON.parse(tokenPayload) as Record<string, unknown>) : {}
-          } catch {
-            return {}
-          }
-        })()
-        const originalFilename =
-          typeof payload.originalFilename === "string" ? payload.originalFilename : blob.pathname
-        const title =
-          typeof payload.title === "string" ? payload.title : humanizeFilename(originalFilename)
-        await upsertResearchReport({
-          producer: "manual",
-          title: title || "Untitled Report",
-          landingUrl: blob.url,
-          documentUrl: blob.url,
-          documentType: "pdf",
-          tags: {
-            source: "manual_upload",
-            originalFilename,
-            blobPath: blob.pathname,
-            uploadedAt:
-              typeof payload.uploadedAt === "string"
-                ? payload.uploadedAt
-                : new Date().toISOString(),
-          },
-        })
+      onUploadCompleted: async () => {
+        // Intentionally no-op for v1.
+        // Metadata persistence is handled by /api/research/register-upload from the client
+        // immediately after upload() resolves, which keeps this callback fast and avoids
+        // slow/hanging client completion when DB connectivity is degraded.
       },
     })
 

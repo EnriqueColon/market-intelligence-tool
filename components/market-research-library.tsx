@@ -150,9 +150,31 @@ export function MarketResearchLibrary() {
               title: humanizeFilename(filename) || "Untitled Report",
             }),
           })
+          const registerRes = await fetch("/api/research/register-upload", {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              "x-admin-upload-token": uploadToken.trim(),
+            },
+            body: JSON.stringify({
+              url: blob.url,
+              pathname: blob.pathname,
+              originalFilename: filename,
+              title: humanizeFilename(filename) || "Untitled Report",
+            }),
+          })
+          const registerJson = await readJsonSafe<{
+            ok: boolean
+            id?: number
+            error?: string
+          }>(registerRes)
+          if (!registerRes.ok || !registerJson.ok) {
+            throw new Error(registerJson.error || "Uploaded blob but failed to register report.")
+          }
           uploaded.push({
             title: humanizeFilename(filename) || "Untitled Report",
             url: blob.url,
+            id: registerJson.id,
           })
         } catch (err) {
           failed.push({
@@ -173,7 +195,7 @@ export function MarketResearchLibrary() {
     } finally {
       setUploading(false)
     }
-  }, [files, loadLibrary, uploadToken])
+  }, [files, loadLibrary, readJsonSafe, uploadToken])
 
   return (
     <div className="space-y-6">
