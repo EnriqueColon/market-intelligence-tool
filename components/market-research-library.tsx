@@ -275,7 +275,7 @@ export function MarketResearchLibrary() {
           setUploadStatus(`${filename}: uploading bytes to Blob...`)
           const blob = await withTimeout(
             upload(pathname, file, {
-              access: "public",
+              access: "private",
               handleUploadUrl: "/api/blob/handle-upload",
               headers: {
                 "x-admin-upload-token": uploadToken.trim(),

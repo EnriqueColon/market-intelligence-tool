@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
     const putStartedAt = Date.now()
     const blob = await withTimeout(
       put(pathname, content, {
-        access: "public",
+        access: "private",
         addRandomSuffix: false,
         contentType: "text/plain; charset=utf-8",
         token: blobToken,
