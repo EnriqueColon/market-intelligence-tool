@@ -14,6 +14,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    console.log("[blob-handle-upload] start")
     const blobToken = process.env.BLOB_READ_WRITE_TOKEN?.trim()
     if (!blobToken) {
       return NextResponse.json(
@@ -23,6 +24,9 @@ export async function POST(request: NextRequest) {
     }
 
     const body = (await request.json()) as HandleUploadBody
+    console.log("[blob-handle-upload] body type", {
+      type: (body as { type?: string })?.type ?? "unknown",
+    })
     const json = await handleUpload({
       token: blobToken,
       body,
@@ -39,6 +43,7 @@ export async function POST(request: NextRequest) {
       },
     })
 
+    console.log("[blob-handle-upload] token generated")
     return NextResponse.json(json)
   } catch (err) {
     console.error("[blob-handle-upload] Failed:", err)

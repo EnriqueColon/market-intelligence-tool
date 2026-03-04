@@ -217,8 +217,8 @@ export function MarketResearchLibrary() {
                 title: humanizeFilename(filename) || "Untitled Report",
               }),
             }),
-            90000,
-            "Upload timed out after 90 seconds."
+            30000,
+            "Upload timed out after 30 seconds."
           )
           if (waitingHintTimer) clearTimeout(waitingHintTimer)
           setFileProgress(filename, "registering", "Upload complete, saving metadata record")
@@ -266,7 +266,7 @@ export function MarketResearchLibrary() {
               "Blob token handshake failed. Check /api/blob/handle-upload auth/runtime logs."
           }
           if (msg.includes("timed out")) {
-            msg = `${msg} Likely network delay or Blob token endpoint issue.`
+            msg = `${msg} Likely token handshake or Blob transfer issue. Check /api/blob/handle-upload logs.`
           }
           failed.push({
             filename,
