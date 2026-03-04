@@ -55,6 +55,7 @@ export function MarketResearchLibrary() {
   const [uploadResult, setUploadResult] = useState<UploadResult | null>(null)
   const [progress, setProgress] = useState<FileProgress[]>([])
   const [preflightStatus, setPreflightStatus] = useState<string>("")
+  const [transferDiagStatus, setTransferDiagStatus] = useState<string>("")
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -144,6 +145,39 @@ export function MarketResearchLibrary() {
     }
   }, [runTokenPreflight])
 
+  const handleTransferDiagnostics = useCallback(async () => {
+    setTransferDiagStatus("Running transfer diagnostics...")
+    try {
+      const token = uploadToken.trim()
+      if (!token) {
+        throw new Error("Admin token is required.")
+      }
+      const res = await fetch("/api/blob/transfer-diagnostics", {
+        method: "POST",
+        headers: {
+          "x-admin-upload-token": token,
+        },
+        cache: "no-store",
+      })
+      const data = await readJsonSafe<{
+        ok: boolean
+        error?: string
+        region?: string
+        timings?: { putMs?: number; totalMs?: number }
+      }>(res)
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || "Transfer diagnostics failed.")
+      }
+      setTransferDiagStatus(
+        `Transfer diagnostics OK (${String(data.region || "unknown")}): Blob PUT ${String(
+          data.timings?.putMs ?? "n/a"
+        )}ms, total ${String(data.timings?.totalMs ?? "n/a")}ms.`
+      )
+    } catch (err) {
+      setTransferDiagStatus(err instanceof Error ? err.message : "Transfer diagnostics failed.")
+    }
+  }, [readJsonSafe, uploadToken])
+
   const handleUpload = useCallback(async () => {
     if (!uploadToken.trim()) {
       setUploadResult({ ok: false, error: "Admin token is required." })
@@ -226,6 +260,7 @@ export function MarketResearchLibrary() {
 
         const pathname = `market-research/${yyyy}/${mm}/${Date.now()}-${safeFilename(filename)}`
         try {
+          const fileStartedAt = Date.now()
           let waitingHintTimer: ReturnType<typeof setTimeout> | null = null
           waitingHintTimer = setTimeout(() => {
             setFileProgress(
@@ -256,6 +291,7 @@ export function MarketResearchLibrary() {
           if (waitingHintTimer) clearTimeout(waitingHintTimer)
           setFileProgress(filename, "registering", "Upload complete, saving metadata record")
           setUploadStatus(`${filename}: registering metadata in database...`)
+          const registerStartedAt = Date.now()
           const registerRes = await withTimeout(
             fetch("/api/research/register-upload", {
               method: "POST",
@@ -286,10 +322,12 @@ export function MarketResearchLibrary() {
             url: blob.url,
             id: registerJson.id,
           })
+          const totalMs = Date.now() - fileStartedAt
+          const registerMs = Date.now() - registerStartedAt
           setFileProgress(
             filename,
             "registered",
-            `Upload + registration complete (id ${String(registerJson.id ?? "n/a")})`
+            `Upload + registration complete (id ${String(registerJson.id ?? "n/a")}, total ${totalMs}ms, register ${registerMs}ms)`
           )
           setUploadStatus(`${filename}: complete`)
         } catch (err) {
@@ -470,6 +508,14 @@ export function MarketResearchLibrary() {
           </button>
           <button
             type="button"
+            onClick={handleTransferDiagnostics}
+            disabled={uploading}
+            className="rounded-md border border-[#006D95] bg-white px-4 py-2 text-sm font-medium text-[#006D95] disabled:opacity-60"
+          >
+            Run Transfer Diagnostics
+          </button>
+          <button
+            type="button"
             onClick={handleUpload}
             disabled={uploading}
             className="rounded-md bg-[#006D95] px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
@@ -477,6 +523,7 @@ export function MarketResearchLibrary() {
             {uploading ? "Uploading..." : "Upload PDFs"}
           </button>
           {preflightStatus && <p className="text-xs text-slate-500">{preflightStatus}</p>}
+          {transferDiagStatus && <p className="text-xs text-slate-500">{transferDiagStatus}</p>}
           {uploading && uploadStatus && (
             <p className="text-xs text-slate-500">{uploadStatus}</p>
           )}
