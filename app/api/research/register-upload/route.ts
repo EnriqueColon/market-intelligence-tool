@@ -65,6 +65,16 @@ function detectProducer(text: string): string | undefined {
   return undefined
 }
 
+function detectProducerFromSignals(...signals: Array<string | undefined>): string | undefined {
+  for (const signal of signals) {
+    const normalized = normalizeWhitespace(signal || "")
+    if (!normalized) continue
+    const detected = detectProducer(normalized)
+    if (detected) return detected
+  }
+  return undefined
+}
+
 function detectPeriodLabel(text: string): string | undefined {
   const quarter = text.match(/\bQ([1-4])\s*(20\d{2})\b/i)
   if (quarter) return `Q${quarter[1]} ${quarter[2]}`
@@ -189,7 +199,7 @@ export async function POST(request: NextRequest) {
     const originalFilename = (body.originalFilename || "").trim() || "uploaded.pdf"
     let title =
       (body.title || "").trim() || humanizeFilename(originalFilename) || "Untitled Report"
-    let producer = "manual"
+    let producer = "unknown"
     let publishedDate: string | undefined
     let extracted: ExtractedMetadata | null = null
 
@@ -203,7 +213,10 @@ export async function POST(request: NextRequest) {
     }
 
     if (extracted?.title) title = extracted.title
-    if (extracted?.producer) producer = extracted.producer
+    producer =
+      extracted?.producer ||
+      detectProducerFromSignals(title, originalFilename, body.title) ||
+      "unknown"
     if (extracted?.publishedDateISO) publishedDate = extracted.publishedDateISO
 
     const upsert = await upsertResearchReport({
