@@ -446,14 +446,19 @@ export function MarketResearchLibrary() {
                     <td className="py-3">
                       <div className="flex gap-3">
                         <a
-                          href={item.document_url}
+                          href={`/api/research/report-file?id=${item.id}`}
                           target="_blank"
                           rel="noreferrer"
                           className="text-[#006D95] underline"
                         >
                           Open PDF
                         </a>
-                        <a href={item.document_url} target="_blank" rel="noreferrer" download className="text-slate-700 underline">
+                        <a
+                          href={`/api/research/report-file?id=${item.id}&download=1`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-slate-700 underline"
+                        >
                           Download
                         </a>
                       </div>
