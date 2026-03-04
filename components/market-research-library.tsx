@@ -58,6 +58,7 @@ export function MarketResearchLibrary() {
   const [transferDiagStatus, setTransferDiagStatus] = useState<string>("")
   const [deletingTestReports, setDeletingTestReports] = useState(false)
   const [deleteStatus, setDeleteStatus] = useState<string>("")
+  const [deletingReportId, setDeletingReportId] = useState<number | null>(null)
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -400,6 +401,45 @@ export function MarketResearchLibrary() {
     }
   }, [loadLibrary, readJsonSafe, uploadToken])
 
+  const handleDeleteReport = useCallback(
+    async (reportId: number, title: string) => {
+      const token = uploadToken.trim()
+      if (!token) {
+        setDeleteStatus("Admin token is required.")
+        return
+      }
+      if (
+        typeof window !== "undefined" &&
+        !window.confirm(`Delete report "${title}"? This cannot be undone.`)
+      ) {
+        return
+      }
+
+      setDeletingReportId(reportId)
+      try {
+        const res = await fetch("/api/research/delete-report", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-admin-upload-token": token,
+          },
+          body: JSON.stringify({ id: reportId }),
+        })
+        const data = await readJsonSafe<{ ok: boolean; error?: string }>(res)
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || "Failed to delete report.")
+        }
+        setDeleteStatus(`Deleted report: ${title}`)
+        void loadLibrary()
+      } catch (err) {
+        setDeleteStatus(err instanceof Error ? err.message : "Failed to delete report.")
+      } finally {
+        setDeletingReportId(null)
+      }
+    },
+    [loadLibrary, readJsonSafe, uploadToken]
+  )
+
   return (
     <div className="space-y-6">
       <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
@@ -498,6 +538,14 @@ export function MarketResearchLibrary() {
                         >
                           Download
                         </a>
+                        <button
+                          type="button"
+                          onClick={() => void handleDeleteReport(item.id, item.title)}
+                          disabled={deletingReportId === item.id}
+                          className="text-red-700 underline disabled:opacity-60"
+                        >
+                          {deletingReportId === item.id ? "Deleting..." : "Delete"}
+                        </button>
                       </div>
                     </td>
                   </tr>
