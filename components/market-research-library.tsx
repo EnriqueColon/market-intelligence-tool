@@ -22,7 +22,13 @@ type UploadResult = {
 
 type FileProgress = {
   filename: string
-  status: "queued" | "uploading" | "registered" | "failed"
+  status:
+    | "queued"
+    | "requesting_token"
+    | "uploading_blob"
+    | "registering"
+    | "registered"
+    | "failed"
   message?: string
 }
 
@@ -150,24 +156,55 @@ export function MarketResearchLibrary() {
         ])
       }
 
+      const setFileProgress = (
+        filename: string,
+        status: FileProgress["status"],
+        message?: string
+      ) => {
+        setProgress((prev) =>
+          prev.map((p) => (p.filename === filename ? { ...p, status, message } : p))
+        )
+      }
+
+      const statusLabel: Record<FileProgress["status"], string> = {
+        queued: "queued",
+        requesting_token: "requesting upload token",
+        uploading_blob: "uploading bytes to Blob",
+        registering: "registering metadata in database",
+        registered: "done",
+        failed: "failed",
+      }
+
       for (const file of files) {
         const filename = file.name || "unnamed.pdf"
-        setUploadStatus(`Uploading ${filename}...`)
-        setProgress((prev) =>
-          prev.map((p) => (p.filename === filename ? { ...p, status: "uploading" } : p))
-        )
+        setUploadStatus(`${filename}: requesting upload token...`)
+        setFileProgress(filename, "requesting_token", "Calling /api/blob/handle-upload")
         const lower = filename.toLowerCase()
         if (!(file.type === "application/pdf" || lower.endsWith(".pdf"))) {
           failed.push({ filename, error: "Only PDF files are allowed." })
+          setFileProgress(filename, "failed", "Only PDF files are allowed.")
           continue
         }
         if (file.size > MAX_FILE_SIZE) {
           failed.push({ filename, error: "File exceeds 25MB limit." })
+          setFileProgress(filename, "failed", "File exceeds 25MB limit.")
           continue
         }
 
         const pathname = `market-research/${yyyy}/${mm}/${Date.now()}-${safeFilename(filename)}`
         try {
+          let waitingHintTimer: ReturnType<typeof setTimeout> | null = null
+          waitingHintTimer = setTimeout(() => {
+            setFileProgress(
+              filename,
+              "uploading_blob",
+              "Still waiting on Blob upload token/transfer..."
+            )
+            setUploadStatus(`${filename}: still waiting on Blob token or transfer...`)
+          }, 8000)
+
+          setFileProgress(filename, "uploading_blob", "Uploading file bytes to Vercel Blob")
+          setUploadStatus(`${filename}: uploading bytes to Blob...`)
           const blob = await withTimeout(
             upload(pathname, file, {
               access: "public",
@@ -183,7 +220,9 @@ export function MarketResearchLibrary() {
             90000,
             "Upload timed out after 90 seconds."
           )
-          setUploadStatus(`Registering ${filename}...`)
+          if (waitingHintTimer) clearTimeout(waitingHintTimer)
+          setFileProgress(filename, "registering", "Upload complete, saving metadata record")
+          setUploadStatus(`${filename}: registering metadata in database...`)
           const registerRes = await withTimeout(
             fetch("/api/research/register-upload", {
               method: "POST",
@@ -214,24 +253,27 @@ export function MarketResearchLibrary() {
             url: blob.url,
             id: registerJson.id,
           })
-          setProgress((prev) =>
-            prev.map((p) =>
-              p.filename === filename
-                ? { ...p, status: "registered", message: "Uploaded and registered" }
-                : p
-            )
+          setFileProgress(
+            filename,
+            "registered",
+            `Upload + registration complete (id ${String(registerJson.id ?? "n/a")})`
           )
+          setUploadStatus(`${filename}: complete`)
         } catch (err) {
-          const msg = err instanceof Error ? err.message : "Upload failed."
+          let msg = err instanceof Error ? err.message : "Upload failed."
+          if (msg.includes("Failed to retrieve the client token")) {
+            msg =
+              "Blob token handshake failed. Check /api/blob/handle-upload auth/runtime logs."
+          }
+          if (msg.includes("timed out")) {
+            msg = `${msg} Likely network delay or Blob token endpoint issue.`
+          }
           failed.push({
             filename,
             error: msg,
           })
-          setProgress((prev) =>
-            prev.map((p) =>
-              p.filename === filename ? { ...p, status: "failed", message: msg } : p
-            )
-          )
+          setFileProgress(filename, "failed", msg)
+          setUploadStatus(`${filename}: failed`)
         }
       }
 
@@ -400,7 +442,7 @@ export function MarketResearchLibrary() {
             <div className="rounded-md border border-slate-200 bg-white p-2 text-xs">
               {progress.map((p) => (
                 <p key={p.filename} className="text-slate-600">
-                  {p.filename}: {p.status}
+                  {p.filename}: {statusLabel[p.status]}
                   {p.message ? ` - ${p.message}` : ""}
                 </p>
               ))}
