@@ -11,6 +11,39 @@ type SummarizeBody = {
   reportId?: number
 }
 
+function isVercelBlobUrl(url: string): boolean {
+  return /blob\.vercel-storage\.com/i.test(url)
+}
+
+async function extractPrivateBlobPdfText(url: string): Promise<string | null> {
+  const blobToken = process.env.BLOB_READ_WRITE_TOKEN?.trim() || ""
+  if (!blobToken) return null
+
+  const response = await fetch(url, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${blobToken}`,
+    },
+    cache: "no-store",
+  })
+  if (!response.ok) return null
+
+  const contentType = (response.headers.get("content-type") || "").toLowerCase()
+  if (!contentType.includes("pdf")) return null
+
+  const arrayBuffer = await response.arrayBuffer()
+  const pdfBytes = Buffer.from(arrayBuffer)
+  const { extractTextWithFallbacks } = require("../../../actions/pdf-text-extraction.js") as {
+    extractTextWithFallbacks: (
+      bytes: Buffer,
+      opts?: { maxPages?: number; ocrPages?: number }
+    ) => Promise<{ text?: string }>
+  }
+  const extraction = await extractTextWithFallbacks(pdfBytes, { maxPages: 20, ocrPages: 3 })
+  const text = String(extraction?.text || "").trim()
+  return text.length > 100 ? text : null
+}
+
 export async function POST(request: NextRequest) {
   const token = request.headers.get("x-admin-upload-token")?.trim() || ""
   const expected = process.env.ADMIN_UPLOAD_TOKEN?.trim() || ""
@@ -53,6 +86,19 @@ export async function POST(request: NextRequest) {
 
     let resolved = await resolveDocument(report.document_url)
     let warning: string | undefined
+
+    // Private Blob URLs require Authorization and cannot be fetched like public pages.
+    if (isVercelBlobUrl(report.document_url)) {
+      const privatePdfText = await extractPrivateBlobPdfText(report.document_url)
+      if (privatePdfText) {
+        resolved = {
+          text: privatePdfText,
+          source: "pdf",
+          finalUrl: report.document_url,
+        }
+      }
+    }
+
     if (!resolved.text || resolved.text.length < 100) {
       const fallback = await resolveDocument(report.landing_url)
       if (!fallback.text || fallback.text.length < 100) {
