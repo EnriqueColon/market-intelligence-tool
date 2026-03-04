@@ -13,6 +13,21 @@ type LibraryItem = {
   has_summary: boolean
 }
 
+type SummaryData = {
+  executiveSummary?: string
+  keyTakeaways?: string[]
+  notableStats?: string[]
+  risks?: string[]
+  opportunities?: string[]
+  whatToWatch_30_90?: string[]
+  metadata?: {
+    producer?: string
+    title?: string
+    summarizedAt?: string
+    warning?: string
+  }
+}
+
 type UploadResult = {
   ok: boolean
   uploaded?: Array<{ title: string; url: string; id?: number }>
@@ -61,6 +76,21 @@ export function MarketResearchLibrary() {
   const [deletingReportId, setDeletingReportId] = useState<number | null>(null)
   const [summarizingReportId, setSummarizingReportId] = useState<number | null>(null)
   const [summaryStatus, setSummaryStatus] = useState<string>("")
+  const [summaryCard, setSummaryCard] = useState<{
+    open: boolean
+    reportId: number | null
+    title: string
+    loading: boolean
+    error: string | null
+    data: SummaryData | null
+  }>({
+    open: false,
+    reportId: null,
+    title: "",
+    loading: false,
+    error: null,
+    data: null,
+  })
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -205,6 +235,24 @@ export function MarketResearchLibrary() {
     [readJsonSafe, uploadToken]
   )
 
+  const fetchSummaryByReportId = useCallback(
+    async (reportId: number): Promise<SummaryData> => {
+      const res = await fetch(`/api/research/summary?reportId=${reportId}`, {
+        cache: "no-store",
+      })
+      const data = await readJsonSafe<{
+        ok: boolean
+        error?: string
+        summary?: SummaryData
+      }>(res)
+      if (!res.ok || !data.ok || !data.summary) {
+        throw new Error(data.error || "Failed to fetch summary.")
+      }
+      return data.summary
+    },
+    [readJsonSafe]
+  )
+
   const handleSummarizeReport = useCallback(
     async (reportId: number, title: string) => {
       setSummaryStatus("")
@@ -220,6 +268,48 @@ export function MarketResearchLibrary() {
       }
     },
     [loadLibrary, requestSummary]
+  )
+
+  const handleSummaryCard = useCallback(
+    async (item: LibraryItem) => {
+      setSummaryStatus("")
+      setSummaryCard({
+        open: true,
+        reportId: item.id,
+        title: item.title,
+        loading: true,
+        error: null,
+        data: null,
+      })
+      try {
+        if (!item.has_summary) {
+          setSummarizingReportId(item.id)
+          await requestSummary(item.id)
+          void loadLibrary()
+        }
+        const summary = await fetchSummaryByReportId(item.id)
+        setSummaryCard({
+          open: true,
+          reportId: item.id,
+          title: item.title,
+          loading: false,
+          error: null,
+          data: summary,
+        })
+      } catch (err) {
+        setSummaryCard({
+          open: true,
+          reportId: item.id,
+          title: item.title,
+          loading: false,
+          error: err instanceof Error ? err.message : "Failed to generate/fetch summary.",
+          data: null,
+        })
+      } finally {
+        setSummarizingReportId((prev) => (prev === item.id ? null : prev))
+      }
+    },
+    [fetchSummaryByReportId, loadLibrary, requestSummary]
   )
 
   const handleUpload = useCallback(async () => {
@@ -606,16 +696,18 @@ export function MarketResearchLibrary() {
                         >
                           {deletingReportId === item.id ? "Deleting..." : "Delete"}
                         </button>
-                        {!item.has_summary && (
-                          <button
-                            type="button"
-                            onClick={() => void handleSummarizeReport(item.id, item.title)}
-                            disabled={summarizingReportId === item.id}
-                            className="text-[#006D95] underline disabled:opacity-60"
-                          >
-                            {summarizingReportId === item.id ? "Summarizing..." : "Summarize"}
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          onClick={() => void handleSummaryCard(item)}
+                          disabled={summarizingReportId === item.id}
+                          className="text-[#006D95] underline disabled:opacity-60"
+                        >
+                          {summarizingReportId === item.id
+                            ? "Summarizing..."
+                            : item.has_summary
+                              ? "View Summary"
+                              : "Summary"}
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -624,6 +716,59 @@ export function MarketResearchLibrary() {
             </tbody>
           </table>
         </div>
+        {summaryCard.open && (
+          <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4 shadow-sm">
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-slate-800">Report Summary</p>
+                <p className="text-xs text-slate-600">{summaryCard.title}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  setSummaryCard((prev) => ({
+                    ...prev,
+                    open: false,
+                  }))
+                }
+                className="text-xs text-slate-500 underline"
+              >
+                Close
+              </button>
+            </div>
+            {summaryCard.loading && (
+              <p className="text-sm text-slate-600">Generating/loading summary...</p>
+            )}
+            {!summaryCard.loading && summaryCard.error && (
+              <p className="text-sm text-red-700">{summaryCard.error}</p>
+            )}
+            {!summaryCard.loading && !summaryCard.error && summaryCard.data && (
+              <div className="space-y-3 text-sm text-slate-700">
+                {!!summaryCard.data.executiveSummary && (
+                  <div>
+                    <p className="font-medium text-slate-800">Executive Summary</p>
+                    <p className="mt-1">{summaryCard.data.executiveSummary}</p>
+                  </div>
+                )}
+                {!!summaryCard.data.keyTakeaways?.length && (
+                  <div>
+                    <p className="font-medium text-slate-800">Key Takeaways</p>
+                    <ul className="mt-1 list-disc pl-5">
+                      {summaryCard.data.keyTakeaways.map((point) => (
+                        <li key={point}>{point}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {!!summaryCard.data.metadata?.warning && (
+                  <p className="text-xs text-amber-700">
+                    Note: {summaryCard.data.metadata.warning}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </section>
 
       <details className="rounded-lg border border-slate-200 bg-slate-50 p-6">
