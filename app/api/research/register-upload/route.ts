@@ -6,8 +6,8 @@ export const dynamic = "force-dynamic"
 export const maxDuration = 20
 
 type RegisterUploadBody = {
-  url?: string
-  pathname?: string
+  blobUrl?: string
+  blobPath?: string
   originalFilename?: string
   title?: string
 }
@@ -25,9 +25,9 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = (await request.json()) as RegisterUploadBody
-    const url = (body.url || "").trim()
-    if (!url) {
-      return NextResponse.json({ ok: false, error: "Missing url" }, { status: 400 })
+    const blobUrl = (body.blobUrl || "").trim()
+    if (!blobUrl) {
+      return NextResponse.json({ ok: false, error: "Missing blobUrl" }, { status: 400 })
     }
 
     const originalFilename = (body.originalFilename || "").trim() || "uploaded.pdf"
@@ -37,13 +37,13 @@ export async function POST(request: NextRequest) {
     const upsert = await upsertResearchReport({
       producer: "manual",
       title,
-      landingUrl: url,
-      documentUrl: url,
+      landingUrl: blobUrl,
+      documentUrl: blobUrl,
       documentType: "pdf",
       tags: {
         source: "manual_upload",
         originalFilename,
-        blobPath: (body.pathname || "").trim() || undefined,
+        blobPath: (body.blobPath || "").trim() || undefined,
         uploadedAt: new Date().toISOString(),
       },
     })

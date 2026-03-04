@@ -20,6 +20,12 @@ type UploadResult = {
   error?: string
 }
 
+type FileProgress = {
+  filename: string
+  status: "queued" | "uploading" | "registered" | "failed"
+  message?: string
+}
+
 export function MarketResearchLibrary() {
   const [q, setQ] = useState("")
   const [producer, setProducer] = useState("manual")
@@ -32,6 +38,7 @@ export function MarketResearchLibrary() {
   const [uploading, setUploading] = useState(false)
   const [uploadStatus, setUploadStatus] = useState<string>("")
   const [uploadResult, setUploadResult] = useState<UploadResult | null>(null)
+  const [progress, setProgress] = useState<FileProgress[]>([])
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -112,6 +119,7 @@ export function MarketResearchLibrary() {
     setUploading(true)
     setUploadStatus("Starting upload...")
     setUploadResult(null)
+    setProgress(files.map((f) => ({ filename: f.name || "unnamed.pdf", status: "queued" })))
     const uploaded: Array<{ title: string; url: string }> = []
     const failed: Array<{ filename: string; error: string }> = []
 
@@ -145,6 +153,9 @@ export function MarketResearchLibrary() {
       for (const file of files) {
         const filename = file.name || "unnamed.pdf"
         setUploadStatus(`Uploading ${filename}...`)
+        setProgress((prev) =>
+          prev.map((p) => (p.filename === filename ? { ...p, status: "uploading" } : p))
+        )
         const lower = filename.toLowerCase()
         if (!(file.type === "application/pdf" || lower.endsWith(".pdf"))) {
           failed.push({ filename, error: "Only PDF files are allowed." })
@@ -160,9 +171,11 @@ export function MarketResearchLibrary() {
           const blob = await withTimeout(
             upload(pathname, file, {
               access: "public",
-              handleUploadUrl: "/api/research/upload",
+              handleUploadUrl: "/api/blob/handle-upload",
+              headers: {
+                "x-admin-upload-token": uploadToken.trim(),
+              },
               clientPayload: JSON.stringify({
-                adminToken: uploadToken.trim(),
                 originalFilename: filename,
                 title: humanizeFilename(filename) || "Untitled Report",
               }),
@@ -179,8 +192,8 @@ export function MarketResearchLibrary() {
                 "x-admin-upload-token": uploadToken.trim(),
               },
               body: JSON.stringify({
-                url: blob.url,
-                pathname: blob.pathname,
+                blobUrl: blob.url,
+                blobPath: blob.pathname,
                 originalFilename: filename,
                 title: humanizeFilename(filename) || "Untitled Report",
               }),
@@ -201,11 +214,24 @@ export function MarketResearchLibrary() {
             url: blob.url,
             id: registerJson.id,
           })
+          setProgress((prev) =>
+            prev.map((p) =>
+              p.filename === filename
+                ? { ...p, status: "registered", message: "Uploaded and registered" }
+                : p
+            )
+          )
         } catch (err) {
+          const msg = err instanceof Error ? err.message : "Upload failed."
           failed.push({
             filename,
-            error: err instanceof Error ? err.message : "Upload failed.",
+            error: msg,
           })
+          setProgress((prev) =>
+            prev.map((p) =>
+              p.filename === filename ? { ...p, status: "failed", message: msg } : p
+            )
+          )
         }
       }
 
@@ -369,6 +395,16 @@ export function MarketResearchLibrary() {
           </button>
           {uploading && uploadStatus && (
             <p className="text-xs text-slate-500">{uploadStatus}</p>
+          )}
+          {progress.length > 0 && (
+            <div className="rounded-md border border-slate-200 bg-white p-2 text-xs">
+              {progress.map((p) => (
+                <p key={p.filename} className="text-slate-600">
+                  {p.filename}: {p.status}
+                  {p.message ? ` - ${p.message}` : ""}
+                </p>
+              ))}
+            </div>
           )}
         </div>
 
