@@ -32,6 +32,15 @@ type FileProgress = {
   message?: string
 }
 
+const STATUS_LABEL: Record<FileProgress["status"], string> = {
+  queued: "queued",
+  requesting_token: "requesting upload token",
+  uploading_blob: "uploading bytes to Blob",
+  registering: "registering metadata in database",
+  registered: "done",
+  failed: "failed",
+}
+
 export function MarketResearchLibrary() {
   const [q, setQ] = useState("")
   const [producer, setProducer] = useState("manual")
@@ -164,15 +173,6 @@ export function MarketResearchLibrary() {
         setProgress((prev) =>
           prev.map((p) => (p.filename === filename ? { ...p, status, message } : p))
         )
-      }
-
-      const statusLabel: Record<FileProgress["status"], string> = {
-        queued: "queued",
-        requesting_token: "requesting upload token",
-        uploading_blob: "uploading bytes to Blob",
-        registering: "registering metadata in database",
-        registered: "done",
-        failed: "failed",
       }
 
       for (const file of files) {
@@ -442,7 +442,7 @@ export function MarketResearchLibrary() {
             <div className="rounded-md border border-slate-200 bg-white p-2 text-xs">
               {progress.map((p) => (
                 <p key={p.filename} className="text-slate-600">
-                  {p.filename}: {statusLabel[p.status]}
+                  {p.filename}: {STATUS_LABEL[p.status]}
                   {p.message ? ` - ${p.message}` : ""}
                 </p>
               ))}
