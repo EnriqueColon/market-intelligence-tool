@@ -250,8 +250,8 @@ export function MarketResearchLibrary() {
                 title: humanizeFilename(filename) || "Untitled Report",
               }),
             }),
-            30000,
-            "Upload timed out after 30 seconds."
+            120000,
+            "Upload timed out after 120 seconds."
           )
           if (waitingHintTimer) clearTimeout(waitingHintTimer)
           setFileProgress(filename, "registering", "Upload complete, saving metadata record")
