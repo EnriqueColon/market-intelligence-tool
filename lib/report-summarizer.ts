@@ -62,6 +62,138 @@ async function callOpenAI(prompt: string): Promise<ReportSummary | null> {
   }
 }
 
+function parseSummaryJson(raw: string): ReportSummary | null {
+  const jsonText = extractJsonObject(raw)
+  if (!jsonText) return null
+  try {
+    const parsed = JSON.parse(jsonText)
+    const summary = typeof parsed?.summary === "string" ? parsed.summary.trim() : ""
+    const bullets = Array.isArray(parsed?.bullets)
+      ? parsed.bullets
+          .filter((b: unknown) => typeof b === "string")
+          .map((b: string) => b.trim())
+          .filter(Boolean)
+      : []
+    if (summary || bullets.length > 0) {
+      return { summary: summary || bullets[0] || "", bullets }
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
+function readResponsesOutputText(data: any): string {
+  if (typeof data?.output_text === "string" && data.output_text.trim()) {
+    return data.output_text
+  }
+  const chunks: string[] = []
+  const output = Array.isArray(data?.output) ? data.output : []
+  for (const item of output) {
+    const content = Array.isArray(item?.content) ? item.content : []
+    for (const c of content) {
+      if (typeof c?.text === "string" && c.text.trim()) {
+        chunks.push(c.text)
+      }
+    }
+  }
+  return chunks.join("\n").trim()
+}
+
+/**
+ * Strong fallback for scanned/image-heavy PDFs:
+ * upload PDF to OpenAI and ask for structured summary JSON directly from file contents.
+ */
+export async function summarizeReportPdfWithOpenAI(
+  pdfBytes: Buffer,
+  reportTitle: string,
+  reportSource: string
+): Promise<ReportSummary | null> {
+  const API_KEY = process.env.OPENAI_API_KEY?.trim()
+  if (!API_KEY || !pdfBytes?.length) return null
+
+  let fileId: string | null = null
+  try {
+    const fileForm = new FormData()
+    fileForm.append("purpose", "user_data")
+    fileForm.append(
+      "file",
+      new Blob([pdfBytes], { type: "application/pdf" }),
+      "report.pdf"
+    )
+
+    const fileRes = await fetch("https://api.openai.com/v1/files", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${API_KEY}`,
+      },
+      body: fileForm,
+      cache: "no-store",
+    })
+    if (!fileRes.ok) return null
+    const fileJson = await fileRes.json()
+    fileId = typeof fileJson?.id === "string" ? fileJson.id : null
+    if (!fileId) return null
+
+    const prompt = `Summarize this commercial real estate PDF report.
+Report: ${reportTitle}
+Source: ${reportSource}
+
+Return JSON with EXACT keys:
+{
+  "summary": "2-4 sentence executive summary",
+  "bullets": ["bullet 1", "bullet 2", "bullet 3", "bullet 4", "bullet 5"]
+}`
+
+    const responseRes = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: process.env.OPENAI_SUMMARY_PDF_MODEL?.trim() || "gpt-4.1",
+        input: [
+          {
+            role: "system",
+            content: [
+              {
+                type: "input_text",
+                text: "You are a commercial real estate analyst. Respond with valid JSON only. Do not invent facts.",
+              },
+            ],
+          },
+          {
+            role: "user",
+            content: [
+              { type: "input_text", text: prompt },
+              { type: "input_file", file_id: fileId },
+            ],
+          },
+        ],
+        max_output_tokens: 1200,
+      }),
+      cache: "no-store",
+    })
+    if (!responseRes.ok) return null
+    const responseJson = await responseRes.json()
+    const outputText = readResponsesOutputText(responseJson)
+    if (!outputText) return null
+    return parseSummaryJson(outputText)
+  } catch {
+    return null
+  } finally {
+    if (fileId) {
+      void fetch(`https://api.openai.com/v1/files/${fileId}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${API_KEY}`,
+        },
+      }).catch(() => {})
+    }
+  }
+}
+
 /**
  * Summarize extracted report text into executive summary + bullets.
  */

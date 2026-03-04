@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { isDbEnabled, sql } from "@/lib/db"
 import { resolveDocument } from "@/lib/document-resolver"
-import { summarizeReportText } from "@/lib/report-summarizer"
+import { summarizeReportPdfWithOpenAI, summarizeReportText, type ReportSummary } from "@/lib/report-summarizer"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -15,24 +15,7 @@ function isVercelBlobUrl(url: string): boolean {
   return /blob\.vercel-storage\.com/i.test(url)
 }
 
-async function extractPrivateBlobPdfText(url: string): Promise<string | null> {
-  const blobToken = process.env.BLOB_READ_WRITE_TOKEN?.trim() || ""
-  if (!blobToken) return null
-
-  const response = await fetch(url, {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${blobToken}`,
-    },
-    cache: "no-store",
-  })
-  if (!response.ok) return null
-
-  const contentType = (response.headers.get("content-type") || "").toLowerCase()
-  if (!contentType.includes("pdf")) return null
-
-  const arrayBuffer = await response.arrayBuffer()
-  const pdfBytes = Buffer.from(arrayBuffer)
+async function extractPrivateBlobPdfText(pdfBytes: Buffer): Promise<string | null> {
   const { extractTextWithFallbacks } = require("../../../actions/pdf-text-extraction.js") as {
     extractTextWithFallbacks: (
       bytes: Buffer,
@@ -42,6 +25,23 @@ async function extractPrivateBlobPdfText(url: string): Promise<string | null> {
   const extraction = await extractTextWithFallbacks(pdfBytes, { maxPages: 20, ocrPages: 3 })
   const text = String(extraction?.text || "").trim()
   return text.length > 100 ? text : null
+}
+
+async function fetchPrivateBlobPdfBytes(url: string): Promise<Buffer | null> {
+  const blobToken = process.env.BLOB_READ_WRITE_TOKEN?.trim() || ""
+  if (!blobToken) return null
+  const response = await fetch(url, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${blobToken}`,
+    },
+    cache: "no-store",
+  })
+  if (!response.ok) return null
+  const contentType = (response.headers.get("content-type") || "").toLowerCase()
+  if (!contentType.includes("pdf")) return null
+  const arrayBuffer = await response.arrayBuffer()
+  return Buffer.from(arrayBuffer)
 }
 
 export async function POST(request: NextRequest) {
@@ -86,20 +86,34 @@ export async function POST(request: NextRequest) {
 
     let resolved = await resolveDocument(report.document_url)
     let warning: string | undefined
+    let aiSummaryFromPdfFallback: ReportSummary | null = null
 
     // Private Blob URLs require Authorization and cannot be fetched like public pages.
     if (isVercelBlobUrl(report.document_url)) {
-      const privatePdfText = await extractPrivateBlobPdfText(report.document_url)
-      if (privatePdfText) {
-        resolved = {
-          text: privatePdfText,
-          source: "pdf",
-          finalUrl: report.document_url,
+      const privatePdfBytes = await fetchPrivateBlobPdfBytes(report.document_url)
+      if (privatePdfBytes) {
+        const privatePdfText = await extractPrivateBlobPdfText(privatePdfBytes)
+        if (privatePdfText) {
+          resolved = {
+            text: privatePdfText,
+            source: "pdf",
+            finalUrl: report.document_url,
+          }
+        } else {
+          aiSummaryFromPdfFallback = await summarizeReportPdfWithOpenAI(
+            privatePdfBytes,
+            report.title,
+            report.producer
+          )
+          if (aiSummaryFromPdfFallback) {
+            warning =
+              "Summary generated via OCR/file fallback because direct text extraction was limited."
+          }
         }
       }
     }
 
-    if (!resolved.text || resolved.text.length < 100) {
+    if (!aiSummaryFromPdfFallback && (!resolved.text || resolved.text.length < 100)) {
       const fallback = await resolveDocument(report.landing_url)
       if (!fallback.text || fallback.text.length < 100) {
         return NextResponse.json(
@@ -111,10 +125,16 @@ export async function POST(request: NextRequest) {
       warning = "PDF extraction was limited; summary generated from landing page content."
     }
 
-    const aiSummary = await summarizeReportText(resolved.text, report.title, report.producer)
+    const aiSummary =
+      aiSummaryFromPdfFallback ??
+      (await summarizeReportText(resolved.text, report.title, report.producer))
     if (!aiSummary) {
       return NextResponse.json(
-        { ok: false, error: "AI summarization failed. Check OPENAI_API_KEY." },
+        {
+          ok: false,
+          error:
+            "AI summarization failed. Extraction and OCR/file fallback both did not produce a usable summary.",
+        },
         { status: 500 }
       )
     }
