@@ -59,6 +59,8 @@ export function MarketResearchLibrary() {
   const [deletingTestReports, setDeletingTestReports] = useState(false)
   const [deleteStatus, setDeleteStatus] = useState<string>("")
   const [deletingReportId, setDeletingReportId] = useState<number | null>(null)
+  const [summarizingReportId, setSummarizingReportId] = useState<number | null>(null)
+  const [summaryStatus, setSummaryStatus] = useState<string>("")
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -180,6 +182,45 @@ export function MarketResearchLibrary() {
       setTransferDiagStatus(err instanceof Error ? err.message : "Transfer diagnostics failed.")
     }
   }, [readJsonSafe, uploadToken])
+
+  const requestSummary = useCallback(
+    async (reportId: number) => {
+      const token = uploadToken.trim()
+      if (!token) {
+        throw new Error("Admin token is required.")
+      }
+      const res = await fetch("/api/research/summarize-report", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-admin-upload-token": token,
+        },
+        body: JSON.stringify({ reportId }),
+      })
+      const data = await readJsonSafe<{ ok: boolean; error?: string }>(res)
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || "Failed to summarize report.")
+      }
+    },
+    [readJsonSafe, uploadToken]
+  )
+
+  const handleSummarizeReport = useCallback(
+    async (reportId: number, title: string) => {
+      setSummaryStatus("")
+      setSummarizingReportId(reportId)
+      try {
+        await requestSummary(reportId)
+        setSummaryStatus(`Summary completed: ${title}`)
+        void loadLibrary()
+      } catch (err) {
+        setSummaryStatus(err instanceof Error ? err.message : "Failed to summarize report.")
+      } finally {
+        setSummarizingReportId(null)
+      }
+    },
+    [loadLibrary, requestSummary]
+  )
 
   const handleUpload = useCallback(async () => {
     if (!uploadToken.trim()) {
@@ -325,6 +366,23 @@ export function MarketResearchLibrary() {
             url: blob.url,
             id: registerJson.id,
           })
+          if (registerJson.id) {
+            setFileProgress(filename, "registering", "Metadata saved, generating summary")
+            try {
+              await withTimeout(
+                requestSummary(registerJson.id),
+                25000,
+                "Summarization timed out after 25 seconds."
+              )
+              setSummaryStatus(`Summary completed: ${humanizeFilename(filename) || filename}`)
+            } catch (summaryErr) {
+              const msg =
+                summaryErr instanceof Error
+                  ? summaryErr.message
+                  : "Summary remains pending. Please click Summarize."
+              setSummaryStatus(msg)
+            }
+          }
           const totalMs = Date.now() - fileStartedAt
           const registerMs = Date.now() - registerStartedAt
           setFileProgress(
@@ -365,7 +423,7 @@ export function MarketResearchLibrary() {
       setUploadStatus("")
       setUploading(false)
     }
-  }, [files, loadLibrary, readJsonSafe, uploadToken])
+  }, [files, loadLibrary, readJsonSafe, requestSummary, uploadToken])
 
   const handleDeleteTestReports = useCallback(async () => {
     const token = uploadToken.trim()
@@ -548,6 +606,16 @@ export function MarketResearchLibrary() {
                         >
                           {deletingReportId === item.id ? "Deleting..." : "Delete"}
                         </button>
+                        {!item.has_summary && (
+                          <button
+                            type="button"
+                            onClick={() => void handleSummarizeReport(item.id, item.title)}
+                            disabled={summarizingReportId === item.id}
+                            className="text-[#006D95] underline disabled:opacity-60"
+                          >
+                            {summarizingReportId === item.id ? "Summarizing..." : "Summarize"}
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -625,6 +693,7 @@ export function MarketResearchLibrary() {
           {preflightStatus && <p className="text-xs text-slate-500">{preflightStatus}</p>}
           {transferDiagStatus && <p className="text-xs text-slate-500">{transferDiagStatus}</p>}
           {deleteStatus && <p className="text-xs text-slate-500">{deleteStatus}</p>}
+          {summaryStatus && <p className="text-xs text-slate-500">{summaryStatus}</p>}
           {uploading && uploadStatus && (
             <p className="text-xs text-slate-500">{uploadStatus}</p>
           )}
