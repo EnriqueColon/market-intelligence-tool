@@ -43,7 +43,7 @@ const STATUS_LABEL: Record<FileProgress["status"], string> = {
 
 export function MarketResearchLibrary() {
   const [q, setQ] = useState("")
-  const [producer, setProducer] = useState("manual")
+  const [producer, setProducer] = useState("all")
   const [loading, setLoading] = useState(false)
   const [items, setItems] = useState<LibraryItem[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -354,6 +354,7 @@ export function MarketResearchLibrary() {
       setUploadResult({ ok: failed.length === 0, uploaded, failed })
       setFiles([])
       setUploadStatus("Refreshing library...")
+      setProducer("all")
       void loadLibrary()
     } catch (err) {
       setUploadResult({
@@ -417,6 +418,7 @@ export function MarketResearchLibrary() {
 
       setDeletingReportId(reportId)
       try {
+        setDeleteStatus("")
         const res = await fetch("/api/research/delete-report", {
           method: "POST",
           headers: {
