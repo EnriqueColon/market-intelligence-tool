@@ -54,6 +54,7 @@ export function MarketResearchLibrary() {
   const [uploadStatus, setUploadStatus] = useState<string>("")
   const [uploadResult, setUploadResult] = useState<UploadResult | null>(null)
   const [progress, setProgress] = useState<FileProgress[]>([])
+  const [preflightStatus, setPreflightStatus] = useState<string>("")
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -114,6 +115,35 @@ export function MarketResearchLibrary() {
     return ["all", ...Array.from(unique).sort((a, b) => a.localeCompare(b))]
   }, [items])
 
+  const runTokenPreflight = useCallback(async (): Promise<void> => {
+    const token = uploadToken.trim()
+    if (!token) {
+      throw new Error("Admin token is required.")
+    }
+
+    const res = await fetch("/api/blob/token-preflight", {
+      method: "POST",
+      headers: {
+        "x-admin-upload-token": token,
+      },
+      cache: "no-store",
+    })
+    const data = await readJsonSafe<{ ok: boolean; error?: string; message?: string }>(res)
+    if (!res.ok || !data.ok) {
+      throw new Error(data.error || "Blob token preflight failed.")
+    }
+  }, [readJsonSafe, uploadToken])
+
+  const handlePreflight = useCallback(async () => {
+    setPreflightStatus("Checking token handshake...")
+    try {
+      await runTokenPreflight()
+      setPreflightStatus("Preflight OK: token + Blob runtime config are valid.")
+    } catch (err) {
+      setPreflightStatus(err instanceof Error ? err.message : "Preflight failed.")
+    }
+  }, [runTokenPreflight])
+
   const handleUpload = useCallback(async () => {
     if (!uploadToken.trim()) {
       setUploadResult({ ok: false, error: "Admin token is required." })
@@ -152,6 +182,9 @@ export function MarketResearchLibrary() {
     }
 
     try {
+      setUploadStatus("Running token preflight...")
+      await runTokenPreflight()
+
       const withTimeout = async <T,>(
         task: Promise<T>,
         timeoutMs: number,
@@ -429,12 +462,21 @@ export function MarketResearchLibrary() {
           </div>
           <button
             type="button"
+            onClick={handlePreflight}
+            disabled={uploading}
+            className="rounded-md border border-[#006D95] bg-white px-4 py-2 text-sm font-medium text-[#006D95] disabled:opacity-60"
+          >
+            Test Token Handshake
+          </button>
+          <button
+            type="button"
             onClick={handleUpload}
             disabled={uploading}
             className="rounded-md bg-[#006D95] px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
           >
             {uploading ? "Uploading..." : "Upload PDFs"}
           </button>
+          {preflightStatus && <p className="text-xs text-slate-500">{preflightStatus}</p>}
           {uploading && uploadStatus && (
             <p className="text-xs text-slate-500">{uploadStatus}</p>
           )}
