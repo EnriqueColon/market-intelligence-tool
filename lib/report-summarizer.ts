@@ -7,6 +7,13 @@ export type ReportSummary = {
   bullets: string[]
 }
 
+function withTimeout<T>(task: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  return Promise.race([
+    task,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error(message)), timeoutMs)),
+  ])
+}
+
 function extractJsonObject(text: string): string | undefined {
   const match = text.match(/\{[\s\S]*\}/)
   return match ? match[0] : undefined
@@ -122,14 +129,18 @@ export async function summarizeReportPdfWithOpenAI(
       "report.pdf"
     )
 
-    const fileRes = await fetch("https://api.openai.com/v1/files", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${API_KEY}`,
-      },
-      body: fileForm,
-      cache: "no-store",
-    })
+    const fileRes = await withTimeout(
+      fetch("https://api.openai.com/v1/files", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${API_KEY}`,
+        },
+        body: fileForm,
+        cache: "no-store",
+      }),
+      12000,
+      "OpenAI file upload timed out."
+    )
     if (!fileRes.ok) return null
     const fileJson = await fileRes.json()
     fileId = typeof fileJson?.id === "string" ? fileJson.id : null
@@ -145,36 +156,40 @@ Return JSON with EXACT keys:
   "bullets": ["bullet 1", "bullet 2", "bullet 3", "bullet 4", "bullet 5"]
 }`
 
-    const responseRes = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: process.env.OPENAI_SUMMARY_PDF_MODEL?.trim() || "gpt-4.1",
-        input: [
-          {
-            role: "system",
-            content: [
-              {
-                type: "input_text",
-                text: "You are a commercial real estate analyst. Respond with valid JSON only. Do not invent facts.",
-              },
-            ],
-          },
-          {
-            role: "user",
-            content: [
-              { type: "input_text", text: prompt },
-              { type: "input_file", file_id: fileId },
-            ],
-          },
-        ],
-        max_output_tokens: 1200,
+    const responseRes = await withTimeout(
+      fetch("https://api.openai.com/v1/responses", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: process.env.OPENAI_SUMMARY_PDF_MODEL?.trim() || "gpt-4o-mini",
+          input: [
+            {
+              role: "system",
+              content: [
+                {
+                  type: "input_text",
+                  text: "You are a commercial real estate analyst. Respond with valid JSON only. Do not invent facts.",
+                },
+              ],
+            },
+            {
+              role: "user",
+              content: [
+                { type: "input_text", text: prompt },
+                { type: "input_file", file_id: fileId },
+              ],
+            },
+          ],
+          max_output_tokens: 900,
+        }),
+        cache: "no-store",
       }),
-      cache: "no-store",
-    })
+      15000,
+      "OpenAI PDF summary timed out."
+    )
     if (!responseRes.ok) return null
     const responseJson = await responseRes.json()
     const outputText = readResponsesOutputText(responseJson)

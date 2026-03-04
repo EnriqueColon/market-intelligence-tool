@@ -5,7 +5,7 @@ import { summarizeReportPdfWithOpenAI, summarizeReportText, type ReportSummary }
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
-export const maxDuration = 20
+export const maxDuration = 60
 
 type SummarizeBody = {
   reportId?: number
