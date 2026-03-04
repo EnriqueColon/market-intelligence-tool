@@ -37,7 +37,7 @@ export async function summarizeReportOnDemand(
     if (!aiSummary || (!aiSummary.summary && aiSummary.bullets.length === 0)) {
       return {
         ok: false,
-        error: "AI summarization failed. Ensure PERPLEXITY_API_KEY is set.",
+        error: "AI summarization failed. Ensure OPENAI_API_KEY is set.",
       }
     }
 
@@ -100,7 +100,7 @@ export async function summarizeReportFromPastedText(
     if (!aiSummary || (!aiSummary.summary && aiSummary.bullets.length === 0)) {
       return {
         ok: false,
-        error: "AI summarization failed. Ensure PERPLEXITY_API_KEY is set.",
+        error: "AI summarization failed. Ensure OPENAI_API_KEY is set.",
       }
     }
 

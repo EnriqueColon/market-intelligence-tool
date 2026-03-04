@@ -1,5 +1,5 @@
 /**
- * Summarizes extracted report text using Perplexity (or OpenAI) API.
+ * Summarizes extracted report text using OpenAI API.
  */
 
 export type ReportSummary = {
@@ -12,18 +12,19 @@ function extractJsonObject(text: string): string | undefined {
   return match ? match[0] : undefined
 }
 
-async function callPerplexity(prompt: string): Promise<ReportSummary | null> {
-  const API_KEY = process.env.PERPLEXITY_API_KEY?.trim()
+async function callOpenAI(prompt: string): Promise<ReportSummary | null> {
+  const API_KEY = process.env.OPENAI_API_KEY?.trim()
   if (!API_KEY) return null
 
-  const response = await fetch("https://api.perplexity.ai/chat/completions", {
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${API_KEY}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "sonar",
+      model: process.env.OPENAI_SUMMARY_MODEL?.trim() || "gpt-4o-mini",
+      response_format: { type: "json_object" },
       messages: [
         {
           role: "system",
@@ -85,5 +86,5 @@ Return JSON with EXACT keys:
   "bullets": ["bullet 1", "bullet 2", "bullet 3", "bullet 4", "bullet 5"]
 }`
 
-  return callPerplexity(prompt)
+  return callOpenAI(prompt)
 }

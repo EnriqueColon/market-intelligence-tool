@@ -114,7 +114,7 @@ export async function POST(request: NextRequest) {
     const aiSummary = await summarizeReportText(resolved.text, report.title, report.producer)
     if (!aiSummary) {
       return NextResponse.json(
-        { ok: false, error: "AI summarization failed. Check PERPLEXITY_API_KEY." },
+        { ok: false, error: "AI summarization failed. Check OPENAI_API_KEY." },
         { status: 500 }
       )
     }
@@ -140,7 +140,7 @@ export async function POST(request: NextRequest) {
 
     await sql`
       INSERT INTO research_summaries (report_id, summary_json, model_provider)
-      VALUES (${report.id}, ${JSON.stringify(summaryJson)}::jsonb, ${"perplexity"})
+      VALUES (${report.id}, ${JSON.stringify(summaryJson)}::jsonb, ${"openai"})
       ON CONFLICT (report_id)
       DO UPDATE SET
         summary_json = EXCLUDED.summary_json,

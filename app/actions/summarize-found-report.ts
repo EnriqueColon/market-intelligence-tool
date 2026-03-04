@@ -120,7 +120,7 @@ export async function summarizeFoundReport(
     if (!aiSummary || (!aiSummary.summary && aiSummary.bullets.length === 0)) {
       return {
         ok: false,
-        error: "AI summarization failed. Ensure PERPLEXITY_API_KEY is set.",
+        error: "AI summarization failed. Ensure OPENAI_API_KEY is set.",
       }
     }
 
@@ -180,7 +180,7 @@ export async function summarizeFoundReport(
           VALUES (
             ${reportRow.id},
             ${JSON.stringify(summaryJson)}::jsonb,
-            ${"perplexity"}
+            ${"openai"}
           )
           ON CONFLICT (report_id)
           DO UPDATE SET

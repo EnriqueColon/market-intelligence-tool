@@ -173,7 +173,7 @@ export async function summarizeResearchReportById(reportId: number): Promise<{
 
     await sql`
       INSERT INTO research_summaries (report_id, summary_json, model_provider)
-      VALUES (${report.id}, ${JSON.stringify(summaryJson)}::jsonb, ${"perplexity"})
+      VALUES (${report.id}, ${JSON.stringify(summaryJson)}::jsonb, ${"openai"})
       ON CONFLICT (report_id)
       DO UPDATE SET
         summary_json = EXCLUDED.summary_json,
