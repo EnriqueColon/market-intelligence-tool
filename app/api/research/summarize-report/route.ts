@@ -11,11 +11,36 @@ type SummarizeBody = {
   reportId?: number
 }
 
+function withTimeout<T>(task: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  return Promise.race([
+    task,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error(message)), timeoutMs)),
+  ])
+}
+
 function isVercelBlobUrl(url: string): boolean {
   return /blob\.vercel-storage\.com/i.test(url)
 }
 
 async function extractPrivateBlobPdfText(pdfBytes: Buffer): Promise<string | null> {
+  // Fast in-process parser fallback (works well on Vercel for text-based PDFs).
+  try {
+    const pdfParse = (await import("pdf-parse")).default
+    const parsed = await withTimeout(
+      pdfParse(pdfBytes),
+      10000,
+      "pdf-parse timed out."
+    )
+    const fastText = String(parsed?.text || "")
+      .replace(/\s+/g, " ")
+      .trim()
+    if (fastText.length > 100) {
+      return fastText
+    }
+  } catch {
+    // Continue to existing extraction chain.
+  }
+
   const { extractTextWithFallbacks } = require("../../../actions/pdf-text-extraction.js") as {
     extractTextWithFallbacks: (
       bytes: Buffer,
