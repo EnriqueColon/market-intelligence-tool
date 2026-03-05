@@ -114,6 +114,16 @@ export async function POST(request: NextRequest) {
     }
 
     if (!aiSummaryFromPdfFallback && (!resolved.text || resolved.text.length < 100)) {
+      if (isVercelBlobUrl(report.document_url)) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              "Could not extract enough text from this private PDF, and OCR/file fallback did not complete in time. Try Summary again, or increase OPENAI_PDF_SUMMARY_TIMEOUT_MS.",
+          },
+          { status: 400 }
+        )
+      }
       const fallback = await resolveDocument(report.landing_url)
       if (!fallback.text || fallback.text.length < 100) {
         return NextResponse.json(

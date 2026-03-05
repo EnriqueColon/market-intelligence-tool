@@ -14,6 +14,13 @@ function withTimeout<T>(task: Promise<T>, timeoutMs: number, message: string): P
   ])
 }
 
+function envInt(name: string, fallback: number): number {
+  const raw = process.env[name]?.trim()
+  if (!raw) return fallback
+  const n = Number(raw)
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : fallback
+}
+
 function extractJsonObject(text: string): string | undefined {
   const match = text.match(/\{[\s\S]*\}/)
   return match ? match[0] : undefined
@@ -119,6 +126,9 @@ export async function summarizeReportPdfWithOpenAI(
   const API_KEY = process.env.OPENAI_API_KEY?.trim()
   if (!API_KEY || !pdfBytes?.length) return null
 
+  const uploadTimeoutMs = envInt("OPENAI_PDF_UPLOAD_TIMEOUT_MS", 20000)
+  const summaryTimeoutMs = envInt("OPENAI_PDF_SUMMARY_TIMEOUT_MS", 35000)
+
   let fileId: string | null = null
   try {
     const fileForm = new FormData()
@@ -138,7 +148,7 @@ export async function summarizeReportPdfWithOpenAI(
         body: fileForm,
         cache: "no-store",
       }),
-      12000,
+      uploadTimeoutMs,
       "OpenAI file upload timed out."
     )
     if (!fileRes.ok) return null
@@ -164,7 +174,7 @@ Return JSON with EXACT keys:
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: process.env.OPENAI_SUMMARY_PDF_MODEL?.trim() || "gpt-4o-mini",
+          model: process.env.OPENAI_SUMMARY_PDF_MODEL?.trim() || "gpt-4o",
           input: [
             {
               role: "system",
@@ -183,11 +193,11 @@ Return JSON with EXACT keys:
               ],
             },
           ],
-          max_output_tokens: 900,
+          max_output_tokens: 1200,
         }),
         cache: "no-store",
       }),
-      15000,
+      summaryTimeoutMs,
       "OpenAI PDF summary timed out."
     )
     if (!responseRes.ok) return null
