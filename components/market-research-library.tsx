@@ -71,7 +71,6 @@ export function MarketResearchLibrary() {
   const [progress, setProgress] = useState<FileProgress[]>([])
   const [preflightStatus, setPreflightStatus] = useState<string>("")
   const [transferDiagStatus, setTransferDiagStatus] = useState<string>("")
-  const [deletingTestReports, setDeletingTestReports] = useState(false)
   const [deleteStatus, setDeleteStatus] = useState<string>("")
   const [deletingReportId, setDeletingReportId] = useState<number | null>(null)
   const [summarizingReportId, setSummarizingReportId] = useState<number | null>(null)
@@ -515,41 +514,6 @@ export function MarketResearchLibrary() {
     }
   }, [files, loadLibrary, readJsonSafe, requestSummary, uploadToken])
 
-  const handleDeleteTestReports = useCallback(async () => {
-    const token = uploadToken.trim()
-    if (!token) {
-      setDeleteStatus("Admin token is required.")
-      return
-    }
-    if (
-      typeof window !== "undefined" &&
-      !window.confirm("Delete all manually uploaded test reports? This cannot be undone.")
-    ) {
-      return
-    }
-
-    setDeletingTestReports(true)
-    setDeleteStatus("Deleting test reports...")
-    try {
-      const res = await fetch("/api/research/delete-test-reports", {
-        method: "POST",
-        headers: {
-          "x-admin-upload-token": token,
-        },
-      })
-      const data = await readJsonSafe<{ ok: boolean; deleted?: number; error?: string }>(res)
-      if (!res.ok || !data.ok) {
-        throw new Error(data.error || "Failed to delete test reports.")
-      }
-      setDeleteStatus(`Deleted ${String(data.deleted ?? 0)} test report(s).`)
-      void loadLibrary()
-    } catch (err) {
-      setDeleteStatus(err instanceof Error ? err.message : "Failed to delete test reports.")
-    } finally {
-      setDeletingTestReports(false)
-    }
-  }, [loadLibrary, readJsonSafe, uploadToken])
-
   const handleDeleteReport = useCallback(
     async (reportId: number, title: string) => {
       const token = uploadToken.trim()
@@ -826,14 +790,6 @@ export function MarketResearchLibrary() {
             className="rounded-md bg-[#006D95] px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
           >
             {uploading ? "Uploading..." : "Upload PDFs"}
-          </button>
-          <button
-            type="button"
-            onClick={handleDeleteTestReports}
-            disabled={uploading || deletingTestReports}
-            className="rounded-md border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 disabled:opacity-60"
-          >
-            {deletingTestReports ? "Deleting..." : "Delete Test Reports"}
           </button>
           {preflightStatus && <p className="text-xs text-slate-500">{preflightStatus}</p>}
           {transferDiagStatus && <p className="text-xs text-slate-500">{transferDiagStatus}</p>}
