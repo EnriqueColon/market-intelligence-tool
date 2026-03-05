@@ -1,19 +1,26 @@
 import { NextResponse } from "next/server"
 export const runtime = "nodejs"
 
-const PROMPT = `I would like the current and projected industry outlook for the commercial real estate sector for Miami, Florida, and the US level as it pertains to investing in distressed debt. Provide sources.
-Time window: recent and current conditions.
-Topic scope (national): distressed COMMERCIAL REAL ESTATE DEBT (CMBS stress, special servicing, delinquencies/defaults, refinancing stress, note/loan sales, workouts, receiverships, foreclosures).
-Topic scope (Florida/Miami): use Florida/Miami-specific sources. If thin, include regional CRE signals tied to debt stress.
-Tone: professional, concise, investment-committee memo. No casual language. No markdown headings. No extra commentary.
+const PROMPT = `I need a data-forward industry outlook for distressed commercial real estate debt focused on U.S., Florida, and Miami.
+Audience: investment committee evaluating distressed-debt acquisitions.
 
-Return a single plain-text memo in this structure using bullet points for each section:
-1) A short executive summary comparing U.S. vs Miami/Florida (2–4 bullets).
-2) “U.S. commercial real estate outlook (CRE debt & distress)” section with 3–6 bullets.
-3) “Miami-specific CRE and distressed-debt outlook” section with 3–6 bullets.
-4) “How this shapes distressed-debt investing” section with 3–6 bullets.
-5) “Key sources (for further reading)” section with 5–10 lines, each line: Title — https://url.
-No JSON. No markdown.`
+Hard requirements:
+- Use RECENT data (prefer last 3-12 months) and include explicit period labels (e.g., Q4 2025, Jan 2026).
+- Prioritize quantified facts, not general commentary.
+- In each main section, include at least 4 numeric data points with units/percentages where possible.
+- Cover debt stress metrics: CMBS delinquency/default trend, special servicing trend, refinance maturity wall pressure, loan origination/liquidity conditions, pricing/spread direction, and transaction distress signals (workouts, note sales, foreclosures/receiverships where available).
+- For Miami/Florida, include local/regional evidence first; if sparse, explicitly label any proxy/regional substitution.
+- Every bullet should be 1-2 sentences max and include concrete figures when available.
+- No markdown. No JSON. Plain text only.
+
+Return a single plain-text memo in EXACT structure:
+1) Executive Summary (U.S. vs Florida/Miami) - 3-5 bullets.
+2) U.S. commercial real estate outlook (CRE debt & distress) - 5-8 bullets, data-heavy.
+3) Miami-specific CRE and distressed-debt outlook - 5-8 bullets, data-heavy.
+4) How this shapes distressed-debt investing - 4-7 bullets with actionable implications tied to the cited data.
+5) Key sources (for further reading) - 8-15 lines. Format each line exactly:
+   Title — https://url
+`
 
 type CacheEntry = {
   text: string
