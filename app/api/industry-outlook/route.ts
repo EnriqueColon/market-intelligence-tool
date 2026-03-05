@@ -39,15 +39,16 @@ async function generateOutlook(apiKey: string, prompt: string, strict = false) {
   const system = strict
     ? "Output ONLY the requested memo. No markdown headings. Do not mention search results or limitations. Keep it professional."
     : "Output ONLY the requested memo. No extra text, no apologies, no mention of search results or limitations."
-  const response = await fetch("https://api.perplexity.ai/chat/completions", {
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "sonar",
+      model: process.env.OPENAI_OUTLOOK_MODEL?.trim() || "gpt-4o-mini",
       temperature: 0.2,
+      max_tokens: 1200,
       messages: [
         {
           role: "system",
@@ -73,10 +74,10 @@ export async function POST() {
     return NextResponse.json({ text: cached?.text })
   }
 
-  // Required in production: PERPLEXITY_API_KEY
-  const apiKey = process.env.PERPLEXITY_API_KEY?.trim()
+  // Required in production: OPENAI_API_KEY
+  const apiKey = process.env.OPENAI_API_KEY?.trim()
   if (!apiKey) {
-    console.error("Industry outlook API error: missing PERPLEXITY_API_KEY")
+    console.error("Industry outlook API error: missing OPENAI_API_KEY")
     return NextResponse.json({ text: "" }, { status: 500 })
   }
 
