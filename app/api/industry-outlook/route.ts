@@ -1,26 +1,7 @@
 import { NextResponse } from "next/server"
+import { retrieveSources } from "@/app/services/industry-outlook/retrieveSources"
+import type { RetrievedSource } from "@/app/services/industry-outlook/schema"
 export const runtime = "nodejs"
-
-const PROMPT = `I need a data-forward industry outlook for distressed commercial real estate debt focused on U.S., Florida, and Miami.
-Audience: investment committee evaluating distressed-debt acquisitions.
-
-Hard requirements:
-- Use RECENT data (prefer last 3-12 months) and include explicit period labels (e.g., Q4 2025, Jan 2026).
-- Prioritize quantified facts, not general commentary.
-- In each main section, include at least 4 numeric data points with units/percentages where possible.
-- Cover debt stress metrics: CMBS delinquency/default trend, special servicing trend, refinance maturity wall pressure, loan origination/liquidity conditions, pricing/spread direction, and transaction distress signals (workouts, note sales, foreclosures/receiverships where available).
-- For Miami/Florida, include local/regional evidence first; if sparse, explicitly label any proxy/regional substitution.
-- Every bullet should be 1-2 sentences max and include concrete figures when available.
-- No markdown. No JSON. Plain text only.
-
-Return a single plain-text memo in EXACT structure:
-1) Executive Summary (U.S. vs Florida/Miami) - 3-5 bullets.
-2) U.S. commercial real estate outlook (CRE debt & distress) - 5-8 bullets, data-heavy.
-3) Miami-specific CRE and distressed-debt outlook - 5-8 bullets, data-heavy.
-4) How this shapes distressed-debt investing - 4-7 bullets with actionable implications tied to the cited data.
-5) Key sources (for further reading) - 8-15 lines. Format each line exactly:
-   Title — https://url
-`
 
 type CacheEntry = {
   text: string
@@ -30,47 +11,225 @@ type CacheEntry = {
 const CACHE_TTL_MS = 2 * 60 * 60 * 1000
 let cached: CacheEntry | null = null
 
+type OutlookMemoJson = {
+  executiveSummary: string[]
+  usOutlook: string[]
+  miamiOutlook: string[]
+  investingImplications: string[]
+  sources: Array<{ title: string; url: string }>
+}
+
 function isFresh(entry: CacheEntry | null) {
   if (!entry) return false
   return Date.now() - entry.fetchedAt < CACHE_TTL_MS
 }
 
-function normalizeOutput(text: string) {
-  const startIdx = text.indexOf("Key themes")
-  if (startIdx === -1) return text.trim()
-  const trimmed = text.slice(startIdx).trim()
-  return trimmed
+function withTimeout<T>(task: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  return Promise.race([
+    task,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error(message)), timeoutMs)),
+  ])
 }
 
-async function generateOutlook(apiKey: string, prompt: string, strict = false) {
-  const system = strict
-    ? "Output ONLY the requested memo. No markdown headings. Do not mention search results or limitations. Keep it professional."
-    : "Output ONLY the requested memo. No extra text, no apologies, no mention of search results or limitations."
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: process.env.OPENAI_OUTLOOK_MODEL?.trim() || "gpt-4o-mini",
-      temperature: 0.2,
-      max_tokens: 1200,
-      messages: [
-        {
-          role: "system",
-          content: system,
-        },
-        { role: "user", content: prompt },
-      ],
-    }),
-  })
+function parseJsonObject<T>(text: string): T | null {
+  const match = text.match(/\{[\s\S]*\}/)
+  if (!match) return null
+  try {
+    return JSON.parse(match[0]) as T
+  } catch {
+    return null
+  }
+}
 
-  if (!response.ok) return ""
+function hasAtLeastNDataBullets(lines: string[], minCount: number): boolean {
+  const count = lines.filter((line) => /\d/.test(line)).length
+  return count >= minCount
+}
+
+function validateMemoJson(obj: OutlookMemoJson): string | null {
+  if (!Array.isArray(obj.executiveSummary) || obj.executiveSummary.length < 3) {
+    return "Missing executive summary bullets."
+  }
+  if (!Array.isArray(obj.usOutlook) || obj.usOutlook.length < 5) {
+    return "Missing U.S. outlook depth."
+  }
+  if (!Array.isArray(obj.miamiOutlook) || obj.miamiOutlook.length < 5) {
+    return "Missing Miami outlook depth."
+  }
+  if (!Array.isArray(obj.investingImplications) || obj.investingImplications.length < 4) {
+    return "Missing investing implications depth."
+  }
+  if (!Array.isArray(obj.sources) || obj.sources.length < 6) {
+    return "Insufficient sources."
+  }
+  if (!hasAtLeastNDataBullets(obj.usOutlook, 3)) {
+    return "U.S. section is not data-forward enough."
+  }
+  if (!hasAtLeastNDataBullets(obj.miamiOutlook, 3)) {
+    return "Miami section is not data-forward enough."
+  }
+  return null
+}
+
+function asBulletList(lines: string[]): string {
+  return lines.map((line) => `- ${String(line || "").trim()}`).join("\n")
+}
+
+function normalizeSources(
+  requested: Array<{ title: string; url: string }>,
+  fallback: RetrievedSource[]
+): Array<{ title: string; url: string }> {
+  const valid = (requested || []).filter(
+    (s) =>
+      s &&
+      typeof s.title === "string" &&
+      typeof s.url === "string" &&
+      /^https?:\/\//i.test(s.url)
+  )
+  const seen = new Set<string>()
+  const output: Array<{ title: string; url: string }> = []
+  for (const item of valid) {
+    const key = item.url.trim().toLowerCase()
+    if (!key || seen.has(key)) continue
+    seen.add(key)
+    output.push({ title: item.title.trim() || item.url.trim(), url: item.url.trim() })
+    if (output.length >= 15) return output
+  }
+  for (const item of fallback) {
+    const key = item.url.trim().toLowerCase()
+    if (!key || seen.has(key)) continue
+    seen.add(key)
+    output.push({ title: item.title.trim() || item.url.trim(), url: item.url.trim() })
+    if (output.length >= 15) break
+  }
+  return output
+}
+
+function renderMemoText(obj: OutlookMemoJson): string {
+  const lines: string[] = []
+  lines.push("Executive Summary")
+  lines.push(asBulletList(obj.executiveSummary))
+  lines.push("")
+  lines.push("U.S. commercial real estate outlook (CRE debt & distress)")
+  lines.push(asBulletList(obj.usOutlook))
+  lines.push("")
+  lines.push("Miami-specific CRE and distressed-debt outlook")
+  lines.push(asBulletList(obj.miamiOutlook))
+  lines.push("")
+  lines.push("How this shapes distressed-debt investing")
+  lines.push(asBulletList(obj.investingImplications))
+  lines.push("")
+  lines.push("Key sources (for further reading)")
+  for (const src of obj.sources) {
+    lines.push(`${src.title} — ${src.url}`)
+  }
+  return lines.join("\n").trim()
+}
+
+async function generateMemoJson(
+  apiKey: string,
+  sources: RetrievedSource[],
+  strictRetry: boolean
+): Promise<OutlookMemoJson | null> {
+  const sourceContext = JSON.stringify(
+    sources.map((s) => ({
+      title: s.title,
+      url: s.url,
+      region: s.region,
+      publisher: s.publisher,
+      date: s.date,
+      snippet: s.snippet,
+    })),
+    null,
+    2
+  )
+
+  const system = strictRetry
+    ? "Return ONLY valid JSON. No markdown, no prose outside JSON, no missing fields."
+    : "Return ONLY valid JSON. No markdown."
+
+  const user = `Create a data-forward investment-committee outlook for distressed CRE debt.
+Use ONLY facts supported by SOURCES_CONTEXT. Do not fabricate numbers.
+Use recent data and include explicit period labels where available.
+
+Return JSON with EXACT shape:
+{
+  "executiveSummary": ["3-5 bullets"],
+  "usOutlook": ["5-8 data-heavy bullets"],
+  "miamiOutlook": ["5-8 data-heavy bullets (Florida/Miami)"],
+  "investingImplications": ["4-7 actionable bullets"],
+  "sources": [{"title":"...","url":"https://..."}]
+}
+
+Rules:
+- Each bullet max 2 sentences.
+- U.S. and Miami sections must each include multiple numeric bullets (rates, %, $, bps, counts).
+- Include CMBS delinquency/special servicing/refinance pressure/liquidity/pricing-distress signals when supported.
+- If Miami data is thin, state that explicitly and use Florida/regional proxy evidence.
+- Sources should be specific URLs from context, not generic homepages.
+
+SOURCES_CONTEXT:
+${sourceContext}`
+
+  const response = await withTimeout(
+    fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: process.env.OPENAI_OUTLOOK_MODEL?.trim() || "gpt-4o-mini",
+        temperature: 0.1,
+        response_format: { type: "json_object" },
+        max_tokens: 1800,
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: user },
+        ],
+      }),
+      cache: "no-store",
+    }),
+    25000,
+    "Industry outlook generation timed out."
+  )
+
+  if (!response.ok) return null
   const json = (await response.json()) as {
     choices?: Array<{ message?: { content?: string } }>
   }
-  return json.choices?.[0]?.message?.content?.trim() || ""
+  const content = json.choices?.[0]?.message?.content?.trim() || ""
+  const parsed = parseJsonObject<OutlookMemoJson>(content)
+  if (!parsed) return null
+  return parsed
+}
+
+async function generateOutlookText(apiKey: string): Promise<string> {
+  const retrieved = await retrieveSources()
+  if (retrieved.length < 4) return ""
+
+  const first = await generateMemoJson(apiKey, retrieved, false)
+  const second = first ? null : await generateMemoJson(apiKey, retrieved, true)
+  const draft = first || second
+  if (!draft) return ""
+
+  const normalized: OutlookMemoJson = {
+    executiveSummary: Array.isArray(draft.executiveSummary) ? draft.executiveSummary : [],
+    usOutlook: Array.isArray(draft.usOutlook) ? draft.usOutlook : [],
+    miamiOutlook: Array.isArray(draft.miamiOutlook) ? draft.miamiOutlook : [],
+    investingImplications: Array.isArray(draft.investingImplications)
+      ? draft.investingImplications
+      : [],
+    sources: normalizeSources(Array.isArray(draft.sources) ? draft.sources : [], retrieved),
+  }
+
+  const validationError = validateMemoJson(normalized)
+  if (validationError) {
+    console.error("Industry outlook validation failed:", validationError)
+    return ""
+  }
+
+  return renderMemoText(normalized)
 }
 
 export async function POST() {
@@ -88,19 +247,14 @@ export async function POST() {
     return NextResponse.json({ text: "" }, { status: 500 })
   }
 
-  const content = await generateOutlook(apiKey, PROMPT, false)
+  const content = await generateOutlookText(apiKey)
   if (!content) {
-    console.error("Industry outlook API error: empty provider response")
+    console.error("Industry outlook API error: could not produce validated data-forward memo")
     return NextResponse.json({ text: "" }, { status: 500 })
   }
 
-  let normalized = normalizeOutput(content)
-  if (!normalized) {
-    const retry = await generateOutlook(apiKey, PROMPT, true)
-    if (retry) normalized = normalizeOutput(retry)
-  }
   if (allowMemoryCache) {
-    cached = { text: normalized, fetchedAt: Date.now() }
+    cached = { text: content, fetchedAt: Date.now() }
   }
-  return NextResponse.json({ text: normalized })
+  return NextResponse.json({ text: content })
 }
