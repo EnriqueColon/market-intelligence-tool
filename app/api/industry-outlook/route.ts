@@ -126,6 +126,39 @@ function renderMemoText(obj: OutlookMemoJson): string {
   return lines.join("\n").trim()
 }
 
+function buildFallbackMemo(
+  sources: RetrievedSource[],
+  reason: string
+): string {
+  const limitedSources = normalizeSources([], sources).slice(0, 10)
+  const srcLines =
+    limitedSources.length > 0
+      ? limitedSources.map((s) => `${s.title} — ${s.url}`)
+      : ["No verified sources were available from the retrieval pipeline."]
+
+  return [
+    "Executive Summary",
+    "- We could not complete the full data-validated outlook in this run.",
+    `- Reason: ${reason}.`,
+    "- A provisional update is provided below using currently retrieved signals.",
+    "",
+    "U.S. commercial real estate outlook (CRE debt & distress)",
+    "- Current run did not pass strict data-density validation for U.S. metrics.",
+    "- Re-run is recommended to retrieve additional verified debt-stress datapoints.",
+    "",
+    "Miami-specific CRE and distressed-debt outlook",
+    "- Current run did not pass strict data-density validation for Miami/Florida metrics.",
+    "- Re-run is recommended to retrieve additional local/regional datapoints.",
+    "",
+    "How this shapes distressed-debt investing",
+    "- Treat this output as provisional and prioritize direct review of linked sources.",
+    "- Focus diligence on delinquency trends, special servicing, and refinance pressure updates.",
+    "",
+    "Key sources (for further reading)",
+    ...srcLines,
+  ].join("\n")
+}
+
 async function generateMemoJson(
   apiKey: string,
   sources: RetrievedSource[],
@@ -206,12 +239,16 @@ ${sourceContext}`
 
 async function generateOutlookText(apiKey: string): Promise<string> {
   const retrieved = await retrieveSources()
-  if (retrieved.length < 4) return ""
+  if (retrieved.length < 2) {
+    return buildFallbackMemo(retrieved, "Insufficient retrieved sources")
+  }
 
   const first = await generateMemoJson(apiKey, retrieved, false)
   const second = first ? null : await generateMemoJson(apiKey, retrieved, true)
   const draft = first || second
-  if (!draft) return ""
+  if (!draft) {
+    return buildFallbackMemo(retrieved, "Model generation returned no usable JSON")
+  }
 
   const normalized: OutlookMemoJson = {
     executiveSummary: Array.isArray(draft.executiveSummary) ? draft.executiveSummary : [],
@@ -226,7 +263,7 @@ async function generateOutlookText(apiKey: string): Promise<string> {
   const validationError = validateMemoJson(normalized)
   if (validationError) {
     console.error("Industry outlook validation failed:", validationError)
-    return ""
+    return buildFallbackMemo(retrieved, validationError)
   }
 
   return renderMemoText(normalized)
