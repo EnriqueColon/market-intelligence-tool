@@ -204,37 +204,42 @@ Rules:
 SOURCES_CONTEXT:
 ${sourceContext}`
 
-  const response = await withTimeout(
-    fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: process.env.OPENAI_OUTLOOK_MODEL?.trim() || "gpt-4o-mini",
-        temperature: 0.1,
-        response_format: { type: "json_object" },
-        max_tokens: 1800,
-        messages: [
-          { role: "system", content: system },
-          { role: "user", content: user },
-        ],
+  try {
+    const response = await withTimeout(
+      fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: process.env.OPENAI_OUTLOOK_MODEL?.trim() || "gpt-4o-mini",
+          temperature: 0.1,
+          response_format: { type: "json_object" },
+          max_tokens: 1800,
+          messages: [
+            { role: "system", content: system },
+            { role: "user", content: user },
+          ],
+        }),
+        cache: "no-store",
       }),
-      cache: "no-store",
-    }),
-    25000,
-    "Industry outlook generation timed out."
-  )
+      25000,
+      "Industry outlook generation timed out."
+    )
 
-  if (!response.ok) return null
-  const json = (await response.json()) as {
-    choices?: Array<{ message?: { content?: string } }>
+    if (!response.ok) return null
+    const json = (await response.json()) as {
+      choices?: Array<{ message?: { content?: string } }>
+    }
+    const content = json.choices?.[0]?.message?.content?.trim() || ""
+    const parsed = parseJsonObject<OutlookMemoJson>(content)
+    if (!parsed) return null
+    return parsed
+  } catch (err) {
+    console.error("Industry outlook generation error:", err)
+    return null
   }
-  const content = json.choices?.[0]?.message?.content?.trim() || ""
-  const parsed = parseJsonObject<OutlookMemoJson>(content)
-  if (!parsed) return null
-  return parsed
 }
 
 async function generateOutlookText(apiKey: string): Promise<string> {
@@ -277,21 +282,29 @@ export async function POST() {
     return NextResponse.json({ text: cached?.text })
   }
 
-  // Required in production: OPENAI_API_KEY
-  const apiKey = process.env.OPENAI_API_KEY?.trim()
-  if (!apiKey) {
-    console.error("Industry outlook API error: missing OPENAI_API_KEY")
-    return NextResponse.json({ text: "" }, { status: 500 })
-  }
+  try {
+    // Required in production: OPENAI_API_KEY
+    const apiKey = process.env.OPENAI_API_KEY?.trim()
+    if (!apiKey) {
+      console.error("Industry outlook API error: missing OPENAI_API_KEY")
+      const text = buildFallbackMemo([], "Missing OPENAI_API_KEY")
+      return NextResponse.json({ text }, { status: 200 })
+    }
 
-  const content = await generateOutlookText(apiKey)
-  if (!content) {
-    console.error("Industry outlook API error: could not produce validated data-forward memo")
-    return NextResponse.json({ text: "" }, { status: 500 })
-  }
+    const content = await generateOutlookText(apiKey)
+    if (!content) {
+      console.error("Industry outlook API error: could not produce validated data-forward memo")
+      const text = buildFallbackMemo([], "No usable output from provider")
+      return NextResponse.json({ text }, { status: 200 })
+    }
 
-  if (allowMemoryCache) {
-    cached = { text: content, fetchedAt: Date.now() }
+    if (allowMemoryCache) {
+      cached = { text: content, fetchedAt: Date.now() }
+    }
+    return NextResponse.json({ text: content })
+  } catch (err) {
+    console.error("Industry outlook API unhandled error:", err)
+    const text = buildFallbackMemo([], "Unhandled generation error")
+    return NextResponse.json({ text }, { status: 200 })
   }
-  return NextResponse.json({ text: content })
 }
