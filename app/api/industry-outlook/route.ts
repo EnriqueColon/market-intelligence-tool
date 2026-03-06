@@ -2,6 +2,8 @@ import { NextResponse } from "next/server"
 import { retrieveSources } from "@/app/services/industry-outlook/retrieveSources"
 import type { RetrievedSource } from "@/app/services/industry-outlook/schema"
 export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
+export const maxDuration = 60
 
 type CacheEntry = {
   text: string
@@ -291,7 +293,11 @@ export async function POST() {
       return NextResponse.json({ text }, { status: 200 })
     }
 
-    const content = await generateOutlookText(apiKey)
+    const content = await withTimeout(
+      generateOutlookText(apiKey),
+      20000,
+      "Industry outlook generation exceeded time budget."
+    )
     if (!content) {
       console.error("Industry outlook API error: could not produce validated data-forward memo")
       const text = buildFallbackMemo([], "No usable output from provider")
