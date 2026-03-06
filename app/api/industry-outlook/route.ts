@@ -34,10 +34,28 @@ function withTimeout<T>(task: Promise<T>, timeoutMs: number, message: string): P
 }
 
 function hasRequiredSections(text: string): boolean {
-  const hitCount = SECTION_HEADINGS.filter((heading) =>
+  return SECTION_HEADINGS.every((heading) =>
     text.toLowerCase().includes(heading.toLowerCase())
-  ).length
-  return hitCount >= 3
+  )
+}
+
+function hasOrderedSections(text: string): boolean {
+  const lowered = text.toLowerCase()
+  let lastIndex = -1
+  for (const heading of SECTION_HEADINGS) {
+    const idx = lowered.indexOf(heading.toLowerCase())
+    if (idx === -1 || idx < lastIndex) return false
+    lastIndex = idx
+  }
+  return true
+}
+
+function cleanMemoText(text: string): string {
+  return text
+    .replace(/\*\*/g, "")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
 }
 
 function normalizeSources(sources: RetrievedSource[]): Array<{ title: string; url: string }> {
@@ -122,6 +140,8 @@ Rules:
 - If a metric is unavailable, state "data unavailable in this run".
 - In Key sources, provide 6-12 specific URLs (not generic homepages), one per line:
   Title — https://url
+- Do NOT use markdown formatting symbols (no **, no #, no code fences).
+- Include all five section headers exactly as written.
 
 SOURCES_CONTEXT:
 ${sourceContext || "No source context available in this run."}`
@@ -190,16 +210,27 @@ export async function POST() {
 
   try {
     const { system, user } = buildPrompt(sources)
-    let content = await callOpenAI(apiKey, system, user)
+    let content = cleanMemoText(await callOpenAI(apiKey, system, user))
 
-    if (!content || !hasRequiredSections(content)) {
+    if (!content || !hasRequiredSections(content) || !hasOrderedSections(content)) {
       const repairUser =
-        `${user}\n\nReformat your answer now to include ALL five required section headers exactly as listed.`
+        `Reformat the following memo into EXACTLY these five section headers in this order:
+${SECTION_HEADINGS.join("\n")}
+
+Rules:
+- Plain text only, no markdown symbols.
+- Keep original meaning and data points.
+- Use bullet points under each section.
+- Ensure "Key sources (for further reading)" contains line items in format: Title — https://url
+
+MEMO TO REFORMAT:
+${content || "(empty)"}
+`
       const repaired = await callOpenAI(apiKey, system, repairUser)
-      if (repaired) content = repaired
+      if (repaired) content = cleanMemoText(repaired)
     }
 
-    if (!content || !hasRequiredSections(content)) {
+    if (!content || !hasRequiredSections(content) || !hasOrderedSections(content)) {
       const fallback = buildFallbackMemo(sources, "Output failed section-format requirements")
       if (allowMemoryCache) {
         cached = { text: fallback, fetchedAt: Date.now() }

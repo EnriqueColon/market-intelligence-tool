@@ -1,6 +1,7 @@
 import type { RetrievedSource } from "@/app/services/industry-outlook/schema"
 
 const RSS_TIMEOUT_MS = 12_000
+const URL_RESOLVE_TIMEOUT_MS = 4_000
 
 type QuerySpec = {
   region: "national" | "florida" | "miami"
@@ -40,6 +41,35 @@ async function fetchWithTimeout(input: string, timeoutMs: number): Promise<Respo
     return await fetch(input, { headers, signal: controller.signal, cache: "no-store" })
   } finally {
     clearTimeout(id)
+  }
+}
+
+async function resolveGoogleNewsRedirect(url: string): Promise<string> {
+  try {
+    const parsed = new URL(url)
+    const isGoogleNews =
+      parsed.hostname.toLowerCase().includes("news.google.com") &&
+      parsed.pathname.includes("/rss/articles/")
+    if (!isGoogleNews) return url
+
+    const res = await fetchWithTimeout(url, URL_RESOLVE_TIMEOUT_MS)
+    const finalUrl = (res.url || "").trim()
+    if (!finalUrl) return url
+
+    try {
+      const finalParsed = new URL(finalUrl)
+      if (finalParsed.hostname.toLowerCase().includes("news.google.com")) {
+        return url
+      }
+      if (finalUrl.startsWith("http://") || finalUrl.startsWith("https://")) {
+        return finalUrl
+      }
+    } catch {
+      return url
+    }
+    return url
+  } catch {
+    return url
   }
 }
 
@@ -166,5 +196,12 @@ export async function retrieveSources(): Promise<RetrievedSource[]> {
     picked.push(item)
   }
 
-  return picked.slice(0, 10)
+  const selected = picked.slice(0, 10)
+  const resolved = await Promise.all(
+    selected.map(async (item) => ({
+      ...item,
+      url: await resolveGoogleNewsRedirect(item.url),
+    }))
+  )
+  return dedupeSources(resolved)
 }
