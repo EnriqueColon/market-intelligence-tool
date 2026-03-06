@@ -295,7 +295,7 @@ export async function POST() {
 
     const content = await withTimeout(
       generateOutlookText(apiKey),
-      20000,
+      50000,
       "Industry outlook generation exceeded time budget."
     )
     if (!content) {
