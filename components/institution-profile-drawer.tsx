@@ -5,12 +5,6 @@ import { Copy, X } from "lucide-react"
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 import { fetchNoncurrentDebugSnapshot } from "@/app/actions/fetch-fdic-data"
 import type { NoncurrentDebugSnapshot } from "@/lib/noncurrent-debug"
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -371,17 +365,17 @@ export function InstitutionProfileDrawer({
   const sortedAvailable = [...availableToAdd].sort((a, b) => (a.name || "").localeCompare(b.name || ""))
 
   return (
-    <Sheet open={!!row || compareRows.length > 0} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent className="sm:max-w-4xl overflow-y-auto" side="right">
-        <SheetHeader className="flex flex-row flex-wrap items-start justify-between gap-3 pr-8">
-          <SheetTitle className="text-lg font-semibold text-slate-800">
+    <Dialog open={!!row || compareRows.length > 0} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="w-[96vw] max-w-6xl max-h-[90vh] overflow-y-auto p-6">
+        <DialogHeader className="flex flex-row flex-wrap items-start justify-between gap-3 pr-8">
+          <DialogTitle className="text-lg font-semibold text-slate-800">
             Compare institutions
-          </SheetTitle>
+          </DialogTitle>
           <Button variant="outline" size="sm" onClick={handleCopy} className="shrink-0 border-[#006D95]/30 text-[#006D95] hover:bg-[#006D95]/5">
             <Copy className="h-4 w-4 mr-2" />
             Copy Snapshot
           </Button>
-        </SheetHeader>
+        </DialogHeader>
         <div className="mt-6 space-y-6 pr-4">
           {isCompareMode ? (
             <>
@@ -499,8 +493,8 @@ export function InstitutionProfileDrawer({
             <p className="text-sm text-slate-600">Select an institution from the table or dropdown to compare.</p>
           )}
         </div>
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   )
 }
 
