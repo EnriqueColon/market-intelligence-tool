@@ -13,13 +13,13 @@ type CacheEntry = {
 const CACHE_TTL_MS = 2 * 60 * 60 * 1000
 let cached: CacheEntry | null = null
 
-type OutlookMemoJson = {
-  executiveSummary: string[]
-  usOutlook: string[]
-  miamiOutlook: string[]
-  investingImplications: string[]
-  sources: Array<{ title: string; url: string }>
-}
+const SECTION_HEADINGS = [
+  "Executive Summary",
+  "U.S. commercial real estate outlook (CRE debt & distress)",
+  "Miami-specific CRE and distressed-debt outlook",
+  "How this shapes distressed-debt investing",
+  "Key sources (for further reading)",
+]
 
 function isFresh(entry: CacheEntry | null) {
   if (!entry) return false
@@ -33,284 +33,193 @@ function withTimeout<T>(task: Promise<T>, timeoutMs: number, message: string): P
   ])
 }
 
-function parseJsonObject<T>(text: string): T | null {
-  const match = text.match(/\{[\s\S]*\}/)
-  if (!match) return null
-  try {
-    return JSON.parse(match[0]) as T
-  } catch {
-    return null
-  }
+function hasRequiredSections(text: string): boolean {
+  const hitCount = SECTION_HEADINGS.filter((heading) =>
+    text.toLowerCase().includes(heading.toLowerCase())
+  ).length
+  return hitCount >= 3
 }
 
-function hasAtLeastNDataBullets(lines: string[], minCount: number): boolean {
-  const count = lines.filter((line) => /\d/.test(line)).length
-  return count >= minCount
-}
-
-function validateMemoJson(obj: OutlookMemoJson): string | null {
-  if (!Array.isArray(obj.executiveSummary) || obj.executiveSummary.length < 3) {
-    return "Missing executive summary bullets."
-  }
-  if (!Array.isArray(obj.usOutlook) || obj.usOutlook.length < 5) {
-    return "Missing U.S. outlook depth."
-  }
-  if (!Array.isArray(obj.miamiOutlook) || obj.miamiOutlook.length < 5) {
-    return "Missing Miami outlook depth."
-  }
-  if (!Array.isArray(obj.investingImplications) || obj.investingImplications.length < 4) {
-    return "Missing investing implications depth."
-  }
-  if (!Array.isArray(obj.sources) || obj.sources.length < 6) {
-    return "Insufficient sources."
-  }
-  if (!hasAtLeastNDataBullets(obj.usOutlook, 3)) {
-    return "U.S. section is not data-forward enough."
-  }
-  if (!hasAtLeastNDataBullets(obj.miamiOutlook, 3)) {
-    return "Miami section is not data-forward enough."
-  }
-  return null
-}
-
-function asBulletList(lines: string[]): string {
-  return lines.map((line) => `- ${String(line || "").trim()}`).join("\n")
-}
-
-function normalizeSources(
-  requested: Array<{ title: string; url: string }>,
-  fallback: RetrievedSource[]
-): Array<{ title: string; url: string }> {
-  const valid = (requested || []).filter(
-    (s) =>
-      s &&
-      typeof s.title === "string" &&
-      typeof s.url === "string" &&
-      /^https?:\/\//i.test(s.url)
-  )
+function normalizeSources(sources: RetrievedSource[]): Array<{ title: string; url: string }> {
   const seen = new Set<string>()
   const output: Array<{ title: string; url: string }> = []
-  for (const item of valid) {
-    const key = item.url.trim().toLowerCase()
-    if (!key || seen.has(key)) continue
+  for (const item of sources) {
+    const url = String(item.url || "").trim()
+    if (!/^https?:\/\//i.test(url)) continue
+    const key = url.toLowerCase()
+    if (seen.has(key)) continue
     seen.add(key)
-    output.push({ title: item.title.trim() || item.url.trim(), url: item.url.trim() })
-    if (output.length >= 15) return output
-  }
-  for (const item of fallback) {
-    const key = item.url.trim().toLowerCase()
-    if (!key || seen.has(key)) continue
-    seen.add(key)
-    output.push({ title: item.title.trim() || item.url.trim(), url: item.url.trim() })
-    if (output.length >= 15) break
+    output.push({
+      title: String(item.title || url).trim(),
+      url,
+    })
+    if (output.length >= 12) break
   }
   return output
 }
 
-function renderMemoText(obj: OutlookMemoJson): string {
-  const lines: string[] = []
-  lines.push("Executive Summary")
-  lines.push(asBulletList(obj.executiveSummary))
-  lines.push("")
-  lines.push("U.S. commercial real estate outlook (CRE debt & distress)")
-  lines.push(asBulletList(obj.usOutlook))
-  lines.push("")
-  lines.push("Miami-specific CRE and distressed-debt outlook")
-  lines.push(asBulletList(obj.miamiOutlook))
-  lines.push("")
-  lines.push("How this shapes distressed-debt investing")
-  lines.push(asBulletList(obj.investingImplications))
-  lines.push("")
-  lines.push("Key sources (for further reading)")
-  for (const src of obj.sources) {
-    lines.push(`${src.title} — ${src.url}`)
-  }
-  return lines.join("\n").trim()
-}
-
-function buildFallbackMemo(
-  sources: RetrievedSource[],
-  reason: string
-): string {
-  const limitedSources = normalizeSources([], sources).slice(0, 10)
-  const srcLines =
-    limitedSources.length > 0
-      ? limitedSources.map((s) => `${s.title} — ${s.url}`)
-      : ["No verified sources were available from the retrieval pipeline."]
+function buildFallbackMemo(sources: RetrievedSource[], reason: string): string {
+  const sourceLines = normalizeSources(sources)
+  const renderedSources =
+    sourceLines.length > 0
+      ? sourceLines.map((s) => `${s.title} — ${s.url}`)
+      : ["No verified sources were available in this run."]
 
   return [
     "Executive Summary",
-    "- We could not complete the full data-validated outlook in this run.",
+    "- We could not complete a full generated outlook in this run.",
     `- Reason: ${reason}.`,
-    "- A provisional update is provided below using currently retrieved signals.",
+    "- A provisional update is provided below with available sources.",
     "",
     "U.S. commercial real estate outlook (CRE debt & distress)",
-    "- Current run did not pass strict data-density validation for U.S. metrics.",
-    "- Re-run is recommended to retrieve additional verified debt-stress datapoints.",
+    "- Data retrieval was partially available; re-run is recommended for a fuller update.",
     "",
     "Miami-specific CRE and distressed-debt outlook",
-    "- Current run did not pass strict data-density validation for Miami/Florida metrics.",
-    "- Re-run is recommended to retrieve additional local/regional datapoints.",
+    "- Miami/Florida signal coverage was limited in this run; re-run is recommended.",
     "",
     "How this shapes distressed-debt investing",
-    "- Treat this output as provisional and prioritize direct review of linked sources.",
-    "- Focus diligence on delinquency trends, special servicing, and refinance pressure updates.",
+    "- Use the sources below for direct verification and decision support.",
     "",
     "Key sources (for further reading)",
-    ...srcLines,
+    ...renderedSources,
   ].join("\n")
 }
 
-async function generateMemoJson(
-  apiKey: string,
-  sources: RetrievedSource[],
-  strictRetry: boolean
-): Promise<OutlookMemoJson | null> {
-  const sourceContext = JSON.stringify(
-    sources.map((s) => ({
-      title: s.title,
-      url: s.url,
-      region: s.region,
-      publisher: s.publisher,
-      date: s.date,
-      snippet: s.snippet,
-    })),
-    null,
-    2
-  )
+function buildPrompt(sources: RetrievedSource[]): {
+  system: string
+  user: string
+} {
+  const sourceContext = normalizeSources(sources)
+    .map((s) => `${s.title} — ${s.url}`)
+    .join("\n")
 
-  const system = strictRetry
-    ? "Return ONLY valid JSON. No markdown, no prose outside JSON, no missing fields."
-    : "Return ONLY valid JSON. No markdown."
+  const system =
+    "You are a senior CRE distressed-debt analyst writing for a private equity investment committee. " +
+    "Write plain text only, concise, data-forward, and decision-oriented. " +
+    "Do not invent sources; if uncertain, say data unavailable in this run."
 
-  const user = `Create a data-forward investment-committee outlook for distressed CRE debt.
-Use ONLY facts supported by SOURCES_CONTEXT. Do not fabricate numbers.
-Use recent data and include explicit period labels where available.
+  const user = `Create an industry outlook memo for distressed commercial real estate debt.
 
-Return JSON with EXACT shape:
-{
-  "executiveSummary": ["3-5 bullets"],
-  "usOutlook": ["5-8 data-heavy bullets"],
-  "miamiOutlook": ["5-8 data-heavy bullets (Florida/Miami)"],
-  "investingImplications": ["4-7 actionable bullets"],
-  "sources": [{"title":"...","url":"https://..."}]
-}
+Scope:
+- U.S.
+- Florida
+- Miami
+
+Timeframe:
+- Prioritize recent data (last 3-12 months), include period labels when possible.
+
+Output format (exact sections):
+1) Executive Summary
+2) U.S. commercial real estate outlook (CRE debt & distress)
+3) Miami-specific CRE and distressed-debt outlook
+4) How this shapes distressed-debt investing
+5) Key sources (for further reading)
 
 Rules:
-- Each bullet max 2 sentences.
-- U.S. and Miami sections must each include multiple numeric bullets (rates, %, $, bps, counts).
-- Include CMBS delinquency/special servicing/refinance pressure/liquidity/pricing-distress signals when supported.
-- If Miami data is thin, state that explicitly and use Florida/regional proxy evidence.
-- Sources should be specific URLs from context, not generic homepages.
+- 3-6 bullets per section (except sources list).
+- Keep bullets to 1-2 sentences.
+- Prefer concrete metrics (rates, %, $, bps, counts) when available.
+- If a metric is unavailable, state "data unavailable in this run".
+- In Key sources, provide 6-12 specific URLs (not generic homepages), one per line:
+  Title — https://url
 
 SOURCES_CONTEXT:
-${sourceContext}`
+${sourceContext || "No source context available in this run."}`
 
-  try {
-    const response = await withTimeout(
-      fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: process.env.OPENAI_OUTLOOK_MODEL?.trim() || "gpt-4o-mini",
-          temperature: 0.1,
-          response_format: { type: "json_object" },
-          max_tokens: 1800,
-          messages: [
-            { role: "system", content: system },
-            { role: "user", content: user },
-          ],
-        }),
-        cache: "no-store",
-      }),
-      25000,
-      "Industry outlook generation timed out."
-    )
-
-    if (!response.ok) return null
-    const json = (await response.json()) as {
-      choices?: Array<{ message?: { content?: string } }>
-    }
-    const content = json.choices?.[0]?.message?.content?.trim() || ""
-    const parsed = parseJsonObject<OutlookMemoJson>(content)
-    if (!parsed) return null
-    return parsed
-  } catch (err) {
-    console.error("Industry outlook generation error:", err)
-    return null
-  }
+  return { system, user }
 }
 
-async function generateOutlookText(apiKey: string): Promise<string> {
-  const retrieved = await retrieveSources()
-  if (retrieved.length < 2) {
-    return buildFallbackMemo(retrieved, "Insufficient retrieved sources")
-  }
+async function callOpenAI(
+  apiKey: string,
+  system: string,
+  user: string
+): Promise<string> {
+  const response = await withTimeout(
+    fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: process.env.OPENAI_OUTLOOK_MODEL?.trim() || "gpt-4o-mini",
+        temperature: 0.2,
+        max_tokens: 1600,
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: user },
+        ],
+      }),
+      cache: "no-store",
+    }),
+    35000,
+    "Industry outlook generation timed out."
+  )
 
-  const first = await generateMemoJson(apiKey, retrieved, false)
-  const second = first ? null : await generateMemoJson(apiKey, retrieved, true)
-  const draft = first || second
-  if (!draft) {
-    return buildFallbackMemo(retrieved, "Model generation returned no usable JSON")
+  if (!response.ok) {
+    throw new Error(`Provider error ${response.status}`)
   }
-
-  const normalized: OutlookMemoJson = {
-    executiveSummary: Array.isArray(draft.executiveSummary) ? draft.executiveSummary : [],
-    usOutlook: Array.isArray(draft.usOutlook) ? draft.usOutlook : [],
-    miamiOutlook: Array.isArray(draft.miamiOutlook) ? draft.miamiOutlook : [],
-    investingImplications: Array.isArray(draft.investingImplications)
-      ? draft.investingImplications
-      : [],
-    sources: normalizeSources(Array.isArray(draft.sources) ? draft.sources : [], retrieved),
+  const json = (await response.json()) as {
+    choices?: Array<{ message?: { content?: string } }>
   }
-
-  const validationError = validateMemoJson(normalized)
-  if (validationError) {
-    console.error("Industry outlook validation failed:", validationError)
-    return buildFallbackMemo(retrieved, validationError)
-  }
-
-  return renderMemoText(normalized)
+  return json.choices?.[0]?.message?.content?.trim() || ""
 }
 
 export async function POST() {
-  // Avoid cross-request state assumptions in serverless runtime.
-  // In-memory cache is used only for local/self-hosted Node processes.
   const allowMemoryCache = process.env.VERCEL !== "1"
   if (allowMemoryCache && isFresh(cached)) {
     return NextResponse.json({ text: cached?.text })
   }
 
+  let sources: RetrievedSource[] = []
   try {
-    // Required in production: OPENAI_API_KEY
-    const apiKey = process.env.OPENAI_API_KEY?.trim()
-    if (!apiKey) {
-      console.error("Industry outlook API error: missing OPENAI_API_KEY")
-      const text = buildFallbackMemo([], "Missing OPENAI_API_KEY")
-      return NextResponse.json({ text }, { status: 200 })
+    sources = await withTimeout(
+      retrieveSources(),
+      12000,
+      "Source retrieval timed out."
+    )
+  } catch (err) {
+    console.error("Industry outlook source retrieval error:", err)
+  }
+
+  const apiKey = process.env.OPENAI_API_KEY?.trim()
+  if (!apiKey) {
+    const fallback = buildFallbackMemo(sources, "Missing OPENAI_API_KEY")
+    return NextResponse.json({ text: fallback }, { status: 200 })
+  }
+
+  try {
+    const { system, user } = buildPrompt(sources)
+    let content = await callOpenAI(apiKey, system, user)
+
+    if (!content || !hasRequiredSections(content)) {
+      const repairUser =
+        `${user}\n\nReformat your answer now to include ALL five required section headers exactly as listed.`
+      const repaired = await callOpenAI(apiKey, system, repairUser)
+      if (repaired) content = repaired
     }
 
-    const content = await withTimeout(
-      generateOutlookText(apiKey),
-      50000,
-      "Industry outlook generation exceeded time budget."
-    )
-    if (!content) {
-      console.error("Industry outlook API error: could not produce validated data-forward memo")
-      const text = buildFallbackMemo([], "No usable output from provider")
-      return NextResponse.json({ text }, { status: 200 })
+    if (!content || !hasRequiredSections(content)) {
+      const fallback = buildFallbackMemo(sources, "Output failed section-format requirements")
+      if (allowMemoryCache) {
+        cached = { text: fallback, fetchedAt: Date.now() }
+      }
+      return NextResponse.json({ text: fallback }, { status: 200 })
     }
 
     if (allowMemoryCache) {
       cached = { text: content, fetchedAt: Date.now() }
     }
-    return NextResponse.json({ text: content })
+    return NextResponse.json({ text: content }, { status: 200 })
   } catch (err) {
-    console.error("Industry outlook API unhandled error:", err)
-    const text = buildFallbackMemo([], "Unhandled generation error")
-    return NextResponse.json({ text }, { status: 200 })
+    console.error("Industry outlook generation error:", err)
+    const fallback = buildFallbackMemo(
+      sources,
+      err instanceof Error ? err.message : "Unhandled generation error"
+    )
+    if (allowMemoryCache) {
+      cached = { text: fallback, fetchedAt: Date.now() }
+    }
+    return NextResponse.json({ text: fallback }, { status: 200 })
   }
 }
