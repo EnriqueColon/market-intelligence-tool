@@ -9,13 +9,22 @@ export function IndustryOutlook() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
 
+  const cleanLine = (line: string) =>
+    line
+      .replace(/\*\*/g, "")
+      .replace(/^\s*[•\-]?\s*\d+\)\s*/i, "")
+      .replace(/^\s*[•\-]\s*/, "")
+      .trim()
+
   const extractSources = (text: string) => {
-    const lines = text.split(/\r?\n/)
-    const idx = lines.findIndex(
-      (line) =>
-        line.trim().toLowerCase().startsWith("key sources") ||
-        line.trim().toLowerCase().startsWith("sources (for further reading)")
-    )
+    const lines = text.split(/\r?\n/).map(cleanLine)
+    const idx = lines.findIndex((line) => {
+      const lowered = line.trim().toLowerCase()
+      return (
+        lowered.includes("key sources") ||
+        lowered.includes("sources (for further reading)")
+      )
+    })
     if (idx === -1) return { body: text, sources: [] as Array<{ title: string; url: string }>, rawSourceLines: [] }
     const body = lines.slice(0, idx).join("\n").trim()
     const rawSourceLines = lines.slice(idx + 1).map((l) => l.trim()).filter(Boolean)
@@ -94,11 +103,14 @@ export function IndustryOutlook() {
       const pattern = new RegExp(`\\s+(${heading.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")})`, "gi")
       return acc.replace(pattern, "\n$1")
     }, text)
-    const lines = normalized.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+    const lines = normalized
+      .split(/\r?\n/)
+      .map((l) => cleanLine(l))
+      .filter(Boolean)
     let current: { heading: string; bullets: string[] } | null = null
 
     for (const line of lines) {
-      const cleanedLine = stripReferences(line)
+      const cleanedLine = stripReferences(cleanLine(line))
       const heading = headings.find((h) => cleanedLine.toLowerCase().startsWith(h.toLowerCase()))
       if (heading) {
         if (current) sections.push({ heading: current.heading, bullets: current.bullets })
@@ -214,32 +226,45 @@ export function IndustryOutlook() {
               {(sources.length > 0 || rawSourceLines.some((l) => /https?:\/\//.test(l))) ? (
                 <div className="pt-4 mt-4 border-t border-slate-200">
                   <div className="text-xs font-semibold text-slate-700 uppercase mb-2">Key Sources (for further reading)</div>
-                  <ul className="space-y-2 text-sm">
+                  <div className="space-y-2 text-sm">
                     {sources.length > 0
                       ? sources.map((s, idx) => {
                           const href = (s.url || "").trim()
                           const isValidHref = href.startsWith("http://") || href.startsWith("https://")
+                          const displayTitle = (s.title || href || "Source").trim()
+                          let host = ""
+                          try {
+                            host = new URL(href).hostname.replace(/^www\./, "")
+                          } catch {
+                            host = ""
+                          }
                           return (
-                            <li key={`src-${idx}`}>
+                            <div key={`src-${idx}`} className="rounded border border-slate-200 bg-white p-2">
+                              <div className="text-slate-700">{displayTitle}</div>
                               {isValidHref ? (
-                                <a
-                                  className="text-[#006D95] underline hover:text-[#005a7a] cursor-pointer"
-                                  href={href}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                >
-                                  {s.title || href}
-                                </a>
+                                <div className="mt-1">
+                                  <a
+                                    className="text-[#006D95] underline hover:text-[#005a7a] break-all"
+                                    href={href}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    title={href}
+                                  >
+                                    Open source{host ? ` (${host})` : ""}
+                                  </a>
+                                </div>
                               ) : (
-                                <span className="text-slate-600">{s.title || s.url}</span>
+                                <div className="mt-1 text-slate-500 break-all">{s.url}</div>
                               )}
-                            </li>
+                            </div>
                           )
                         })
                       : rawSourceLines.map((line, idx) => (
-                          <li key={`raw-${idx}`}>{renderTextWithLinks(line)}</li>
+                          <div key={`raw-${idx}`} className="rounded border border-slate-200 bg-white p-2 text-slate-700 break-all">
+                            {renderTextWithLinks(cleanLine(line))}
+                          </div>
                         ))}
-                  </ul>
+                  </div>
                 </div>
               ) : null}
             </div>
