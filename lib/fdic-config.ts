@@ -6,8 +6,12 @@
 export const FDIC_CONFIG = {
   // Server-side FDIC endpoint override (optional for production).
   baseUrl: process.env.FDIC_API_URL || 'https://banks.data.fdic.gov',
+  // Fallback host used when the primary host has transient DNS/network issues.
+  fallbackBaseUrls: [
+    'https://api.fdic.gov/banks',
+  ],
   // Server-only credential. Do not expose as NEXT_PUBLIC_*.
-  apiKey: process.env.FDIC_API_KEY || null, // Currently not required, but prepared for future
+  apiKey: process.env.FDIC_API_KEY || process.env.NEXT_PUBLIC_FDIC_API_KEY || null,
   defaultLimit: 100,
   cacheTimeout: 3600000, // 1 hour in milliseconds
   defaultFormat: 'json' as const,

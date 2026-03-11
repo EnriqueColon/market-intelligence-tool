@@ -105,63 +105,81 @@ async function fetchFDICData<T>(
       queryParams.append('sort_order', sort_order)
     }
 
-    const url = `${FDIC_CONFIG.baseUrl}${endpoint}?${queryParams.toString()}`
+    const baseUrls = [FDIC_CONFIG.baseUrl, ...(FDIC_CONFIG.fallbackBaseUrls ?? [])]
+      .map((u) => String(u || "").trim())
+      .filter(Boolean)
+      .filter((u, i, arr) => arr.indexOf(u) === i)
+
+    const apiKey = FDIC_CONFIG.apiKey?.trim()
+    if (apiKey) {
+      queryParams.set("api_key", apiKey)
+    }
 
     // FDIC financials responses can exceed Next.js 2MB cache limit; skip cache for large requests
     const skipCache = limit >= 5000
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 45000) // 45s timeout
-    try {
-      const response = await fetch(url, {
-        ...(skipCache ? { cache: 'no-store' as RequestCache } : { next: { revalidate: FDIC_CONFIG.cacheTimeout / 1000 } }),
-        headers: {
-          'Accept': 'application/json',
-        },
-        signal: controller.signal,
-      })
-      clearTimeout(timeoutId)
+    let lastError: string | undefined
 
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error(`FDIC API error: ${response.status} - ${errorText}`)
-        console.error(`FDIC API URL: ${url}`)
-        return {
-          data: [],
-          error: `FDIC API error: ${response.status}`,
+    for (const baseUrl of baseUrls) {
+      const url = `${baseUrl}${endpoint}?${queryParams.toString()}`
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 30000) // 30s timeout per host
+      try {
+        const response = await fetch(url, {
+          ...(skipCache ? { cache: 'no-store' as RequestCache } : { next: { revalidate: FDIC_CONFIG.cacheTimeout / 1000 } }),
+          headers: {
+            'Accept': 'application/json',
+          },
+          signal: controller.signal,
+        })
+        clearTimeout(timeoutId)
+
+        if (!response.ok) {
+          const errorText = await response.text()
+          lastError = `FDIC API error: ${response.status}`
+          console.error(`FDIC API error: ${response.status} - ${errorText}`)
+          console.error(`FDIC API URL: ${url}`)
+
+          // 4xx usually won't recover on another host unless auth/env changes.
+          if (response.status >= 400 && response.status < 500) {
+            return {
+              data: [],
+              error: lastError,
+            }
+          }
+          continue
         }
-      }
 
-      const jsonData = await response.json()
+        const jsonData = await response.json()
 
-      // FDIC API returns data in different formats depending on endpoint
-      if (jsonData.data && Array.isArray(jsonData.data)) {
-        const normalized = jsonData.data.map((item: any) => item?.data ?? item)
-        return {
-          data: normalized,
-          meta: jsonData.meta,
+        // FDIC API returns data in different formats depending on endpoint
+        if (jsonData.data && Array.isArray(jsonData.data)) {
+          const normalized = jsonData.data.map((item: any) => item?.data ?? item)
+          return {
+            data: normalized,
+            meta: jsonData.meta,
+          }
         }
-      }
 
-      if (Array.isArray(jsonData)) {
-        const normalized = jsonData.map((item: any) => item?.data ?? item)
-        return {
-          data: normalized,
+        if (Array.isArray(jsonData)) {
+          const normalized = jsonData.map((item: any) => item?.data ?? item)
+          return {
+            data: normalized,
+          }
         }
-      }
 
-      return {
-        data: [],
-        error: 'Unexpected response format from FDIC API',
+        lastError = 'Unexpected response format from FDIC API'
+      } catch (error) {
+        clearTimeout(timeoutId)
+        const msg = error instanceof Error ? error.message : 'Unknown error'
+        const isTimeout = msg.includes('abort') || msg.includes('AbortError')
+        lastError = isTimeout ? 'Request timed out. Try selecting a state for faster results.' : msg
+        console.error(`Error fetching FDIC data from ${endpoint} via ${baseUrl}:`, error)
       }
-    } catch (error) {
-      clearTimeout(timeoutId)
-      const msg = error instanceof Error ? error.message : 'Unknown error'
-      const isTimeout = msg.includes('abort') || msg.includes('AbortError')
-      console.error(`Error fetching FDIC data from ${endpoint}:`, error)
-      return {
-        data: [],
-        error: isTimeout ? 'Request timed out. Try selecting a state for faster results.' : msg,
-      }
+    }
+
+    return {
+      data: [],
+      error: lastError || 'Unable to reach FDIC API',
     }
   } catch (error) {
     console.error(`Error fetching FDIC data from ${endpoint}:`, error)
