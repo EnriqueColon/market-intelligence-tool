@@ -4,6 +4,36 @@ import { useEffect, useState } from "react"
 import { Card } from "@/components/ui/card"
 import { Newspaper } from "lucide-react"
 
+const INDUSTRY_OUTLOOK_SESSION_KEY = "industry-outlook:latest"
+let industryOutlookMemoryCache: string | null = null
+let industryOutlookInFlight: Promise<string | null> | null = null
+
+async function generateIndustryOutlookOnce(): Promise<string | null> {
+  if (industryOutlookInFlight) return industryOutlookInFlight
+
+  industryOutlookInFlight = (async () => {
+    const res = await fetch("/api/industry-outlook", { method: "POST" })
+    if (!res.ok) throw new Error("Request failed")
+    const json = (await res.json()) as { text?: string }
+    const text = json.text?.trim() || null
+    if (text) {
+      industryOutlookMemoryCache = text
+      try {
+        sessionStorage.setItem(INDUSTRY_OUTLOOK_SESSION_KEY, text)
+      } catch {
+        // Ignore storage failures (private mode/quota), keep memory cache.
+      }
+    }
+    return text
+  })()
+
+  try {
+    return await industryOutlookInFlight
+  } finally {
+    industryOutlookInFlight = null
+  }
+}
+
 export function IndustryOutlook() {
   const [data, setData] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -165,11 +195,28 @@ export function IndustryOutlook() {
     async function load() {
       setLoading(true)
       try {
-        const res = await fetch("/api/industry-outlook", { method: "POST" })
-        if (!res.ok) throw new Error("Request failed")
-        const json = (await res.json()) as { text?: string }
+        if (industryOutlookMemoryCache) {
+          if (!mounted) return
+          setData(industryOutlookMemoryCache)
+          setError(false)
+          return
+        }
+        try {
+          const cached = sessionStorage.getItem(INDUSTRY_OUTLOOK_SESSION_KEY)?.trim() || ""
+          if (cached) {
+            industryOutlookMemoryCache = cached
+            if (!mounted) return
+            setData(cached)
+            setError(false)
+            return
+          }
+        } catch {
+          // Ignore sessionStorage read failures and continue to network path.
+        }
+
+        const text = await generateIndustryOutlookOnce()
         if (!mounted) return
-        setData(json.text?.trim() || null)
+        setData(text)
         setError(false)
       } catch {
         if (!mounted) return
