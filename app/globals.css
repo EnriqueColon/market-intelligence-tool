@@ -451,3 +451,14 @@ table[data-sticky-headers] thead th {
 .dark table[data-sticky-headers] thead th {
   background: rgb(2 6 23);
 }
+
+/* Market Intelligence readability: body/supporting text in solid black.
+   Keep tabs, titles, links, and table headers on their existing styles. */
+.market-intelligence-tool .text-muted-foreground:not([data-slot="tabs-trigger"]):not(a):not(h1):not(h2):not(h3):not(h4):not(th):not([role="columnheader"]),
+.market-intelligence-tool .text-slate-500:not([data-slot="tabs-trigger"]):not(a):not(h1):not(h2):not(h3):not(h4):not(th):not([role="columnheader"]),
+.market-intelligence-tool .text-slate-600:not([data-slot="tabs-trigger"]):not(a):not(h1):not(h2):not(h3):not(h4):not(th):not([role="columnheader"]),
+.market-intelligence-tool .text-slate-400:not([data-slot="tabs-trigger"]):not(a):not(h1):not(h2):not(h3):not(h4):not(th):not([role="columnheader"]),
+.market-intelligence-tool .text-gray-500:not([data-slot="tabs-trigger"]):not(a):not(h1):not(h2):not(h3):not(h4):not(th):not([role="columnheader"]),
+.market-intelligence-tool .text-gray-600:not([data-slot="tabs-trigger"]):not(a):not(h1):not(h2):not(h3):not(h4):not(th):not([role="columnheader"]) {
+  color: #000000 !important;
+}

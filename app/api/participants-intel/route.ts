@@ -61,18 +61,22 @@ function loadAssignmentsFromAomSqlite(): AssignmentRecord[] {
   try {
     const cols = db.prepare("PRAGMA table_info(aom_events)").all() as Array<{ name: string }>
     const has = new Set(cols.map((c) => c.name))
-    const amountExpr = has.has("loan_amount")
-      ? "loan_amount"
-      : has.has("amount")
-        ? "amount"
-        : has.has("consideration")
-          ? "consideration"
-          : "NULL"
+    const amountExpr = [
+      has.has("upb") ? "NULLIF(upb,0)" : null,
+      has.has("consideration_1") ? "NULLIF(consideration_1,0)" : null,
+      has.has("consideration_2") ? "NULLIF(consideration_2,0)" : null,
+      has.has("loan_amount") ? "NULLIF(loan_amount,0)" : null,
+      has.has("amount") ? "NULLIF(amount,0)" : null,
+    ]
+      .filter(Boolean)
+      .join(", ")
     const propertyExpr = has.has("property_address")
       ? "property_address"
       : has.has("property")
         ? "property"
-        : "NULL"
+        : has.has("legal_description")
+          ? "legal_description"
+          : "NULL"
     const rows = db
       .prepare(
         `
@@ -80,7 +84,7 @@ function loadAssignmentsFromAomSqlite(): AssignmentRecord[] {
           CAST(id AS TEXT) AS id,
           trim(first_party) AS assignor,
           trim(second_party) AS assignee,
-          ${amountExpr} AS loan_amount,
+          ${amountExpr ? `COALESCE(${amountExpr})` : "NULL"} AS loan_amount,
           event_date AS recording_date,
           ${propertyExpr} AS property
         FROM aom_events

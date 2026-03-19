@@ -22,6 +22,13 @@ function daysAgoIso(days: number): string {
   return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
 }
 
+function shiftIsoDays(anchorIso: string, minusDays: number): string {
+  const d = new Date(`${anchorIso}T00:00:00.000Z`)
+  if (Number.isNaN(d.getTime())) return daysAgoIso(minusDays)
+  d.setUTCDate(d.getUTCDate() - minusDays)
+  return d.toISOString().slice(0, 10)
+}
+
 function normalizePartyName(name: string): string {
   const base = (name || "")
     .toLowerCase()
@@ -79,10 +86,12 @@ export function calculateInboundOutbound(edges: FlowEdge[], fromDateIso: string,
 }
 
 export function calculateRollingWindows(edges: FlowEdge[]): FlowWindowStats[] {
-  const d0 = daysAgoIso(30)
-  const d30 = daysAgoIso(60)
-  const d90 = daysAgoIso(90)
-  const today = new Date().toISOString().slice(0, 10)
+  const maxDate = edges.reduce((max, e) => (e.date > max ? e.date : max), "")
+  const anchor = maxDate || new Date().toISOString().slice(0, 10)
+  const d0 = shiftIsoDays(anchor, 30)
+  const d30 = shiftIsoDays(anchor, 60)
+  const d90 = shiftIsoDays(anchor, 90)
+  const today = anchor
 
   const current30 = calculateInboundOutbound(edges, d0, today)
   const prior30 = calculateInboundOutbound(edges, d30, d0)
@@ -118,8 +127,9 @@ export function calculateRollingWindows(edges: FlowEdge[]): FlowWindowStats[] {
 }
 
 export function aggregateTopPairs(edges: FlowEdge[], days = 90): PairAggregate[] {
-  const from = daysAgoIso(days)
-  const to = new Date().toISOString().slice(0, 10)
+  const maxDate = edges.reduce((max, e) => (e.date > max ? e.date : max), "")
+  const to = maxDate || new Date().toISOString().slice(0, 10)
+  const from = shiftIsoDays(to, days)
   const map = new Map<string, PairAggregate>()
   for (const e of edges) {
     if (e.date < from || e.date > to) continue
@@ -206,8 +216,10 @@ export function generateAlerts(input: {
       })
   }
 
-  const pre30 = daysAgoIso(30)
-  const pre90 = daysAgoIso(90)
+  const maxEdgeDate = input.edges.reduce((max, e) => (e.date > max ? e.date : max), "")
+  const anchor = maxEdgeDate || new Date().toISOString().slice(0, 10)
+  const pre30 = shiftIsoDays(anchor, 30)
+  const pre90 = shiftIsoDays(anchor, 90)
   const lenderCount30 = new Map<string, number>()
   const lenderCount90 = new Map<string, number>()
   const borrowerCount30 = new Map<string, number>()
