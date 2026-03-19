@@ -20,6 +20,11 @@ function money(n?: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n || 0)
 }
 
+function moneyOrUnknown(n?: number | null) {
+  if (n == null) return "Unknown"
+  return money(n)
+}
+
 export function SectionPartySearch({
   query,
   onQueryChange,
@@ -116,7 +121,7 @@ export function SectionPartySearch({
                 <div className="space-y-1">
                   {profile.recentAssignments.slice(0, 5).map((a) => (
                     <div key={a.id} className="text-xs text-slate-700">
-                      {a.recordingDate}: {a.assignor} → {a.assignee} ({money(a.loanAmount)})
+                      {a.recordingDate}: {a.assignor} → {a.assignee} ({moneyOrUnknown(a.loanAmount)})
                     </div>
                   ))}
                   {profile.recentAssignments.length === 0 && <div className="text-xs text-slate-600">—</div>}

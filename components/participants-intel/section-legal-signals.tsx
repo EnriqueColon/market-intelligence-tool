@@ -2,7 +2,7 @@
 
 import { Card } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import type { ExecutiveAlert, PreforeclosureRecord } from "@/lib/participants-intel/types"
+import type { ExecutiveAlert, FlowEdge, PreforeclosureRecord } from "@/lib/participants-intel/types"
 
 function money(n?: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n || 0)
@@ -11,11 +11,16 @@ function money(n?: number) {
 type Props = {
   preforeclosures: PreforeclosureRecord[]
   alerts: ExecutiveAlert[]
+  edges: FlowEdge[]
 }
 
-export function SectionLegalSignals({ preforeclosures, alerts }: Props) {
-  const d30 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
-  const d90 = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+export function SectionLegalSignals({ preforeclosures, alerts, edges }: Props) {
+  const anchor =
+    preforeclosures.map((p) => p.auctionDate).filter(Boolean).sort().at(-1) ||
+    edges.map((e) => e.date).filter(Boolean).sort().at(-1) ||
+    new Date().toISOString().slice(0, 10)
+  const d30 = new Date(new Date(`${anchor}T00:00:00.000Z`).getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+  const d90 = new Date(new Date(`${anchor}T00:00:00.000Z`).getTime() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
   const lenderStats = new Map<string, { c30: number; c90: number }>()
 
   for (const p of preforeclosures) {
@@ -35,6 +40,9 @@ export function SectionLegalSignals({ preforeclosures, alerts }: Props) {
       trend: s.c30 > s.c90 / 3 ? "up" : s.c30 < s.c90 / 3 ? "down" : "flat",
     }))
     .sort((a, b) => b.c30 - a.c30)
+  const flowParticipants = new Set(
+    edges.flatMap((e) => [e.from_party.toLowerCase(), e.to_party.toLowerCase()])
+  )
 
   return (
     <Card className="p-6 border-slate-200/80 bg-slate-50/30">
@@ -42,6 +50,9 @@ export function SectionLegalSignals({ preforeclosures, alerts }: Props) {
 
       <div className="mt-4">
         <h4 className="text-sm font-semibold text-slate-800 mb-2">Preforeclosure Table</h4>
+        {preforeclosures.length === 0 ? (
+          <p className="text-sm text-slate-600">No preforeclosure records were returned for the selected scope/window.</p>
+        ) : null}
         <Table>
           <TableHeader>
             <TableRow>
@@ -50,17 +61,26 @@ export function SectionLegalSignals({ preforeclosures, alerts }: Props) {
               <TableHead>Auction Date</TableHead>
               <TableHead>Loan Amount</TableHead>
               <TableHead>Property</TableHead>
+              <TableHead>Linked to Flow</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {preforeclosures.slice(0, 25).map((p) => (
+              (() => {
+                const lenderName = (p.lender || p.plaintiff || "").toLowerCase()
+                const borrowerName = (p.defendant || "").toLowerCase()
+                const linked = flowParticipants.has(lenderName) || flowParticipants.has(borrowerName)
+                return (
               <TableRow key={p.id}>
                 <TableCell className="max-w-[200px] truncate">{p.defendant || "—"}</TableCell>
                 <TableCell className="max-w-[200px] truncate">{p.plaintiff || p.lender || "—"}</TableCell>
                 <TableCell>{p.auctionDate || "—"}</TableCell>
-                <TableCell>{money(p.loanAmount)}</TableCell>
+                <TableCell>{p.loanAmount != null ? money(p.loanAmount) : "Unknown"}</TableCell>
                 <TableCell className="max-w-[260px] truncate">{p.property || "—"}</TableCell>
+                <TableCell>{linked ? "Yes" : "No"}</TableCell>
               </TableRow>
+                )
+              })()
             ))}
           </TableBody>
         </Table>

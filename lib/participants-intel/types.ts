@@ -2,9 +2,15 @@ export type AssignmentRecord = {
   id: string
   assignor: string
   assignee: string
-  loanAmount: number
+  loanAmount?: number | null
+  valueStatus: "known" | "unknown"
+  valueSource?: "assignment.loanAmount" | "assignment.amount" | "linkedMortgage.mortgageAmount" | "linkedMortgage.loanAmount" | "relatedMortgage.amount" | "aom.upb" | "aom.consideration" | "unknown"
   recordingDate: string
   property?: string
+  propertyType?: string
+  geography?: string
+  linkedMortgageId?: string
+  raw?: Record<string, unknown>
 }
 
 export type MortgageRecord = {
@@ -12,8 +18,14 @@ export type MortgageRecord = {
   lender: string
   borrower: string
   amount?: number
+  mortgageAmount?: number
+  loanAmount?: number
   recordingDate?: string
   linkedAssignmentIds?: string[]
+  property?: string
+  propertyType?: string
+  geography?: string
+  raw?: Record<string, unknown>
 }
 
 export type PreforeclosureRecord = {
@@ -24,6 +36,9 @@ export type PreforeclosureRecord = {
   auctionDate: string
   loanAmount?: number
   property?: string
+  propertyType?: string
+  geography?: string
+  raw?: Record<string, unknown>
 }
 
 export type LenderAnalyticsRecord = {
@@ -40,18 +55,44 @@ export type SearchEntityResult = {
   location?: string
 }
 
+export type ParticipantType =
+  | "institutional_lender_bank"
+  | "servicer"
+  | "trust_securitization_vehicle"
+  | "borrower_owner_entity"
+  | "individual"
+  | "government_agency"
+  | "unknown"
+
+export type ParticipantProfile = {
+  normalizedName: string
+  displayName: string
+  participantType: ParticipantType
+  confidence: number
+}
+
 export type FlowEdge = {
   from_party: string
   to_party: string
-  amount: number
+  amount: number | null
+  amountKnown: boolean
+  valueSource?: AssignmentRecord["valueSource"]
   date: string
   rawAssignor: string
   rawAssignee: string
   property?: string
+  propertyType?: string
+  geography?: string
+  commerciallyRelevant: boolean
+  relevanceReason: string[]
+  fromProfile: ParticipantProfile
+  toProfile: ParticipantProfile
 }
 
 export type FlowWindowStats = {
   firm: string
+  participantType: ParticipantType
+  confidence: number
   inbound30d: number
   outbound30d: number
   net30d: number
@@ -62,14 +103,25 @@ export type FlowWindowStats = {
   outbound90d: number
   net90d: number
   assignmentsPrior30d: number
+  knownValueAssignments30d: number
+  unknownValueAssignments30d: number
+  valueCoveragePct30d: number
+  commerciallyRelevantAssignments30d: number
+  firstSeenDate?: string
+  lastSeenDate?: string
+  activityScore: number
+  inferredRole: "assignor-heavy" | "assignee-heavy" | "balanced" | "servicer" | "trust-conduit" | "unknown"
 }
 
 export type PairAggregate = {
   assignor: string
   assignee: string
-  totalVolume: number
+  totalVolumeKnown: number
   transactions: number
   lastActivityDate: string
+  knownValueTransactions: number
+  unknownValueTransactions: number
+  valueCoveragePct: number
 }
 
 export type MonthlyFlowPoint = {
@@ -83,5 +135,34 @@ export type ExecutiveAlert = {
   message: string
   firm?: string
   severity: "low" | "medium" | "high"
+  label?: string
+}
+
+export type CoverageMetrics = {
+  totalAssignments: number
+  assignmentsWithRecoveredValue: number
+  assignmentsWithUnknownValue: number
+  assignmentsLinkedToMortgage: number
+  mortgageRecordsLoaded: number
+  preforeclosureRecordsLoaded: number
+  institutionalParticipants: number
+  individualParticipants: number
+  commerciallyRelevantRecords: number
+  geographicCoverageCount: number
+  valueRecoveredPct: number
+  unknownValuePct: number
+  mortgageLinkedPct: number
+}
+
+export type ResourceDiagnostics = {
+  source: "external_api" | "local_fallback"
+  totalFetched: number
+  notes: string[]
+  extractionStats?: Record<string, number | string>
+}
+
+export type ResourcePayload<T> = {
+  items: T[]
+  diagnostics: ResourceDiagnostics
 }
 

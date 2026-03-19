@@ -5,6 +5,7 @@ import type {
   LenderAnalyticsRecord,
   MortgageRecord,
   PreforeclosureRecord,
+  ResourcePayload,
   SearchEntityResult,
 } from "@/lib/participants-intel/types"
 
@@ -31,28 +32,64 @@ async function getJson<T>(url: string): Promise<T> {
   return (await res.json()) as T
 }
 
-export function fetchAssignments(): Promise<AssignmentRecord[]> {
-  return cached("participants-intel:assignments", () =>
-    getJson<{ items: AssignmentRecord[] }>("/api/participants-intel?resource=assignments").then((r) => r.items || [])
+function emptyDiagnostics() {
+  return {
+    source: "local_fallback" as const,
+    totalFetched: 0,
+    notes: [],
+  }
+}
+
+export function fetchAssignmentsPayload(): Promise<ResourcePayload<AssignmentRecord>> {
+  return cached("participants-intel:assignments:payload", () =>
+    getJson<ResourcePayload<AssignmentRecord>>("/api/participants-intel?resource=assignments").catch(() => ({
+      items: [],
+      diagnostics: emptyDiagnostics(),
+    }))
   )
+}
+
+export function fetchMortgagesPayload(): Promise<ResourcePayload<MortgageRecord>> {
+  return cached("participants-intel:mortgages:payload", () =>
+    getJson<ResourcePayload<MortgageRecord>>("/api/participants-intel?resource=mortgages").catch(() => ({
+      items: [],
+      diagnostics: emptyDiagnostics(),
+    }))
+  )
+}
+
+export function fetchPreforeclosuresPayload(): Promise<ResourcePayload<PreforeclosureRecord>> {
+  return cached("participants-intel:preforeclosures:payload", () =>
+    getJson<ResourcePayload<PreforeclosureRecord>>("/api/participants-intel?resource=preforeclosures").catch(() => ({
+      items: [],
+      diagnostics: emptyDiagnostics(),
+    }))
+  )
+}
+
+export function fetchLendersPayload(): Promise<ResourcePayload<LenderAnalyticsRecord>> {
+  return cached("participants-intel:lenders:payload", () =>
+    getJson<ResourcePayload<LenderAnalyticsRecord>>("/api/participants-intel?resource=lenders").catch(() => ({
+      items: [],
+      diagnostics: emptyDiagnostics(),
+    }))
+  )
+}
+
+export function fetchAssignments(): Promise<AssignmentRecord[]> {
+  return fetchAssignmentsPayload().then((r) => r.items || [])
 }
 
 export function fetchMortgages(): Promise<MortgageRecord[]> {
-  return cached("participants-intel:mortgages", () =>
-    getJson<{ items: MortgageRecord[] }>("/api/participants-intel?resource=mortgages").then((r) => r.items || [])
-  )
+  return fetchMortgagesPayload().then((r) => r.items || [])
 }
 
 export function fetchPreforeclosures(): Promise<PreforeclosureRecord[]> {
-  return cached("participants-intel:preforeclosures", () =>
-    getJson<{ items: PreforeclosureRecord[] }>("/api/participants-intel?resource=preforeclosures").then((r) => r.items || [])
-  )
+  return fetchPreforeclosuresPayload().then((r) => r.items || [])
 }
 
 export function fetchLenders(): Promise<LenderAnalyticsRecord[]> {
-  return cached("participants-intel:lenders", () =>
-    getJson<{ items: LenderAnalyticsRecord[] }>("/api/participants-intel?resource=lenders").then((r) => r.items || [])
-  )
+  return fetchLendersPayload().then((r) => r.items || [])
 }
 
 export function searchEntities(query: string): Promise<SearchEntityResult[]> {

@@ -14,14 +14,22 @@ type Props = {
   topPairs: PairAggregate[]
   monthly: MonthlyFlowPoint[]
   onSelectFirm: (name: string) => void
+  participantScope: "all" | "institutional" | "commercial"
 }
 
-export function SectionMarketFlow({ rolling, topPairs, monthly, onSelectFirm }: Props) {
-  const sorted = [...rolling].sort((a, b) => b.net30d - a.net30d)
+function moneyOrUnknown(n: number, coveragePct: number) {
+  if (coveragePct <= 0) return "Unknown"
+  return money(n)
+}
+
+export function SectionMarketFlow({ rolling, topPairs, monthly, onSelectFirm, participantScope }: Props) {
+  const sorted = [...rolling].sort((a, b) => b.activityScore - a.activityScore)
   return (
     <Card className="p-6 border-slate-200/80 bg-slate-50/30">
       <h3 className="text-base font-semibold text-slate-800">1) Market Participants & Activity (AOM Flow)</h3>
-      <p className="text-xs text-slate-600 mt-1">Dynamic rollups from assignment-level flow edges (normalized assignor/assignee).</p>
+      <p className="text-xs text-slate-600 mt-1">
+        Dynamic rollups from assignment-level flow edges (normalized assignor/assignee). Scope: {participantScope}.
+      </p>
 
       <div className="mt-4">
         <h4 className="text-sm font-semibold text-slate-800 mb-2">Core Table (Firm Rollup)</h4>
@@ -29,24 +37,30 @@ export function SectionMarketFlow({ rolling, topPairs, monthly, onSelectFirm }: 
           <TableHeader>
             <TableRow>
               <TableHead>Firm Name</TableHead>
+              <TableHead>Participant Type</TableHead>
               <TableHead>Inbound Volume (30d)</TableHead>
               <TableHead>Outbound Volume (30d)</TableHead>
               <TableHead>Net Flow</TableHead>
               <TableHead># Assignments (30d)</TableHead>
               <TableHead># Assignments (90d)</TableHead>
               <TableHead>% Change (30d vs prior 30d)</TableHead>
+              <TableHead>Value Coverage (30d)</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {sorted.slice(0, 25).map((r) => (
               <TableRow key={r.firm} className="cursor-pointer" onClick={() => onSelectFirm(r.firm)}>
                 <TableCell className="font-medium">{r.firm}</TableCell>
-                <TableCell>{money(r.inbound30d)}</TableCell>
-                <TableCell>{money(r.outbound30d)}</TableCell>
-                <TableCell className={r.net30d >= 0 ? "text-emerald-700" : "text-rose-700"}>{money(r.net30d)}</TableCell>
+                <TableCell className="text-xs uppercase">{r.participantType.replaceAll("_", " ")}</TableCell>
+                <TableCell>{moneyOrUnknown(r.inbound30d, r.valueCoveragePct30d)}</TableCell>
+                <TableCell>{moneyOrUnknown(r.outbound30d, r.valueCoveragePct30d)}</TableCell>
+                <TableCell className={r.net30d >= 0 ? "text-emerald-700" : "text-rose-700"}>
+                  {moneyOrUnknown(r.net30d, r.valueCoveragePct30d)}
+                </TableCell>
                 <TableCell>{r.assignments30d}</TableCell>
                 <TableCell>{r.assignments90d}</TableCell>
                 <TableCell>{r.pctChange30dVsPrior30d.toFixed(1)}%</TableCell>
+                <TableCell>{r.valueCoveragePct30d.toFixed(0)}%</TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -64,6 +78,7 @@ export function SectionMarketFlow({ rolling, topPairs, monthly, onSelectFirm }: 
                 <TableHead>Total Volume</TableHead>
                 <TableHead># Transactions</TableHead>
                 <TableHead>Last Activity</TableHead>
+                <TableHead>Value Coverage</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -71,9 +86,10 @@ export function SectionMarketFlow({ rolling, topPairs, monthly, onSelectFirm }: 
                 <TableRow key={`${p.assignor}-${p.assignee}`}>
                   <TableCell className="max-w-[180px] truncate">{p.assignor}</TableCell>
                   <TableCell className="max-w-[180px] truncate">{p.assignee}</TableCell>
-                  <TableCell>{money(p.totalVolume)}</TableCell>
+                  <TableCell>{p.knownValueTransactions > 0 ? money(p.totalVolumeKnown) : "Unknown"}</TableCell>
                   <TableCell>{p.transactions}</TableCell>
                   <TableCell>{p.lastActivityDate || "—"}</TableCell>
+                  <TableCell>{p.valueCoveragePct.toFixed(0)}%</TableCell>
                 </TableRow>
               ))}
             </TableBody>

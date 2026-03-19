@@ -3,14 +3,15 @@
 import { useEffect, useMemo, useState } from "react"
 import { Card } from "@/components/ui/card"
 import {
-  fetchAssignments,
-  fetchLenders,
-  fetchMortgages,
-  fetchPreforeclosures,
+  fetchAssignmentsPayload,
+  fetchLendersPayload,
+  fetchMortgagesPayload,
+  fetchPreforeclosuresPayload,
   searchEntities,
 } from "@/lib/participants-intel/services"
 import {
   aggregateTopPairs,
+  buildCoverageMetrics,
   buildFlowEdges,
   calculateRollingWindows,
   generateAlerts,
@@ -18,9 +19,11 @@ import {
 } from "@/lib/participants-intel/aggregation"
 import type {
   AssignmentRecord,
+  CoverageMetrics,
   LenderAnalyticsRecord,
   MortgageRecord,
   PreforeclosureRecord,
+  ResourceDiagnostics,
   SearchEntityResult,
 } from "@/lib/participants-intel/types"
 import { SectionExecutiveSnapshot } from "@/components/participants-intel/section-executive-snapshot"
@@ -38,9 +41,16 @@ export function MarketParticipantsIntel() {
   const [error, setError] = useState<string | null>(null)
   const [selectedFirm, setSelectedFirm] = useState("")
   const [timeWindow, setTimeWindow] = useState<"30d" | "90d">("30d")
+  const [participantScope, setParticipantScope] = useState<"all" | "institutional" | "commercial">("institutional")
   const [searchQuery, setSearchQuery] = useState("")
   const [searchResults, setSearchResults] = useState<SearchEntityResult[]>([])
   const [selectedEntity, setSelectedEntity] = useState<SearchEntityResult | null>(null)
+  const [diagnostics, setDiagnostics] = useState<{
+    assignments: ResourceDiagnostics
+    mortgages: ResourceDiagnostics
+    preforeclosures: ResourceDiagnostics
+    lenders: ResourceDiagnostics
+  } | null>(null)
 
   useEffect(() => {
     let mounted = true
@@ -49,16 +59,22 @@ export function MarketParticipantsIntel() {
       setError(null)
       try {
         const [a, m, p, l] = await Promise.all([
-          fetchAssignments(),
-          fetchMortgages(),
-          fetchPreforeclosures(),
-          fetchLenders(),
+          fetchAssignmentsPayload(),
+          fetchMortgagesPayload(),
+          fetchPreforeclosuresPayload(),
+          fetchLendersPayload(),
         ])
         if (!mounted) return
-        setAssignments(a)
-        setMortgages(m)
-        setPreforeclosures(p)
-        setLenders(l)
+        setAssignments(a.items)
+        setMortgages(m.items)
+        setPreforeclosures(p.items)
+        setLenders(l.items)
+        setDiagnostics({
+          assignments: a.diagnostics,
+          mortgages: m.diagnostics,
+          preforeclosures: p.diagnostics,
+          lenders: l.diagnostics,
+        })
       } catch (e) {
         if (!mounted) return
         setError(e instanceof Error ? e.message : "Failed to load participant intelligence data.")
@@ -98,13 +114,30 @@ export function MarketParticipantsIntel() {
   const topPairs = useMemo(() => aggregateTopPairs(edges, 90), [edges])
   const monthly = useMemo(() => monthlyTrend(edges), [edges])
   const alerts = useMemo(() => generateAlerts({ edges, preforeclosures, rolling }), [edges, preforeclosures, rolling])
+  const coverage = useMemo<CoverageMetrics>(
+    () =>
+      buildCoverageMetrics({
+        assignments,
+        mortgages,
+        preforeclosures,
+        edges,
+        rolling,
+      }),
+    [assignments, mortgages, preforeclosures, edges, rolling]
+  )
 
   const rollingByWindow = useMemo(() => {
-    if (timeWindow === "90d") {
-      return [...rolling].sort((a, b) => b.net90d - a.net90d)
+    const base = timeWindow === "90d" ? [...rolling].sort((a, b) => b.net90d - a.net90d) : [...rolling]
+    if (participantScope === "institutional") {
+      return base.filter((r) =>
+        ["institutional_lender_bank", "servicer", "trust_securitization_vehicle", "borrower_owner_entity"].includes(r.participantType)
+      )
     }
-    return rolling
-  }, [rolling, timeWindow])
+    if (participantScope === "commercial") {
+      return base.filter((r) => r.commerciallyRelevantAssignments30d > 0)
+    }
+    return base
+  }, [rolling, timeWindow, participantScope])
 
   return (
     <div className="space-y-6">
@@ -126,11 +159,46 @@ export function MarketParticipantsIntel() {
               <option value="30d">30d</option>
               <option value="90d">90d</option>
             </select>
+            <span className="text-slate-600 ml-2">Participants:</span>
+            <select
+              value={participantScope}
+              onChange={(e) => setParticipantScope(e.target.value as "all" | "institutional" | "commercial")}
+              className="rounded border border-slate-300 bg-white px-2 py-1"
+            >
+              <option value="all">All</option>
+              <option value="institutional">Institutional only</option>
+              <option value="commercial">Commercially relevant only</option>
+            </select>
           </div>
         </div>
         <div className="mt-3 text-xs text-slate-600">
           Assignments: {assignments.length} • Mortgages: {mortgages.length} • Preforeclosures: {preforeclosures.length} • Lenders: {lenders.length}
         </div>
+      </Card>
+
+      <Card className="p-6 border-slate-200/80 bg-slate-50/30">
+        <h4 className="text-sm font-semibold text-slate-800">Data Quality / Coverage</h4>
+        <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-5 text-sm">
+          <div className="rounded border border-slate-200 bg-white p-3">Total assignments analyzed: <strong>{coverage.totalAssignments.toLocaleString()}</strong></div>
+          <div className="rounded border border-slate-200 bg-white p-3">Assignment value recovered: <strong>{coverage.valueRecoveredPct.toFixed(1)}%</strong></div>
+          <div className="rounded border border-slate-200 bg-white p-3">Unknown assignment value: <strong>{coverage.unknownValuePct.toFixed(1)}%</strong></div>
+          <div className="rounded border border-slate-200 bg-white p-3">Mortgage-linked assignments: <strong>{coverage.mortgageLinkedPct.toFixed(1)}%</strong></div>
+          <div className="rounded border border-slate-200 bg-white p-3">Commercially relevant records: <strong>{coverage.commerciallyRelevantRecords.toLocaleString()}</strong></div>
+          <div className="rounded border border-slate-200 bg-white p-3">Mortgage records loaded: <strong>{coverage.mortgageRecordsLoaded.toLocaleString()}</strong></div>
+          <div className="rounded border border-slate-200 bg-white p-3">Preforeclosure records loaded: <strong>{coverage.preforeclosureRecordsLoaded.toLocaleString()}</strong></div>
+          <div className="rounded border border-slate-200 bg-white p-3">Institutional participants: <strong>{coverage.institutionalParticipants.toLocaleString()}</strong></div>
+          <div className="rounded border border-slate-200 bg-white p-3">Individual participants: <strong>{coverage.individualParticipants.toLocaleString()}</strong></div>
+          <div className="rounded border border-slate-200 bg-white p-3">Geographic coverage points: <strong>{coverage.geographicCoverageCount.toLocaleString()}</strong></div>
+        </div>
+        {diagnostics && (
+          <div className="mt-3 text-xs text-slate-600 space-y-1">
+            {[diagnostics.assignments, diagnostics.mortgages, diagnostics.preforeclosures, diagnostics.lenders]
+              .flatMap((d) => d.notes || [])
+              .filter(Boolean)
+              .slice(0, 8)
+              .map((n, i) => <div key={i}>- {n}</div>)}
+          </div>
+        )}
       </Card>
 
       {loading ? (
@@ -139,9 +207,21 @@ export function MarketParticipantsIntel() {
         <Card className="p-6 border-red-200 bg-red-50 text-sm text-red-700">{error}</Card>
       ) : (
         <>
-          <SectionMarketFlow rolling={rollingByWindow} topPairs={topPairs} monthly={monthly} onSelectFirm={setSelectedFirm} />
+          <SectionMarketFlow
+            rolling={rollingByWindow}
+            topPairs={topPairs}
+            monthly={monthly}
+            onSelectFirm={setSelectedFirm}
+            participantScope={participantScope}
+          />
           <SectionExecutiveSnapshot rolling={rollingByWindow} alerts={alerts} />
-          <SectionFirmDrilldown selectedFirm={selectedFirm} rolling={rollingByWindow} edges={edges} />
+          <SectionFirmDrilldown
+            selectedFirm={selectedFirm}
+            rolling={rollingByWindow}
+            edges={edges}
+            mortgages={mortgages}
+            preforeclosures={preforeclosures}
+          />
           <SectionPartySearch
             query={searchQuery}
             onQueryChange={setSearchQuery}
@@ -152,7 +232,7 @@ export function MarketParticipantsIntel() {
             mortgages={mortgages}
             preforeclosures={preforeclosures}
           />
-          <SectionLegalSignals preforeclosures={preforeclosures} alerts={alerts} />
+          <SectionLegalSignals preforeclosures={preforeclosures} alerts={alerts} edges={edges} />
         </>
       )}
     </div>
