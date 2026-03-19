@@ -5,8 +5,7 @@ import { FileText, LineChart, Newspaper, Scale, Users } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { LegalUpdates } from "@/components/legal-updates"
 import { MarketAnalytics } from "@/components/market-analytics"
-import { CompetitorAnalysis } from "@/components/competitor-analysis"
-import { CompetitorSurveillance } from "@/components/competitor-surveillance"
+import { MarketParticipantsIntel } from "@/components/market-participants-intel"
 import { PublicMentions } from "@/components/public-mentions"
 import { InvestingBusinessMentions } from "@/components/investing-business-mentions"
 import { ArticleDigest } from "@/components/article-digest"
@@ -200,10 +199,7 @@ export function MarketIntelligenceDashboard({
                     Peer landscape for distressed CRE debt buyers.
                   </p>
                 </div>
-                <CompetitorAnalysis />
-                <div className="mt-8 border-t border-[#006D95]/20 pt-8">
-                  <CompetitorSurveillance />
-                </div>
+                <MarketParticipantsIntel />
               </TabsContent>
             )}
 
