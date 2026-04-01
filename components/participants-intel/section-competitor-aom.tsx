@@ -81,151 +81,6 @@ type AssignorNode = {
   category: PartyCategory
 }
 
-// ─── County extraction ────────────────────────────────────────────────────────
-
-function extractCounty(geo: string): string | null {
-  // geo format: "City, County Name, State"
-  const parts = geo.split(", ")
-  return parts.length >= 2 ? parts[1] : null
-}
-
-// ─── Velocity Cards ───────────────────────────────────────────────────────────
-
-function VelocityCards({ rankings }: { rankings: CompetitorRanking[] }) {
-  const top = rankings.slice(0, 5)
-  if (top.length === 0) return null
-
-  return (
-    <div>
-      <h4 className="text-sm font-semibold text-slate-800 mb-1">Competitor Velocity</h4>
-      <p className="text-xs text-slate-500 mb-3">
-        Period-over-period deal activity for the top FL private credit buyers. Green = accelerating, red = slowing.
-      </p>
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        {top.map((r) => {
-          const isUp = r.percentChange > 0
-          const isFlat = r.percentChange === 0
-          const changeColor = isUp ? "text-emerald-600" : isFlat ? "text-slate-400" : "text-rose-600"
-          const changeBg = isUp ? "bg-emerald-50 border-emerald-200" : isFlat ? "bg-slate-50 border-slate-200" : "bg-rose-50 border-rose-200"
-          const arrow = isUp ? "▲" : isFlat ? "→" : "▼"
-
-          return (
-            <div key={r.name} className={`rounded-xl border p-4 ${changeBg}`}>
-              <div className="text-xs font-medium text-slate-600 truncate mb-2" title={r.name}>
-                {r.name.length > 20 ? r.name.slice(0, 18) + "…" : r.name}
-              </div>
-              <div className="text-2xl font-bold text-slate-800 tabular-nums">{r.count}</div>
-              <div className="text-xs text-slate-500 mt-0.5">deals this period</div>
-              <div className={`text-sm font-semibold mt-2 ${changeColor}`}>
-                {arrow} {pctFmt(r.percentChange)} vs prior
-              </div>
-              {r.volume > 0 && (
-                <div className="text-xs text-slate-500 mt-1">{compact(r.volume)} volume</div>
-              )}
-              {r.avgDealSize > 0 && (
-                <div className="text-xs text-slate-400 mt-0.5">~{compact(r.avgDealSize)} avg deal</div>
-              )}
-            </div>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
-// ─── Market Share Bar ─────────────────────────────────────────────────────────
-
-function MarketShareBar({ rankings }: { rankings: CompetitorRanking[] }) {
-  const withVolume = rankings.filter((r) => r.volume > 0).slice(0, 10)
-  if (withVolume.length === 0) return null
-
-  const total = withVolume.reduce((s, r) => s + r.volume, 0)
-  const BAR_COLORS = ["#1e40af", "#0891b2", "#0d9488", "#059669", "#65a30d", "#ca8a04", "#dc2626", "#9333ea", "#db2777", "#f97316"]
-
-  return (
-    <div>
-      <h4 className="text-sm font-semibold text-slate-800 mb-1">FL AOM Market Share by Volume</h4>
-      <p className="text-xs text-slate-500 mb-3">
-        Share of total recorded FL assignment volume among the top private credit buyers.
-      </p>
-
-      {/* Stacked bar */}
-      <div className="flex h-6 rounded-full overflow-hidden mb-4 gap-0.5">
-        {withVolume.map((r, i) => {
-          const pct = (r.volume / total) * 100
-          return (
-            <div
-              key={r.name}
-              title={`${r.name}: ${compact(r.volume)} (${pct.toFixed(1)}%)`}
-              className="h-full transition-all"
-              style={{ width: `${pct}%`, background: BAR_COLORS[i % BAR_COLORS.length], minWidth: pct > 1 ? 4 : 0 }}
-            />
-          )
-        })}
-      </div>
-
-      {/* Legend rows */}
-      <div className="space-y-1.5">
-        {withVolume.map((r, i) => {
-          const pct = (r.volume / total) * 100
-          return (
-            <div key={r.name} className="flex items-center gap-2">
-              <span className="inline-block w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: BAR_COLORS[i % BAR_COLORS.length] }} />
-              <span className="text-xs text-slate-700 w-48 truncate shrink-0" title={r.name}>{r.name}</span>
-              <div className="flex-1 bg-slate-100 rounded-full h-1.5 overflow-hidden">
-                <div className="h-full rounded-full" style={{ width: `${pct}%`, background: BAR_COLORS[i % BAR_COLORS.length] }} />
-              </div>
-              <span className="text-xs text-slate-500 w-12 text-right shrink-0 tabular-nums">{pct.toFixed(1)}%</span>
-              <span className="text-xs text-slate-400 w-16 text-right shrink-0">{compact(r.volume)}</span>
-            </div>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
-// ─── Geographic Concentration ─────────────────────────────────────────────────
-
-function GeoPanel({ categorized }: { categorized: CategorizedEdge[] }) {
-  const signal = categorized.filter((e) => e.flowCategory !== "noise" && e.geography)
-  const countyMap = new Map<string, number>()
-  for (const e of signal) {
-    const county = extractCounty(e.geography!)
-    if (county) countyMap.set(county, (countyMap.get(county) ?? 0) + 1)
-  }
-  const counties = Array.from(countyMap.entries())
-    .map(([name, count]) => ({ name, count }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 8)
-
-  if (counties.length === 0) return null
-  const maxCount = counties[0].count
-
-  return (
-    <div>
-      <h4 className="text-sm font-semibold text-slate-800 mb-1">Geographic Concentration</h4>
-      <p className="text-xs text-slate-500 mb-3">
-        Top FL counties by private credit AOM deal count. Shows where competitor activity is concentrated.
-      </p>
-      <div className="space-y-2">
-        {counties.map((c) => {
-          const pct = Math.round((c.count / maxCount) * 100)
-          return (
-            <div key={c.name} className="flex items-center gap-3">
-              <div className="w-40 shrink-0 text-xs text-slate-700 truncate" title={c.name}>{c.name}</div>
-              <div className="flex-1 bg-slate-100 rounded-full h-2 overflow-hidden">
-                <div className="h-full rounded-full bg-blue-500" style={{ width: `${pct}%` }} />
-              </div>
-              <div className="text-xs text-slate-500 w-12 text-right tabular-nums shrink-0">{c.count} deals</div>
-            </div>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
 // ─── Assignor detail panel ────────────────────────────────────────────────────
 
 function AssignorDetailPanel({
@@ -754,30 +609,6 @@ export function SectionCompetitorAOM({ edges, lenders, rankings }: Props) {
     .sort((a, b) => b.deals - a.deals)
     .slice(0, 10)
 
-  const noiseCount = categorized.filter((e) => e.flowCategory === "noise").length
-  const cleanCount = categorized.filter((e) => e.flowCategory !== "noise").length
-
-  const flowCategoryLabel: Record<FlowCategory, string> = {
-    bank_to_private: "Bank → Private",
-    private_to_bank: "Private → Bank",
-    private_to_private: "Private → Private",
-    noise: "Institutional",
-    other: "Mixed",
-  }
-
-  const flowBadgeClass: Record<FlowCategory, string> = {
-    bank_to_private: "bg-amber-100 text-amber-800",
-    private_to_bank: "bg-blue-100 text-blue-800",
-    private_to_private: "bg-emerald-100 text-emerald-800",
-    noise: "bg-slate-100 text-slate-500",
-    other: "bg-purple-100 text-purple-800",
-  }
-
-  const cleanEdges = categorized
-    .filter((e) => e.flowCategory !== "noise")
-    .sort((a, b) => b.date.localeCompare(a.date))
-    .slice(0, 30)
-
   return (
     <>
       {selectedFirm && (
@@ -792,78 +623,62 @@ export function SectionCompetitorAOM({ edges, lenders, rankings }: Props) {
         <div>
           <h3 className="text-base font-semibold text-slate-800">Competitor AOM Intelligence</h3>
           <p className="text-xs text-slate-500 mt-1">
-            Florida private credit assignment activity. {noiseCount.toLocaleString()} institutional transfers filtered out —{" "}
-            <span className="font-medium text-slate-700">{cleanCount.toLocaleString()} signal records.</span>
+            Florida private credit assignment activity sourced from Elementix.
           </p>
         </div>
 
-        {/* A — Velocity Cards */}
-        {rankings.length > 0 && <VelocityCards rankings={rankings} />}
-
-        {/* B — Competitor Rankings table + C — Market Share side by side on large screens */}
-        <div className="grid gap-8 xl:grid-cols-2">
-          {/* Competitor Rankings table */}
-          <div>
-            <h4 className="text-sm font-semibold text-slate-800 mb-1">Competitor Rankings — Top FL AOM Buyers</h4>
-            <p className="text-xs text-slate-500 mb-3">
-              Click any firm to open the spider graph → click an assignor node to drill into their profile.
-            </p>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Firm</TableHead>
-                  <TableHead className="text-right">AOMs</TableHead>
-                  <TableHead className="text-right">Volume</TableHead>
-                  <TableHead className="text-right">Avg Deal</TableHead>
-                  <TableHead className="text-right">Δ vs Prior</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {competitors.length === 0 ? (
-                  <TableRow><TableCell colSpan={5} className="text-slate-500 text-xs">No private creditor activity detected.</TableCell></TableRow>
-                ) : (
-                  competitors.map((c) => {
-                    const isUp = c.percentChange > 0
-                    const isDown = c.percentChange < 0
-                    return (
-                      <TableRow key={c.name} className="cursor-pointer hover:bg-blue-50 transition-colors" onClick={() => setSelectedFirm(c.name)}>
-                        <TableCell>
-                          <div className="font-medium text-blue-700 max-w-[180px] truncate">{c.name}</div>
-                          {c.category && (
-                            <div className="text-[10px] text-slate-400 mt-0.5">{c.category}</div>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">{c.deals}</TableCell>
-                        <TableCell className="text-right text-slate-600 tabular-nums">{c.volume > 0 ? compact(c.volume) : "—"}</TableCell>
-                        <TableCell className="text-right text-slate-500 tabular-nums">{c.avgDealSize > 0 ? compact(c.avgDealSize) : "—"}</TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {c.percentChange !== 0 ? (
-                            <span className={`font-semibold ${isUp ? "text-emerald-600" : isDown ? "text-rose-600" : "text-slate-400"}`}>
-                              {pctFmt(c.percentChange)}
-                            </span>
-                          ) : <span className="text-slate-400">—</span>}
-                        </TableCell>
-                      </TableRow>
-                    )
-                  })
-                )}
-              </TableBody>
-            </Table>
-          </div>
-
-          {/* Market Share Bar */}
-          {rankings.length > 0 && (
-            <div>
-              <MarketShareBar rankings={rankings} />
-            </div>
-          )}
+        {/* Competitor Rankings */}
+        <div>
+          <h4 className="text-sm font-semibold text-slate-800 mb-1">Competitor Rankings — Top FL AOM Buyers</h4>
+          <p className="text-xs text-slate-500 mb-3">
+            Click any firm to open the spider graph → click an assignor node to drill into their profile.
+          </p>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Firm</TableHead>
+                <TableHead className="text-right">AOMs</TableHead>
+                <TableHead className="text-right">Volume</TableHead>
+                <TableHead className="text-right">Avg Deal</TableHead>
+                <TableHead className="text-right">Δ vs Prior</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {competitors.length === 0 ? (
+                <TableRow><TableCell colSpan={5} className="text-slate-500 text-xs">No private creditor activity detected.</TableCell></TableRow>
+              ) : (
+                competitors.map((c) => {
+                  const isUp = c.percentChange > 0
+                  const isDown = c.percentChange < 0
+                  return (
+                    <TableRow key={c.name} className="cursor-pointer hover:bg-blue-50 transition-colors" onClick={() => setSelectedFirm(c.name)}>
+                      <TableCell>
+                        <div className="font-medium text-blue-700 max-w-[220px] truncate">{c.name}</div>
+                        {c.category && <div className="text-[10px] text-slate-400 mt-0.5">{c.category}</div>}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">{c.deals}</TableCell>
+                      <TableCell className="text-right text-slate-600 tabular-nums">{c.volume > 0 ? compact(c.volume) : "—"}</TableCell>
+                      <TableCell className="text-right text-slate-500 tabular-nums">{c.avgDealSize > 0 ? compact(c.avgDealSize) : "—"}</TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {c.percentChange !== 0 ? (
+                          <span className={`font-semibold ${isUp ? "text-emerald-600" : isDown ? "text-rose-600" : "text-slate-400"}`}>
+                            {pctFmt(c.percentChange)}
+                          </span>
+                        ) : <span className="text-slate-400">—</span>}
+                      </TableCell>
+                    </TableRow>
+                  )
+                })
+              )}
+            </TableBody>
+          </Table>
         </div>
 
-        {/* D — Bank Sell-Off Signals */}
+        {/* Bank Sell-Off Signals */}
         <div>
           <h4 className="text-sm font-semibold text-slate-800 mb-1">Bank Sell-Off Signals</h4>
           <p className="text-xs text-slate-500 mb-3">
-            Banks assigning FL loans to private creditors — ranked by deal count. Click any bank to see a spider graph of which private creditors they are selling to.
+            Banks assigning FL loans to private creditors — ranked by deal count. Click any bank to see which private creditors they are selling to.
           </p>
           <Table>
             <TableHeader>
@@ -895,53 +710,6 @@ export function SectionCompetitorAOM({ edges, lenders, rankings }: Props) {
               )}
             </TableBody>
           </Table>
-        </div>
-
-        {/* E — Geographic Concentration */}
-        <GeoPanel categorized={categorized} />
-
-        {/* Recent AOM Flow */}
-        <div>
-          <h4 className="text-sm font-semibold text-slate-800 mb-1">Recent AOM Flow — Noise Removed</h4>
-          <p className="text-xs text-slate-500 mb-3">
-            Most recent FL assignments involving private creditors. Bank↔bank and servicer transfers hidden.
-          </p>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Assignor (Seller)</TableHead>
-                  <TableHead>Assignee (Buyer)</TableHead>
-                  <TableHead>Flow Type</TableHead>
-                  <TableHead className="text-right">Loan Amount</TableHead>
-                  <TableHead>Geography</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {cleanEdges.length === 0 ? (
-                  <TableRow><TableCell colSpan={6} className="text-slate-500 text-xs">No clean AOM flow data available.</TableCell></TableRow>
-                ) : (
-                  cleanEdges.map((e, idx) => (
-                    <TableRow key={`${e.date}-${idx}`}>
-                      <TableCell className="text-xs">{e.date}</TableCell>
-                      <TableCell className="max-w-[180px] truncate text-sm">{e.rawAssignor}</TableCell>
-                      <TableCell className="max-w-[180px] truncate text-sm font-medium">{e.rawAssignee}</TableCell>
-                      <TableCell>
-                        <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${flowBadgeClass[e.flowCategory]}`}>
-                          {flowCategoryLabel[e.flowCategory]}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-right text-sm">
-                        {e.amountKnown && e.amount != null && (e.amount as number) > 0 ? money(e.amount as number) : "—"}
-                      </TableCell>
-                      <TableCell className="text-xs text-slate-500 max-w-[140px] truncate">{e.geography || "—"}</TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
         </div>
       </Card>
     </>
