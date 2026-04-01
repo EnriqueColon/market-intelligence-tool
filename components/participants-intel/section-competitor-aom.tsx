@@ -13,6 +13,33 @@ function compact(n: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", notation: "compact", maximumFractionDigits: 1 }).format(n)
 }
 
+// ─── Weekly bucketing ─────────────────────────────────────────────────────────
+
+/** Returns the ISO Monday (YYYY-MM-DD) of the week containing dateStr */
+function getWeekKey(dateStr: string): string {
+  if (!dateStr) return ""
+  const d = new Date(dateStr + "T12:00:00Z")
+  if (isNaN(d.getTime())) return ""
+  const day = d.getUTCDay() // 0=Sun, 1=Mon…
+  const diff = day === 0 ? -6 : 1 - day
+  const mon = new Date(d)
+  mon.setUTCDate(d.getUTCDate() + diff)
+  return mon.toISOString().slice(0, 10)
+}
+
+/** Returns the last N week-Monday keys, oldest first */
+function getLastNWeeks(n: number): string[] {
+  const today = new Date()
+  const weeks: string[] = []
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date(today)
+    d.setDate(today.getDate() - i * 7)
+    const key = getWeekKey(d.toISOString().slice(0, 10))
+    if (key) weeks.push(key)
+  }
+  return weeks
+}
+
 // ─── Party classifier ────────────────────────────────────────────────────────
 
 type PartyCategory = "private_creditor" | "bank" | "servicer" | "gse" | "unknown"
@@ -59,7 +86,42 @@ function categorizeEdges(edges: FlowEdge[], lenderTypeMap: Map<string, string>):
   })
 }
 
-// ─── Colors ───────────────────────────────────────────────────────────────────
+// ─── Sparkline ────────────────────────────────────────────────────────────────
+
+function sparklineColor(data: number[]): string {
+  const first = data.slice(0, 4).reduce((s, v) => s + v, 0) / 4
+  const last = data.slice(-4).reduce((s, v) => s + v, 0) / 4
+  if (first === 0 && last === 0) return "#94a3b8"
+  return last >= first ? "#10b981" : "#f59e0b"
+}
+
+function Sparkline({ data }: { data: number[] }) {
+  const W = 88
+  const H = 28
+  const max = Math.max(...data, 1)
+  const n = data.length
+  const color = sparklineColor(data)
+  if (n < 2) return <span className="text-slate-300 text-xs">—</span>
+
+  const pts = data.map((v, i): [number, number] => [
+    2 + (i / (n - 1)) * (W - 4),
+    H - 4 - ((v / max) * (H - 8)),
+  ])
+  const polyline = pts.map(([x, y]) => `${x},${y}`).join(" ")
+  const area = `M ${pts[0][0]},${H} L ${pts.map(([x, y]) => `${x},${y}`).join(" L ")} L ${pts[n - 1][0]},${H} Z`
+  const [lx, ly] = pts[n - 1]
+  const hasActivity = data.some((v) => v > 0)
+
+  return (
+    <svg width={W} height={H} className="overflow-visible block">
+      {hasActivity && <path d={area} fill={color} fillOpacity={0.1} />}
+      <polyline points={polyline} fill="none" stroke={color} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
+      <circle cx={lx} cy={ly} r={2.5} fill={color} />
+    </svg>
+  )
+}
+
+// ─── Category colors ──────────────────────────────────────────────────────────
 
 const CATEGORY_COLOR: Record<PartyCategory, string> = {
   bank: "#f59e0b",
@@ -69,16 +131,6 @@ const CATEGORY_COLOR: Record<PartyCategory, string> = {
   unknown: "#64748b",
 }
 
-const CATEGORY_LABEL: Record<PartyCategory, string> = {
-  bank: "Bank",
-  servicer: "Servicer",
-  gse: "GSE / Agency",
-  private_creditor: "Private Creditor",
-  unknown: "Unknown",
-}
-
-// ─── Assignor Detail Panel ────────────────────────────────────────────────────
-
 type AssignorNode = {
   name: string
   deals: number
@@ -86,35 +138,37 @@ type AssignorNode = {
   category: PartyCategory
 }
 
+// ─── Assignor detail panel ────────────────────────────────────────────────────
+
 function AssignorDetailPanel({
-  assignor,
-  category,
+  node,
+  edges,
   allEdges,
+  firm,
   onBack,
 }: {
-  assignor: string
-  category: PartyCategory
+  node: AssignorNode
+  edges: CategorizedEdge[]
   allEdges: CategorizedEdge[]
+  firm: string
   onBack: () => void
 }) {
-  // All outbound edges from this assignor (FL-wide, noise excluded)
-  const outbound = allEdges.filter((e) => e.from_party === assignor && e.flowCategory !== "noise")
+  const color = CATEGORY_COLOR[node.category]
 
-  // Stats
-  const totalDeals = outbound.length
-  const totalVolume = outbound.reduce((s, e) => s + (e.amount ?? 0), 0)
-  const knownVolume = outbound.filter((e) => e.amountKnown && (e.amount ?? 0) > 0)
-  const avgDealSize = knownVolume.length > 0 ? knownVolume.reduce((s, e) => s + (e.amount ?? 0), 0) / knownVolume.length : 0
+  const dates = edges.map((e) => e.date).filter(Boolean).sort()
+  const firstDate = dates[0] ?? "—"
+  const lastDate = dates[dates.length - 1] ?? "—"
 
-  // Date range
-  const dates = outbound.map((e) => e.date).filter(Boolean).sort()
-  const firstSeen = dates[0] ?? "—"
-  const lastSeen = dates[dates.length - 1] ?? "—"
+  const knownAmounts = edges
+    .filter((e) => e.amountKnown && e.amount != null && (e.amount as number) > 0)
+    .map((e) => e.amount as number)
+  const avgDeal = knownAmounts.length > 0 ? knownAmounts.reduce((s, v) => s + v, 0) / knownAmounts.length : null
 
-  // Buyer breakdown (who they sell to)
-  const buyerMap = new Map<string, { deals: number; volume: number; category: PartyCategory }>()
-  for (const e of outbound) {
-    const curr = buyerMap.get(e.to_party) ?? { deals: 0, volume: 0, category: e.toCategory }
+  // Who else does this assignor sell to?
+  const buyerMap = new Map<string, { deals: number; volume: number }>()
+  for (const e of allEdges) {
+    if (e.from_party !== node.name || e.flowCategory === "noise") continue
+    const curr = buyerMap.get(e.to_party) ?? { deals: 0, volume: 0 }
     curr.deals += 1
     curr.volume += e.amount ?? 0
     buyerMap.set(e.to_party, curr)
@@ -122,181 +176,137 @@ function AssignorDetailPanel({
   const buyers = Array.from(buyerMap.entries())
     .map(([name, v]) => ({ name, ...v }))
     .sort((a, b) => b.deals - a.deals)
-    .slice(0, 10)
+    .slice(0, 8)
+  const maxBuyerDeals = Math.max(...buyers.map((b) => b.deals), 1)
 
-  // Concentration signal
-  const topBuyerShare = buyers.length > 0 ? buyers[0].deals / Math.max(totalDeals, 1) : 0
-  const concentrationLabel =
-    topBuyerShare >= 0.8
-      ? "Highly concentrated — selling primarily to one buyer"
-      : topBuyerShare >= 0.5
-      ? "Moderately concentrated — one dominant buyer"
-      : buyers.length >= 5
-      ? "Diversified — spreading deals across multiple buyers"
-      : "Active — selling to multiple buyers"
+  const recent = [...edges].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 8)
 
-  // Recent transactions
-  const recent = [...outbound]
-    .sort((a, b) => b.date.localeCompare(a.date))
-    .slice(0, 12)
+  const totalOutflow = allEdges.filter((e) => e.from_party === node.name && e.flowCategory !== "noise").length
+  const concentration = totalOutflow > 0 ? Math.round((node.deals / totalOutflow) * 100) : null
 
-  const color = CATEGORY_COLOR[category]
+  const shortFirm = firm.length > 16 ? firm.slice(0, 14) + "…" : firm
 
   return (
-    <div className="flex flex-col gap-5">
-      {/* Back nav */}
-      <div className="flex items-center gap-2">
-        <button
-          onClick={onBack}
-          className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800 transition-colors"
-        >
+    <div className="flex flex-col h-full">
+      {/* Back bar */}
+      <div className="flex items-center gap-3 px-5 py-3 border-b border-slate-100 shrink-0">
+        <button onClick={onBack} className="text-slate-400 hover:text-slate-700 flex items-center gap-1 text-sm">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <path d="M10 12L6 8L10 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
-          Back to spider view
+          Back to spider
         </button>
+        <div className="h-4 w-px bg-slate-200" />
+        <span className="text-sm font-semibold text-slate-800 truncate">{node.name}</span>
+        <span
+          className="text-xs px-2 py-0.5 rounded-full font-medium shrink-0"
+          style={{ background: color + "22", color }}
+        >
+          {node.category.replace("_", " ")}
+        </span>
       </div>
 
-      {/* Header */}
-      <div className="flex items-start gap-3">
-        <div
-          className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5"
-          style={{ background: color + "20", border: `2px solid ${color}` }}
-        >
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-            <circle cx="9" cy="9" r="5" stroke={color} strokeWidth="2"/>
-            <path d="M9 4V2M9 16v-2M4 9H2M16 9h-2" stroke={color} strokeWidth="1.5" strokeLinecap="round"/>
-          </svg>
+      <div className="p-5 overflow-y-auto flex-1 space-y-5">
+        {/* KPI cards */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {[
+            { label: `AOMs → ${shortFirm}`, value: node.deals },
+            { label: "All-buyer outflow", value: totalOutflow || node.deals },
+            { label: "Avg deal size", value: avgDeal != null ? compact(avgDeal) : "—" },
+            { label: "Concentration", value: concentration != null ? `${concentration}%` : "—" },
+          ].map((kpi) => (
+            <div key={kpi.label} className="bg-slate-50 rounded-lg p-3">
+              <div className="text-xs text-slate-500 leading-tight">{kpi.label}</div>
+              <div className="text-lg font-bold text-slate-800 mt-1">{kpi.value}</div>
+            </div>
+          ))}
         </div>
-        <div>
-          <h4 className="text-base font-bold text-slate-800">{assignor}</h4>
-          <span
-            className="inline-block text-xs font-medium px-2 py-0.5 rounded-full mt-1"
-            style={{ background: color + "20", color }}
-          >
-            {CATEGORY_LABEL[category]}
+
+        {/* Activity window + concentration warning */}
+        <div className="flex flex-wrap gap-4 text-xs text-slate-500">
+          <span>
+            <span className="font-medium text-slate-600">Activity window: </span>
+            {firstDate} → {lastDate}
           </span>
+          {concentration != null && concentration >= 50 && (
+            <span className="text-amber-600 font-medium">
+              ⚠ {concentration}% of outflow goes to {shortFirm} — high dependency signal
+            </span>
+          )}
         </div>
-      </div>
 
-      {/* KPI grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {[
-          { label: "Total FL AOMs", value: totalDeals.toLocaleString() },
-          { label: "Total Volume", value: totalVolume > 0 ? compact(totalVolume) : "—" },
-          { label: "Avg Deal Size", value: avgDealSize > 0 ? compact(avgDealSize) : "—" },
-          { label: "Unique Buyers", value: buyers.length.toLocaleString() },
-        ].map((kpi) => (
-          <div key={kpi.label} className="bg-slate-50 rounded-lg p-3 border border-slate-100">
-            <p className="text-[11px] text-slate-500 uppercase tracking-wide">{kpi.label}</p>
-            <p className="text-lg font-bold text-slate-800 mt-0.5">{kpi.value}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Activity window + signal */}
-      <div className="flex flex-wrap gap-3">
-        <div className="flex items-center gap-2 text-xs text-slate-500 bg-slate-50 rounded-lg px-3 py-2 border border-slate-100">
-          <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
-            <rect x="1" y="2" width="11" height="10" rx="1.5" stroke="#94a3b8" strokeWidth="1.2"/>
-            <path d="M4 1v2M9 1v2M1 5h11" stroke="#94a3b8" strokeWidth="1.2" strokeLinecap="round"/>
-          </svg>
-          <span>Activity: <strong className="text-slate-700">{firstSeen}</strong> → <strong className="text-slate-700">{lastSeen}</strong></span>
-        </div>
-        <div
-          className="flex items-center gap-2 text-xs rounded-lg px-3 py-2 border"
-          style={{ background: color + "10", borderColor: color + "30", color }}
-        >
-          <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
-            <circle cx="6.5" cy="6.5" r="5.5" stroke={color} strokeWidth="1.2"/>
-            <path d="M6.5 4v3l2 1.5" stroke={color} strokeWidth="1.2" strokeLinecap="round"/>
-          </svg>
-          <span className="font-medium">{concentrationLabel}</span>
-        </div>
-      </div>
-
-      {/* Buyers table */}
-      <div>
-        <h5 className="text-sm font-semibold text-slate-700 mb-2">
-          Who They Sell To — FL Buyer Breakdown
-        </h5>
-        <div className="rounded-lg border border-slate-200 overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 border-b border-slate-200">
-              <tr>
-                <th className="text-left py-2 px-3 text-xs font-semibold text-slate-600">Buyer (Assignee)</th>
-                <th className="text-left py-2 px-3 text-xs font-semibold text-slate-600">Type</th>
-                <th className="text-right py-2 px-3 text-xs font-semibold text-slate-600">AOMs</th>
-                <th className="text-right py-2 px-3 text-xs font-semibold text-slate-600">% of Deals</th>
-                <th className="text-right py-2 px-3 text-xs font-semibold text-slate-600">Volume</th>
-              </tr>
-            </thead>
-            <tbody>
-              {buyers.map((b, idx) => {
-                const pct = totalDeals > 0 ? Math.round((b.deals / totalDeals) * 100) : 0
-                const bColor = CATEGORY_COLOR[b.category]
+        {/* Buyer distribution bar chart */}
+        {buyers.length > 0 && (
+          <div>
+            <h5 className="text-sm font-semibold text-slate-700 mb-2">Buyer distribution (all firms)</h5>
+            <div className="space-y-1.5">
+              {buyers.map((b) => {
+                const barPct = Math.round((b.deals / maxBuyerDeals) * 100)
+                const isSelected = b.name === firm
                 return (
-                  <tr key={b.name} className={idx % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
-                    <td className="py-2 px-3 font-medium text-slate-800 max-w-[180px] truncate">{b.name}</td>
-                    <td className="py-2 px-3">
-                      <span
-                        className="text-[11px] font-medium px-2 py-0.5 rounded-full"
-                        style={{ background: bColor + "22", color: bColor }}
-                      >
-                        {CATEGORY_LABEL[b.category]}
-                      </span>
-                    </td>
-                    <td className="py-2 px-3 text-right text-slate-700 font-medium">{b.deals}</td>
-                    <td className="py-2 px-3 text-right text-slate-500">
-                      <div className="flex items-center justify-end gap-2">
-                        <div className="w-16 bg-slate-100 rounded-full h-1.5 overflow-hidden">
-                          <div className="h-full rounded-full" style={{ width: `${pct}%`, background: color }} />
-                        </div>
-                        <span className="text-xs w-8 text-right">{pct}%</span>
-                      </div>
-                    </td>
-                    <td className="py-2 px-3 text-right text-slate-500">{b.volume > 0 ? compact(b.volume) : "—"}</td>
-                  </tr>
+                  <div key={b.name} className="flex items-center gap-2">
+                    <div className="w-40 truncate text-xs shrink-0" title={b.name}>
+                      {isSelected ? (
+                        <span className="text-blue-700 font-semibold">{b.name}</span>
+                      ) : (
+                        <span className="text-slate-700">{b.name}</span>
+                      )}
+                    </div>
+                    <div className="flex-1 bg-slate-100 rounded-full h-2 overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all"
+                        style={{
+                          width: `${barPct}%`,
+                          background: isSelected ? "#1e40af" : color,
+                          opacity: isSelected ? 1 : 0.55,
+                        }}
+                      />
+                    </div>
+                    <div className="text-xs text-slate-500 w-14 text-right shrink-0 tabular-nums">
+                      {b.deals} AOM{b.deals !== 1 ? "s" : ""}
+                    </div>
+                    <div className="text-xs text-slate-400 w-14 text-right shrink-0">
+                      {b.volume > 0 ? compact(b.volume) : ""}
+                    </div>
+                  </div>
                 )
               })}
-            </tbody>
-          </table>
-        </div>
-      </div>
+            </div>
+          </div>
+        )}
 
-      {/* Recent transactions */}
-      <div>
-        <h5 className="text-sm font-semibold text-slate-700 mb-2">Recent FL Transactions</h5>
-        <div className="rounded-lg border border-slate-200 overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 border-b border-slate-200">
-              <tr>
-                <th className="text-left py-2 px-3 text-xs font-semibold text-slate-600">Date</th>
-                <th className="text-left py-2 px-3 text-xs font-semibold text-slate-600">Buyer</th>
-                <th className="text-left py-2 px-3 text-xs font-semibold text-slate-600">Geography</th>
-                <th className="text-right py-2 px-3 text-xs font-semibold text-slate-600">Loan Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recent.length === 0 ? (
-                <tr>
-                  <td colSpan={4} className="py-4 text-center text-xs text-slate-400">No recent transactions found.</td>
-                </tr>
-              ) : (
-                recent.map((e, idx) => (
-                  <tr key={idx} className={idx % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
-                    <td className="py-2 px-3 text-xs text-slate-500">{e.date}</td>
-                    <td className="py-2 px-3 max-w-[180px] truncate text-slate-800">{e.rawAssignee}</td>
-                    <td className="py-2 px-3 text-xs text-slate-500 max-w-[130px] truncate">{e.geography || "—"}</td>
-                    <td className="py-2 px-3 text-right text-sm font-medium text-slate-700">
-                      {e.amountKnown && e.amount != null && e.amount > 0 ? money(e.amount) : "—"}
-                    </td>
+        {/* Recent transactions */}
+        {recent.length > 0 && (
+          <div>
+            <h5 className="text-sm font-semibold text-slate-700 mb-2">
+              Recent FL transactions → {firm.length > 24 ? firm.slice(0, 22) + "…" : firm}
+            </h5>
+            <div className="rounded border border-slate-200 overflow-hidden">
+              <table className="w-full text-xs">
+                <thead className="bg-slate-50">
+                  <tr>
+                    <th className="text-left py-1.5 px-3 font-semibold text-slate-600">Date</th>
+                    <th className="text-right py-1.5 px-3 font-semibold text-slate-600">Loan Amount</th>
+                    <th className="text-left py-1.5 px-3 font-semibold text-slate-600">Geography</th>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                </thead>
+                <tbody>
+                  {recent.map((e, i) => (
+                    <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
+                      <td className="py-1.5 px-3 text-slate-600">{e.date}</td>
+                      <td className="py-1.5 px-3 text-right text-slate-700">
+                        {e.amountKnown && e.amount != null && (e.amount as number) > 0
+                          ? money(e.amount as number)
+                          : "—"}
+                      </td>
+                      <td className="py-1.5 px-3 text-slate-500 max-w-[160px] truncate">{e.geography || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -334,10 +344,10 @@ function SpiderModal({
   const totalVolume = assignors.reduce((s, a) => s + a.volume, 0)
 
   const W = 560
-  const H = 560
+  const H = 520
   const cx = W / 2
   const cy = H / 2
-  const outerR = 200
+  const outerR = 190
   const centerR = 46
 
   return (
@@ -346,24 +356,18 @@ function SpiderModal({
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto"
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-start justify-between p-6 pb-3 border-b border-slate-100">
+        <div className="flex items-start justify-between p-6 pb-3 border-b border-slate-100 shrink-0">
           <div>
-            <h3 className="text-lg font-bold text-slate-800">
-              {selectedAssignor ? `${assignors.find(a => a.name === selectedAssignor.name)?.name ?? selectedAssignor.name}` : firm}
-            </h3>
-            {!selectedAssignor && (
-              <p className="text-sm text-slate-500 mt-0.5">
-                {totalDeals} inbound AOM{totalDeals !== 1 ? "s" : ""} · {assignors.length} unique assignors
-                {totalVolume > 0 ? ` · ${compact(totalVolume)} total` : ""}
-              </p>
-            )}
-            {selectedAssignor && (
-              <p className="text-sm text-slate-500 mt-0.5">Assignor Intelligence — click ← to return to spider view</p>
-            )}
+            <h3 className="text-lg font-bold text-slate-800">{firm}</h3>
+            <p className="text-sm text-slate-500 mt-0.5">
+              {selectedAssignor
+                ? "Assignor intelligence — " + selectedAssignor.name
+                : `${totalDeals} inbound AOM${totalDeals !== 1 ? "s" : ""} · ${assignors.length} unique assignors${totalVolume > 0 ? ` · ${compact(totalVolume)} total` : ""}`}
+            </p>
           </div>
           <button
             onClick={onClose}
@@ -373,179 +377,135 @@ function SpiderModal({
           </button>
         </div>
 
-        <div className="p-6">
-          {selectedAssignor ? (
-            // ── Assignor detail drill-down ──
+        {/* Body — spider graph or assignor detail */}
+        {selectedAssignor ? (
+          <div className="flex-1 overflow-hidden">
             <AssignorDetailPanel
-              assignor={selectedAssignor.name}
-              category={selectedAssignor.category}
+              node={selectedAssignor}
+              edges={inbound.filter((e) => e.from_party === selectedAssignor.name)}
               allEdges={categorized}
+              firm={firm}
               onBack={() => setSelectedAssignor(null)}
             />
-          ) : assignors.length === 0 ? (
-            <p className="text-sm text-slate-500 text-center py-12">No inbound AOM data found for this firm.</p>
-          ) : (
-            <>
-              {/* Click-hint */}
-              <p className="text-xs text-slate-400 text-center mb-2 italic">
-                Click any assignor node or row to drill into their full intelligence profile ↓
-              </p>
+          </div>
+        ) : (
+          <div className="p-6 overflow-y-auto flex-1">
+            {assignors.length === 0 ? (
+              <p className="text-sm text-slate-500 text-center py-12">No inbound AOM data found for this firm.</p>
+            ) : (
+              <>
+                <p className="text-xs text-slate-400 text-center mb-1">
+                  Click any assignor node or row to drill into their intelligence profile
+                </p>
+                <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: 420 }}>
+                  {[0.33, 0.66, 1].map((r) => (
+                    <circle
+                      key={r}
+                      cx={cx} cy={cy} r={outerR * r}
+                      fill="none" stroke="#e2e8f0" strokeWidth={1} strokeDasharray="5 4"
+                    />
+                  ))}
 
-              {/* Spider SVG */}
-              <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: 440 }}>
-                {/* Decorative web rings */}
-                {[0.33, 0.66, 1].map((r) => (
-                  <circle
-                    key={r}
-                    cx={cx}
-                    cy={cy}
-                    r={outerR * r}
-                    fill="none"
-                    stroke="#e2e8f0"
-                    strokeWidth={1}
-                    strokeDasharray="5 4"
-                  />
-                ))}
+                  {assignors.map((a, i) => {
+                    const angle = (i * 2 * Math.PI) / assignors.length - Math.PI / 2
+                    const nx = cx + outerR * Math.cos(angle)
+                    const ny = cy + outerR * Math.sin(angle)
+                    const nodeR = Math.max(16, Math.min(34, 16 + (a.deals / maxDeals) * 18))
+                    const color = CATEGORY_COLOR[a.category]
+                    const lineW = Math.max(1.5, Math.min(7, 1.5 + (a.deals / maxDeals) * 5.5))
+                    const labelDist = outerR + nodeR + 16
+                    const lx = cx + labelDist * Math.cos(angle)
+                    const ly = cy + labelDist * Math.sin(angle)
+                    const cosA = Math.cos(angle)
+                    const anchor = cosA > 0.15 ? "start" : cosA < -0.15 ? "end" : "middle"
+                    const shortName = a.name.length > 18 ? a.name.slice(0, 16) + "…" : a.name
 
-                {assignors.map((a, i) => {
-                  const angle = (i * 2 * Math.PI) / assignors.length - Math.PI / 2
-                  const nx = cx + outerR * Math.cos(angle)
-                  const ny = cy + outerR * Math.sin(angle)
-                  const nodeR = Math.max(16, Math.min(34, 16 + (a.deals / maxDeals) * 18))
-                  const color = CATEGORY_COLOR[a.category]
-                  const lineW = Math.max(1.5, Math.min(7, 1.5 + (a.deals / maxDeals) * 5.5))
+                    return (
+                      <g key={a.name} className="cursor-pointer" onClick={() => setSelectedAssignor(a)}>
+                        <line
+                          x1={cx} y1={cy} x2={nx} y2={ny}
+                          stroke={color} strokeWidth={lineW} strokeOpacity={0.35} strokeLinecap="round"
+                        />
+                        <circle cx={nx} cy={ny} r={nodeR} fill={color} fillOpacity={0.13} stroke={color} strokeWidth={2} />
+                        {/* enlarged invisible hit target */}
+                        <circle cx={nx} cy={ny} r={nodeR + 8} fill="transparent" />
+                        <text
+                          x={nx} y={ny} textAnchor="middle" dominantBaseline="middle"
+                          fontSize={11} fontWeight="700" fill={color}
+                          style={{ pointerEvents: "none" }}
+                        >
+                          {a.deals}
+                        </text>
+                        <text
+                          x={lx} y={ly} textAnchor={anchor} dominantBaseline="middle"
+                          fontSize={10} fill="#475569"
+                          style={{ pointerEvents: "none" }}
+                        >
+                          {shortName}
+                        </text>
+                      </g>
+                    )
+                  })}
 
-                  // Label placement
-                  const labelDist = outerR + nodeR + 16
-                  const lx = cx + labelDist * Math.cos(angle)
-                  const ly = cy + labelDist * Math.sin(angle)
-                  const cosA = Math.cos(angle)
-                  const anchor = cosA > 0.15 ? "start" : cosA < -0.15 ? "end" : "middle"
-                  const shortName = a.name.length > 18 ? a.name.slice(0, 16) + "…" : a.name
+                  <circle cx={cx} cy={cy} r={centerR} fill="#1e40af" fillOpacity={0.1} stroke="#1e40af" strokeWidth={2.5} />
+                  <text x={cx} y={cy - 9} textAnchor="middle" dominantBaseline="middle" fontSize={10} fontWeight="700" fill="#1e40af">
+                    {firm.length > 14 ? firm.slice(0, 13) + "…" : firm}
+                  </text>
+                  <text x={cx} y={cy + 9} textAnchor="middle" dominantBaseline="middle" fontSize={10} fill="#3b82f6">
+                    {totalDeals} AOMs in
+                  </text>
+                </svg>
 
-                  return (
-                    <g
-                      key={a.name}
-                      style={{ cursor: "pointer" }}
-                      onClick={() => setSelectedAssignor(a)}
-                    >
-                      {/* Spoke */}
-                      <line
-                        x1={cx} y1={cy}
-                        x2={nx} y2={ny}
-                        stroke={color}
-                        strokeWidth={lineW}
-                        strokeOpacity={0.35}
-                        strokeLinecap="round"
-                      />
-                      {/* Outer node — hover ring */}
-                      <circle cx={nx} cy={ny} r={nodeR + 5} fill={color} fillOpacity={0.06} />
-                      {/* Outer node */}
-                      <circle cx={nx} cy={ny} r={nodeR} fill={color} fillOpacity={0.13} stroke={color} strokeWidth={2} />
-                      {/* Deal count label inside node */}
-                      <text
-                        x={nx} y={ny}
-                        textAnchor="middle"
-                        dominantBaseline="middle"
-                        fontSize={11}
-                        fontWeight="700"
-                        fill={color}
-                      >
-                        {a.deals}
-                      </text>
-                      {/* Firm name label outside */}
-                      <text
-                        x={lx} y={ly}
-                        textAnchor={anchor}
-                        dominantBaseline="middle"
-                        fontSize={10}
-                        fill="#475569"
-                      >
-                        {shortName}
-                      </text>
-                    </g>
-                  )
-                })}
+                {/* Legend */}
+                <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 mb-4 text-xs text-slate-500">
+                  {(Object.entries(CATEGORY_COLOR) as [PartyCategory, string][]).map(([cat, color]) => (
+                    <span key={cat} className="flex items-center gap-1">
+                      <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: color }} />
+                      {cat.replace("_", " ")}
+                    </span>
+                  ))}
+                  <span className="ml-auto text-slate-400 italic">Node size ∝ deal count · click to drill in</span>
+                </div>
 
-                {/* Center node */}
-                <circle cx={cx} cy={cy} r={centerR} fill="#1e40af" fillOpacity={0.1} stroke="#1e40af" strokeWidth={2.5} />
-                <text
-                  x={cx} y={cy - 9}
-                  textAnchor="middle"
-                  dominantBaseline="middle"
-                  fontSize={10}
-                  fontWeight="700"
-                  fill="#1e40af"
-                >
-                  {firm.length > 14 ? firm.slice(0, 13) + "…" : firm}
-                </text>
-                <text
-                  x={cx} y={cy + 9}
-                  textAnchor="middle"
-                  dominantBaseline="middle"
-                  fontSize={10}
-                  fill="#3b82f6"
-                >
-                  {totalDeals} AOMs in
-                </text>
-              </svg>
-
-              {/* Legend */}
-              <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 mb-4 text-xs text-slate-500">
-                {(Object.entries(CATEGORY_COLOR) as [PartyCategory, string][]).map(([cat, color]) => (
-                  <span key={cat} className="flex items-center gap-1">
-                    <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: color }} />
-                    {cat.replace("_", " ")}
-                  </span>
-                ))}
-                <span className="ml-auto text-slate-400 italic">Node size ∝ deal count</span>
-              </div>
-
-              {/* Assignor breakdown table — clickable */}
-              <h4 className="text-sm font-semibold text-slate-700 mb-2">Assignor Breakdown</h4>
-              <div className="rounded border border-slate-200 overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead className="bg-slate-50">
-                    <tr>
-                      <th className="text-left py-2 px-3 font-semibold text-slate-600">Assignor (Seller)</th>
-                      <th className="text-left py-2 px-3 font-semibold text-slate-600">Type</th>
-                      <th className="text-right py-2 px-3 font-semibold text-slate-600">AOMs</th>
-                      <th className="text-right py-2 px-3 font-semibold text-slate-600">Volume</th>
-                      <th className="text-right py-2 px-3 font-semibold text-slate-600"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {assignors.map((a, idx) => (
-                      <tr
-                        key={a.name}
-                        className={`cursor-pointer transition-colors ${idx % 2 === 0 ? "bg-white" : "bg-slate-50/50"} hover:bg-blue-50`}
-                        onClick={() => setSelectedAssignor(a)}
-                      >
-                        <td className="py-2 px-3 font-medium text-blue-700 max-w-[240px] truncate">{a.name}</td>
-                        <td className="py-2 px-3">
-                          <span
-                            className="text-[11px] font-medium px-2 py-0.5 rounded-full"
-                            style={{
-                              background: CATEGORY_COLOR[a.category] + "22",
-                              color: CATEGORY_COLOR[a.category],
-                            }}
-                          >
-                            {a.category.replace("_", " ")}
-                          </span>
-                        </td>
-                        <td className="py-2 px-3 text-right text-slate-700">{a.deals}</td>
-                        <td className="py-2 px-3 text-right text-slate-500">{a.volume > 0 ? compact(a.volume) : "—"}</td>
-                        <td className="py-2 px-3 text-right text-slate-400 text-xs">
-                          View →
-                        </td>
+                {/* Assignor breakdown table — also clickable */}
+                <h4 className="text-sm font-semibold text-slate-700 mb-2">Assignor Breakdown</h4>
+                <div className="rounded border border-slate-200 overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-50">
+                      <tr>
+                        <th className="text-left py-2 px-3 font-semibold text-slate-600">Assignor (Seller)</th>
+                        <th className="text-left py-2 px-3 font-semibold text-slate-600">Type</th>
+                        <th className="text-right py-2 px-3 font-semibold text-slate-600">AOMs</th>
+                        <th className="text-right py-2 px-3 font-semibold text-slate-600">Volume</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          )}
-        </div>
+                    </thead>
+                    <tbody>
+                      {assignors.map((a, idx) => (
+                        <tr
+                          key={a.name}
+                          className={`cursor-pointer hover:bg-blue-50 transition-colors ${idx % 2 === 0 ? "bg-white" : "bg-slate-50/50"}`}
+                          onClick={() => setSelectedAssignor(a)}
+                        >
+                          <td className="py-2 px-3 font-medium text-blue-700 hover:underline max-w-[240px] truncate">{a.name}</td>
+                          <td className="py-2 px-3">
+                            <span
+                              className="text-[11px] font-medium px-2 py-0.5 rounded-full"
+                              style={{ background: CATEGORY_COLOR[a.category] + "22", color: CATEGORY_COLOR[a.category] }}
+                            >
+                              {a.category.replace("_", " ")}
+                            </span>
+                          </td>
+                          <td className="py-2 px-3 text-right text-slate-700">{a.deals}</td>
+                          <td className="py-2 px-3 text-right text-slate-500">{a.volume > 0 ? compact(a.volume) : "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -567,20 +527,32 @@ export function SectionCompetitorAOM({ edges, lenders }: Props) {
   }
 
   const categorized = categorizeEdges(edges, lenderTypeMap)
+  const weekKeys = getLastNWeeks(12) // last 12 weeks, oldest → newest
 
-  // Competitor Rankings
-  const competitorInbound = new Map<string, { volume: number; deals: number }>()
+  // Competitor Rankings with weekly trend
+  type CompetitorEntry = { name: string; volume: number; deals: number; weeklyTrend: number[]; thisWeek: number }
+  const competitorInbound = new Map<string, { volume: number; deals: number; weekCounts: Map<string, number> }>()
   for (const e of categorized) {
     if (e.flowCategory === "noise") continue
     if (e.toCategory === "private_creditor" || e.toCategory === "unknown") {
-      const curr = competitorInbound.get(e.to_party) ?? { volume: 0, deals: 0 }
+      const curr = competitorInbound.get(e.to_party) ?? { volume: 0, deals: 0, weekCounts: new Map<string, number>() }
       curr.volume += e.amount ?? 0
       curr.deals += 1
+      const wk = getWeekKey(e.date)
+      if (wk) curr.weekCounts.set(wk, (curr.weekCounts.get(wk) ?? 0) + 1)
       competitorInbound.set(e.to_party, curr)
     }
   }
-  const competitors = Array.from(competitorInbound.entries())
-    .map(([name, v]) => ({ name, ...v }))
+
+  const currentWeekKey = weekKeys[weekKeys.length - 1]
+  const competitors: CompetitorEntry[] = Array.from(competitorInbound.entries())
+    .map(([name, v]) => ({
+      name,
+      volume: v.volume,
+      deals: v.deals,
+      weeklyTrend: weekKeys.map((wk) => v.weekCounts.get(wk) ?? 0),
+      thisWeek: v.weekCounts.get(currentWeekKey) ?? 0,
+    }))
     .filter((c) => c.deals >= 2)
     .sort((a, b) => b.deals - a.deals)
     .slice(0, 15)
@@ -628,11 +600,7 @@ export function SectionCompetitorAOM({ edges, lenders }: Props) {
   return (
     <>
       {selectedFirm && (
-        <SpiderModal
-          firm={selectedFirm}
-          categorized={categorized}
-          onClose={() => setSelectedFirm(null)}
-        />
+        <SpiderModal firm={selectedFirm} categorized={categorized} onClose={() => setSelectedFirm(null)} />
       )}
 
       <Card className="p-6 border-slate-200/80 bg-slate-50/30">
@@ -642,79 +610,90 @@ export function SectionCompetitorAOM({ edges, lenders }: Props) {
           <span className="font-medium text-slate-700">{cleanCount.toLocaleString()} signal records shown.</span>
         </p>
 
-        <div className="mt-6 grid gap-6 xl:grid-cols-2">
-          {/* Competitor Rankings */}
-          <div>
-            <h4 className="text-sm font-semibold text-slate-800 mb-1">Competitor Rankings — Top FL AOM Buyers</h4>
-            <p className="text-xs text-slate-500 mb-3">
-              Click any firm to see a spider graph of which lenders are assigning loans to them.
-            </p>
-            <Table>
-              <TableHeader>
+        {/* ── Competitor Rankings — full width with 12-week sparkline ── */}
+        <div className="mt-6">
+          <h4 className="text-sm font-semibold text-slate-800 mb-1">Competitor Rankings — Top FL AOM Buyers</h4>
+          <p className="text-xs text-slate-500 mb-3">
+            Weekly AOM trend over the last 12 weeks (green = accelerating, amber = slowing).
+            Click any firm to open the spider graph, then click an assignor to drill into their intelligence profile.
+          </p>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Firm</TableHead>
+                <TableHead>12-Week Trend</TableHead>
+                <TableHead className="text-right">This Week</TableHead>
+                <TableHead className="text-right">Total AOMs</TableHead>
+                <TableHead className="text-right">Total Volume</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {competitors.length === 0 ? (
                 <TableRow>
-                  <TableHead>Firm</TableHead>
-                  <TableHead className="text-right">AOM Count</TableHead>
-                  <TableHead className="text-right">Total Volume</TableHead>
+                  <TableCell colSpan={5} className="text-slate-500 text-xs">No private creditor activity detected.</TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {competitors.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={3} className="text-slate-500 text-xs">No private creditor activity detected.</TableCell>
+              ) : (
+                competitors.map((c) => (
+                  <TableRow
+                    key={c.name}
+                    className="cursor-pointer hover:bg-blue-50 transition-colors"
+                    onClick={() => setSelectedFirm(c.name)}
+                  >
+                    <TableCell className="font-medium text-blue-700 max-w-[220px] truncate">{c.name}</TableCell>
+                    <TableCell className="py-1">
+                      <Sparkline data={c.weeklyTrend} />
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {c.thisWeek > 0 ? (
+                        <span className="text-emerald-700 font-semibold">{c.thisWeek}</span>
+                      ) : (
+                        <span className="text-slate-400">0</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">{c.deals}</TableCell>
+                    <TableCell className="text-right text-slate-500">{c.volume > 0 ? compact(c.volume) : "—"}</TableCell>
                   </TableRow>
-                ) : (
-                  competitors.map((c) => (
-                    <TableRow
-                      key={c.name}
-                      className="cursor-pointer hover:bg-blue-50 transition-colors"
-                      onClick={() => setSelectedFirm(c.name)}
-                    >
-                      <TableCell className="font-medium text-blue-700 hover:underline">{c.name}</TableCell>
-                      <TableCell className="text-right">{c.deals}</TableCell>
-                      <TableCell className="text-right">{c.volume > 0 ? compact(c.volume) : "—"}</TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
-
-          {/* Bank Sell-Off Signals */}
-          <div>
-            <h4 className="text-sm font-semibold text-slate-800 mb-1">Bank Sell-Off Signals</h4>
-            <p className="text-xs text-slate-500 mb-3">
-              Banks actively assigning FL loans to private creditors — potential outreach targets.
-            </p>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Bank / Originator</TableHead>
-                  <TableHead className="text-right">Deals to Private</TableHead>
-                  <TableHead className="text-right">Unique Buyers</TableHead>
-                  <TableHead className="text-right">Volume</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {bankSignals.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={4} className="text-slate-500 text-xs">No bank sell-off signals detected.</TableCell>
-                  </TableRow>
-                ) : (
-                  bankSignals.map((b) => (
-                    <TableRow key={b.name}>
-                      <TableCell className="font-medium">{b.name}</TableCell>
-                      <TableCell className="text-right">{b.deals}</TableCell>
-                      <TableCell className="text-right">{b.uniqueBuyers}</TableCell>
-                      <TableCell className="text-right">{b.volume > 0 ? compact(b.volume) : "—"}</TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
+                ))
+              )}
+            </TableBody>
+          </Table>
         </div>
 
-        {/* Clean AOM Flow */}
+        {/* ── Bank Sell-Off Signals ── */}
+        <div className="mt-6">
+          <h4 className="text-sm font-semibold text-slate-800 mb-1">Bank Sell-Off Signals</h4>
+          <p className="text-xs text-slate-500 mb-3">
+            Banks actively assigning FL loans to private creditors — potential outreach targets.
+          </p>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Bank / Originator</TableHead>
+                <TableHead className="text-right">Deals to Private</TableHead>
+                <TableHead className="text-right">Unique Buyers</TableHead>
+                <TableHead className="text-right">Volume</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {bankSignals.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-slate-500 text-xs">No bank sell-off signals detected.</TableCell>
+                </TableRow>
+              ) : (
+                bankSignals.map((b) => (
+                  <TableRow key={b.name}>
+                    <TableCell className="font-medium">{b.name}</TableCell>
+                    <TableCell className="text-right">{b.deals}</TableCell>
+                    <TableCell className="text-right">{b.uniqueBuyers}</TableCell>
+                    <TableCell className="text-right">{b.volume > 0 ? compact(b.volume) : "—"}</TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
+
+        {/* ── Recent AOM Flow ── */}
         <div className="mt-6">
           <h4 className="text-sm font-semibold text-slate-800 mb-1">Recent AOM Flow — Noise Removed</h4>
           <p className="text-xs text-slate-500 mb-3">
@@ -749,7 +728,9 @@ export function SectionCompetitorAOM({ edges, lenders }: Props) {
                         </span>
                       </TableCell>
                       <TableCell className="text-right text-sm">
-                        {e.amountKnown && e.amount != null && e.amount > 0 ? money(e.amount) : "—"}
+                        {e.amountKnown && e.amount != null && (e.amount as number) > 0
+                          ? money(e.amount as number)
+                          : "—"}
                       </TableCell>
                       <TableCell className="text-xs text-slate-500 max-w-[140px] truncate">{e.geography || "—"}</TableCell>
                     </TableRow>
