@@ -41,6 +41,19 @@ export type PreforeclosureRecord = {
   raw?: Record<string, unknown>
 }
 
+export type CompetitorRanking = {
+  name: string
+  volume: number
+  volumePrev: number
+  count: number
+  countPrev: number
+  percentChange: number
+  avgDealSize: number
+  category?: string   // e.g. "Buyer - Investment Firm", "Private Money"
+  buyerType?: string  // e.g. "Private Money", "Bank"
+  rank: number
+}
+
 export type LenderAnalyticsRecord = {
   lender: string
   volume?: number

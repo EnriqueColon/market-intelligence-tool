@@ -2,6 +2,7 @@
 
 import type {
   AssignmentRecord,
+  CompetitorRanking,
   LenderAnalyticsRecord,
   MortgageRecord,
   PreforeclosureRecord,
@@ -70,6 +71,15 @@ export function fetchPreforeclosuresPayload(): Promise<ResourcePayload<Preforecl
 export function fetchLendersPayload(): Promise<ResourcePayload<LenderAnalyticsRecord>> {
   return cached("participants-intel:lenders:payload", () =>
     getJson<ResourcePayload<LenderAnalyticsRecord>>("/api/participants-intel?resource=lenders").catch(() => ({
+      items: [],
+      diagnostics: emptyDiagnostics(),
+    }))
+  )
+}
+
+export function fetchRankingsPayload(): Promise<ResourcePayload<CompetitorRanking>> {
+  return cached("participants-intel:rankings:payload", () =>
+    getJson<ResourcePayload<CompetitorRanking>>("/api/participants-intel?resource=rankings").catch(() => ({
       items: [],
       diagnostics: emptyDiagnostics(),
     }))

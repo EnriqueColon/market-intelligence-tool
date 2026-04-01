@@ -4,6 +4,7 @@ import fs from "node:fs"
 import Database from "better-sqlite3"
 import type {
   AssignmentRecord,
+  CompetitorRanking,
   LenderAnalyticsRecord,
   MortgageRecord,
   PreforeclosureRecord,
@@ -32,7 +33,7 @@ export const dynamic = "force-dynamic"
  *   4) aom.upb / aom.consideration  5) unknown
  */
 
-type Resource = "assignments" | "mortgages" | "preforeclosures" | "lenders" | "search"
+type Resource = "assignments" | "mortgages" | "preforeclosures" | "lenders" | "search" | "rankings"
 
 // ─── Elementix API config ─────────────────────────────────────────────────────
 
@@ -715,6 +716,45 @@ function localSearch(
   return Array.from(out.values()).slice(0, 100)
 }
 
+// ─── Elementix: FL AOM buyer rankings (authoritative volume + trend) ──────────
+
+async function fetchElementixRankings(): Promise<ResourcePayload<CompetitorRanking> | null> {
+  const key = process.env.ELEMENTIX_API_KEY?.trim()
+  if (!key) return null
+
+  const resp = await elxFetch<{ data: ElxAssignmentRanking[] }>("/api/v1/assignments/rankings", {
+    state: "FL",
+    limit: "20",
+  })
+
+  const data = resp?.data ?? []
+  if (data.length === 0) return null
+
+  const items: CompetitorRanking[] = data
+    .filter((r) => r.buyerName)
+    .map((r) => ({
+      name: r.buyerName!,
+      volume: r.volume ?? 0,
+      volumePrev: r.volumePrev ?? 0,
+      count: r.count ?? 0,
+      countPrev: r.countPrev ?? 0,
+      percentChange: r.percentChange ?? 0,
+      avgDealSize: r.avgDealSize ?? 0,
+      category: r.buyerCategory || undefined,
+      buyerType: r.buyerType || undefined,
+      rank: r.rank ?? 0,
+    }))
+
+  return {
+    items,
+    diagnostics: {
+      source: "external_api",
+      totalFetched: items.length,
+      notes: [`Elementix: ${items.length} FL AOM buyer rankings loaded.`],
+    },
+  }
+}
+
 // ─── Route handler ────────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
@@ -790,6 +830,20 @@ export async function GET(req: NextRequest) {
       notes: ["Search results from local fallback datasets."],
     }
     return NextResponse.json({ items, diagnostics } satisfies ResourcePayload<SearchEntityResult>)
+  }
+
+  // ── Rankings ─────────────────────────────────────────────────────────────────
+  if (resource === "rankings") {
+    const elementix = await fetchElementixRankings()
+    if (elementix) return NextResponse.json(elementix satisfies ResourcePayload<CompetitorRanking>)
+    return NextResponse.json({
+      items: [],
+      diagnostics: {
+        source: "local_fallback" as const,
+        totalFetched: 0,
+        notes: ["No Elementix rankings available — check ELEMENTIX_API_KEY."],
+      },
+    } satisfies ResourcePayload<CompetitorRanking>)
   }
 
   return NextResponse.json({ error: "invalid resource" }, { status: 400 })

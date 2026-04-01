@@ -2,15 +2,16 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { Card } from "@/components/ui/card"
-import { fetchAssignmentsPayload, fetchLendersPayload } from "@/lib/participants-intel/services"
+import { fetchAssignmentsPayload, fetchLendersPayload, fetchRankingsPayload } from "@/lib/participants-intel/services"
 import { buildFlowEdges } from "@/lib/participants-intel/aggregation"
-import type { AssignmentRecord, LenderAnalyticsRecord } from "@/lib/participants-intel/types"
+import type { AssignmentRecord, CompetitorRanking, LenderAnalyticsRecord } from "@/lib/participants-intel/types"
 import { SectionCompetitorAOM } from "@/components/participants-intel/section-competitor-aom"
 
 export function MarketParticipantsIntel() {
   const [loading, setLoading] = useState(true)
   const [assignments, setAssignments] = useState<AssignmentRecord[]>([])
   const [lenders, setLenders] = useState<LenderAnalyticsRecord[]>([])
+  const [rankings, setRankings] = useState<CompetitorRanking[]>([])
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -19,10 +20,11 @@ export function MarketParticipantsIntel() {
       setLoading(true)
       setError(null)
       try {
-        const [a, l] = await Promise.all([fetchAssignmentsPayload(), fetchLendersPayload()])
+        const [a, l, r] = await Promise.all([fetchAssignmentsPayload(), fetchLendersPayload(), fetchRankingsPayload()])
         if (!mounted) return
         setAssignments(a.items)
         setLenders(l.items)
+        setRankings(r.items)
       } catch (e) {
         if (!mounted) return
         setError(e instanceof Error ? e.message : "Failed to load data.")
@@ -52,7 +54,7 @@ export function MarketParticipantsIntel() {
 
   return (
     <div className="space-y-6">
-      <SectionCompetitorAOM edges={edges} lenders={lenders} />
+      <SectionCompetitorAOM edges={edges} lenders={lenders} rankings={rankings} />
     </div>
   )
 }
