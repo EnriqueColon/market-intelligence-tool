@@ -46,6 +46,11 @@ export type LenderAnalyticsRecord = {
   volume?: number
   marketShare?: number
   trend?: "up" | "down" | "flat"
+  lenderType?: string        // e.g. "Private Money", "Bank", "Mortgage Banker"
+  category?: string          // e.g. "Servicer", "Trustee", "Buyer - Investment Firm"
+  avgDealSize?: number       // average deal/assignment size in dollars
+  dealCount?: number         // number of deals
+  countPrev?: number         // prior period deal count for trend comparison
 }
 
 export type SearchEntityResult = {

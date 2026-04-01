@@ -16,43 +16,148 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 /**
- * Developer notes:
- * - Assignment value recovery order:
- *   1) assignment.loanAmount
- *   2) assignment.amount
- *   3) linked mortgage.mortgageAmount
- *   4) linked mortgage.loanAmount
- *   5) related mortgage.amount
- *   6) local fallback aom.upb / aom.consideration_* (when available)
- *   7) unknown
- * - Missing values are returned as null + valueStatus="unknown" (never coerced to zero).
- * - Mortgages and preforeclosures prefer external API; local fallback coverage depends on local sqlite tables.
+ * Data source priority:
+ *   1) Elementix API (ELEMENTIX_API_KEY) — live AOM, mortgage, lender, and search data
+ *   2) Local SQLite fallback — aom.sqlite (assignments) and ingestion.sqlite (preforeclosures)
+ *
+ * Elementix endpoints used:
+ *   GET /api/v1/lender/{id}/assignments?state=FL   → individual AOM records per lender
+ *   GET /api/v1/assignments/rankings?state=FL      → top FL AOM buyer/seller rankings
+ *   GET /api/v1/transactions?state=FL&isBusinessPurpose=true → FL mortgage transactions
+ *   GET /api/v1/lenders                            → national lender rankings
+ *   GET /api/v1/lender-search?q=...                → lender entity search
+ *
+ * Assignment value recovery order (for SQLite fallback):
+ *   1) assignment.loanAmount  2) assignment.amount  3) linked mortgage amounts
+ *   4) aom.upb / aom.consideration  5) unknown
  */
 
 type Resource = "assignments" | "mortgages" | "preforeclosures" | "lenders" | "search"
 
-const EXTERNAL_BASE = process.env.PARTICIPANTS_API_BASE_URL?.trim()
-const EXTERNAL_KEY = process.env.PARTICIPANTS_API_KEY?.trim()
+// ─── Elementix API config ─────────────────────────────────────────────────────
+
+const ELEMENTIX_BASE = "https://app.elementix.ai"
+const ELEMENTIX_KEY = process.env.ELEMENTIX_API_KEY?.trim()
+
+// ─── Elementix response types ─────────────────────────────────────────────────
+
+type ElxAssignment = {
+  id: string
+  countyName: string
+  countyState: string
+  city: string
+  zipCode?: string
+  regionName?: string
+  recordingDate: string
+  addresses: string[]
+  addressDetails?: { id: string; addressFull: string }[]
+  borrowerNames: string[]
+  loanAmount: string | number
+  originalLenderRaw: string
+  originalLender: string
+  originalLenderId: string
+  originalLenderDomainName?: string | null
+  assigneeLenderRaw: string
+  assigneeLender: string
+  assigneeLenderId: string
+  assigneeLenderDomainName?: string | null
+  mortgageId: string | null
+}
+
+type ElxTransaction = {
+  id: string
+  type: string
+  recordingDate: string
+  countyName: string
+  countyState: string
+  city: string
+  zipCode?: string
+  regionName?: string
+  addresses: { id: string; addressFull: string }[]
+  isBusinessPurpose: boolean
+  propertyTypes: string[]
+  propertySubtypes: string[]
+  amount: number | null
+  partiesGrantor: string[]
+  partiesGrantee: string[]
+  lenderId?: string
+  lenderName?: string
+  lenderType?: string | null
+  entityBorrowers: { id: string; name: string; type: string; state: string }[]
+  deedConsideration?: number | null
+}
+
+type ElxLender = {
+  lenderId: string
+  lenderName: string
+  lenderDomainName?: string | null
+  lenderType?: string | null
+  address?: string
+  volume: number
+  volumePrev: number
+  count: number
+  countPrev: number
+  percentChange: number
+  countPercentChange: number
+  rank: number
+  totalVolumeAllTime?: number
+  averageMortgageSizeAllTime?: number
+}
+
+type ElxAssignmentRanking = {
+  buyerId?: string
+  buyerName?: string
+  buyerType?: string
+  buyerCategory?: string | null
+  sellerId?: string
+  sellerName?: string
+  sellerType?: string
+  sellerCategory?: string | null
+  volume: number
+  volumePrev?: number
+  count: number
+  countPrev?: number
+  percentChange: number
+  rank: number
+  avgDealSize?: number
+  windowInMonths?: number
+}
+
+// ─── Elementix fetch helper ───────────────────────────────────────────────────
+
+async function elxFetch<T>(path: string, params: Record<string, string> = {}): Promise<T | null> {
+  if (!ELEMENTIX_KEY) return null
+  try {
+    const url = new URL(`${ELEMENTIX_BASE}${path}`)
+    for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v)
+    const res = await fetch(url.toString(), {
+      headers: { Authorization: `Bearer ${ELEMENTIX_KEY}` },
+      cache: "no-store",
+      signal: AbortSignal.timeout(20000),
+    })
+    if (!res.ok) {
+      console.warn(`[elementix] ${path} → HTTP ${res.status}`)
+      return null
+    }
+    return (await res.json()) as T
+  } catch (err) {
+    console.warn(`[elementix] ${path} fetch error:`, err)
+    return null
+  }
+}
+
+// ─── Utility helpers ──────────────────────────────────────────────────────────
 
 function asObj(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" ? (value as Record<string, unknown>) : null
 }
 
-function pickFirstArray(obj: Record<string, unknown>): unknown[] | null {
-  const keys = ["items", "data", "results", "records", "rows", "assignments", "mortgages", "preforeclosures", "entities"]
-  for (const k of keys) {
-    const v = obj[k]
-    if (Array.isArray(v)) return v
-  }
-  return null
-}
-
 function maybeNumber(input: unknown): number | null {
-  if (typeof input === "number" && Number.isFinite(input)) return input
+  if (typeof input === "number" && Number.isFinite(input) && input !== 0) return input
   if (typeof input === "string") {
     const cleaned = input.replace(/[$, ]/g, "")
     const n = Number(cleaned)
-    return Number.isFinite(n) ? n : null
+    return Number.isFinite(n) && n !== 0 ? n : null
   }
   return null
 }
@@ -84,44 +189,247 @@ function guessPropertyType(text?: string): string | undefined {
   return undefined
 }
 
-async function fetchExternal<T>(resource: Resource, q?: string): Promise<{ items: T[]; diagnostics: ResourceDiagnostics } | null> {
-  if (!EXTERNAL_BASE) return null
-  const endpointMap: Record<Resource, string> = {
-    assignments: "/assignments",
-    mortgages: "/mortgages",
-    preforeclosures: "/preforeclosures",
-    lenders: "/lenders",
-    search: "/entities/search",
-  }
-  const url = new URL(`${EXTERNAL_BASE.replace(/\/+$/, "")}${endpointMap[resource]}`)
-  if (q) url.searchParams.set("q", q)
-  const headers: Record<string, string> = {}
-  if (EXTERNAL_KEY) headers.Authorization = `Bearer ${EXTERNAL_KEY}`
-  try {
-    const res = await fetch(url.toString(), {
-      headers,
-      cache: "no-store",
-      signal: AbortSignal.timeout(15000),
-    })
-    if (!res.ok) return null
-    const raw = (await res.json()) as unknown
-    const obj = asObj(raw)
-    let items: unknown[] = []
-    if (Array.isArray(raw)) items = raw
-    else if (obj) items = pickFirstArray(obj) || []
-    return {
-      items: items as T[],
-      diagnostics: {
-        source: "external_api",
-        totalFetched: items.length,
-        notes: [],
-        extractionStats: {},
-      },
+// ─── Elementix: Assignment of Mortgage records (FL) ──────────────────────────
+// Strategy: fetch top FL AOM buyers from rankings, then pull their individual records in parallel
+
+async function fetchElementixAssignments(): Promise<ResourcePayload<AssignmentRecord> | null> {
+  if (!ELEMENTIX_KEY) return null
+
+  // Step 1: Get top FL AOM buyers and top Private Money lenders in parallel
+  const [rankings, privateLendersResp] = await Promise.all([
+    elxFetch<{ data: ElxAssignmentRanking[] }>("/api/v1/assignments/rankings", {
+      state: "FL",
+      limit: "20",
+    }),
+    elxFetch<{ data: ElxLender[] }>("/api/v1/lenders", {
+      lenderType: "Private Money",
+      limit: "10",
+    }),
+  ])
+  const topBuyers = (rankings?.data ?? []).slice(0, 15)
+  const buyerIds = topBuyers.map((r) => r.buyerId).filter((id): id is string => !!id)
+
+  const privateLenderIds = (privateLendersResp?.data ?? [])
+    .map((l) => l.lenderId)
+    .filter((id): id is string => !!id)
+
+  const uniqueIds = Array.from(new Set([...buyerIds, ...privateLenderIds]))
+
+  if (uniqueIds.length === 0) return null
+
+  // Step 2: Fetch each participant's individual FL assignment records in parallel
+  const assignmentSets = await Promise.all(
+    uniqueIds.map((id) =>
+      elxFetch<{ data: ElxAssignment[] }>(`/api/v1/lender/${id}/assignments`, {
+        state: "FL",
+        limit: "200",
+      })
+    )
+  )
+
+  // Step 3: Deduplicate by record ID and normalize to AssignmentRecord
+  const seen = new Set<string>()
+  const items: AssignmentRecord[] = []
+
+  for (const set of assignmentSets) {
+    for (const a of set?.data ?? []) {
+      if (!a.id || seen.has(a.id)) continue
+      seen.add(a.id)
+
+      const date = normalizeDate(a.recordingDate)
+      if (!date) continue
+
+      const loanAmt = maybeNumber(a.loanAmount)
+      const assignor = (a.originalLender || a.originalLenderRaw || "").trim()
+      const assignee = (a.assigneeLender || a.assigneeLenderRaw || "").trim()
+      if (!assignor && !assignee) continue
+
+      const addressFull =
+        a.addressDetails?.[0]?.addressFull ||
+        (typeof a.addresses?.[0] === "string" ? a.addresses[0] : undefined)
+
+      items.push({
+        id: a.id,
+        assignor,
+        assignee,
+        loanAmount: loanAmt,
+        valueStatus: loanAmt !== null ? "known" : "unknown",
+        valueSource: loanAmt !== null ? "assignment.loanAmount" : "unknown",
+        recordingDate: date,
+        property: addressFull || undefined,
+        propertyType: guessPropertyType(addressFull),
+        geography: [a.city, a.countyName, a.countyState].filter(Boolean).join(", ") || undefined,
+        linkedMortgageId: a.mortgageId || undefined,
+      })
     }
-  } catch {
-    return null
   }
+
+  items.sort((a, b) => b.recordingDate.localeCompare(a.recordingDate))
+
+  const known = items.filter((x) => x.valueStatus === "known").length
+  const diagnostics: ResourceDiagnostics = {
+    source: "external_api",
+    totalFetched: items.length,
+    notes: [
+      `Elementix: ${uniqueIds.length} FL participants queried (top buyers + private creditors), ${items.length} unique AOM records.`,
+      known === 0 ? "No loan amounts available in current batch." : "",
+    ].filter(Boolean),
+    extractionStats: {
+      known_value_records: known,
+      unknown_value_records: items.length - known,
+      lenders_queried: uniqueIds.length,
+    },
+  }
+
+  console.info("[participants-intel][assignments] Elementix diagnostics", diagnostics)
+  return { items, diagnostics }
 }
+
+// ─── Elementix: Mortgage transactions (FL, business purpose) ─────────────────
+
+async function fetchElementixMortgages(): Promise<ResourcePayload<MortgageRecord> | null> {
+  if (!ELEMENTIX_KEY) return null
+
+  const resp = await elxFetch<{ data: ElxTransaction[] }>("/api/v1/transactions", {
+    state: "FL",
+    isBusinessPurpose: "true",
+    limit: "500",
+  })
+
+  const rawItems = (resp?.data ?? []).filter((t) => t.type === "mortgage")
+  if (rawItems.length === 0) return null
+
+  const items: MortgageRecord[] = rawItems.map((m) => ({
+    id: m.id,
+    lender: m.lenderName || m.partiesGrantee?.[0] || "",
+    borrower: m.entityBorrowers?.[0]?.name || m.partiesGrantor?.[0] || "",
+    amount: maybeNumber(m.amount) ?? undefined,
+    mortgageAmount: maybeNumber(m.amount) ?? undefined,
+    recordingDate: normalizeDate(m.recordingDate),
+    property: m.addresses?.[0]?.addressFull || undefined,
+    propertyType:
+      m.propertySubtypes?.[0] ||
+      m.propertyTypes?.[0] ||
+      guessPropertyType(m.addresses?.[0]?.addressFull) ||
+      undefined,
+    geography: [m.city, m.countyName, m.countyState].filter(Boolean).join(", ") || undefined,
+    raw: m as unknown as Record<string, unknown>,
+  }))
+
+  const diagnostics: ResourceDiagnostics = {
+    source: "external_api",
+    totalFetched: items.length,
+    notes: [
+      `Elementix: ${items.length} FL business-purpose mortgage transactions loaded.`,
+      items.length === 500 ? "Result capped at 500 — some records may be excluded." : "",
+    ].filter(Boolean),
+  }
+
+  console.info("[participants-intel][mortgages] Elementix diagnostics", diagnostics)
+  return { items, diagnostics }
+}
+
+// ─── Elementix: Lender analytics ─────────────────────────────────────────────
+// Combines national lender volume rankings with FL-specific AOM buyer activity
+
+async function fetchElementixLenders(): Promise<ResourcePayload<LenderAnalyticsRecord> | null> {
+  if (!ELEMENTIX_KEY) return null
+
+  const [lendersResp, flBuyersResp] = await Promise.all([
+    elxFetch<{ data: ElxLender[] }>("/api/v1/lenders", { limit: "200" }),
+    elxFetch<{ data: ElxAssignmentRanking[] }>("/api/v1/assignments/rankings", {
+      state: "FL",
+      limit: "100",
+    }),
+  ])
+
+  const lendersList = lendersResp?.data ?? []
+  const flBuyers = flBuyersResp?.data ?? []
+
+  if (lendersList.length === 0 && flBuyers.length === 0) return null
+
+  // Build FL buyer map for trend overlay
+  const flBuyerMap = new Map<string, { percentChange: number; volume: number }>()
+  for (const r of flBuyers) {
+    const name = r.buyerName || r.sellerName || ""
+    if (name) flBuyerMap.set(name.toLowerCase(), { percentChange: r.percentChange, volume: r.volume })
+  }
+
+  const items: LenderAnalyticsRecord[] = lendersList.map((l) => {
+    const flData = flBuyerMap.get(l.lenderName.toLowerCase())
+    const pctChange = flData?.percentChange ?? l.percentChange
+    return {
+      lender: l.lenderName,
+      volume: l.volume,
+      marketShare: l.totalVolumeAllTime ? l.volume / l.totalVolumeAllTime : undefined,
+      trend: pctChange > 5 ? "up" : pctChange < -5 ? "down" : "flat",
+      lenderType: l.lenderType || undefined,
+      avgDealSize: l.averageMortgageSizeAllTime || undefined,
+      dealCount: l.count,
+      countPrev: l.countPrev,
+    }
+  })
+
+  // Append any FL-only assignment buyers not already in the national list
+  const nationalNames = new Set(lendersList.map((l) => l.lenderName.toLowerCase()))
+  for (const r of flBuyers) {
+    const name = r.buyerName || r.sellerName || ""
+    if (!name || nationalNames.has(name.toLowerCase())) continue
+    items.push({
+      lender: name,
+      volume: r.volume,
+      marketShare: undefined,
+      trend: r.percentChange > 5 ? "up" : r.percentChange < -5 ? "down" : "flat",
+      category: r.buyerCategory || r.sellerCategory || undefined,
+      avgDealSize: r.avgDealSize || undefined,
+      dealCount: r.count,
+      countPrev: r.countPrev,
+    })
+  }
+
+  items.sort((a, b) => (b.volume ?? 0) - (a.volume ?? 0))
+
+  const diagnostics: ResourceDiagnostics = {
+    source: "external_api",
+    totalFetched: items.length,
+    notes: [
+      `Elementix: ${lendersList.length} national lenders ranked, overlaid with ${flBuyers.length} FL AOM buyer rankings.`,
+    ],
+    extractionStats: {
+      national_lenders: lendersList.length,
+      fl_assignment_buyers: flBuyers.length,
+    },
+  }
+
+  console.info("[participants-intel][lenders] Elementix diagnostics", diagnostics)
+  return { items, diagnostics }
+}
+
+// ─── Elementix: Lender search ─────────────────────────────────────────────────
+
+async function fetchElementixSearch(q: string): Promise<SearchEntityResult[] | null> {
+  if (!ELEMENTIX_KEY || !q.trim()) return null
+
+  const resp = await elxFetch<{ data: ElxLender[] } | ElxLender[]>("/api/v1/lender-search", {
+    q: q.trim(),
+    limit: "30",
+  })
+
+  const rawItems: ElxLender[] = Array.isArray(resp)
+    ? resp
+    : ((asObj(resp) as { data?: ElxLender[] } | null)?.data ?? [])
+
+  if (rawItems.length === 0) return null
+
+  return rawItems.map((r, idx) => ({
+    id: r.lenderId || String(idx),
+    name: r.lenderName || "",
+    type: "lender" as const,
+    location: r.address || undefined,
+  }))
+}
+
+// ─── Local SQLite fallbacks ───────────────────────────────────────────────────
 
 function recoverAssignmentValue(
   raw: Record<string, unknown>,
@@ -221,8 +529,8 @@ function loadAssignmentsFromAomSqlite(): ResourcePayload<AssignmentRecord> {
         assignor: r.assignor || "",
         assignee: r.assignee || "",
         loanAmount: maybeNumber(r.loan_amount),
-        valueStatus: maybeNumber(r.loan_amount) !== null ? "known" : "unknown",
-        valueSource: maybeNumber(r.upb) !== null ? "aom.upb" : maybeNumber(r.consideration_1) !== null || maybeNumber(r.consideration_2) !== null ? "aom.consideration" : "unknown",
+        valueStatus: (maybeNumber(r.loan_amount) !== null ? "known" : "unknown") as "known" | "unknown",
+        valueSource: (maybeNumber(r.upb) !== null ? "aom.upb" : maybeNumber(r.consideration_1) !== null || maybeNumber(r.consideration_2) !== null ? "aom.consideration" : "unknown") as AssignmentRecord["valueSource"],
         recordingDate: normalizeDate(r.recording_date),
         property: (r.property || "").trim() || undefined,
         propertyType: guessPropertyType(maybeString(r.property)),
@@ -341,7 +649,7 @@ function loadMortgagesFromLocal(): ResourcePayload<MortgageRecord> {
     diagnostics: {
       source: "local_fallback",
       totalFetched: 0,
-      notes: ["No local mortgage table currently available in fallback stores."],
+      notes: ["No local mortgage table available; Elementix API key may be missing or returned no data."],
     },
   }
 }
@@ -407,6 +715,8 @@ function localSearch(
   return Array.from(out.values()).slice(0, 100)
 }
 
+// ─── Route handler ────────────────────────────────────────────────────────────
+
 export async function GET(req: NextRequest) {
   const resource = (req.nextUrl.searchParams.get("resource") || "").trim() as Resource
   const q = (req.nextUrl.searchParams.get("q") || "").trim()
@@ -415,161 +725,60 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "resource is required" }, { status: 400 })
   }
 
+  // ── Assignments ──────────────────────────────────────────────────────────────
   if (resource === "assignments") {
-    const external = await fetchExternal<Record<string, unknown>>("assignments")
-    const mortgages = await fetchExternal<Record<string, unknown>>("mortgages")
-    const mortgageItems = mortgages?.items ?? []
-    const mortgagesById = new Map<string, MortgageRecord>(
-      mortgageItems.map((m) => [maybeString(m.id || m.mortgageId || m.mortgage_id), {
-        id: maybeString(m.id || m.mortgageId || m.mortgage_id),
-        lender: maybeString(m.lender || m.lenderName),
-        borrower: maybeString(m.borrower || m.borrowerName),
-        amount: maybeNumber(m.amount) ?? undefined,
-        mortgageAmount: maybeNumber(m.mortgageAmount) ?? undefined,
-        loanAmount: maybeNumber(m.loanAmount) ?? undefined,
-        recordingDate: normalizeDate(m.recordingDate || m.recording_date),
-      }])
-    )
-
-    if (external?.items) {
-      const items = external.items.map((a, idx) => {
-        const linkedMortgageId = maybeString(a.mortgageId || a.mortgage_id || a.linkedMortgageId)
-        const linked = linkedMortgageId ? mortgagesById.get(linkedMortgageId) : undefined
-        const recovered = recoverAssignmentValue(a, mortgagesById, linked)
-        return {
-          id: maybeString(a.id || a.assignmentId || idx),
-          assignor: maybeString(a.assignor || a.fromParty || a.from_party || a.firstParty),
-          assignee: maybeString(a.assignee || a.toParty || a.to_party || a.secondParty),
-          loanAmount: recovered.value,
-          valueStatus: recovered.value !== null ? "known" : "unknown",
-          valueSource: recovered.source,
-          recordingDate: normalizeDate(a.recordingDate || a.recording_date || a.date || a.filingDate),
-          property: maybeString(a.property || a.address || a.propertyAddress || a.collateralAddress) || undefined,
-          propertyType: maybeString(a.propertyType || a.useType || a.assetType) || undefined,
-          geography: maybeString(a.geography || a.market || a.cityState || a.county) || undefined,
-          linkedMortgageId: linkedMortgageId || undefined,
-          raw: a,
-        } satisfies AssignmentRecord
-      }).filter((x) => x.recordingDate)
-      const known = items.filter((x) => x.valueStatus === "known").length
-      const diagnostics: ResourceDiagnostics = {
-        source: "external_api",
-        totalFetched: items.length,
-        notes: [],
-        extractionStats: {
-          known_value_records: known,
-          unknown_value_records: items.length - known,
-          mortgages_available_for_linking: mortgageItems.length,
-        },
-      }
-      console.info("[participants-intel][assignments] diagnostics", diagnostics)
-      return NextResponse.json({ items, diagnostics } satisfies ResourcePayload<AssignmentRecord>)
-    }
-
+    const elementix = await fetchElementixAssignments()
+    if (elementix) return NextResponse.json(elementix satisfies ResourcePayload<AssignmentRecord>)
     const fallback = loadAssignmentsFromAomSqlite()
-    console.info("[participants-intel][assignments] diagnostics", fallback.diagnostics)
+    console.info("[participants-intel][assignments] using SQLite fallback, diagnostics:", fallback.diagnostics)
     return NextResponse.json(fallback)
   }
+
+  // ── Mortgages ────────────────────────────────────────────────────────────────
   if (resource === "mortgages") {
-    const external = await fetchExternal<Record<string, unknown>>("mortgages")
-    if (external?.items) {
-      const items = external.items.map((m, idx) => ({
-        id: maybeString(m.id || m.mortgageId || m.mortgage_id || idx),
-        lender: maybeString(m.lender || m.lenderName),
-        borrower: maybeString(m.borrower || m.borrowerName),
-        amount: maybeNumber(m.amount) ?? undefined,
-        mortgageAmount: maybeNumber(m.mortgageAmount) ?? undefined,
-        loanAmount: maybeNumber(m.loanAmount) ?? undefined,
-        recordingDate: normalizeDate(m.recordingDate || m.recording_date || m.date),
-        linkedAssignmentIds: Array.isArray(m.linkedAssignmentIds) ? (m.linkedAssignmentIds as string[]) : undefined,
-        property: maybeString(m.property || m.address || m.propertyAddress) || undefined,
-        propertyType: maybeString(m.propertyType || m.useType || m.assetType) || undefined,
-        geography: maybeString(m.geography || m.market || m.county || m.cityState) || undefined,
-        raw: m,
-      } satisfies MortgageRecord))
-      const diagnostics: ResourceDiagnostics = {
-        source: "external_api",
-        totalFetched: items.length,
-        notes: items.length === 0 ? ["No mortgage records were returned for the selected scope/window."] : [],
-      }
-      console.info("[participants-intel][mortgages] diagnostics", diagnostics)
-      return NextResponse.json({ items, diagnostics } satisfies ResourcePayload<MortgageRecord>)
-    }
+    const elementix = await fetchElementixMortgages()
+    if (elementix) return NextResponse.json(elementix satisfies ResourcePayload<MortgageRecord>)
     const fallback = loadMortgagesFromLocal()
-    console.info("[participants-intel][mortgages] diagnostics", fallback.diagnostics)
+    console.info("[participants-intel][mortgages] using local fallback, diagnostics:", fallback.diagnostics)
     return NextResponse.json(fallback)
   }
+
+  // ── Preforeclosures ──────────────────────────────────────────────────────────
+  // No Elementix endpoint available — always uses local SQLite
   if (resource === "preforeclosures") {
-    const external = await fetchExternal<Record<string, unknown>>("preforeclosures")
-    if (external?.items) {
-      const items = external.items.map((p, idx) => ({
-        id: maybeString(p.id || p.preforeclosureId || p.noticeId || idx),
-        plaintiff: maybeString(p.plaintiff || p.lender || p.creditor),
-        defendant: maybeString(p.defendant || p.borrower || p.debtor),
-        lender: maybeString(p.lender || p.plaintiff || p.creditor) || undefined,
-        auctionDate: normalizeDate(p.auctionDate || p.auction_date || p.date || p.filedDate),
-        loanAmount: maybeNumber(p.loanAmount || p.amount || p.claimAmount) ?? undefined,
-        property: maybeString(p.property || p.address || p.propertyAddress) || undefined,
-        propertyType: maybeString(p.propertyType || p.useType || p.assetType) || undefined,
-        geography: maybeString(p.geography || p.market || p.county || p.cityState) || undefined,
-        raw: p,
-      } satisfies PreforeclosureRecord)).filter((x) => x.auctionDate)
-      const diagnostics: ResourceDiagnostics = {
-        source: "external_api",
-        totalFetched: items.length,
-        notes: items.length === 0 ? ["No preforeclosure records were returned for the selected scope/window."] : [],
-      }
-      console.info("[participants-intel][preforeclosures] diagnostics", diagnostics)
-      return NextResponse.json({ items, diagnostics } satisfies ResourcePayload<PreforeclosureRecord>)
-    }
     const fallback = loadPreforeclosuresFromIngestionSqlite()
-    console.info("[participants-intel][preforeclosures] diagnostics", fallback.diagnostics)
+    console.info("[participants-intel][preforeclosures] diagnostics:", fallback.diagnostics)
     return NextResponse.json(fallback)
   }
+
+  // ── Lenders ──────────────────────────────────────────────────────────────────
   if (resource === "lenders") {
-    const external = await fetchExternal<Record<string, unknown>>("lenders")
-    if (external?.items) {
-      const items = external.items.map((l) => ({
-        lender: maybeString(l.lender || l.name || l.entityName),
-        volume: maybeNumber(l.volume) ?? undefined,
-        marketShare: maybeNumber(l.marketShare) ?? undefined,
-        trend: ["up", "down", "flat"].includes(maybeString(l.trend)) ? (maybeString(l.trend) as "up" | "down" | "flat") : undefined,
-      } satisfies LenderAnalyticsRecord))
-      const diagnostics: ResourceDiagnostics = {
-        source: "external_api",
-        totalFetched: items.length,
-        notes: [],
-      }
-      console.info("[participants-intel][lenders] diagnostics", diagnostics)
-      return NextResponse.json({ items, diagnostics } satisfies ResourcePayload<LenderAnalyticsRecord>)
-    }
+    const elementix = await fetchElementixLenders()
+    if (elementix) return NextResponse.json(elementix satisfies ResourcePayload<LenderAnalyticsRecord>)
     const assignmentsPayload = loadAssignmentsFromAomSqlite()
     const prePayload = loadPreforeclosuresFromIngestionSqlite()
     const items = deriveLenders(assignmentsPayload.items, prePayload.items)
     const diagnostics: ResourceDiagnostics = {
       source: "local_fallback",
       totalFetched: items.length,
-      notes: ["Derived lender analytics from assignments/preforeclosures fallback data."],
+      notes: ["Derived lender analytics from local AOM/preforeclosure fallback data."],
     }
-    console.info("[participants-intel][lenders] diagnostics", diagnostics)
+    console.info("[participants-intel][lenders] using SQLite fallback, diagnostics:", diagnostics)
     return NextResponse.json({ items, diagnostics } satisfies ResourcePayload<LenderAnalyticsRecord>)
   }
+
+  // ── Search ───────────────────────────────────────────────────────────────────
   if (resource === "search") {
-    const external = await fetchExternal<Record<string, unknown>>("search", q)
-    if (external?.items) {
-      const items = external.items.map((r, idx) => ({
-        id: maybeString(r.id || idx),
-        name: maybeString(r.name || r.entityName || r.fullName),
-        type: (["firm", "person", "lender"].includes(maybeString(r.type).toLowerCase()) ? maybeString(r.type).toLowerCase() : "firm") as "firm" | "person" | "lender",
-        location: maybeString(r.location || r.geography || r.cityState) || undefined,
-      } satisfies SearchEntityResult))
+    const elementixResults = await fetchElementixSearch(q)
+    if (elementixResults && elementixResults.length > 0) {
       const diagnostics: ResourceDiagnostics = {
         source: "external_api",
-        totalFetched: items.length,
-        notes: [],
+        totalFetched: elementixResults.length,
+        notes: [`Elementix lender search: ${elementixResults.length} results for "${q}".`],
       }
-      return NextResponse.json({ items, diagnostics } satisfies ResourcePayload<SearchEntityResult>)
+      return NextResponse.json({ items: elementixResults, diagnostics } satisfies ResourcePayload<SearchEntityResult>)
     }
+    // Local fallback search
     const assignments = loadAssignmentsFromAomSqlite()
     const pre = loadPreforeclosuresFromIngestionSqlite()
     const mortgages = loadMortgagesFromLocal()
@@ -585,4 +794,3 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({ error: "invalid resource" }, { status: 400 })
 }
-

@@ -18,7 +18,7 @@ export type IndustryOutlook = IndustryOutlookJson & {
   cacheKey: string
 }
 
-type PerplexityResponse = {
+type OpenAIResponse = {
   choices?: Array<{ message?: { content?: string } }>
 }
 
@@ -128,18 +128,18 @@ function isFresh(cachedAt: string) {
   return Date.now() - ms <= CACHE_TTL_MS
 }
 
-async function callPerplexity(messages: { role: "system" | "user"; content: string }[]): Promise<string | null> {
-  const API_KEY = process.env.PERPLEXITY_API_KEY?.trim()
+async function callOpenAI(messages: { role: "system" | "user"; content: string }[]): Promise<string | null> {
+  const API_KEY = process.env.OPENAI_API_KEY?.trim()
   if (!API_KEY) return null
   try {
-    const res = await fetch("https://api.perplexity.ai/chat/completions", {
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "sonar",
+        model: "gpt-4o",
         messages,
         temperature: 0.2,
         max_tokens: 1800,
@@ -148,7 +148,7 @@ async function callPerplexity(messages: { role: "system" | "user"; content: stri
     })
 
     if (!res.ok) return null
-    const json = (await res.json()) as PerplexityResponse
+    const json = (await res.json()) as OpenAIResponse
     return json.choices?.[0]?.message?.content ?? null
   } catch {
     return null
@@ -164,7 +164,7 @@ async function repairJson(raw: string): Promise<IndustryOutlookJson | null> {
   const system =
     "Return ONLY valid JSON matching this schema: keyThemes[], facts{national,florida,miami}, analysis{national,florida,miami}, sources[{title,url}]. No extra keys."
   const user = `Fix to valid JSON only:\n${raw}`
-  const repaired = await callPerplexity([
+  const repaired = await callOpenAI([
     { role: "system", content: system },
     { role: "user", content: user },
   ])
@@ -232,7 +232,7 @@ export async function fetchIndustryOutlook(): Promise<IndustryOutlook> {
   }
 
   const prompt = buildIndustryOutlookPrompt(retrieved)
-  const raw = await callPerplexity([
+  const raw = await callOpenAI([
     { role: "system", content: prompt.system },
     { role: "user", content: prompt.user },
   ])
@@ -266,7 +266,7 @@ export async function fetchIndustryOutlook(): Promise<IndustryOutlook> {
 
   if (retrieved.length >= 5 && parsed.sources.length < 3) {
     const retryPrompt = buildIndustryOutlookPrompt(retrieved)
-    const retryRaw = await callPerplexity([
+    const retryRaw = await callOpenAI([
       { role: "system", content: retryPrompt.system },
       {
         role: "user",

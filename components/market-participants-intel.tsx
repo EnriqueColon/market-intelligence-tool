@@ -28,6 +28,7 @@ import type {
 } from "@/lib/participants-intel/types"
 import { SectionExecutiveSnapshot } from "@/components/participants-intel/section-executive-snapshot"
 import { SectionFirmDrilldown } from "@/components/participants-intel/section-firm-drilldown"
+import { SectionCompetitorAOM } from "@/components/participants-intel/section-competitor-aom"
 import { SectionLegalSignals } from "@/components/participants-intel/section-legal-signals"
 import { SectionMarketFlow } from "@/components/participants-intel/section-market-flow"
 import { SectionPartySearch } from "@/components/participants-intel/section-party-search"
@@ -232,10 +233,65 @@ export function MarketParticipantsIntel() {
             mortgages={mortgages}
             preforeclosures={preforeclosures}
           />
+          <SectionCompetitorAOM edges={edges} lenders={lenders} />
           <SectionLegalSignals preforeclosures={preforeclosures} alerts={alerts} edges={edges} />
+          <PrivateCreditorPanel lenders={lenders} />
         </>
       )}
     </div>
+  )
+}
+
+function PrivateCreditorPanel({ lenders }: { lenders: LenderAnalyticsRecord[] }) {
+  const privateKeywords = /private|bridge|capital|funding|hard money|reit|debt fund|credit fund|mortgage fund/i
+  const privateCreditors = lenders
+    .filter((l) => l.lenderType === "Private Money" || privateKeywords.test(l.lender))
+    .sort((a, b) => (b.volume ?? 0) - (a.volume ?? 0))
+    .slice(0, 20)
+
+  if (privateCreditors.length === 0) return null
+
+  return (
+    <Card className="p-6 border-slate-200/80 bg-slate-50/30">
+      <h3 className="text-base font-semibold text-slate-800">Private Creditor Intelligence</h3>
+      <p className="text-xs text-slate-600 mt-1">
+        Hard money, bridge, and private credit lenders active in Florida — sourced from Elementix.
+      </p>
+      <div className="mt-4 overflow-x-auto">
+        <table className="w-full text-sm border-collapse">
+          <thead>
+            <tr className="border-b border-slate-200">
+              <th className="text-left py-2 px-3 font-semibold text-slate-700">Firm</th>
+              <th className="text-left py-2 px-3 font-semibold text-slate-700">Type</th>
+              <th className="text-right py-2 px-3 font-semibold text-slate-700">Avg Deal Size</th>
+              <th className="text-right py-2 px-3 font-semibold text-slate-700"># Deals</th>
+              <th className="text-right py-2 px-3 font-semibold text-slate-700">Volume</th>
+              <th className="text-center py-2 px-3 font-semibold text-slate-700">Trend</th>
+            </tr>
+          </thead>
+          <tbody>
+            {privateCreditors.map((l, i) => (
+              <tr key={l.lender} className={i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
+                <td className="py-2 px-3 font-medium text-slate-800">{l.lender}</td>
+                <td className="py-2 px-3 text-xs text-slate-500">{l.lenderType || "Private"}</td>
+                <td className="py-2 px-3 text-right text-slate-700">
+                  {l.avgDealSize ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(l.avgDealSize) : "—"}
+                </td>
+                <td className="py-2 px-3 text-right text-slate-700">{l.dealCount?.toLocaleString() ?? "—"}</td>
+                <td className="py-2 px-3 text-right text-slate-700">
+                  {l.volume ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", notation: "compact", maximumFractionDigits: 1 }).format(l.volume) : "—"}
+                </td>
+                <td className="py-2 px-3 text-center">
+                  {l.trend === "up" ? <span className="text-emerald-600 font-semibold">↑</span>
+                    : l.trend === "down" ? <span className="text-rose-600 font-semibold">↓</span>
+                    : <span className="text-slate-400">→</span>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
   )
 }
 
