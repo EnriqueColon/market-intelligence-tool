@@ -497,6 +497,162 @@ function SpiderModal({ firm, categorized, onClose }: { firm: string; categorized
   )
 }
 
+// ─── Bank Spider Modal (outbound: bank → private credit buyers) ───────────────
+
+function BankSpiderModal({
+  bank,
+  categorized,
+  onClose,
+}: {
+  bank: string
+  categorized: CategorizedEdge[]
+  onClose: () => void
+}) {
+  // Outbound: edges FROM this bank TO private creditors
+  const outbound = categorized.filter(
+    (e) => e.from_party === bank && e.flowCategory === "bank_to_private"
+  )
+
+  const buyerMap = new Map<string, AssignorNode>()
+  for (const e of outbound) {
+    const curr = buyerMap.get(e.to_party) ?? { name: e.to_party, deals: 0, volume: 0, category: e.toCategory }
+    curr.deals += 1
+    curr.volume += e.amount ?? 0
+    buyerMap.set(e.to_party, curr)
+  }
+
+  const buyers: AssignorNode[] = Array.from(buyerMap.values())
+    .sort((a, b) => b.deals - a.deals)
+    .slice(0, 14)
+
+  const maxDeals = Math.max(...buyers.map((b) => b.deals), 1)
+  const totalDeals = buyers.reduce((s, b) => s + b.deals, 0)
+  const totalVolume = buyers.reduce((s, b) => s + b.volume, 0)
+
+  const W = 560; const H = 520; const cx = W / 2; const cy = H / 2
+  const outerR = 190; const centerR = 46
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] overflow-hidden flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-start justify-between p-6 pb-3 border-b border-slate-100 shrink-0">
+          <div>
+            <h3 className="text-lg font-bold text-slate-800">{bank}</h3>
+            <p className="text-sm text-slate-500 mt-0.5">
+              {totalDeals} AOM{totalDeals !== 1 ? "s" : ""} sold to private creditors · {buyers.length} unique buyers
+              {totalVolume > 0 ? ` · ${compact(totalVolume)} total` : ""}
+            </p>
+          </div>
+          <button onClick={onClose} className="ml-4 text-slate-400 hover:text-slate-700 text-2xl leading-none font-light">×</button>
+        </div>
+
+        <div className="p-6 overflow-y-auto flex-1">
+          {buyers.length === 0 ? (
+            <p className="text-sm text-slate-500 text-center py-12">No outbound AOM data found for this bank.</p>
+          ) : (
+            <>
+              <p className="text-xs text-slate-400 text-center mb-1">
+                Each node represents a private credit buyer receiving loans from this bank. Node size ∝ deal count.
+              </p>
+
+              {/* Spider SVG */}
+              <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: 420 }}>
+                {[0.33, 0.66, 1].map((r) => (
+                  <circle key={r} cx={cx} cy={cy} r={outerR * r} fill="none" stroke="#e2e8f0" strokeWidth={1} strokeDasharray="5 4" />
+                ))}
+
+                {buyers.map((b, i) => {
+                  const angle = (i * 2 * Math.PI) / buyers.length - Math.PI / 2
+                  const nx = cx + outerR * Math.cos(angle)
+                  const ny = cy + outerR * Math.sin(angle)
+                  const nodeR = Math.max(16, Math.min(34, 16 + (b.deals / maxDeals) * 18))
+                  const color = CATEGORY_COLOR[b.category]
+                  const lineW = Math.max(1.5, Math.min(7, 1.5 + (b.deals / maxDeals) * 5.5))
+                  const labelDist = outerR + nodeR + 16
+                  const lx = cx + labelDist * Math.cos(angle)
+                  const ly = cy + labelDist * Math.sin(angle)
+                  const cosA = Math.cos(angle)
+                  const anchor = cosA > 0.15 ? "start" : cosA < -0.15 ? "end" : "middle"
+                  const shortName = b.name.length > 18 ? b.name.slice(0, 16) + "…" : b.name
+
+                  return (
+                    <g key={b.name}>
+                      <line x1={cx} y1={cy} x2={nx} y2={ny} stroke={color} strokeWidth={lineW} strokeOpacity={0.35} strokeLinecap="round" />
+                      <circle cx={nx} cy={ny} r={nodeR} fill={color} fillOpacity={0.13} stroke={color} strokeWidth={2} />
+                      <text x={nx} y={ny} textAnchor="middle" dominantBaseline="middle" fontSize={11} fontWeight="700" fill={color} style={{ pointerEvents: "none" }}>
+                        {b.deals}
+                      </text>
+                      <text x={lx} y={ly} textAnchor={anchor} dominantBaseline="middle" fontSize={10} fill="#475569" style={{ pointerEvents: "none" }}>
+                        {shortName}
+                      </text>
+                    </g>
+                  )
+                })}
+
+                {/* Center node — amber for bank */}
+                <circle cx={cx} cy={cy} r={centerR} fill="#f59e0b" fillOpacity={0.1} stroke="#f59e0b" strokeWidth={2.5} />
+                <text x={cx} y={cy - 9} textAnchor="middle" dominantBaseline="middle" fontSize={10} fontWeight="700" fill="#b45309">
+                  {bank.length > 14 ? bank.slice(0, 13) + "…" : bank}
+                </text>
+                <text x={cx} y={cy + 9} textAnchor="middle" dominantBaseline="middle" fontSize={10} fill="#d97706">
+                  {totalDeals} AOMs out
+                </text>
+              </svg>
+
+              {/* Legend */}
+              <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 mb-4 text-xs text-slate-500">
+                {(Object.entries(CATEGORY_COLOR) as [PartyCategory, string][]).map(([cat, color]) => (
+                  <span key={cat} className="flex items-center gap-1">
+                    <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: color }} />
+                    {cat.replace("_", " ")}
+                  </span>
+                ))}
+                <span className="ml-auto text-slate-400 italic">Node size ∝ deal count</span>
+              </div>
+
+              {/* Buyer breakdown table */}
+              <h4 className="text-sm font-semibold text-slate-700 mb-2">Private Credit Buyer Breakdown</h4>
+              <div className="rounded border border-slate-200 overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50">
+                    <tr>
+                      <th className="text-left py-2 px-3 font-semibold text-slate-600">Buyer (Private Creditor)</th>
+                      <th className="text-left py-2 px-3 font-semibold text-slate-600">Type</th>
+                      <th className="text-right py-2 px-3 font-semibold text-slate-600">AOMs Received</th>
+                      <th className="text-right py-2 px-3 font-semibold text-slate-600">Volume</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {buyers.map((b, idx) => (
+                      <tr key={b.name} className={idx % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
+                        <td className="py-2 px-3 font-medium text-slate-800 max-w-[240px] truncate">{b.name}</td>
+                        <td className="py-2 px-3">
+                          <span className="text-[11px] font-medium px-2 py-0.5 rounded-full" style={{ background: CATEGORY_COLOR[b.category] + "22", color: CATEGORY_COLOR[b.category] }}>
+                            {b.category.replace("_", " ")}
+                          </span>
+                        </td>
+                        <td className="py-2 px-3 text-right text-slate-700">{b.deals}</td>
+                        <td className="py-2 px-3 text-right text-slate-500">{b.volume > 0 ? compact(b.volume) : "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Main section ─────────────────────────────────────────────────────────────
 
 type Props = {
@@ -507,6 +663,7 @@ type Props = {
 
 export function SectionCompetitorAOM({ edges, lenders, rankings }: Props) {
   const [selectedFirm, setSelectedFirm] = useState<string | null>(null)
+  const [selectedBank, setSelectedBank] = useState<string | null>(null)
 
   const lenderTypeMap = new Map<string, string>()
   for (const l of lenders) {
@@ -626,6 +783,9 @@ export function SectionCompetitorAOM({ edges, lenders, rankings }: Props) {
       {selectedFirm && (
         <SpiderModal firm={selectedFirm} categorized={categorized} onClose={() => setSelectedFirm(null)} />
       )}
+      {selectedBank && (
+        <BankSpiderModal bank={selectedBank} categorized={categorized} onClose={() => setSelectedBank(null)} />
+      )}
 
       <Card className="p-6 border-slate-200/80 bg-slate-50/30 space-y-8">
         {/* Header */}
@@ -703,7 +863,7 @@ export function SectionCompetitorAOM({ edges, lenders, rankings }: Props) {
         <div>
           <h4 className="text-sm font-semibold text-slate-800 mb-1">Bank Sell-Off Signals</h4>
           <p className="text-xs text-slate-500 mb-3">
-            Banks assigning FL loans to private creditors — ranked by deal count. Potential outreach targets.
+            Banks assigning FL loans to private creditors — ranked by deal count. Click any bank to see a spider graph of which private creditors they are selling to.
           </p>
           <Table>
             <TableHeader>
@@ -720,8 +880,12 @@ export function SectionCompetitorAOM({ edges, lenders, rankings }: Props) {
                 <TableRow><TableCell colSpan={5} className="text-slate-500 text-xs">No bank sell-off signals detected.</TableCell></TableRow>
               ) : (
                 bankSignals.map((b) => (
-                  <TableRow key={b.name}>
-                    <TableCell className="font-medium">{b.name}</TableCell>
+                  <TableRow
+                    key={b.name}
+                    className="cursor-pointer hover:bg-amber-50 transition-colors"
+                    onClick={() => setSelectedBank(b.name)}
+                  >
+                    <TableCell className="font-medium text-amber-700">{b.name}</TableCell>
                     <TableCell className="text-right">{b.deals}</TableCell>
                     <TableCell className="text-right">{b.uniqueBuyers}</TableCell>
                     <TableCell className="text-right text-slate-500">{b.avgDeal > 0 ? compact(b.avgDeal) : "—"}</TableCell>
