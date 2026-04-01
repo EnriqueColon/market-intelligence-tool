@@ -13,33 +13,6 @@ function compact(n: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", notation: "compact", maximumFractionDigits: 1 }).format(n)
 }
 
-// ─── Weekly bucketing ─────────────────────────────────────────────────────────
-
-/** Returns the ISO Monday (YYYY-MM-DD) of the week containing dateStr */
-function getWeekKey(dateStr: string): string {
-  if (!dateStr) return ""
-  const d = new Date(dateStr + "T12:00:00Z")
-  if (isNaN(d.getTime())) return ""
-  const day = d.getUTCDay() // 0=Sun, 1=Mon…
-  const diff = day === 0 ? -6 : 1 - day
-  const mon = new Date(d)
-  mon.setUTCDate(d.getUTCDate() + diff)
-  return mon.toISOString().slice(0, 10)
-}
-
-/** Returns the last N week-Monday keys, oldest first */
-function getLastNWeeks(n: number): string[] {
-  const today = new Date()
-  const weeks: string[] = []
-  for (let i = n - 1; i >= 0; i--) {
-    const d = new Date(today)
-    d.setDate(today.getDate() - i * 7)
-    const key = getWeekKey(d.toISOString().slice(0, 10))
-    if (key) weeks.push(key)
-  }
-  return weeks
-}
-
 // ─── Party classifier ────────────────────────────────────────────────────────
 
 type PartyCategory = "private_creditor" | "bank" | "servicer" | "gse" | "unknown"
@@ -84,41 +57,6 @@ function categorizeEdges(edges: FlowEdge[], lenderTypeMap: Map<string, string>):
     else flowCategory = "other"
     return { ...e, fromCategory, toCategory, flowCategory }
   })
-}
-
-// ─── Sparkline ────────────────────────────────────────────────────────────────
-
-function sparklineColor(data: number[]): string {
-  const first = data.slice(0, 4).reduce((s, v) => s + v, 0) / 4
-  const last = data.slice(-4).reduce((s, v) => s + v, 0) / 4
-  if (first === 0 && last === 0) return "#94a3b8"
-  return last >= first ? "#10b981" : "#f59e0b"
-}
-
-function Sparkline({ data }: { data: number[] }) {
-  const W = 88
-  const H = 28
-  const max = Math.max(...data, 1)
-  const n = data.length
-  const color = sparklineColor(data)
-  if (n < 2) return <span className="text-slate-300 text-xs">—</span>
-
-  const pts = data.map((v, i): [number, number] => [
-    2 + (i / (n - 1)) * (W - 4),
-    H - 4 - ((v / max) * (H - 8)),
-  ])
-  const polyline = pts.map(([x, y]) => `${x},${y}`).join(" ")
-  const area = `M ${pts[0][0]},${H} L ${pts.map(([x, y]) => `${x},${y}`).join(" L ")} L ${pts[n - 1][0]},${H} Z`
-  const [lx, ly] = pts[n - 1]
-  const hasActivity = data.some((v) => v > 0)
-
-  return (
-    <svg width={W} height={H} className="overflow-visible block">
-      {hasActivity && <path d={area} fill={color} fillOpacity={0.1} />}
-      <polyline points={polyline} fill="none" stroke={color} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
-      <circle cx={lx} cy={ly} r={2.5} fill={color} />
-    </svg>
-  )
 }
 
 // ─── Category colors ──────────────────────────────────────────────────────────
@@ -527,32 +465,21 @@ export function SectionCompetitorAOM({ edges, lenders }: Props) {
   }
 
   const categorized = categorizeEdges(edges, lenderTypeMap)
-  const weekKeys = getLastNWeeks(12) // last 12 weeks, oldest → newest
 
-  // Competitor Rankings with weekly trend
-  type CompetitorEntry = { name: string; volume: number; deals: number; weeklyTrend: number[]; thisWeek: number }
-  const competitorInbound = new Map<string, { volume: number; deals: number; weekCounts: Map<string, number> }>()
+  // Competitor Rankings
+  const competitorInbound = new Map<string, { volume: number; deals: number }>()
   for (const e of categorized) {
     if (e.flowCategory === "noise") continue
     if (e.toCategory === "private_creditor" || e.toCategory === "unknown") {
-      const curr = competitorInbound.get(e.to_party) ?? { volume: 0, deals: 0, weekCounts: new Map<string, number>() }
+      const curr = competitorInbound.get(e.to_party) ?? { volume: 0, deals: 0 }
       curr.volume += e.amount ?? 0
       curr.deals += 1
-      const wk = getWeekKey(e.date)
-      if (wk) curr.weekCounts.set(wk, (curr.weekCounts.get(wk) ?? 0) + 1)
       competitorInbound.set(e.to_party, curr)
     }
   }
 
-  const currentWeekKey = weekKeys[weekKeys.length - 1]
-  const competitors: CompetitorEntry[] = Array.from(competitorInbound.entries())
-    .map(([name, v]) => ({
-      name,
-      volume: v.volume,
-      deals: v.deals,
-      weeklyTrend: weekKeys.map((wk) => v.weekCounts.get(wk) ?? 0),
-      thisWeek: v.weekCounts.get(currentWeekKey) ?? 0,
-    }))
+  const competitors = Array.from(competitorInbound.entries())
+    .map(([name, v]) => ({ name, volume: v.volume, deals: v.deals }))
     .filter((c) => c.deals >= 2)
     .sort((a, b) => b.deals - a.deals)
     .slice(0, 15)
@@ -614,23 +541,20 @@ export function SectionCompetitorAOM({ edges, lenders }: Props) {
         <div className="mt-6">
           <h4 className="text-sm font-semibold text-slate-800 mb-1">Competitor Rankings — Top FL AOM Buyers</h4>
           <p className="text-xs text-slate-500 mb-3">
-            Weekly AOM trend over the last 12 weeks (green = accelerating, amber = slowing).
             Click any firm to open the spider graph, then click an assignor to drill into their intelligence profile.
           </p>
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Firm</TableHead>
-                <TableHead>12-Week Trend</TableHead>
-                <TableHead className="text-right">This Week</TableHead>
-                <TableHead className="text-right">Total AOMs</TableHead>
+                <TableHead className="text-right">AOM Count</TableHead>
                 <TableHead className="text-right">Total Volume</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {competitors.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-slate-500 text-xs">No private creditor activity detected.</TableCell>
+                  <TableCell colSpan={3} className="text-slate-500 text-xs">No private creditor activity detected.</TableCell>
                 </TableRow>
               ) : (
                 competitors.map((c) => (
@@ -640,16 +564,6 @@ export function SectionCompetitorAOM({ edges, lenders }: Props) {
                     onClick={() => setSelectedFirm(c.name)}
                   >
                     <TableCell className="font-medium text-blue-700 max-w-[220px] truncate">{c.name}</TableCell>
-                    <TableCell className="py-1">
-                      <Sparkline data={c.weeklyTrend} />
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {c.thisWeek > 0 ? (
-                        <span className="text-emerald-700 font-semibold">{c.thisWeek}</span>
-                      ) : (
-                        <span className="text-slate-400">0</span>
-                      )}
-                    </TableCell>
                     <TableCell className="text-right tabular-nums">{c.deals}</TableCell>
                     <TableCell className="text-right text-slate-500">{c.volume > 0 ? compact(c.volume) : "—"}</TableCell>
                   </TableRow>
