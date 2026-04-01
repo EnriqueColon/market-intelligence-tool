@@ -527,58 +527,11 @@ export function SectionCompetitorAOM({ edges, lenders, rankings }: Props) {
 
   const categorized = categorizeEdges(edges, lenderTypeMap)
 
-  // Build ranking lookup by name for volume enrichment
-  const rankingByName = new Map<string, CompetitorRanking>()
-  for (const r of rankings) rankingByName.set(r.name.toLowerCase().trim(), r)
-
-  // Competitor Rankings — merge edge deal counts with ranking volume/metadata
-  const competitorInbound = new Map<string, { volume: number; deals: number }>()
-  for (const e of categorized) {
-    if (e.flowCategory === "noise") continue
-    if (e.toCategory === "private_creditor" || e.toCategory === "unknown") {
-      const curr = competitorInbound.get(e.to_party) ?? { volume: 0, deals: 0 }
-      curr.volume += e.amount ?? 0
-      curr.deals += 1
-      competitorInbound.set(e.to_party, curr)
-    }
-  }
-
-  // Merge: prefer ranking volume (authoritative from Elementix) over edge-summed volume
-  const competitors = Array.from(competitorInbound.entries())
-    .map(([name, v]) => {
-      const rk = rankingByName.get(name.toLowerCase().trim())
-      return {
-        name,
-        deals: v.deals,
-        volume: rk?.volume ?? v.volume,
-        volumePrev: rk?.volumePrev ?? 0,
-        percentChange: rk?.percentChange ?? 0,
-        avgDealSize: rk?.avgDealSize ?? 0,
-        category: rk?.category,
-        buyerType: rk?.buyerType,
-      }
-    })
-    .filter((c) => c.deals >= 2)
-    .sort((a, b) => b.deals - a.deals)
-    .slice(0, 15)
-
-  // Also include ranking-only entries not captured in edges
-  for (const r of rankings) {
-    const alreadyIn = competitors.some((c) => c.name.toLowerCase() === r.name.toLowerCase())
-    if (!alreadyIn && r.count >= 2) {
-      competitors.push({
-        name: r.name,
-        deals: r.count,
-        volume: r.volume,
-        volumePrev: r.volumePrev,
-        percentChange: r.percentChange,
-        avgDealSize: r.avgDealSize,
-        category: r.category,
-        buyerType: r.buyerType,
-      })
-    }
-  }
-  competitors.sort((a, b) => b.deals - a.deals)
+  // Competitor Rankings — use Elementix rankings directly (authoritative volume, avgDealSize, percentChange)
+  // Rankings are sorted by rank from Elementix; fall back to edge-derived count sort if rankings empty
+  const competitors = rankings.length > 0
+    ? [...rankings].sort((a, b) => a.rank - b.rank)
+    : [] // show empty table if Elementix rankings unavailable
 
   // Bank Sell-Off Signals
   const bankSellers = new Map<string, { volume: number; deals: number; uniqueBuyers: Set<string> }>()
@@ -645,7 +598,7 @@ export function SectionCompetitorAOM({ edges, lenders, rankings }: Props) {
             </TableHeader>
             <TableBody>
               {competitors.length === 0 ? (
-                <TableRow><TableCell colSpan={5} className="text-slate-500 text-xs">No private creditor activity detected.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={5} className="text-slate-500 text-xs">No competitor rankings available — verify ELEMENTIX_API_KEY is set.</TableCell></TableRow>
               ) : (
                 competitors.map((c) => {
                   const isUp = c.percentChange > 0
@@ -656,7 +609,7 @@ export function SectionCompetitorAOM({ edges, lenders, rankings }: Props) {
                         <div className="font-medium text-blue-700 max-w-[220px] truncate">{c.name}</div>
                         {c.category && <div className="text-[10px] text-slate-400 mt-0.5">{c.category}</div>}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">{c.deals}</TableCell>
+                      <TableCell className="text-right tabular-nums">{c.count}</TableCell>
                       <TableCell className="text-right text-slate-600 tabular-nums">{c.volume > 0 ? compact(c.volume) : "—"}</TableCell>
                       <TableCell className="text-right text-slate-500 tabular-nums">{c.avgDealSize > 0 ? compact(c.avgDealSize) : "—"}</TableCell>
                       <TableCell className="text-right tabular-nums">
