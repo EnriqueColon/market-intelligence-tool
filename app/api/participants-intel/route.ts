@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import type {
   AssignmentRecord,
+  BankAssignorRow,
   CompetitorRanking,
   LenderAnalyticsRecord,
   MortgageRecord,
@@ -26,7 +27,7 @@ export const dynamic = "force-dynamic"
  *   GET /api/v1/lender-search?q=...                → lender entity search
  */
 
-type Resource = "assignments" | "mortgages" | "preforeclosures" | "lenders" | "search" | "rankings" | "private-lenders" | "recent-deals"
+type Resource = "assignments" | "mortgages" | "preforeclosures" | "lenders" | "search" | "rankings" | "private-lenders" | "recent-deals" | "competitor-assignors"
 
 // ─── Elementix API config ─────────────────────────────────────────────────────
 
@@ -581,6 +582,130 @@ async function fetchElementixRankings(): Promise<ResourcePayload<CompetitorRanki
   }
 }
 
+// ─── Competitor Assignor Intelligence ────────────────────────────────────────
+// For Safe Harbor C-suite: which banks are selling paper to our competitors?
+// Data flow:
+//   1. Fetch FL AOM rankings → build competitor whitelist (investment firms only)
+//   2. Parallel-fetch assignment records for top 10 competitors
+//   3. Group by originating bank (assignor) → competitor matrix
+//   4. Filter noise: skip individuals and one-off unknown entities
+
+const INSTITUTIONAL_RE = /bank|financial|mortgage|capital|fund|credit|trust|llc|corp|inc|holdings|group|partners|lending|loan|asset|management|investment|securities|realty|real estate|servicer|servicing|equity|debt|note|reit/i
+
+const SERVER_GSE_RE = /fannie mae|freddie mac|fhlmc|fnma|ginnie mae|hud\b|federal home loan|department of housing|veteran|va loan/i
+const SERVER_SERVICER_RE = /nationstar|mr\.? cooper|ocwen|shellpoint|select portfolio|phh |sps \b|carrington|rushmore|specialized loan|loancare|dovenmuehle|cenlar|roundpoint|planet home|fay servicing|bsi financial|provident funding/i
+const SERVER_BANK_RE = /wells fargo|jpmorgan|chase bank|bank of america|citibank|\bus bank\b|\bu\.s\. bank\b|goldman sachs|deutsche bank|hsbc|barclays|morgan stanley|truist|regions bank|suntrust|td bank\b|pnc bank|fifth third|citizens bank|bank na\b|national bank|national association|wilmington trust|computershare/i
+
+/** Returns true if this entity looks like a competitor (investment firm / private credit) rather than a bank/servicer/GSE */
+function isCompetitorEntity(name: string, buyerType?: string, buyerCategory?: string): boolean {
+  if (!name) return false
+  const n = name.toLowerCase()
+  if (SERVER_GSE_RE.test(n)) return false
+  if (SERVER_SERVICER_RE.test(n)) return false
+  if (SERVER_BANK_RE.test(n)) return false
+  if (buyerType === "Bank" || buyerType === "Credit Union" || buyerType === "Thrift") return false
+  if (buyerCategory?.toLowerCase().includes("servicer")) return false
+  return true
+}
+
+/** Returns true if an assignor is an institutional entity (not a random individual or one-off noise) */
+function isInstitutionalAssignor(name: string): boolean {
+  if (!name || name.length < 4) return false
+  return INSTITUTIONAL_RE.test(name)
+}
+
+async function fetchElementixCompetitorAssignors(): Promise<ResourcePayload<BankAssignorRow> | null> {
+  if (!process.env.ELEMENTIX_API_KEY?.trim()) return null
+
+  // Step 1: Get FL AOM buyer rankings to build competitor whitelist
+  const rankingsResp = await elxFetch<{ data: ElxAssignmentRanking[] }>("/api/v1/assignments/rankings", {
+    state: "FL",
+    limit: "20",
+  })
+
+  const allRankings = rankingsResp?.data ?? []
+  if (allRankings.length === 0) return null
+
+  // Step 2: Filter to real competitors — exclude banks, servicers, GSEs
+  // Safe Harbor's competitors are investment firms, private credit funds, distressed debt buyers
+  const competitors = allRankings
+    .filter((r) => r.buyerName && r.buyerId)
+    .filter((r) => isCompetitorEntity(r.buyerName!, r.buyerType, r.buyerCategory ?? undefined))
+    .slice(0, 10)
+
+  if (competitors.length === 0) return null
+
+  // Step 3: Parallel-fetch assignment records for each competitor
+  const assignmentSets = await Promise.all(
+    competitors.map((c) =>
+      elxFetch<{ data: ElxAssignment[] }>(`/api/v1/lender/${c.buyerId}/assignments`, {
+        state: "FL",
+        limit: "200",
+      })
+    )
+  )
+
+  // Step 4: Build bank → competitor matrix
+  const bankMap = new Map<
+    string,
+    { totalDeals: number; totalAmount: number; competitors: Map<string, { deals: number; amount: number; rank: number }> }
+  >()
+
+  for (let i = 0; i < competitors.length; i++) {
+    const competitor = competitors[i]
+    const assignments = assignmentSets[i]?.data ?? []
+
+    for (const a of assignments) {
+      const bankName = (a.originalLender || a.originalLenderRaw || "").trim()
+      if (!bankName || !isInstitutionalAssignor(bankName)) continue
+
+      const amount = maybeNumber(a.loanAmount) ?? 0
+      const competitorName = competitor.buyerName!
+      const competitorRank = competitor.rank ?? 0
+
+      if (!bankMap.has(bankName)) {
+        bankMap.set(bankName, { totalDeals: 0, totalAmount: 0, competitors: new Map() })
+      }
+
+      const bankEntry = bankMap.get(bankName)!
+      bankEntry.totalDeals += 1
+      bankEntry.totalAmount += amount
+
+      const existing = bankEntry.competitors.get(competitorName) ?? { deals: 0, amount: 0, rank: competitorRank }
+      existing.deals += 1
+      existing.amount += amount
+      bankEntry.competitors.set(competitorName, existing)
+    }
+  }
+
+  // Step 5: Serialize, filter low-signal banks, sort by deal count
+  const items: BankAssignorRow[] = Array.from(bankMap.entries())
+    .map(([bankName, data]) => ({
+      bankName,
+      totalDeals: data.totalDeals,
+      totalAmount: data.totalAmount,
+      competitors: Array.from(data.competitors.entries())
+        .map(([name, v]) => ({ name, deals: v.deals, amount: v.amount, rank: v.rank }))
+        .sort((a, b) => b.deals - a.deals),
+    }))
+    .filter((b) => b.totalDeals >= 2 && b.competitors.length >= 1)
+    .sort((a, b) => b.totalDeals - a.totalDeals)
+
+  const uniqueCompetitorNames = new Set(items.flatMap((b) => b.competitors.map((c) => c.name)))
+
+  return {
+    items,
+    diagnostics: {
+      source: "external_api",
+      totalFetched: items.length,
+      notes: [
+        `${competitors.length} competitors analyzed, ${items.length} active bank assignors identified.`,
+        `${uniqueCompetitorNames.size} distinct competitors receiving paper across all banks.`,
+      ],
+    },
+  }
+}
+
 // ─── Route handler ────────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
@@ -651,6 +776,13 @@ export async function GET(req: NextRequest) {
     const elementix = await fetchElementixRecentDeals(geo)
     if (elementix) return NextResponse.json(elementix satisfies ResourcePayload<RecentDealRecord>)
     return NextResponse.json(emptyPayload<RecentDealRecord>("Elementix unavailable — check ELEMENTIX_API_KEY."))
+  }
+
+  // ── Competitor Assignors ──────────────────────────────────────────────────────
+  if (resource === "competitor-assignors") {
+    const elementix = await fetchElementixCompetitorAssignors()
+    if (elementix) return NextResponse.json(elementix satisfies ResourcePayload<BankAssignorRow>)
+    return NextResponse.json(emptyPayload<BankAssignorRow>("Elementix unavailable — check ELEMENTIX_API_KEY."))
   }
 
   return NextResponse.json({ error: "invalid resource" }, { status: 400 })

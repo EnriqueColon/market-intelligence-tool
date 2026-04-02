@@ -2,6 +2,7 @@
 
 import type {
   AssignmentRecord,
+  BankAssignorRow,
   CompetitorRanking,
   LenderAnalyticsRecord,
   MortgageRecord,
@@ -116,6 +117,15 @@ export function fetchPrivateLendersPayload(geo: string): Promise<ResourcePayload
 export function fetchRecentDealsPayload(geo: string): Promise<ResourcePayload<RecentDealRecord>> {
   return cached(`participants-intel:recent-deals:${geo}`, () =>
     getJson<ResourcePayload<RecentDealRecord>>(`/api/participants-intel?resource=recent-deals&geo=${encodeURIComponent(geo)}`).catch(() => ({
+      items: [],
+      diagnostics: emptyDiagnostics(),
+    }))
+  )
+}
+
+export function fetchBankAssignorsPayload(): Promise<ResourcePayload<BankAssignorRow>> {
+  return cached("participants-intel:competitor-assignors", () =>
+    getJson<ResourcePayload<BankAssignorRow>>("/api/participants-intel?resource=competitor-assignors").catch(() => ({
       items: [],
       diagnostics: emptyDiagnostics(),
     }))

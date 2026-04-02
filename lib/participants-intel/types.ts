@@ -202,6 +202,19 @@ export type RecentDealRecord = {
   propertyType?: string
 }
 
+export type BankAssignorRow = {
+  bankName: string
+  totalDeals: number
+  totalAmount: number
+  /** Competitors confirmed in FL AOM rankings receiving paper from this bank */
+  competitors: {
+    name: string
+    deals: number
+    amount: number
+    rank?: number
+  }[]
+}
+
 export type ResourceDiagnostics = {
   source: "external_api" | "local_fallback"
   totalFetched: number
