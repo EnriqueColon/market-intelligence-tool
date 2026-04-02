@@ -2,7 +2,7 @@
 
 import type {
   AssignmentRecord,
-  BankAssignorRow,
+  CompetitorAssignorRow,
   CompetitorRanking,
   LenderAnalyticsRecord,
   MortgageRecord,
@@ -123,9 +123,9 @@ export function fetchRecentDealsPayload(geo: string): Promise<ResourcePayload<Re
   )
 }
 
-export function fetchBankAssignorsPayload(): Promise<ResourcePayload<BankAssignorRow>> {
+export function fetchCompetitorAssignorsPayload(): Promise<ResourcePayload<CompetitorAssignorRow>> {
   return cached("participants-intel:competitor-assignors", () =>
-    getJson<ResourcePayload<BankAssignorRow>>("/api/participants-intel?resource=competitor-assignors").catch(() => ({
+    getJson<ResourcePayload<CompetitorAssignorRow>>("/api/participants-intel?resource=competitor-assignors").catch(() => ({
       items: [],
       diagnostics: emptyDiagnostics(),
     }))

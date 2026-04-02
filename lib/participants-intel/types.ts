@@ -202,16 +202,16 @@ export type RecentDealRecord = {
   propertyType?: string
 }
 
-export type BankAssignorRow = {
-  bankName: string
-  totalDeals: number
+export type CompetitorAssignorRow = {
+  competitorName: string
+  rank: number
+  totalAOMs: number
   totalAmount: number
-  /** Competitors confirmed in FL AOM rankings receiving paper from this bank */
-  competitors: {
+  /** Banks / institutions that assigned paper TO this competitor */
+  assignors: {
     name: string
     deals: number
     amount: number
-    rank?: number
   }[]
 }
 

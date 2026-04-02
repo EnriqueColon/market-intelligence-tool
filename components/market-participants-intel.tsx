@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import { Card } from "@/components/ui/card"
 import {
   fetchAssignmentsPayload,
-  fetchBankAssignorsPayload,
+  fetchCompetitorAssignorsPayload,
   fetchLendersPayload,
   fetchPrivateLendersPayload,
   fetchRankingsPayload,
@@ -13,7 +13,7 @@ import {
 import { buildFlowEdges } from "@/lib/participants-intel/aggregation"
 import type {
   AssignmentRecord,
-  BankAssignorRow,
+  CompetitorAssignorRow,
   CompetitorRanking,
   LenderAnalyticsRecord,
   PrivateLenderRecord,
@@ -31,7 +31,7 @@ export function MarketParticipantsIntel({ level = "florida" }: Props) {
   const [rankings, setRankings] = useState<CompetitorRanking[]>([])
   const [privateLenders, setPrivateLenders] = useState<PrivateLenderRecord[]>([])
   const [recentDeals, setRecentDeals] = useState<RecentDealRecord[]>([])
-  const [bankAssignors, setBankAssignors] = useState<BankAssignorRow[]>([])
+  const [competitorAssignors, setCompetitorAssignors] = useState<CompetitorAssignorRow[]>([])
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -46,7 +46,7 @@ export function MarketParticipantsIntel({ level = "florida" }: Props) {
           fetchRankingsPayload(),
           fetchPrivateLendersPayload(level),
           fetchRecentDealsPayload(level),
-          fetchBankAssignorsPayload(),
+          fetchCompetitorAssignorsPayload(),
         ])
         if (!mounted) return
         setAssignments(a.items)
@@ -54,7 +54,7 @@ export function MarketParticipantsIntel({ level = "florida" }: Props) {
         setRankings(r.items)
         setPrivateLenders(pl.items)
         setRecentDeals(rd.items)
-        setBankAssignors(ba.items)
+        setCompetitorAssignors(ba.items)
       } catch (e) {
         if (!mounted) return
         setError(e instanceof Error ? e.message : "Failed to load data.")
@@ -85,7 +85,7 @@ export function MarketParticipantsIntel({ level = "florida" }: Props) {
   return (
     <div className="space-y-6">
       <SectionPrivateCreditorMonitor lenders={privateLenders} deals={recentDeals} geo={level} />
-      <SectionCompetitorAOM edges={edges} lenders={lenders} rankings={rankings} bankAssignors={bankAssignors} />
+      <SectionCompetitorAOM edges={edges} lenders={lenders} rankings={rankings} competitorAssignors={competitorAssignors} />
     </div>
   )
 }

@@ -4,7 +4,7 @@ import { useState } from "react"
 import { ChevronDown, ChevronRight } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import type { BankAssignorRow, CompetitorRanking, FlowEdge, LenderAnalyticsRecord } from "@/lib/participants-intel/types"
+import type { CompetitorAssignorRow, CompetitorRanking, FlowEdge, LenderAnalyticsRecord } from "@/lib/participants-intel/types"
 
 function compact(n: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", notation: "compact", maximumFractionDigits: 1 }).format(n)
@@ -314,61 +314,62 @@ function SpiderModal({ firm, categorized, onClose }: { firm: string; categorized
   )
 }
 
-// ─── Bank Selloff Intelligence — expandable rows ──────────────────────────────
+// ─── Competitor Sourcing Intelligence — expandable rows ───────────────────────
 
-function BankRow({ bank }: { bank: BankAssignorRow }) {
+function CompetitorRow({ row }: { row: CompetitorAssignorRow }) {
   const [open, setOpen] = useState(false)
-  const total = bank.totalAmount
-  const uniqueCompetitors = bank.competitors.length
+  const total = row.totalAmount
+  const maxDeals = Math.max(...row.assignors.map((a) => a.deals), 1)
 
   return (
     <>
       <TableRow
-        className="cursor-pointer hover:bg-amber-50/70 transition-colors"
+        className="cursor-pointer hover:bg-blue-50/60 transition-colors"
         onClick={() => setOpen((o) => !o)}
       >
         <TableCell className="w-6">
           {open
-            ? <ChevronDown className="h-3.5 w-3.5 text-amber-600" />
+            ? <ChevronDown className="h-3.5 w-3.5 text-blue-600" />
             : <ChevronRight className="h-3.5 w-3.5 text-slate-400" />}
         </TableCell>
         <TableCell>
-          <div className="font-semibold text-amber-800 max-w-[240px] truncate">{bank.bankName}</div>
+          <div className="font-semibold text-blue-800 max-w-[240px] truncate">{row.competitorName}</div>
         </TableCell>
-        <TableCell className="text-right tabular-nums font-medium text-slate-700">{bank.totalDeals}</TableCell>
-        <TableCell className="text-right tabular-nums text-slate-600">{bank.totalAmount > 0 ? compact(bank.totalAmount) : "—"}</TableCell>
+        <TableCell className="text-right tabular-nums font-medium text-slate-700">{row.totalAOMs}</TableCell>
+        <TableCell className="text-right tabular-nums text-slate-600">{row.totalAmount > 0 ? compact(row.totalAmount) : "—"}</TableCell>
         <TableCell className="text-right">
-          <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-[11px] font-medium tabular-nums">
-            {uniqueCompetitors} competitor{uniqueCompetitors !== 1 ? "s" : ""}
+          <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 text-[11px] font-medium tabular-nums">
+            {row.assignors.length} source{row.assignors.length !== 1 ? "s" : ""}
           </span>
         </TableCell>
       </TableRow>
 
       {open && (
-        <TableRow className="bg-amber-50/40 hover:bg-amber-50/40">
+        <TableRow className="bg-blue-50/30 hover:bg-blue-50/30">
           <TableCell colSpan={5} className="py-0 px-0">
-            <div className="px-10 py-4 border-t border-amber-100">
+            <div className="px-10 py-4 border-t border-blue-100">
               <p className="text-[11px] text-slate-500 mb-3">
-                Competitors receiving AOMs from <span className="font-semibold text-slate-700">{bank.bankName}</span>
-                {total > 0 ? ` — ${compact(total)} total deployed` : ""}
+                Banks and institutions assigning paper to <span className="font-semibold text-slate-700">{row.competitorName}</span>
+                {total > 0 ? ` — ${compact(total)} total received` : ""}
               </p>
               <div className="space-y-2">
-                {bank.competitors.map((c) => {
-                  const sharePct = total > 0 ? (c.amount / total) * 100 : 0
+                {row.assignors.map((a) => {
+                  const barPct = (a.deals / maxDeals) * 100
+                  const sharePct = row.totalAOMs > 0 ? (a.deals / row.totalAOMs) * 100 : 0
                   return (
-                    <div key={c.name} className="flex items-center gap-3">
-                      <div className="w-52 shrink-0 text-xs font-medium text-slate-700 truncate" title={c.name}>{c.name}</div>
+                    <div key={a.name} className="flex items-center gap-3">
+                      <div className="w-52 shrink-0 text-xs font-medium text-slate-700 truncate" title={a.name}>{a.name}</div>
                       <div className="flex-1 h-5 bg-slate-100 rounded overflow-hidden">
                         <div
-                          className="h-full bg-amber-400/60 rounded transition-all"
-                          style={{ width: `${Math.max(sharePct, 2)}%` }}
+                          className="h-full bg-blue-400/50 rounded transition-all"
+                          style={{ width: `${Math.max(barPct, 2)}%` }}
                         />
                       </div>
                       <div className="w-14 text-right text-xs tabular-nums text-slate-700 shrink-0 font-medium">
-                        {c.deals} AOM{c.deals !== 1 ? "s" : ""}
+                        {a.deals} AOM{a.deals !== 1 ? "s" : ""}
                       </div>
                       <div className="w-16 text-right text-xs tabular-nums text-slate-500 shrink-0">
-                        {c.amount > 0 ? compact(c.amount) : "—"}
+                        {a.amount > 0 ? compact(a.amount) : "—"}
                       </div>
                       <div className="w-10 text-right text-[11px] tabular-nums text-slate-400 shrink-0">
                         {sharePct > 0 ? `${sharePct.toFixed(0)}%` : ""}
@@ -378,7 +379,7 @@ function BankRow({ bank }: { bank: BankAssignorRow }) {
                 })}
               </div>
               <p className="text-[10px] text-slate-400 mt-3 italic">
-                Based on assignment records for confirmed FL AOM buyers. Each row is a competitor, not a banking relationship with Safe Harbor.
+                These are the institutions feeding this competitor&apos;s pipeline. If they appear here and not in Safe Harbor&apos;s deal flow, they are a direct sourcing opportunity.
               </p>
             </div>
           </TableCell>
@@ -394,10 +395,10 @@ type Props = {
   edges: FlowEdge[]
   lenders: LenderAnalyticsRecord[]
   rankings: CompetitorRanking[]
-  bankAssignors: BankAssignorRow[]
+  competitorAssignors: CompetitorAssignorRow[]
 }
 
-export function SectionCompetitorAOM({ edges, lenders, rankings, bankAssignors }: Props) {
+export function SectionCompetitorAOM({ edges, lenders, rankings, competitorAssignors }: Props) {
   const [selectedFirm, setSelectedFirm] = useState<string | null>(null)
 
   const lenderTypeMap = new Map<string, string>()
@@ -475,34 +476,34 @@ export function SectionCompetitorAOM({ edges, lenders, rankings, bankAssignors }
           </Table>
         </div>
 
-        {/* ── Bank Selloff Intelligence ── */}
+        {/* ── Competitor Sourcing Intelligence ── */}
         <div>
-          <h4 className="text-sm font-semibold text-slate-800 mb-1">Bank Selloff Intelligence</h4>
+          <h4 className="text-sm font-semibold text-slate-800 mb-1">Competitor Sourcing Intelligence</h4>
           <p className="text-xs text-slate-500 mb-3">
-            Banks actively assigning mortgages to confirmed FL competitors. Expand any bank to see exactly which competitors are acquiring their paper — and how much.
+            Where competitors are getting their AOMs from — expand any firm to see the banks and institutions feeding their pipeline.
             <span className="block mt-1 text-slate-400 italic">
-              Every deal here is a sourcing opportunity. If a bank is selling and Safe Harbor isn&apos;t at the table, this is where to look.
+              If an institution appears here and not in Safe Harbor&apos;s deal flow, that is a direct sourcing gap to close.
             </span>
           </p>
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead className="w-6" />
-                <TableHead>Bank / Originator</TableHead>
-                <TableHead className="text-right">Total AOMs</TableHead>
+                <TableHead>Competitor</TableHead>
+                <TableHead className="text-right">AOMs Received</TableHead>
                 <TableHead className="text-right">Volume</TableHead>
-                <TableHead className="text-right">Recipients</TableHead>
+                <TableHead className="text-right">Sources</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {bankAssignors.length === 0 ? (
+              {competitorAssignors.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={5} className="text-slate-500 text-xs py-4">
-                    No bank assignment data available — data will populate once competitor AOM records are loaded.
+                    No sourcing data available — data will populate once competitor AOM records are loaded.
                   </TableCell>
                 </TableRow>
               ) : (
-                bankAssignors.map((b) => <BankRow key={b.bankName} bank={b} />)
+                competitorAssignors.map((c) => <CompetitorRow key={c.competitorName} row={c} />)
               )}
             </TableBody>
           </Table>

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import type {
   AssignmentRecord,
-  BankAssignorRow,
+  CompetitorAssignorRow,
   CompetitorRanking,
   LenderAnalyticsRecord,
   MortgageRecord,
@@ -621,10 +621,10 @@ function isInstitutionalAssignor(name: string): boolean {
   return INSTITUTIONAL_RE.test(name)
 }
 
-async function fetchElementixCompetitorAssignors(): Promise<ResourcePayload<BankAssignorRow> | null> {
+async function fetchElementixCompetitorAssignors(): Promise<ResourcePayload<CompetitorAssignorRow> | null> {
   if (!process.env.ELEMENTIX_API_KEY?.trim()) return null
 
-  // Step 1: Get FL AOM buyer rankings to build competitor whitelist
+  // Step 1: Get FL AOM buyer rankings → build competitor whitelist
   const rankingsResp = await elxFetch<{ data: ElxAssignmentRanking[] }>("/api/v1/assignments/rankings", {
     state: "FL",
     limit: "20",
@@ -633,8 +633,7 @@ async function fetchElementixCompetitorAssignors(): Promise<ResourcePayload<Bank
   const allRankings = rankingsResp?.data ?? []
   if (allRankings.length === 0) return null
 
-  // Step 2: Filter to real competitors — exclude banks, servicers, GSEs
-  // Safe Harbor's competitors are investment firms, private credit funds, distressed debt buyers
+  // Step 2: Filter to real competitors (investment firms, private credit, distressed debt buyers)
   const competitors = allRankings
     .filter((r) => r.buyerName && r.buyerId)
     .filter((r) => isCompetitorEntity(r.buyerName!, r.buyerType, r.buyerCategory ?? undefined))
@@ -652,60 +651,49 @@ async function fetchElementixCompetitorAssignors(): Promise<ResourcePayload<Bank
     )
   )
 
-  // Step 4: Build bank → competitor matrix
-  // Build a lowercase set of all competitor names so we can exclude
-  // competitor-to-competitor flows (e.g. Churchill Real Estate → Kiavi).
-  // Only true bank/institutional assignors should appear in this panel.
+  // Step 4: Build competitor → assignor breakdown
+  // Exclude competitor-to-competitor flows so only true institutional originators appear
   const competitorNameSet = new Set(competitors.map((c) => c.buyerName!.toLowerCase().trim()))
 
-  const bankMap = new Map<
-    string,
-    { totalDeals: number; totalAmount: number; competitors: Map<string, { deals: number; amount: number; rank: number }> }
-  >()
+  const items: CompetitorAssignorRow[] = []
 
   for (let i = 0; i < competitors.length; i++) {
     const competitor = competitors[i]
     const assignments = assignmentSets[i]?.data ?? []
 
+    const assignorMap = new Map<string, { deals: number; amount: number }>()
+
     for (const a of assignments) {
-      const bankName = (a.originalLender || a.originalLenderRaw || "").trim()
-      // Skip if not institutional OR if the assignor is itself a known competitor
-      if (!bankName || !isInstitutionalAssignor(bankName)) continue
-      if (competitorNameSet.has(bankName.toLowerCase().trim())) continue
+      const assignorName = (a.originalLender || a.originalLenderRaw || "").trim()
+      if (!assignorName || !isInstitutionalAssignor(assignorName)) continue
+      if (competitorNameSet.has(assignorName.toLowerCase().trim())) continue
 
       const amount = maybeNumber(a.loanAmount) ?? 0
-      const competitorName = competitor.buyerName!
-      const competitorRank = competitor.rank ?? 0
-
-      if (!bankMap.has(bankName)) {
-        bankMap.set(bankName, { totalDeals: 0, totalAmount: 0, competitors: new Map() })
-      }
-
-      const bankEntry = bankMap.get(bankName)!
-      bankEntry.totalDeals += 1
-      bankEntry.totalAmount += amount
-
-      const existing = bankEntry.competitors.get(competitorName) ?? { deals: 0, amount: 0, rank: competitorRank }
-      existing.deals += 1
-      existing.amount += amount
-      bankEntry.competitors.set(competitorName, existing)
+      const curr = assignorMap.get(assignorName) ?? { deals: 0, amount: 0 }
+      curr.deals += 1
+      curr.amount += amount
+      assignorMap.set(assignorName, curr)
     }
+
+    const assignors = Array.from(assignorMap.entries())
+      .map(([name, v]) => ({ name, deals: v.deals, amount: v.amount }))
+      .sort((a, b) => b.deals - a.deals)
+
+    const totalAOMs = assignors.reduce((s, a) => s + a.deals, 0)
+    const totalAmount = assignors.reduce((s, a) => s + a.amount, 0)
+
+    if (totalAOMs === 0) continue
+
+    items.push({
+      competitorName: competitor.buyerName!,
+      rank: competitor.rank ?? 0,
+      totalAOMs,
+      totalAmount,
+      assignors,
+    })
   }
 
-  // Step 5: Serialize, filter low-signal banks, sort by deal count
-  const items: BankAssignorRow[] = Array.from(bankMap.entries())
-    .map(([bankName, data]) => ({
-      bankName,
-      totalDeals: data.totalDeals,
-      totalAmount: data.totalAmount,
-      competitors: Array.from(data.competitors.entries())
-        .map(([name, v]) => ({ name, deals: v.deals, amount: v.amount, rank: v.rank }))
-        .sort((a, b) => b.deals - a.deals),
-    }))
-    .filter((b) => b.totalDeals >= 2 && b.competitors.length >= 1)
-    .sort((a, b) => b.totalDeals - a.totalDeals)
-
-  const uniqueCompetitorNames = new Set(items.flatMap((b) => b.competitors.map((c) => c.name)))
+  items.sort((a, b) => b.totalAOMs - a.totalAOMs)
 
   return {
     items,
@@ -713,8 +701,7 @@ async function fetchElementixCompetitorAssignors(): Promise<ResourcePayload<Bank
       source: "external_api",
       totalFetched: items.length,
       notes: [
-        `${competitors.length} competitors analyzed, ${items.length} active bank assignors identified.`,
-        `${uniqueCompetitorNames.size} distinct competitors receiving paper across all banks.`,
+        `${competitors.length} competitors analyzed, ${items.length} with trackable bank assignment sources.`,
       ],
     },
   }
@@ -795,8 +782,8 @@ export async function GET(req: NextRequest) {
   // ── Competitor Assignors ──────────────────────────────────────────────────────
   if (resource === "competitor-assignors") {
     const elementix = await fetchElementixCompetitorAssignors()
-    if (elementix) return NextResponse.json(elementix satisfies ResourcePayload<BankAssignorRow>)
-    return NextResponse.json(emptyPayload<BankAssignorRow>("Elementix unavailable — check ELEMENTIX_API_KEY."))
+    if (elementix) return NextResponse.json(elementix satisfies ResourcePayload<CompetitorAssignorRow>)
+    return NextResponse.json(emptyPayload<CompetitorAssignorRow>("Elementix unavailable — check ELEMENTIX_API_KEY."))
   }
 
   return NextResponse.json({ error: "invalid resource" }, { status: 400 })
