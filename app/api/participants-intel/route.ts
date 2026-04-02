@@ -646,6 +646,11 @@ async function fetchElementixCompetitorAssignors(): Promise<ResourcePayload<Bank
   )
 
   // Step 4: Build bank → competitor matrix
+  // Build a lowercase set of all competitor names so we can exclude
+  // competitor-to-competitor flows (e.g. Churchill Real Estate → Kiavi).
+  // Only true bank/institutional assignors should appear in this panel.
+  const competitorNameSet = new Set(competitors.map((c) => c.buyerName!.toLowerCase().trim()))
+
   const bankMap = new Map<
     string,
     { totalDeals: number; totalAmount: number; competitors: Map<string, { deals: number; amount: number; rank: number }> }
@@ -657,7 +662,9 @@ async function fetchElementixCompetitorAssignors(): Promise<ResourcePayload<Bank
 
     for (const a of assignments) {
       const bankName = (a.originalLender || a.originalLenderRaw || "").trim()
+      // Skip if not institutional OR if the assignor is itself a known competitor
       if (!bankName || !isInstitutionalAssignor(bankName)) continue
+      if (competitorNameSet.has(bankName.toLowerCase().trim())) continue
 
       const amount = maybeNumber(a.loanAmount) ?? 0
       const competitorName = competitor.buyerName!
