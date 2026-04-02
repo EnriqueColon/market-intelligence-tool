@@ -1,21 +1,16 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useState } from "react"
 import { Card } from "@/components/ui/card"
 import {
-  fetchAssignmentsPayload,
   fetchCompetitorAssignorsPayload,
-  fetchLendersPayload,
   fetchPrivateLendersPayload,
   fetchRankingsPayload,
   fetchRecentDealsPayload,
 } from "@/lib/participants-intel/services"
-import { buildFlowEdges } from "@/lib/participants-intel/aggregation"
 import type {
-  AssignmentRecord,
   CompetitorAssignorRow,
   CompetitorRanking,
-  LenderAnalyticsRecord,
   PrivateLenderRecord,
   RecentDealRecord,
 } from "@/lib/participants-intel/types"
@@ -26,8 +21,6 @@ type Props = { level?: string }
 
 export function MarketParticipantsIntel({ level = "florida" }: Props) {
   const [loading, setLoading] = useState(true)
-  const [assignments, setAssignments] = useState<AssignmentRecord[]>([])
-  const [lenders, setLenders] = useState<LenderAnalyticsRecord[]>([])
   const [rankings, setRankings] = useState<CompetitorRanking[]>([])
   const [privateLenders, setPrivateLenders] = useState<PrivateLenderRecord[]>([])
   const [recentDeals, setRecentDeals] = useState<RecentDealRecord[]>([])
@@ -40,21 +33,17 @@ export function MarketParticipantsIntel({ level = "florida" }: Props) {
       setLoading(true)
       setError(null)
       try {
-        const [a, l, r, pl, rd, ba] = await Promise.all([
-          fetchAssignmentsPayload(),
-          fetchLendersPayload(),
-          fetchRankingsPayload(),
+        const [r, pl, rd, ca] = await Promise.all([
+          fetchRankingsPayload(level),
           fetchPrivateLendersPayload(level),
           fetchRecentDealsPayload(level),
-          fetchCompetitorAssignorsPayload(),
+          fetchCompetitorAssignorsPayload(level),
         ])
         if (!mounted) return
-        setAssignments(a.items)
-        setLenders(l.items)
         setRankings(r.items)
         setPrivateLenders(pl.items)
         setRecentDeals(rd.items)
-        setCompetitorAssignors(ba.items)
+        setCompetitorAssignors(ca.items)
       } catch (e) {
         if (!mounted) return
         setError(e instanceof Error ? e.message : "Failed to load data.")
@@ -65,8 +54,6 @@ export function MarketParticipantsIntel({ level = "florida" }: Props) {
     load()
     return () => { mounted = false }
   }, [level])
-
-  const edges = useMemo(() => buildFlowEdges(assignments), [assignments])
 
   if (loading) {
     return (
@@ -84,8 +71,17 @@ export function MarketParticipantsIntel({ level = "florida" }: Props) {
 
   return (
     <div className="space-y-6">
-      <SectionPrivateCreditorMonitor lenders={privateLenders} deals={recentDeals} geo={level} />
-      <SectionCompetitorAOM edges={edges} lenders={lenders} rankings={rankings} competitorAssignors={competitorAssignors} />
+      <SectionPrivateCreditorMonitor
+        lenders={privateLenders}
+        deals={recentDeals}
+        rankings={rankings}
+        geo={level}
+      />
+      <SectionCompetitorAOM
+        rankings={rankings}
+        competitorAssignors={competitorAssignors}
+        privateLenders={privateLenders}
+      />
     </div>
   )
 }

@@ -545,12 +545,12 @@ async function fetchElementixRecentDeals(geo: string): Promise<ResourcePayload<R
 
 // ─── Elementix: FL AOM buyer rankings (authoritative volume + trend) ──────────
 
-async function fetchElementixRankings(): Promise<ResourcePayload<CompetitorRanking> | null> {
+async function fetchElementixRankings(geo: string): Promise<ResourcePayload<CompetitorRanking> | null> {
   const key = process.env.ELEMENTIX_API_KEY?.trim()
   if (!key) return null
 
   const resp = await elxFetch<{ data: ElxAssignmentRanking[] }>("/api/v1/assignments/rankings", {
-    state: "FL",
+    ...geoParams(geo),
     limit: "20",
   })
 
@@ -621,12 +621,12 @@ function isInstitutionalAssignor(name: string): boolean {
   return INSTITUTIONAL_RE.test(name)
 }
 
-async function fetchElementixCompetitorAssignors(): Promise<ResourcePayload<CompetitorAssignorRow> | null> {
+async function fetchElementixCompetitorAssignors(geo: string): Promise<ResourcePayload<CompetitorAssignorRow> | null> {
   if (!process.env.ELEMENTIX_API_KEY?.trim()) return null
 
   // Step 1: Get FL AOM buyer rankings → build competitor whitelist
   const rankingsResp = await elxFetch<{ data: ElxAssignmentRanking[] }>("/api/v1/assignments/rankings", {
-    state: "FL",
+    ...geoParams(geo),
     limit: "20",
   })
 
@@ -645,7 +645,7 @@ async function fetchElementixCompetitorAssignors(): Promise<ResourcePayload<Comp
   const assignmentSets = await Promise.all(
     competitors.map((c) =>
       elxFetch<{ data: ElxAssignment[] }>(`/api/v1/lender/${c.buyerId}/assignments`, {
-        state: "FL",
+        ...geoParams(geo),
         limit: "200",
       })
     )
@@ -760,7 +760,7 @@ export async function GET(req: NextRequest) {
 
   // ── Rankings ─────────────────────────────────────────────────────────────────
   if (resource === "rankings") {
-    const elementix = await fetchElementixRankings()
+    const elementix = await fetchElementixRankings(geo)
     if (elementix) return NextResponse.json(elementix satisfies ResourcePayload<CompetitorRanking>)
     return NextResponse.json(emptyPayload<CompetitorRanking>("Elementix unavailable — check ELEMENTIX_API_KEY."))
   }
@@ -781,7 +781,7 @@ export async function GET(req: NextRequest) {
 
   // ── Competitor Assignors ──────────────────────────────────────────────────────
   if (resource === "competitor-assignors") {
-    const elementix = await fetchElementixCompetitorAssignors()
+    const elementix = await fetchElementixCompetitorAssignors(geo)
     if (elementix) return NextResponse.json(elementix satisfies ResourcePayload<CompetitorAssignorRow>)
     return NextResponse.json(emptyPayload<CompetitorAssignorRow>("Elementix unavailable — check ELEMENTIX_API_KEY."))
   }

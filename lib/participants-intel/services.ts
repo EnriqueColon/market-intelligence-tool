@@ -80,9 +80,9 @@ export function fetchLendersPayload(): Promise<ResourcePayload<LenderAnalyticsRe
   )
 }
 
-export function fetchRankingsPayload(): Promise<ResourcePayload<CompetitorRanking>> {
-  return cached("participants-intel:rankings:payload", () =>
-    getJson<ResourcePayload<CompetitorRanking>>("/api/participants-intel?resource=rankings").catch(() => ({
+export function fetchRankingsPayload(geo = "florida"): Promise<ResourcePayload<CompetitorRanking>> {
+  return cached(`participants-intel:rankings:${geo}`, () =>
+    getJson<ResourcePayload<CompetitorRanking>>(`/api/participants-intel?resource=rankings&geo=${encodeURIComponent(geo)}`).catch(() => ({
       items: [],
       diagnostics: emptyDiagnostics(),
     }))
@@ -123,9 +123,9 @@ export function fetchRecentDealsPayload(geo: string): Promise<ResourcePayload<Re
   )
 }
 
-export function fetchCompetitorAssignorsPayload(): Promise<ResourcePayload<CompetitorAssignorRow>> {
-  return cached("participants-intel:competitor-assignors", () =>
-    getJson<ResourcePayload<CompetitorAssignorRow>>("/api/participants-intel?resource=competitor-assignors").catch(() => ({
+export function fetchCompetitorAssignorsPayload(geo = "florida"): Promise<ResourcePayload<CompetitorAssignorRow>> {
+  return cached(`participants-intel:competitor-assignors:${geo}`, () =>
+    getJson<ResourcePayload<CompetitorAssignorRow>>(`/api/participants-intel?resource=competitor-assignors&geo=${encodeURIComponent(geo)}`).catch(() => ({
       items: [],
       diagnostics: emptyDiagnostics(),
     }))
