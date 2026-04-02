@@ -408,27 +408,66 @@ async function fetchElementixLenders(): Promise<ResourcePayload<LenderAnalyticsR
 }
 
 // ─── Elementix: Lender search ─────────────────────────────────────────────────
+// Multi-source: tries the dedicated lender-search endpoint first, then falls
+// back to filtering FL AOM rankings + private lenders by name — guaranteeing
+// that any entity visible in other panels is always discoverable here.
 
 async function fetchElementixSearch(q: string): Promise<SearchEntityResult[] | null> {
   if (!process.env.ELEMENTIX_API_KEY?.trim() || !q.trim()) return null
 
-  const resp = await elxFetch<{ data: ElxLender[] } | ElxLender[]>("/api/v1/lender-search", {
+  const qLower = q.trim().toLowerCase()
+  const results: SearchEntityResult[] = []
+  const seen = new Set<string>()
+
+  const addResult = (id: string, name: string, location?: string) => {
+    const key = name.toLowerCase().trim()
+    if (!name || !key || seen.has(key)) return
+    seen.add(key)
+    results.push({ id: id || name, name: name.trim(), type: "lender", location })
+  }
+
+  // ── Source 1: dedicated lender-search endpoint (may or may not exist) ────
+  const searchResp = await elxFetch<{ data: ElxLender[] } | ElxLender[]>("/api/v1/lender-search", {
     q: q.trim(),
     limit: "30",
   })
+  if (searchResp) {
+    const rawItems: ElxLender[] = Array.isArray(searchResp)
+      ? searchResp
+      : ((asObj(searchResp) as { data?: ElxLender[] } | null)?.data ?? [])
+    for (const r of rawItems) {
+      if (r.lenderName) addResult(r.lenderId || r.lenderName, r.lenderName, r.address || undefined)
+    }
+  }
 
-  const rawItems: ElxLender[] = Array.isArray(resp)
-    ? resp
-    : ((asObj(resp) as { data?: ElxLender[] } | null)?.data ?? [])
+  // ── Source 2: FL AOM rankings — filter buyers by name match ──────────────
+  const [rankingsResp, privateLendersResp] = await Promise.all([
+    elxFetch<{ data: ElxAssignmentRanking[] }>("/api/v1/assignments/rankings", {
+      state: "FL",
+      limit: "50",
+    }),
+    elxFetch<{ data: ElxLender[] }>("/api/v1/lenders", {
+      lenderType: "Private Money",
+      perPage: "30",
+      sortBy: "volume",
+    }),
+  ])
 
-  if (rawItems.length === 0) return null
+  for (const r of rankingsResp?.data ?? []) {
+    const name = r.buyerName || r.sellerName || ""
+    if (name && name.toLowerCase().includes(qLower)) {
+      addResult(r.buyerId || r.sellerId || name, name)
+    }
+  }
 
-  return rawItems.map((r, idx) => ({
-    id: r.lenderId || String(idx),
-    name: r.lenderName || "",
-    type: "lender" as const,
-    location: r.address || undefined,
-  }))
+  // ── Source 3: private lenders — filter by name match ─────────────────────
+  for (const l of privateLendersResp?.data ?? []) {
+    if (l.lenderName && l.lenderName.toLowerCase().includes(qLower)) {
+      addResult(l.lenderId, l.lenderName, l.address || undefined)
+    }
+  }
+
+  return results.length > 0 ? results : null
 }
 
 // ─── Empty payload helper ─────────────────────────────────────────────────────

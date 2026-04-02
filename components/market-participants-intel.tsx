@@ -73,6 +73,7 @@ export function MarketParticipantsIntel({ level = "florida" }: Props) {
   return (
     <div className="space-y-6">
       <SectionEntitySearch />
+
       <SectionPrivateCreditorMonitor
         lenders={privateLenders}
         deals={recentDeals}
