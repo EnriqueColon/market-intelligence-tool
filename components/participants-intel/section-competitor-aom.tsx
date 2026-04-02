@@ -6,6 +6,24 @@ import { Card } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import type { CompetitorAssignorRow, CompetitorRanking, PrivateLenderRecord } from "@/lib/participants-intel/types"
 
+// ─── Tooltip header ───────────────────────────────────────────────────────────
+
+function Th({ children, tip, className }: { children: React.ReactNode; tip?: string; className?: string }) {
+  return (
+    <TableHead className={className}>
+      {tip ? (
+        <span className="inline-flex items-center gap-1 group relative cursor-default">
+          {children}
+          <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-slate-200 text-slate-500 text-[9px] font-bold leading-none shrink-0">?</span>
+          <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 rounded-lg bg-slate-800 text-white text-[11px] leading-snug px-3 py-2 opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-lg whitespace-normal text-center">
+            {tip}
+          </span>
+        </span>
+      ) : children}
+    </TableHead>
+  )
+}
+
 function compact(n: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", notation: "compact", maximumFractionDigits: 1 }).format(n)
 }
@@ -150,12 +168,12 @@ export function SectionCompetitorAOM({ rankings, competitorAssignors, privateLen
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Firm</TableHead>
-              <TableHead className="text-right">AOMs</TableHead>
-              <TableHead className="text-right">Volume</TableHead>
-              <TableHead className="text-right">Avg Deal</TableHead>
-              <TableHead className="text-right">Δ vs Prior</TableHead>
-              <TableHead>Momentum</TableHead>
+              <Th tip="Legal name of the AOM buyer as recorded in Florida county deed records. Filtered to active institutional acquirers of distressed and performing mortgage paper — residential noise (retail banks, homebuilder captives) excluded.">Firm</Th>
+              <Th tip="Total number of Assignments of Mortgage recorded by this firm in the current period. Each AOM represents a mortgage acquired from another lender or institution — the original lender's rights transfer entirely to the buyer." className="text-right">AOMs</Th>
+              <Th tip="Total dollar value of mortgage principal acquired via AOM in the current period. Derived from the face amount of the original mortgage instruments assigned — reflects capital deployed into mortgage debt acquisition." className="text-right">Volume</Th>
+              <Th tip="Average mortgage principal per assignment (volume ÷ AOM count). Higher values indicate a focus on larger commercial or institutional loans; lower values suggest residential or smaller-balance portfolios." className="text-right">Avg Deal</Th>
+              <Th tip="Percentage change in AOM count versus the equivalent prior period. Positive = firm is acquiring more aggressively; negative = pullback in buying activity. A sharp increase may signal a competitor ramping up a new strategy." className="text-right">Δ vs Prior</Th>
+              <Th tip="Trend tier derived from the Δ vs Prior percentage. ↑ Accelerating = +15% or more. ↗ Growing = +1% to +14%. → Stable = 0%. ↘ Declining = −1% to −14%. ↓ Contracting = −15% or worse.">Momentum</Th>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -215,10 +233,10 @@ export function SectionCompetitorAOM({ rankings, competitorAssignors, privateLen
           <TableHeader>
             <TableRow>
               <TableHead className="w-6" />
-              <TableHead>Competitor</TableHead>
-              <TableHead className="text-right">AOMs Received</TableHead>
-              <TableHead className="text-right">Volume</TableHead>
-              <TableHead className="text-right">Sources</TableHead>
+              <Th tip="The AOM buyer receiving mortgage assignments from external institutions. These are the same firms ranked in the Competitor Rankings panel above — expand each row to see exactly which institutions are feeding their pipeline.">Competitor</Th>
+              <Th tip="Total number of mortgage assignments received by this competitor from external institutions in the current period. This represents inbound deal flow — paper being handed off to them by banks, servicers, and other lenders." className="text-right">AOMs Received</Th>
+              <Th tip="Estimated total dollar value of mortgage principal received via assignment. Based on the face amounts of the original mortgage instruments. Higher volume indicates a competitor actively deploying capital at scale." className="text-right">Volume</Th>
+              <Th tip="Number of distinct institutions that have assigned mortgages to this competitor. A higher source count indicates broader institutional relationships — if these institutions do not appear in Safe Harbor's deal flow, they represent direct sourcing gaps to close." className="text-right">Sources</Th>
             </TableRow>
           </TableHeader>
           <TableBody>

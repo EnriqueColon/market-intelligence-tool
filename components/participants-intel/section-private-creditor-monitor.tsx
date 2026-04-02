@@ -227,8 +227,8 @@ export function SectionPrivateCreditorMonitor({ lenders, deals, rankings, geo }:
           <TableHeader>
             <TableRow>
               <TableHead className="w-6" />
-              <TableHead className="w-8">#</TableHead>
-              <TableHead>Lender</TableHead>
+              <Th tip="Rank by total origination volume over the last 12 months. #1 is the most active private creditor in this geography." className="w-8">#</Th>
+              <Th tip="The private credit institution or hard-money lender originating the mortgage. These are non-bank, non-agency lenders operating outside GSE (Fannie/Freddie) guidelines — typically providing bridge, construction, or direct CRE debt.">Lender</Th>
               <Th tip="Number of mortgage originations recorded in this period." className="text-right">Deals</Th>
               <Th tip="Total dollar volume of loans originated in the last 12 months." className="text-right">Volume</Th>
               <Th tip="Average individual loan size — total volume divided by deal count." className="text-right">Avg Deal</Th>
@@ -258,9 +258,9 @@ export function SectionPrivateCreditorMonitor({ lenders, deals, rankings, geo }:
         <Table>
           <TableHeader>
             <TableRow>
-              <Th tip="Date the mortgage was recorded with the county clerk.">Date</Th>
-              <TableHead>Lender</TableHead>
-              <Th tip="The borrowing entity — typically an LLC or operating company.">Borrower Entity</Th>
+              <Th tip="Date the mortgage was recorded with the county clerk. Recording date is when the lien becomes public record — origination may have occurred days or weeks earlier.">Date</Th>
+              <Th tip="The private credit firm that originated this loan. Non-bank, non-agency lenders providing bridge, hard money, or direct private credit outside conventional GSE programs.">Lender</Th>
+              <Th tip="The borrowing entity — typically an LLC or operating company holding the collateral property. Entity structure (LLC, trust, corp) is visible in the deed record.">Borrower Entity</Th>
               <Th tip="Loan amount as recorded on the mortgage document." className="text-right">Amount</Th>
               <Th tip="City and county where the collateral property is located.">Location</Th>
               <Th tip="Open = loan still active. Closed = satisfaction of mortgage recorded.">Status</Th>
