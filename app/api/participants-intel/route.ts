@@ -608,9 +608,16 @@ function isCompetitorEntity(name: string, buyerType?: string, buyerCategory?: st
   return true
 }
 
-/** Returns true if an assignor is an institutional entity (not a random individual or one-off noise) */
+// Residential / consumer lenders that are noise for Safe Harbor's CRE distressed debt focus.
+// These originate consumer home loans, homebuilder captive mortgages, or retail residential paper —
+// not the commercial real estate debt Safe Harbor sources.
+const RESIDENTIAL_NOISE_RE = /lennar mortgage|lennar financial|movement mortgage|rocket mortgage|quicken loan|united wholesale|uwm\b|loanDepot|loan depot|better\.com|better mortgage|homepoint|home point|guild mortgage|caliber home|pennymac|newrez|mr\. cooper|freedom mortgage|guaranteed rate|fairway independent|cross country mortgage|homeside financial|american pacific mortgage|plaza home mortgage|homebridge|first continental|first home mortgage|summit funding|academy mortgage|american financing|pulte mortgage|kb home mortgage|dr horton mortgage|toll brothers mortgage|beazer mortgage|meritage mortgage|century mortgage|taylor morrison mortgage|nvr mortgage|smith douglas mortgage|smith douglas home|highland homes mortgage|gehan mortgage|on q financial|atlantic bay mortgage|success mortgage|michigan mutual|michigan-mutual|lakeview loan|finance of america|foamortgage|finance of america mortgage|mutual of omaha mortgage|american neighborhood mortgage|paramount residential|prmi\b|primary residential/i
+
+/** Returns true if an assignor is a CRE-relevant institutional entity.
+ *  Excludes residential/consumer originators and random individuals. */
 function isInstitutionalAssignor(name: string): boolean {
   if (!name || name.length < 4) return false
+  if (RESIDENTIAL_NOISE_RE.test(name)) return false
   return INSTITUTIONAL_RE.test(name)
 }
 
