@@ -3,6 +3,7 @@ import type {
   AssignmentRecord,
   CompetitorAssignorRow,
   CompetitorRanking,
+  EntityProfileRecord,
   LenderAnalyticsRecord,
   MortgageRecord,
   PreforeclosureRecord,
@@ -27,7 +28,7 @@ export const dynamic = "force-dynamic"
  *   GET /api/v1/lender-search?q=...                → lender entity search
  */
 
-type Resource = "assignments" | "mortgages" | "preforeclosures" | "lenders" | "search" | "rankings" | "private-lenders" | "recent-deals" | "competitor-assignors"
+type Resource = "assignments" | "mortgages" | "preforeclosures" | "lenders" | "search" | "rankings" | "private-lenders" | "recent-deals" | "competitor-assignors" | "entity-profile"
 
 // ─── Elementix API config ─────────────────────────────────────────────────────
 
@@ -707,6 +708,86 @@ async function fetchElementixCompetitorAssignors(geo: string): Promise<ResourceP
   }
 }
 
+// ─── Elementix: Entity profile (AOM activity for a specific lender) ───────────
+
+async function fetchElementixEntityProfile(id: string, name: string): Promise<ResourcePayload<EntityProfileRecord> | null> {
+  if (!process.env.ELEMENTIX_API_KEY?.trim() || !id) return null
+
+  // Fetch the lender's FL assignment records (as buyer/assignee)
+  const assignmentsResp = await elxFetch<{ data: ElxAssignment[] }>(`/api/v1/lender/${id}/assignments`, {
+    state: "FL",
+    limit: "200",
+  })
+
+  const assignments = assignmentsResp?.data ?? []
+  if (assignments.length === 0) return null
+
+  const assignorMap = new Map<string, { deals: number; amount: number }>()
+  let aomsBought = 0
+  let volumeBought = 0
+
+  const recentDeals: EntityProfileRecord["recentDeals"] = []
+
+  for (const a of assignments) {
+    const assignorName = (a.originalLender || a.originalLenderRaw || "").trim()
+    const amount = maybeNumber(a.loanAmount)
+    const date = normalizeDate(a.recordingDate)
+    if (!date) continue
+
+    aomsBought++
+    if (amount) volumeBought += amount
+
+    if (assignorName) {
+      const curr = assignorMap.get(assignorName) ?? { deals: 0, amount: 0 }
+      curr.deals++
+      if (amount) curr.amount += amount
+      assignorMap.set(assignorName, curr)
+    }
+
+    const addressFull =
+      a.addressDetails?.[0]?.addressFull ||
+      (typeof a.addresses?.[0] === "string" ? a.addresses[0] : undefined)
+
+    recentDeals.push({
+      id: a.id,
+      date,
+      counterparty: assignorName || "Unknown",
+      amount,
+      county: a.countyName || undefined,
+      property: addressFull || undefined,
+    })
+  }
+
+  recentDeals.sort((a, b) => b.date.localeCompare(a.date))
+
+  const topAssignors = Array.from(assignorMap.entries())
+    .map(([n, v]) => ({ name: n, deals: v.deals, amount: v.amount }))
+    .sort((a, b) => b.deals - a.deals)
+    .slice(0, 10)
+
+  const avgDealSizeBought = aomsBought > 0 && volumeBought > 0 ? volumeBought / aomsBought : 0
+
+  const item: EntityProfileRecord = {
+    id,
+    name,
+    aomsBought,
+    volumeBought,
+    avgDealSizeBought,
+    percentChange: 0,
+    topAssignors,
+    recentDeals: recentDeals.slice(0, 25),
+  }
+
+  return {
+    items: [item],
+    diagnostics: {
+      source: "external_api",
+      totalFetched: assignments.length,
+      notes: [`Entity profile for "${name}": ${assignments.length} FL AOM records found.`],
+    },
+  }
+}
+
 // ─── Route handler ────────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
@@ -784,6 +865,15 @@ export async function GET(req: NextRequest) {
     const elementix = await fetchElementixCompetitorAssignors(geo)
     if (elementix) return NextResponse.json(elementix satisfies ResourcePayload<CompetitorAssignorRow>)
     return NextResponse.json(emptyPayload<CompetitorAssignorRow>("Elementix unavailable — check ELEMENTIX_API_KEY."))
+  }
+
+  // ── Entity Profile ────────────────────────────────────────────────────────────
+  if (resource === "entity-profile") {
+    const entityId = (req.nextUrl.searchParams.get("id") || "").trim()
+    const entityName = (req.nextUrl.searchParams.get("name") || "").trim()
+    const elementix = await fetchElementixEntityProfile(entityId, entityName)
+    if (elementix) return NextResponse.json(elementix satisfies ResourcePayload<EntityProfileRecord>)
+    return NextResponse.json(emptyPayload<EntityProfileRecord>(`No AOM data found for "${entityName}" — entity may not be active in FL.`))
   }
 
   return NextResponse.json({ error: "invalid resource" }, { status: 400 })

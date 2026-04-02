@@ -4,6 +4,7 @@ import type {
   AssignmentRecord,
   CompetitorAssignorRow,
   CompetitorRanking,
+  EntityProfileRecord,
   LenderAnalyticsRecord,
   MortgageRecord,
   PreforeclosureRecord,
@@ -140,6 +141,18 @@ export function searchEntities(query: string): Promise<SearchEntityResult[]> {
     getJson<{ items: SearchEntityResult[] }>(`/api/participants-intel?resource=search&q=${encodeURIComponent(q)}`).then(
       (r) => r.items || []
     )
+  )
+}
+
+export function fetchEntityProfile(id: string, name: string): Promise<ResourcePayload<EntityProfileRecord>> {
+  const key = `participants-intel:entity-profile:${id || name.toLowerCase().replace(/\s+/g, "-")}`
+  return cached(key, () =>
+    getJson<ResourcePayload<EntityProfileRecord>>(
+      `/api/participants-intel?resource=entity-profile&id=${encodeURIComponent(id)}&name=${encodeURIComponent(name)}`
+    ).catch(() => ({
+      items: [],
+      diagnostics: emptyDiagnostics(),
+    }))
   )
 }
 

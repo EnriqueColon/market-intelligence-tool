@@ -16,6 +16,7 @@ import type {
 } from "@/lib/participants-intel/types"
 import { SectionCompetitorAOM } from "@/components/participants-intel/section-competitor-aom"
 import { SectionPrivateCreditorMonitor } from "@/components/participants-intel/section-private-creditor-monitor"
+import { SectionEntitySearch } from "@/components/participants-intel/section-entity-search"
 
 type Props = { level?: string }
 
@@ -71,6 +72,7 @@ export function MarketParticipantsIntel({ level = "florida" }: Props) {
 
   return (
     <div className="space-y-6">
+      <SectionEntitySearch />
       <SectionPrivateCreditorMonitor
         lenders={privateLenders}
         deals={recentDeals}

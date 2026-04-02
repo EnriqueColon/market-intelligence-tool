@@ -227,3 +227,23 @@ export type ResourcePayload<T> = {
   diagnostics: ResourceDiagnostics
 }
 
+export type EntityProfileRecord = {
+  id: string
+  name: string
+  lenderType?: string
+  aomRank?: number
+  aomsBought: number
+  volumeBought: number
+  avgDealSizeBought: number
+  percentChange: number
+  topAssignors: { name: string; deals: number; amount: number }[]
+  recentDeals: {
+    id: string
+    date: string
+    counterparty: string
+    amount: number | null
+    county?: string
+    property?: string
+  }[]
+}
+
