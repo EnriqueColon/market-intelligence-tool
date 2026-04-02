@@ -172,6 +172,36 @@ export type CoverageMetrics = {
   mortgageLinkedPct: number
 }
 
+export type PrivateLenderRecord = {
+  lenderId: string
+  name: string
+  volume: number
+  volumePrev: number
+  count: number
+  countPrev: number
+  percentChange: number
+  avgDealSize: number
+  shortTermPct: number
+  longTermPct: number
+  lenderType?: string
+  rank: number
+}
+
+export type RecentDealRecord = {
+  id: string
+  date: string
+  lender: string
+  lenderId?: string
+  borrower: string
+  amount: number | null
+  address?: string
+  city?: string
+  county?: string
+  loanStatus?: string
+  isBusinessPurpose: boolean
+  propertyType?: string
+}
+
 export type ResourceDiagnostics = {
   source: "external_api" | "local_fallback"
   totalFetched: number

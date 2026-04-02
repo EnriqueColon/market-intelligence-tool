@@ -5,6 +5,8 @@ import type {
   LenderAnalyticsRecord,
   MortgageRecord,
   PreforeclosureRecord,
+  PrivateLenderRecord,
+  RecentDealRecord,
   ResourceDiagnostics,
   ResourcePayload,
   SearchEntityResult,
@@ -24,7 +26,7 @@ export const dynamic = "force-dynamic"
  *   GET /api/v1/lender-search?q=...                → lender entity search
  */
 
-type Resource = "assignments" | "mortgages" | "preforeclosures" | "lenders" | "search" | "rankings"
+type Resource = "assignments" | "mortgages" | "preforeclosures" | "lenders" | "search" | "rankings" | "private-lenders" | "recent-deals"
 
 // ─── Elementix API config ─────────────────────────────────────────────────────
 
@@ -116,12 +118,18 @@ type ElxAssignmentRanking = {
 
 // ─── Elementix fetch helper ───────────────────────────────────────────────────
 
-async function elxFetch<T>(path: string, params: Record<string, string> = {}): Promise<T | null> {
+async function elxFetch<T>(path: string, params: Record<string, string | string[]> = {}): Promise<T | null> {
   const key = process.env.ELEMENTIX_API_KEY?.trim()
   if (!key) return null
   try {
     const url = new URL(`${ELEMENTIX_BASE}${path}`)
-    for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v)
+    for (const [k, v] of Object.entries(params)) {
+      if (Array.isArray(v)) {
+        v.forEach((val) => url.searchParams.append(k, val))
+      } else {
+        url.searchParams.set(k, v)
+      }
+    }
     const res = await fetch(url.toString(), {
       headers: { Authorization: `Bearer ${key}` },
       cache: "no-store",
@@ -434,6 +442,106 @@ function emptyPayload<T>(note: string): ResourcePayload<T> {
   }
 }
 
+// ─── Geo param builder ───────────────────────────────────────────────────────
+
+function geoParams(geo: string): Record<string, string[]> {
+  if (geo === "miami") return { countyName: ["Miami-Dade|FL"] }
+  // "florida" or "national" both scope to FL (this tab is FL-focused)
+  return { state: ["FL"] }
+}
+
+// ─── Elementix: Active private creditors by geography ────────────────────────
+
+async function fetchElementixPrivateLenders(geo: string): Promise<ResourcePayload<PrivateLenderRecord> | null> {
+  if (!process.env.ELEMENTIX_API_KEY?.trim()) return null
+
+  const resp = await elxFetch<{ data: ElxLender[] }>("/api/v1/lenders", {
+    lenderType: ["Private Money"],
+    windowInMonths: "12",
+    perPage: "20",
+    sortBy: "volume",
+    sortOrder: "desc",
+    ...geoParams(geo),
+  })
+
+  const data = resp?.data ?? []
+  if (data.length === 0) return null
+
+  const items: PrivateLenderRecord[] = data.map((l) => ({
+    lenderId: l.lenderId,
+    name: l.lenderName,
+    volume: l.volume ?? 0,
+    volumePrev: l.volumePrev ?? 0,
+    count: l.count ?? 0,
+    countPrev: l.countPrev ?? 0,
+    percentChange: l.percentChange ?? 0,
+    avgDealSize: l.averageMortgageSizeAllTime ?? 0,
+    shortTermPct: (l as unknown as Record<string, number>).shortTermLoanPercentage ?? 0,
+    longTermPct: (l as unknown as Record<string, number>).longTermLoanPercentage ?? 0,
+    lenderType: l.lenderType || undefined,
+    rank: l.rank ?? 0,
+  }))
+
+  return {
+    items,
+    diagnostics: {
+      source: "external_api",
+      totalFetched: items.length,
+      notes: [`Elementix: ${items.length} active private lenders for geo=${geo}.`],
+    },
+  }
+}
+
+// ─── Elementix: Recent private credit originations by geography ───────────────
+
+async function fetchElementixRecentDeals(geo: string): Promise<ResourcePayload<RecentDealRecord> | null> {
+  if (!process.env.ELEMENTIX_API_KEY?.trim()) return null
+
+  const resp = await elxFetch<{ data: ElxTransaction[] }>("/api/v1/transactions", {
+    transactionType: "mortgage",
+    lenderType: ["Private Money"],
+    isBusinessPurpose: "true",
+    sortBy: "recordingDate",
+    sortOrder: "desc",
+    perPage: "25",
+    ...geoParams(geo),
+  })
+
+  const data = resp?.data ?? []
+  if (data.length === 0) return null
+
+  const items: RecentDealRecord[] = data.map((t) => {
+    const borrower =
+      (t.entityBorrowers?.[0]?.name) ||
+      (t.partiesGrantor?.[0]) ||
+      "Unknown"
+    const addressFull = t.addresses?.[0]?.addressFull
+    return {
+      id: t.id,
+      date: normalizeDate(t.recordingDate),
+      lender: t.lenderName || t.partiesGrantee?.[0] || "Unknown",
+      lenderId: t.lenderId || undefined,
+      borrower,
+      amount: maybeNumber(t.amount),
+      address: addressFull || undefined,
+      city: t.city || undefined,
+      county: t.countyName || undefined,
+      loanStatus: (t as unknown as Record<string, string>).loanStatus || undefined,
+      isBusinessPurpose: t.isBusinessPurpose ?? true,
+      propertyType: t.propertySubtypes?.[0] || t.propertyTypes?.[0] || undefined,
+    }
+  })
+
+  return {
+    items,
+    diagnostics: {
+      source: "external_api",
+      totalFetched: items.length,
+      notes: [`Elementix: ${items.length} recent private credit deals for geo=${geo}.`],
+    },
+  }
+}
+
 // ─── Elementix: FL AOM buyer rankings (authoritative volume + trend) ──────────
 
 async function fetchElementixRankings(): Promise<ResourcePayload<CompetitorRanking> | null> {
@@ -478,6 +586,7 @@ async function fetchElementixRankings(): Promise<ResourcePayload<CompetitorRanki
 export async function GET(req: NextRequest) {
   const resource = (req.nextUrl.searchParams.get("resource") || "").trim() as Resource
   const q = (req.nextUrl.searchParams.get("q") || "").trim()
+  const geo = (req.nextUrl.searchParams.get("geo") || "florida").trim()
 
   if (!resource) {
     return NextResponse.json({ error: "resource is required" }, { status: 400 })
@@ -528,6 +637,20 @@ export async function GET(req: NextRequest) {
     const elementix = await fetchElementixRankings()
     if (elementix) return NextResponse.json(elementix satisfies ResourcePayload<CompetitorRanking>)
     return NextResponse.json(emptyPayload<CompetitorRanking>("Elementix unavailable — check ELEMENTIX_API_KEY."))
+  }
+
+  // ── Private Lenders ───────────────────────────────────────────────────────────
+  if (resource === "private-lenders") {
+    const elementix = await fetchElementixPrivateLenders(geo)
+    if (elementix) return NextResponse.json(elementix satisfies ResourcePayload<PrivateLenderRecord>)
+    return NextResponse.json(emptyPayload<PrivateLenderRecord>("Elementix unavailable — check ELEMENTIX_API_KEY."))
+  }
+
+  // ── Recent Deals ─────────────────────────────────────────────────────────────
+  if (resource === "recent-deals") {
+    const elementix = await fetchElementixRecentDeals(geo)
+    if (elementix) return NextResponse.json(elementix satisfies ResourcePayload<RecentDealRecord>)
+    return NextResponse.json(emptyPayload<RecentDealRecord>("Elementix unavailable — check ELEMENTIX_API_KEY."))
   }
 
   return NextResponse.json({ error: "invalid resource" }, { status: 400 })

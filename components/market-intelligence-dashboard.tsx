@@ -199,7 +199,7 @@ export function MarketIntelligenceDashboard({
                     Peer landscape for distressed CRE debt buyers.
                   </p>
                 </div>
-                <MarketParticipantsIntel />
+                <MarketParticipantsIntel level={level} />
               </TabsContent>
             )}
 

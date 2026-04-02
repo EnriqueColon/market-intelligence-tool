@@ -6,6 +6,8 @@ import type {
   LenderAnalyticsRecord,
   MortgageRecord,
   PreforeclosureRecord,
+  PrivateLenderRecord,
+  RecentDealRecord,
   ResourcePayload,
   SearchEntityResult,
 } from "@/lib/participants-intel/types"
@@ -100,6 +102,24 @@ export function fetchPreforeclosures(): Promise<PreforeclosureRecord[]> {
 
 export function fetchLenders(): Promise<LenderAnalyticsRecord[]> {
   return fetchLendersPayload().then((r) => r.items || [])
+}
+
+export function fetchPrivateLendersPayload(geo: string): Promise<ResourcePayload<PrivateLenderRecord>> {
+  return cached(`participants-intel:private-lenders:${geo}`, () =>
+    getJson<ResourcePayload<PrivateLenderRecord>>(`/api/participants-intel?resource=private-lenders&geo=${encodeURIComponent(geo)}`).catch(() => ({
+      items: [],
+      diagnostics: emptyDiagnostics(),
+    }))
+  )
+}
+
+export function fetchRecentDealsPayload(geo: string): Promise<ResourcePayload<RecentDealRecord>> {
+  return cached(`participants-intel:recent-deals:${geo}`, () =>
+    getJson<ResourcePayload<RecentDealRecord>>(`/api/participants-intel?resource=recent-deals&geo=${encodeURIComponent(geo)}`).catch(() => ({
+      items: [],
+      diagnostics: emptyDiagnostics(),
+    }))
+  )
 }
 
 export function searchEntities(query: string): Promise<SearchEntityResult[]> {

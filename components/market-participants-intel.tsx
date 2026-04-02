@@ -2,16 +2,33 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { Card } from "@/components/ui/card"
-import { fetchAssignmentsPayload, fetchLendersPayload, fetchRankingsPayload } from "@/lib/participants-intel/services"
+import {
+  fetchAssignmentsPayload,
+  fetchLendersPayload,
+  fetchPrivateLendersPayload,
+  fetchRankingsPayload,
+  fetchRecentDealsPayload,
+} from "@/lib/participants-intel/services"
 import { buildFlowEdges } from "@/lib/participants-intel/aggregation"
-import type { AssignmentRecord, CompetitorRanking, LenderAnalyticsRecord } from "@/lib/participants-intel/types"
+import type {
+  AssignmentRecord,
+  CompetitorRanking,
+  LenderAnalyticsRecord,
+  PrivateLenderRecord,
+  RecentDealRecord,
+} from "@/lib/participants-intel/types"
 import { SectionCompetitorAOM } from "@/components/participants-intel/section-competitor-aom"
+import { SectionPrivateCreditorMonitor } from "@/components/participants-intel/section-private-creditor-monitor"
 
-export function MarketParticipantsIntel() {
+type Props = { level?: string }
+
+export function MarketParticipantsIntel({ level = "florida" }: Props) {
   const [loading, setLoading] = useState(true)
   const [assignments, setAssignments] = useState<AssignmentRecord[]>([])
   const [lenders, setLenders] = useState<LenderAnalyticsRecord[]>([])
   const [rankings, setRankings] = useState<CompetitorRanking[]>([])
+  const [privateLenders, setPrivateLenders] = useState<PrivateLenderRecord[]>([])
+  const [recentDeals, setRecentDeals] = useState<RecentDealRecord[]>([])
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -20,11 +37,19 @@ export function MarketParticipantsIntel() {
       setLoading(true)
       setError(null)
       try {
-        const [a, l, r] = await Promise.all([fetchAssignmentsPayload(), fetchLendersPayload(), fetchRankingsPayload()])
+        const [a, l, r, pl, rd] = await Promise.all([
+          fetchAssignmentsPayload(),
+          fetchLendersPayload(),
+          fetchRankingsPayload(),
+          fetchPrivateLendersPayload(level),
+          fetchRecentDealsPayload(level),
+        ])
         if (!mounted) return
         setAssignments(a.items)
         setLenders(l.items)
         setRankings(r.items)
+        setPrivateLenders(pl.items)
+        setRecentDeals(rd.items)
       } catch (e) {
         if (!mounted) return
         setError(e instanceof Error ? e.message : "Failed to load data.")
@@ -34,14 +59,14 @@ export function MarketParticipantsIntel() {
     }
     load()
     return () => { mounted = false }
-  }, [])
+  }, [level])
 
   const edges = useMemo(() => buildFlowEdges(assignments), [assignments])
 
   if (loading) {
     return (
       <Card className="p-6 border-slate-200/80 bg-slate-50/30 text-sm text-slate-600">
-        Loading competitor AOM intelligence…
+        Loading market participants intelligence…
       </Card>
     )
   }
@@ -54,6 +79,7 @@ export function MarketParticipantsIntel() {
 
   return (
     <div className="space-y-6">
+      <SectionPrivateCreditorMonitor lenders={privateLenders} deals={recentDeals} geo={level} />
       <SectionCompetitorAOM edges={edges} lenders={lenders} rankings={rankings} />
     </div>
   )
