@@ -12,6 +12,7 @@ import { ArticleDigest } from "@/components/article-digest"
 import { IndustryOutlook } from "@/components/industry-outlook"
 import { SendNewsEmailButton } from "@/components/send-news-email-button"
 import { MarketResearchLibrary } from "@/components/market-research-library"
+import { NewsGlanceStrip } from "@/components/news-glance-strip"
 
 const LEVEL_OPTIONS = [
   { value: "national", label: "National" },
@@ -143,6 +144,7 @@ export function MarketIntelligenceDashboard({
                   <SendNewsEmailButton />
                 </div>
                 <IndustryOutlook />
+                <NewsGlanceStrip level={level} />
                 <div>
                   <PublicMentions level={level} />
                 </div>

@@ -43,12 +43,21 @@ export function PublicMentions({ level }: PublicMentionsProps) {
   const [summaryLoading, setSummaryLoading] = useState(false)
   const [summaryError, setSummaryError] = useState<string | undefined>()
   const [brief, setBrief] = useState<NewsBrief | null>(null)
+  const [activeTopic, setActiveTopic] = useState<string>("All")
 
   const regionLabel = (region?: PublicMentionItem["region"]) => {
     if (region === "miami") return "Miami Metro"
     if (region === "florida") return "Florida"
     return "National"
   }
+
+  const topics = ["All", ...Array.from(new Set(news.map((n) => n.topic).filter(Boolean))).sort()]
+
+  const visibleNews = activeTopic === "All" ? news : news.filter((n) => n.topic === activeTopic)
+
+  useEffect(() => {
+    setActiveTopic("All")
+  }, [level])
 
   useEffect(() => {
     let mounted = true
@@ -129,6 +138,28 @@ export function PublicMentions({ level }: PublicMentionsProps) {
         </div>
         {note && <p className="text-xs text-slate-900">{note}</p>}
       </div>
+      {topics.length > 1 && (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {topics.map((topic) => (
+            <button
+              key={topic}
+              onClick={() => setActiveTopic(topic)}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                activeTopic === topic
+                  ? "bg-[#006D95] text-white"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              {topic}
+              {topic !== "All" && (
+                <span className="ml-1 opacity-60">
+                  {news.filter((n) => n.topic === topic).length}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="mt-4" aria-busy={loading}>
         <Table>
           <TableHeader>
@@ -151,7 +182,7 @@ export function PublicMentions({ level }: PublicMentionsProps) {
                 </TableCell>
               </TableRow>
             )}
-            {[...news].sort((a, b) => {
+            {[...visibleNews].sort((a, b) => {
               const order = { open: 0, partial: 1, paywalled: 2 } as const
               return (order[a.access_status] ?? 1) - (order[b.access_status] ?? 1)
             }).map((item, index) => (
@@ -166,6 +197,12 @@ export function PublicMentions({ level }: PublicMentionsProps) {
                     <HoverCardContent className="w-[420px] space-y-2">
                       <div className="text-xs font-semibold text-slate-900 uppercase">Preview</div>
                       <div className="text-sm text-slate-800">{item.snippet || "No preview available."}</div>
+                      {item.detection_reason && (
+                        <div className="rounded bg-[#006D95]/8 border border-[#006D95]/20 px-2 py-1.5">
+                          <span className="text-xs font-semibold text-[#006D95]">Why flagged: </span>
+                          <span className="text-xs text-slate-700">{item.detection_reason}</span>
+                        </div>
+                      )}
                       <div className="text-xs text-slate-900">
                         {item.source || "—"}
                         {item.date ? ` • ${item.date}` : ""}

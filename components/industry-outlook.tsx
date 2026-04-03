@@ -248,32 +248,109 @@ export function IndustryOutlook() {
         (() => {
           const { body, sources, rawSourceLines } = extractSources(data)
           const sections = sectionize(stripReferences(body))
+
+          const execSummary = sections.find((s) => s.heading.toLowerCase().includes("executive"))
+          const nationalSection = sections.find((s) => s.heading.toLowerCase().includes("u.s.") || s.heading.toLowerCase().includes("commercial real estate outlook"))
+          const miamiSection = sections.find((s) => s.heading.toLowerCase().includes("miami"))
+          const investingSection = sections.find((s) => s.heading.toLowerCase().includes("shapes"))
+          const otherSections = sections.filter(
+            (s) => s !== execSummary && s !== nationalSection && s !== miamiSection && s !== investingSection
+          )
+
           return (
-            <div className="space-y-4">
-              {sections.length > 0 ? (
-                <div className="space-y-4">
-                  {sections.map((section, idx) => (
-                    <div key={`sec-${idx}`} className="space-y-2">
-                      <div className="text-xs font-semibold text-slate-700 uppercase">{section.heading}</div>
-                      {section.bullets.length ? (
-                        <ul className="list-disc pl-5 space-y-1 text-sm text-slate-900 leading-relaxed">
-                          {section.bullets.map((bullet, bIdx) => (
-                            <li key={`sec-${idx}-b-${bIdx}`}>{bullet}</li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="text-sm text-slate-900 leading-relaxed">No content available.</p>
-                      )}
-                    </div>
-                  ))}
+            <div className="space-y-5">
+              {/* Key Signals Strip — Executive Summary bullets as callout cards */}
+              {execSummary && execSummary.bullets.length > 0 && (
+                <div>
+                  <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Key Signals</div>
+                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    {execSummary.bullets.map((bullet, i) => (
+                      <div key={`sig-${i}`} className="rounded-lg border border-[#006D95]/20 bg-[#006D95]/5 px-3 py-2.5">
+                        <div className="flex items-start gap-2">
+                          <span className="mt-0.5 flex-shrink-0 h-2 w-2 rounded-full bg-[#006D95]" />
+                          <p className="text-xs text-slate-800 leading-relaxed">{bullet}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              ) : (
+              )}
+
+              {/* 2-column: National | Miami/FL */}
+              {(nationalSection || miamiSection) && (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {nationalSection && (
+                    <div className="rounded-lg border border-slate-200 bg-white p-4 space-y-2">
+                      <div className="flex items-center gap-1.5">
+                        <span className="h-2 w-2 rounded-full bg-slate-400" />
+                        <div className="text-xs font-semibold text-slate-600 uppercase tracking-wide">U.S. National</div>
+                      </div>
+                      <ul className="space-y-1.5">
+                        {nationalSection.bullets.map((b, i) => (
+                          <li key={`nat-${i}`} className="flex items-start gap-1.5 text-xs text-slate-800 leading-relaxed">
+                            <span className="mt-1.5 flex-shrink-0 h-1 w-1 rounded-full bg-slate-300" />
+                            {b}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {miamiSection && (
+                    <div className="rounded-lg border border-[#006D95]/30 bg-white p-4 space-y-2">
+                      <div className="flex items-center gap-1.5">
+                        <span className="h-2 w-2 rounded-full bg-[#006D95]" />
+                        <div className="text-xs font-semibold text-[#006D95] uppercase tracking-wide">Miami / Florida</div>
+                      </div>
+                      <ul className="space-y-1.5">
+                        {miamiSection.bullets.map((b, i) => (
+                          <li key={`mia-${i}`} className="flex items-start gap-1.5 text-xs text-slate-800 leading-relaxed">
+                            <span className="mt-1.5 flex-shrink-0 h-1 w-1 rounded-full bg-[#006D95]/40" />
+                            {b}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* How this shapes investing — full width */}
+              {investingSection && (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 space-y-2">
+                  <div className="text-xs font-semibold text-slate-600 uppercase tracking-wide">How This Shapes Distressed-Debt Investing</div>
+                  <ul className="space-y-1.5">
+                    {investingSection.bullets.map((b, i) => (
+                      <li key={`inv-${i}`} className="flex items-start gap-1.5 text-xs text-slate-800 leading-relaxed">
+                        <span className="mt-1.5 flex-shrink-0 h-1 w-1 rounded-full bg-slate-400" />
+                        {b}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Any remaining sections */}
+              {otherSections.map((section, idx) => (
+                <div key={`other-${idx}`} className="space-y-2">
+                  <div className="text-xs font-semibold text-slate-700 uppercase">{section.heading}</div>
+                  <ul className="list-disc pl-5 space-y-1 text-sm text-slate-900 leading-relaxed">
+                    {section.bullets.map((b, bIdx) => (
+                      <li key={`other-${idx}-b-${bIdx}`}>{b}</li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+
+              {/* Fallback if no sections parsed */}
+              {sections.length === 0 && (
                 <p className="text-sm text-slate-900 leading-relaxed">{stripReferences(body)}</p>
               )}
-              {(sources.length > 0 || rawSourceLines.some((l) => /https?:\/\//.test(l))) ? (
-                <div className="pt-4 mt-4 border-t border-slate-200">
+
+              {/* Key Sources */}
+              {(sources.length > 0 || rawSourceLines.some((l) => /https?:\/\//.test(l))) && (
+                <div className="pt-4 mt-2 border-t border-slate-200">
                   <div className="text-xs font-semibold text-slate-700 uppercase mb-2">Key Sources (for further reading)</div>
-                  <div className="space-y-2 text-sm">
+                  <div className="grid gap-2 sm:grid-cols-2">
                     {sources.length > 0
                       ? sources.map((s, idx) => {
                           const href = (s.url || "").trim()
@@ -287,11 +364,11 @@ export function IndustryOutlook() {
                           }
                           return (
                             <div key={`src-${idx}`} className="rounded border border-slate-200 bg-white p-2">
-                              <div className="text-slate-700">{displayTitle}</div>
+                              <div className="text-xs text-slate-700 leading-snug">{displayTitle}</div>
                               {isValidHref ? (
                                 <div className="mt-1">
                                   <a
-                                    className="text-[#006D95] underline hover:text-[#005a7a] break-all"
+                                    className="text-xs text-[#006D95] underline hover:text-[#005a7a] break-all"
                                     href={href}
                                     target="_blank"
                                     rel="noopener noreferrer"
@@ -301,19 +378,19 @@ export function IndustryOutlook() {
                                   </a>
                                 </div>
                               ) : (
-                                <div className="mt-1 text-slate-500 break-all">{s.url}</div>
+                                <div className="mt-1 text-xs text-slate-500 break-all">{s.url}</div>
                               )}
                             </div>
                           )
                         })
                       : rawSourceLines.map((line, idx) => (
-                          <div key={`raw-${idx}`} className="rounded border border-slate-200 bg-white p-2 text-slate-700 break-all">
+                          <div key={`raw-${idx}`} className="rounded border border-slate-200 bg-white p-2 text-xs text-slate-700 break-all">
                             {renderTextWithLinks(cleanLine(line))}
                           </div>
                         ))}
                   </div>
                 </div>
-              ) : null}
+              )}
             </div>
           )
         })()
