@@ -176,7 +176,7 @@ async function callPerplexity(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "sonar-pro",
+        model: "sonar",
         temperature: 0.2,
         max_tokens: 1400,
         messages: [
@@ -247,9 +247,7 @@ ${content || "(empty)"}
 
     if (!content || !hasRequiredSections(content) || !hasOrderedSections(content)) {
       const fallback = buildFallbackMemo(sources, "Output failed section-format requirements")
-      if (true /* always cache */) {
-        cached = { text: fallback, fetchedAt: Date.now() }
-      }
+      // Do NOT cache format failures — let next request retry.
       return NextResponse.json({ text: fallback }, { status: 200 })
     }
 
@@ -263,9 +261,7 @@ ${content || "(empty)"}
       sources,
       err instanceof Error ? err.message : "Unhandled generation error"
     )
-    if (true /* always cache */) {
-      cached = { text: fallback, fetchedAt: Date.now() }
-    }
+    // Do NOT cache errors — let the next request retry the API call.
     return NextResponse.json({ text: fallback }, { status: 200 })
   }
 }

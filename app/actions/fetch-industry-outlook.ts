@@ -139,7 +139,7 @@ async function callPerplexity(messages: { role: "system" | "user"; content: stri
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "sonar-pro",
+        model: "sonar",
         messages,
         temperature: 0.2,
         max_tokens: 1800,
