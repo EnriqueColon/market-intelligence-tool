@@ -201,8 +201,15 @@ export function InvestingBusinessMentions({ level }: InvestingBusinessMentionsPr
               </TableRow>
             )}
             {[...visibleNews].sort((a, b) => {
-              const order = { open: 0, partial: 1, paywalled: 2 } as const
-              return (order[a.access_status] ?? 1) - (order[b.access_status] ?? 1)
+              const accessOrder = { open: 0, partial: 1, paywalled: 2 } as const
+              const accessDiff = (accessOrder[a.access_status] ?? 1) - (accessOrder[b.access_status] ?? 1)
+              if (accessDiff !== 0) return accessDiff
+              const geoScore = (item: typeof a) => {
+                if (level === "florida") return item.region === "florida" || item.region === "miami" ? 0 : 1
+                if (level === "miami") return item.region === "miami" ? 0 : item.region === "florida" ? 1 : 2
+                return 0
+              }
+              return geoScore(a) - geoScore(b)
             }).map((item, index) => (
               <TableRow key={`${item.id}-${item.url || "no-url"}-${item.date || "no-date"}-${index}`}>
                 <TableCell className="max-w-[520px]">
