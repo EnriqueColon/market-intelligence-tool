@@ -237,13 +237,13 @@ export function IndustryOutlook() {
       <div className="flex items-center gap-2 mb-4">
         <Newspaper className="h-5 w-5 text-[#006D95]" />
         <h3 className="text-base font-semibold text-slate-800">Industry Outlook</h3>
-        <span className="text-xs text-slate-600 ml-auto">Recent</span>
+        <span className="text-xs text-slate-900 ml-auto">Recent</span>
       </div>
 
       {loading ? (
-        <div className="text-sm text-slate-600">Generating industry outlook…</div>
+        <div className="text-sm text-slate-900">Generating industry outlook…</div>
       ) : error || !data ? (
-        <div className="text-sm text-slate-600">Unable to generate outlook right now.</div>
+        <div className="text-sm text-slate-900">Unable to generate outlook right now.</div>
       ) : (
         (() => {
           const { body, sources, rawSourceLines } = extractSources(data)
@@ -256,19 +256,19 @@ export function IndustryOutlook() {
                     <div key={`sec-${idx}`} className="space-y-2">
                       <div className="text-xs font-semibold text-slate-700 uppercase">{section.heading}</div>
                       {section.bullets.length ? (
-                        <ul className="list-disc pl-5 space-y-1 text-sm text-slate-600 leading-relaxed">
+                        <ul className="list-disc pl-5 space-y-1 text-sm text-slate-900 leading-relaxed">
                           {section.bullets.map((bullet, bIdx) => (
                             <li key={`sec-${idx}-b-${bIdx}`}>{bullet}</li>
                           ))}
                         </ul>
                       ) : (
-                        <p className="text-sm text-slate-600 leading-relaxed">No content available.</p>
+                        <p className="text-sm text-slate-900 leading-relaxed">No content available.</p>
                       )}
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-slate-600 leading-relaxed">{stripReferences(body)}</p>
+                <p className="text-sm text-slate-900 leading-relaxed">{stripReferences(body)}</p>
               )}
               {(sources.length > 0 || rawSourceLines.some((l) => /https?:\/\//.test(l))) ? (
                 <div className="pt-4 mt-4 border-t border-slate-200">

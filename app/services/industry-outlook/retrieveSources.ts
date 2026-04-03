@@ -186,22 +186,18 @@ export async function retrieveSources(): Promise<RetrievedSource[]> {
   }
 
   const picked: RetrievedSource[] = []
-  picked.push(...byRegion.national.slice(0, 4))
-  picked.push(...byRegion.florida.slice(0, 3))
-  picked.push(...byRegion.miami.slice(0, 3))
+  picked.push(...byRegion.national.slice(0, 2))
+  picked.push(...byRegion.florida.slice(0, 2))
+  picked.push(...byRegion.miami.slice(0, 2))
 
   const remaining = flat.filter((x) => !picked.includes(x))
   for (const item of remaining) {
-    if (picked.length >= 10) break
+    if (picked.length >= 6) break
     picked.push(item)
   }
 
-  const selected = picked.slice(0, 10)
-  const resolved = await Promise.all(
-    selected.map(async (item) => ({
-      ...item,
-      url: await resolveGoogleNewsRedirect(item.url),
-    }))
-  )
-  return dedupeSources(resolved)
+  // Skip Google News redirect resolution — it adds up to 4s × N items and
+  // regularly pushes the route past Vercel's 60s limit. The redirect URLs
+  // still contain the headline, publisher, and snippet needed for the prompt.
+  return dedupeSources(picked.slice(0, 6))
 }

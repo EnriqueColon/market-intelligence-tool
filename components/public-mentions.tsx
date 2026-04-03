@@ -123,11 +123,11 @@ export function PublicMentions({ level }: PublicMentionsProps) {
       <div className="flex items-center justify-between">
         <div>
           <div className="text-base font-semibold text-slate-800">Industry Specific News</div>
-          <p className="text-sm text-slate-600">
+          <p className="text-sm text-slate-900">
             Region-aware mentions of distressed CRE debt activity (past 7 days).
           </p>
         </div>
-        {note && <p className="text-xs text-slate-600">{note}</p>}
+        {note && <p className="text-xs text-slate-900">{note}</p>}
       </div>
       <div className="mt-4" aria-busy={loading}>
         <Table>
@@ -146,7 +146,7 @@ export function PublicMentions({ level }: PublicMentionsProps) {
           <TableBody>
             {news.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="text-sm text-slate-600">
+                <TableCell colSpan={7} className="text-sm text-slate-900">
                   No qualifying mentions in past 7 days.
                 </TableCell>
               </TableRow>
@@ -161,9 +161,9 @@ export function PublicMentions({ level }: PublicMentionsProps) {
                       </Button>
                     </HoverCardTrigger>
                     <HoverCardContent className="w-[420px] space-y-2">
-                      <div className="text-xs font-semibold text-slate-600 uppercase">Preview</div>
+                      <div className="text-xs font-semibold text-slate-900 uppercase">Preview</div>
                       <div className="text-sm text-slate-800">{item.snippet || "No preview available."}</div>
-                      <div className="text-xs text-slate-600">
+                      <div className="text-xs text-slate-900">
                         {item.source || "—"}
                         {item.date ? ` • ${item.date}` : ""}
                         {item.url ? (
@@ -196,22 +196,26 @@ export function PublicMentions({ level }: PublicMentionsProps) {
                   )}
                 </TableCell>
                 <TableCell>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => {
-                      setSelected({
-                        title: item.title,
-                        url: item.resolved_url || item.url,
-                        source: item.source,
-                        date: item.date,
-                        summary: item.snippet,
-                      })
-                      setSummaryOpen(true)
-                    }}
-                  >
-                    Brief
-                  </Button>
+                  {item.access_status === "paywalled" ? (
+                    <span className="text-xs text-slate-400 italic">Paywalled</span>
+                  ) : (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => {
+                        setSelected({
+                          title: item.title,
+                          url: item.resolved_url || item.url,
+                          source: item.source,
+                          date: item.date,
+                          summary: item.snippet,
+                        })
+                        setSummaryOpen(true)
+                      }}
+                    >
+                      Brief
+                    </Button>
+                  )}
                 </TableCell>
               </TableRow>
             ))}
@@ -270,7 +274,7 @@ export function PublicMentions({ level }: PublicMentionsProps) {
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
-                    <div className="text-xs font-semibold text-slate-600 uppercase">Key bullets</div>
+                    <div className="text-xs font-semibold text-slate-900 uppercase">Key bullets</div>
                     <ul className="list-disc space-y-1 pl-5 text-sm">
                       {brief.keyBullets.map((b, idx) => (
                         <li key={`kb-${idx}`}>{b}</li>
@@ -279,7 +283,7 @@ export function PublicMentions({ level }: PublicMentionsProps) {
                   </div>
 
                   <div className="space-y-2">
-                    <div className="text-xs font-semibold text-slate-600 uppercase">Why it matters</div>
+                    <div className="text-xs font-semibold text-slate-900 uppercase">Why it matters</div>
                     <ul className="list-disc space-y-1 pl-5 text-sm">
                       {brief.whyItMatters.map((b, idx) => (
                         <li key={`wm-${idx}`}>{b}</li>
@@ -292,7 +296,7 @@ export function PublicMentions({ level }: PublicMentionsProps) {
                   <div className="grid gap-4 sm:grid-cols-2">
                     {brief.entities.length > 0 && (
                       <div className="space-y-2">
-                        <div className="text-xs font-semibold text-slate-600 uppercase">Entities</div>
+                        <div className="text-xs font-semibold text-slate-900 uppercase">Entities</div>
                         <ul className="list-disc space-y-1 pl-5 text-sm">
                           {brief.entities.map((b, idx) => (
                             <li key={`en-${idx}`}>{b}</li>
@@ -303,7 +307,7 @@ export function PublicMentions({ level }: PublicMentionsProps) {
 
                     {brief.redFlags.length > 0 && (
                       <div className="space-y-2">
-                        <div className="text-xs font-semibold text-slate-600 uppercase">
+                        <div className="text-xs font-semibold text-slate-900 uppercase">
                           Red flags / gaps
                         </div>
                         <ul className="list-disc space-y-1 pl-5 text-sm">
@@ -317,7 +321,7 @@ export function PublicMentions({ level }: PublicMentionsProps) {
                 )}
 
                 <div className="space-y-2">
-                  <div className="text-xs font-semibold text-slate-600 uppercase">Follow-ups</div>
+                  <div className="text-xs font-semibold text-slate-900 uppercase">Follow-ups</div>
                   <ul className="list-disc space-y-1 pl-5 text-sm">
                     {brief.followUps.map((b, idx) => (
                       <li key={`fu-${idx}`}>{b}</li>
@@ -325,7 +329,7 @@ export function PublicMentions({ level }: PublicMentionsProps) {
                   </ul>
                 </div>
 
-                <div className="text-xs text-slate-600">
+                <div className="text-xs text-slate-900">
                   Confidence: <span className="font-medium text-slate-800">{brief.confidence}/100</span>
                   {brief.notes?.length ? <span className="ml-2">• {brief.notes.join(" ")}</span> : null}
                 </div>

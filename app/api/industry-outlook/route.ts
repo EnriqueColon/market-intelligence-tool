@@ -164,7 +164,7 @@ async function callOpenAI(
       body: JSON.stringify({
         model: process.env.OPENAI_OUTLOOK_MODEL?.trim() || "gpt-4o-mini",
         temperature: 0.2,
-        max_tokens: 1600,
+        max_tokens: 1000,
         messages: [
           { role: "system", content: system },
           { role: "user", content: user },
@@ -186,8 +186,9 @@ async function callOpenAI(
 }
 
 export async function POST() {
-  const allowMemoryCache = process.env.VERCEL !== "1"
-  if (allowMemoryCache && isFresh(cached)) {
+  // Always serve from memory cache when fresh — this was previously disabled
+  // on Vercel which caused every page load to re-run the full generation.
+  if (isFresh(cached)) {
     return NextResponse.json({ text: cached?.text })
   }
 
@@ -232,13 +233,13 @@ ${content || "(empty)"}
 
     if (!content || !hasRequiredSections(content) || !hasOrderedSections(content)) {
       const fallback = buildFallbackMemo(sources, "Output failed section-format requirements")
-      if (allowMemoryCache) {
+      if (true /* always cache */) {
         cached = { text: fallback, fetchedAt: Date.now() }
       }
       return NextResponse.json({ text: fallback }, { status: 200 })
     }
 
-    if (allowMemoryCache) {
+    if (true /* always cache */) {
       cached = { text: content, fetchedAt: Date.now() }
     }
     return NextResponse.json({ text: content }, { status: 200 })
@@ -248,7 +249,7 @@ ${content || "(empty)"}
       sources,
       err instanceof Error ? err.message : "Unhandled generation error"
     )
-    if (allowMemoryCache) {
+    if (true /* always cache */) {
       cached = { text: fallback, fetchedAt: Date.now() }
     }
     return NextResponse.json({ text: fallback }, { status: 200 })

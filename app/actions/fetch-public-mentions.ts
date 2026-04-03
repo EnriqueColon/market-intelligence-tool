@@ -1,6 +1,6 @@
 "use server"
 
-import { classifyArticleAccess, type AccessStatus } from "@/app/actions/news-access"
+import { classifyArticleAccess, KNOWN_PAYWALL_DOMAINS, type AccessStatus } from "@/app/actions/news-access"
 
 export type PublicMentionItem = {
   id: string
@@ -397,11 +397,16 @@ function feedsForLevel(level: "national" | "florida" | "miami"): FeedSpec[] {
 
   const feeds: FeedSpec[] = [
     ...queries.map((q, idx) => ({ name: `Google News ${idx + 1}`, url: googleUrl(q), kind: "rss" as const })),
+    // Open-access CRE publications — prioritized to reduce paywall noise in the feed
     { name: "GlobeSt National", url: "https://feeds.feedblitz.com/globest/national", kind: "rss" },
     { name: "GlobeSt Southeast", url: "https://feeds.feedblitz.com/globest/southeast", kind: "rss" },
     { name: "GlobeSt Miami", url: "https://feeds.feedblitz.com/globest/miami", kind: "rss" },
     { name: "Bisnow", url: "https://www.bisnow.com/feed", kind: "rss" },
     { name: "Commercial Observer", url: "https://commercialobserver.com/feed/", kind: "rss" },
+    { name: "The Real Deal", url: "https://therealdeal.com/feed/", kind: "rss" },
+    { name: "CRE Daily", url: "https://credaily.com/feed/", kind: "rss" },
+    { name: "Propmodo", url: "https://propmodo.com/feed/", kind: "rss" },
+    { name: "Trepp Talk", url: "https://www.trepp.com/trepptalk/rss.xml", kind: "rss" },
     { name: "South Florida Business Journal", url: "https://feeds.bizjournals.com/bizj_southflorida", kind: "rss" },
   ]
   return feeds
@@ -620,6 +625,13 @@ async function classifyTop(items: PublicMentionItem[]): Promise<PublicMentionIte
         continue
       }
       try {
+        // Fast-path: skip fetching articles from known paywalled publishers
+        const host = (() => { try { return new URL(url).hostname.replace(/^www\./, "").toLowerCase() } catch { return "" } })()
+        const isKnownPaywall = host && KNOWN_PAYWALL_DOMAINS.some((d) => host === d || host.endsWith(`.${d}`))
+        if (isKnownPaywall) {
+          out[i] = { ...item, access_status: "paywalled", detection_reason: "known_paywall_domain" }
+          continue
+        }
         const c = await classifyArticleAccess({ url, title: item.title, includeExtractedText: false })
         out[i] = {
           ...item,
