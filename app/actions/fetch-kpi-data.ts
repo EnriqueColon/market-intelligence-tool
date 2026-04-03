@@ -91,7 +91,7 @@ Use the most recent available data from Q4 2024 or Q1 2025.`
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "sonar",
+        model: "sonar-pro",
         messages: [
           {
             role: "system",

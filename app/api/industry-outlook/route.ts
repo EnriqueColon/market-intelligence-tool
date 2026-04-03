@@ -132,12 +132,13 @@ function buildPrompt(sources: RetrievedSource[]): {
     .join("\n\n")
 
   const system =
-    "You are a senior CRE distressed-debt analyst at a private equity firm. " +
+    "You are a senior CRE distressed-debt analyst at a private equity firm specializing in distressed commercial real estate debt, NPL acquisitions, and loan workouts. " +
     "Write for the investment committee: plain text only, data-forward, specific numbers and dates. " +
-    "Cite facts from the sources provided. If a metric is not in the sources, write 'data unavailable in this run'. " +
-    "Never invent statistics. Never use markdown symbols (no **, no #, no bullet dashes — use plain hyphens)."
+    "Use your live web search to find the most current market data — CMBS delinquency rates, special servicing volumes, foreclosure filings, note sale pipelines, and deal activity. " +
+    "Supplement with the source articles provided below. Prioritize verifiable, cited facts. " +
+    "Never use markdown symbols (no **, no #, no bullet dashes — use plain hyphens)."
 
-  const user = `Write a distressed commercial real estate debt outlook memo using the source articles below.
+  const user = `Write a distressed commercial real estate debt outlook memo. Use your live search AND the source articles below.
 
 SCOPE: U.S. national, Florida, Miami-Dade
 
@@ -150,32 +151,32 @@ OUTPUT — use these exact five section headers in this order:
 
 WRITING RULES:
 - 4-6 bullets per section (except Key sources).
-- Each bullet: 1-2 sentences, lead with a concrete metric or named entity when the source provides one.
-- Include dollar amounts, percentages, basis points, delinquency rates, loan counts, or deal sizes whenever the sources mention them.
-- Name specific properties, cities, lenders, borrowers, or servicers when cited in the sources.
-- For bullets where source data is thin, note the signal and flag it as limited-data.
-- Key sources: list 4-8 source URLs, one per line, format: Title — https://url
+- Each bullet: 1-2 sentences. Lead with a concrete metric, named entity, or date when available.
+- Include dollar amounts, percentages, basis points, delinquency rates, loan counts, or deal sizes.
+- Name specific properties, cities, lenders, borrowers, or servicers when known.
+- Search for: current CMBS delinquency rates, special servicing volumes, CRE loan maturity wall data, South Florida foreclosure activity, distressed note sale transactions.
+- Key sources: list 4-8 URLs, one per line, format: Title — https://url
 
-SOURCE ARTICLES:
-${richContext || "No source articles available in this run."}`
+SUPPLEMENTAL SOURCE ARTICLES:
+${richContext || "No supplemental articles provided — rely on live search."}`
 
   return { system, user }
 }
 
-async function callOpenAI(
+async function callPerplexity(
   apiKey: string,
   system: string,
   user: string
 ): Promise<string> {
   const response = await withTimeout(
-    fetch("https://api.openai.com/v1/chat/completions", {
+    fetch("https://api.perplexity.ai/chat/completions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: process.env.OPENAI_OUTLOOK_MODEL?.trim() || "gpt-4o-mini",
+        model: "sonar-pro",
         temperature: 0.2,
         max_tokens: 1400,
         messages: [
@@ -185,7 +186,7 @@ async function callOpenAI(
       }),
       cache: "no-store",
     }),
-    35000,
+    45000,
     "Industry outlook generation timed out."
   )
 
@@ -216,15 +217,15 @@ export async function POST() {
     console.error("Industry outlook source retrieval error:", err)
   }
 
-  const apiKey = process.env.OPENAI_API_KEY?.trim()
+  const apiKey = process.env.PERPLEXITY_API_KEY?.trim()
   if (!apiKey) {
-    const fallback = buildFallbackMemo(sources, "Missing OPENAI_API_KEY")
+    const fallback = buildFallbackMemo(sources, "Missing PERPLEXITY_API_KEY")
     return NextResponse.json({ text: fallback }, { status: 200 })
   }
 
   try {
     const { system, user } = buildPrompt(sources)
-    let content = cleanMemoText(await callOpenAI(apiKey, system, user))
+    let content = cleanMemoText(await callPerplexity(apiKey, system, user))
 
     if (!content || !hasRequiredSections(content) || !hasOrderedSections(content)) {
       const repairUser =
@@ -240,7 +241,7 @@ Rules:
 MEMO TO REFORMAT:
 ${content || "(empty)"}
 `
-      const repaired = await callOpenAI(apiKey, system, repairUser)
+      const repaired = await callPerplexity(apiKey, system, repairUser)
       if (repaired) content = cleanMemoText(repaired)
     }
 

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { Card } from "@/components/ui/card"
 import { Newspaper } from "lucide-react"
 
-const INDUSTRY_OUTLOOK_SESSION_KEY = "industry-outlook:v2"
+const INDUSTRY_OUTLOOK_SESSION_KEY = "industry-outlook:v3"
 let industryOutlookMemoryCache: string | null = null
 let industryOutlookInFlight: Promise<string | null> | null = null
 

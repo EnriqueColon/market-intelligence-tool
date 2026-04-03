@@ -64,7 +64,7 @@ Be specific with numbers and trends. Focus on distressed debt opportunities and 
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "sonar",
+        model: "sonar-pro",
         messages: [
           {
             role: "system",

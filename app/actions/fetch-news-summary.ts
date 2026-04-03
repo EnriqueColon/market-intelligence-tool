@@ -234,7 +234,7 @@ async function callPerplexityJson(prompt: string, notes: string[]) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "sonar",
+        model: "sonar-pro",
         messages: [
           { role: "system", content: "Return ONLY valid JSON. Do not invent facts." },
           { role: "user", content: prompt },

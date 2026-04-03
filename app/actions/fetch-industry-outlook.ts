@@ -128,18 +128,18 @@ function isFresh(cachedAt: string) {
   return Date.now() - ms <= CACHE_TTL_MS
 }
 
-async function callOpenAI(messages: { role: "system" | "user"; content: string }[]): Promise<string | null> {
-  const API_KEY = process.env.OPENAI_API_KEY?.trim()
+async function callPerplexity(messages: { role: "system" | "user"; content: string }[]): Promise<string | null> {
+  const API_KEY = process.env.PERPLEXITY_API_KEY?.trim()
   if (!API_KEY) return null
   try {
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    const res = await fetch("https://api.perplexity.ai/chat/completions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-4o",
+        model: "sonar-pro",
         messages,
         temperature: 0.2,
         max_tokens: 1800,
@@ -164,7 +164,7 @@ async function repairJson(raw: string): Promise<IndustryOutlookJson | null> {
   const system =
     "Return ONLY valid JSON matching this schema: keyThemes[], facts{national,florida,miami}, analysis{national,florida,miami}, sources[{title,url}]. No extra keys."
   const user = `Fix to valid JSON only:\n${raw}`
-  const repaired = await callOpenAI([
+  const repaired = await callPerplexity([
     { role: "system", content: system },
     { role: "user", content: user },
   ])
@@ -232,7 +232,7 @@ export async function fetchIndustryOutlook(): Promise<IndustryOutlook> {
   }
 
   const prompt = buildIndustryOutlookPrompt(retrieved)
-  const raw = await callOpenAI([
+  const raw = await callPerplexity([
     { role: "system", content: prompt.system },
     { role: "user", content: prompt.user },
   ])
@@ -266,7 +266,7 @@ export async function fetchIndustryOutlook(): Promise<IndustryOutlook> {
 
   if (retrieved.length >= 5 && parsed.sources.length < 3) {
     const retryPrompt = buildIndustryOutlookPrompt(retrieved)
-    const retryRaw = await callOpenAI([
+    const retryRaw = await callPerplexity([
       { role: "system", content: retryPrompt.system },
       {
         role: "user",

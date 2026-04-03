@@ -150,7 +150,7 @@ async function callPerplexity(prompt: string, notes: string[]): Promise<any | nu
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "sonar",
+      model: "sonar-pro",
       messages: [
         {
           role: "system",
