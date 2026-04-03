@@ -346,51 +346,6 @@ export function IndustryOutlook() {
                 <p className="text-sm text-slate-900 leading-relaxed">{stripReferences(body)}</p>
               )}
 
-              {/* Key Sources */}
-              {(sources.length > 0 || rawSourceLines.some((l) => /https?:\/\//.test(l))) && (
-                <div className="pt-4 mt-2 border-t border-slate-200">
-                  <div className="text-xs font-semibold text-slate-700 uppercase mb-2">Key Sources (for further reading)</div>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    {sources.length > 0
-                      ? sources.map((s, idx) => {
-                          const href = (s.url || "").trim()
-                          const isValidHref = href.startsWith("http://") || href.startsWith("https://")
-                          const displayTitle = (s.title || href || "Source").trim()
-                          let host = ""
-                          try {
-                            host = new URL(href).hostname.replace(/^www\./, "")
-                          } catch {
-                            host = ""
-                          }
-                          return (
-                            <div key={`src-${idx}`} className="rounded border border-slate-200 bg-white p-2">
-                              <div className="text-xs text-slate-700 leading-snug">{displayTitle}</div>
-                              {isValidHref ? (
-                                <div className="mt-1">
-                                  <a
-                                    className="text-xs text-[#006D95] underline hover:text-[#005a7a] break-all"
-                                    href={href}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    title={href}
-                                  >
-                                    Open source{host ? ` (${host})` : ""}
-                                  </a>
-                                </div>
-                              ) : (
-                                <div className="mt-1 text-xs text-slate-500 break-all">{s.url}</div>
-                              )}
-                            </div>
-                          )
-                        })
-                      : rawSourceLines.map((line, idx) => (
-                          <div key={`raw-${idx}`} className="rounded border border-slate-200 bg-white p-2 text-xs text-slate-700 break-all">
-                            {renderTextWithLinks(cleanLine(line))}
-                          </div>
-                        ))}
-                  </div>
-                </div>
-              )}
             </div>
           )
         })()
