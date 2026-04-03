@@ -276,9 +276,9 @@ export function IndustryOutlook() {
                 </div>
               )}
 
-              {/* 2-column: National | Miami/FL */}
+              {/* 2-column: National | Miami/FL — only use grid when both are present */}
               {(nationalSection || miamiSection) && (
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div className={nationalSection && miamiSection ? "grid gap-4 sm:grid-cols-2" : ""}>
                   {nationalSection && (
                     <div className="rounded-lg border border-slate-200 bg-white p-4 space-y-2">
                       <div className="flex items-center gap-1.5">
