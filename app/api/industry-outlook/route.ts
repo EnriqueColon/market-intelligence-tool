@@ -107,44 +107,57 @@ function buildPrompt(sources: RetrievedSource[]): {
   system: string
   user: string
 } {
-  const sourceContext = normalizeSources(sources)
-    .map((s) => `${s.title} — ${s.url}`)
-    .join("\n")
+  // Build rich source context — include publisher, date, and snippet so the
+  // LLM has actual data points to cite, not just headlines.
+  const seen = new Set<string>()
+  const richContext = sources
+    .filter((s) => {
+      const url = String(s.url || "").trim()
+      if (!/^https?:\/\//i.test(url) || seen.has(url.toLowerCase())) return false
+      seen.add(url.toLowerCase())
+      return true
+    })
+    .slice(0, 6)
+    .map((s, i) => {
+      const lines = [
+        `[Source ${i + 1} — ${(s.region || "national").toUpperCase()}]`,
+        `Title: ${s.title}`,
+        `Publisher: ${s.publisher || "Unknown"} | Date: ${s.date || "Recent"}`,
+        `URL: ${s.url}`,
+      ]
+      const snippet = (s.snippet || "").trim()
+      if (snippet) lines.push(`Content: ${snippet.slice(0, 600)}`)
+      return lines.join("\n")
+    })
+    .join("\n\n")
 
   const system =
-    "You are a senior CRE distressed-debt analyst writing for a private equity investment committee. " +
-    "Write plain text only, concise, data-forward, and decision-oriented. " +
-    "Do not invent sources; if uncertain, say data unavailable in this run."
+    "You are a senior CRE distressed-debt analyst at a private equity firm. " +
+    "Write for the investment committee: plain text only, data-forward, specific numbers and dates. " +
+    "Cite facts from the sources provided. If a metric is not in the sources, write 'data unavailable in this run'. " +
+    "Never invent statistics. Never use markdown symbols (no **, no #, no bullet dashes — use plain hyphens)."
 
-  const user = `Create an industry outlook memo for distressed commercial real estate debt.
+  const user = `Write a distressed commercial real estate debt outlook memo using the source articles below.
 
-Scope:
-- U.S.
-- Florida
-- Miami
+SCOPE: U.S. national, Florida, Miami-Dade
 
-Timeframe:
-- Prioritize recent data (last 3-12 months), include period labels when possible.
-
-Output format (exact sections):
+OUTPUT — use these exact five section headers in this order:
 1) Executive Summary
 2) U.S. commercial real estate outlook (CRE debt & distress)
 3) Miami-specific CRE and distressed-debt outlook
 4) How this shapes distressed-debt investing
 5) Key sources (for further reading)
 
-Rules:
-- 3-6 bullets per section (except sources list).
-- Keep bullets to 1-2 sentences.
-- Prefer concrete metrics (rates, %, $, bps, counts) when available.
-- If a metric is unavailable, state "data unavailable in this run".
-- In Key sources, provide 6-12 specific URLs (not generic homepages), one per line:
-  Title — https://url
-- Do NOT use markdown formatting symbols (no **, no #, no code fences).
-- Include all five section headers exactly as written.
+WRITING RULES:
+- 4-6 bullets per section (except Key sources).
+- Each bullet: 1-2 sentences, lead with a concrete metric or named entity when the source provides one.
+- Include dollar amounts, percentages, basis points, delinquency rates, loan counts, or deal sizes whenever the sources mention them.
+- Name specific properties, cities, lenders, borrowers, or servicers when cited in the sources.
+- For bullets where source data is thin, note the signal and flag it as limited-data.
+- Key sources: list 4-8 source URLs, one per line, format: Title — https://url
 
-SOURCES_CONTEXT:
-${sourceContext || "No source context available in this run."}`
+SOURCE ARTICLES:
+${richContext || "No source articles available in this run."}`
 
   return { system, user }
 }
@@ -164,7 +177,7 @@ async function callOpenAI(
       body: JSON.stringify({
         model: process.env.OPENAI_OUTLOOK_MODEL?.trim() || "gpt-4o-mini",
         temperature: 0.2,
-        max_tokens: 1000,
+        max_tokens: 1400,
         messages: [
           { role: "system", content: system },
           { role: "user", content: user },

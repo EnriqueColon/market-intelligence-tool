@@ -152,7 +152,10 @@ export function InvestingBusinessMentions({ level }: InvestingBusinessMentionsPr
                 </TableCell>
               </TableRow>
             )}
-            {news.map((item, index) => (
+            {[...news].sort((a, b) => {
+              const order = { open: 0, partial: 1, paywalled: 2 } as const
+              return (order[a.access_status] ?? 1) - (order[b.access_status] ?? 1)
+            }).map((item, index) => (
               <TableRow key={`${item.id}-${item.url || "no-url"}-${item.date || "no-date"}-${index}`}>
                 <TableCell className="max-w-[520px]">
                   <HoverCard openDelay={250}>
