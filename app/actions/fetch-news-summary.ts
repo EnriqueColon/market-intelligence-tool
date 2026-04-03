@@ -28,6 +28,14 @@ export type NewsBrief = {
 
   banner?: string
   executiveSummary: string
+  dealSpecifics?: {
+    assetType?: string
+    location?: string
+    loanAmount?: string
+    lender?: string
+    borrower?: string
+    dealStatus?: string
+  }
   keyBullets: string[]
   whyItMatters: string[]
   entities: string[]
@@ -234,13 +242,13 @@ async function callPerplexityJson(prompt: string, notes: string[]) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "sonar-pro",
+        model: "sonar",
         messages: [
-          { role: "system", content: "Return ONLY valid JSON. Do not invent facts." },
+          { role: "system", content: "Return ONLY valid JSON. Do not invent facts. Use your live web search when needed to supplement the provided content." },
           { role: "user", content: prompt },
         ],
         temperature: 0.2,
-        max_tokens: 1200,
+        max_tokens: 2500,
       }),
       cache: "no-store",
     })
@@ -377,25 +385,35 @@ SNIPPET: ${snippet || "[none]"}`
   }
 
   if (summarization_mode === "intelligence_brief") {
-    const prompt = `You are a meticulous market intelligence analyst focused on distressed commercial real estate debt and related counterparties.
+    const prompt = `You are a senior market intelligence analyst at a distressed CRE debt investment firm.
 
-The source is limited-access or only partially readable. Create a "bullet-proof" briefing using ONLY publicly available information below.
-Do NOT invent facts. If uncertain, put it in redFlags and lower confidence.
+The article below is partially accessible. Use your live web search to find the full story, recent coverage, and related context about this topic. Combine what you find with the snippet/text provided.
+Do NOT invent facts not supported by sources. If uncertain, note it in redFlags.
 
 TITLE: ${title}
 SOURCE: ${source || "Unknown"}
 DATE: ${date || "Unknown"}
 SNIPPET/PREVIEW: ${snippet || "[none]"}
-PARTIAL EXTRACTED TEXT (may be limited): ${clippedText || "[none]"}
+PARTIAL EXTRACTED TEXT: ${clippedText || "[none]"}
+
+Produce a COMPREHENSIVE briefing — not just a headline summary. An executive needs enough detail to decide whether to act or investigate further.
 
 Return JSON with EXACT keys:
 {
-  "executiveSummary": "2-4 sentences, plain English, no hype",
-  "keyBullets": ["... up to 8 bullets ..."],
-  "whyItMatters": ["... up to 6 bullets ..."],
-  "entities": ["... named entities if present ..."],
-  "redFlags": ["... uncertainties, missing info, access limits ..."],
-  "followUps": ["... concrete questions to validate/act ..."],
+  "executiveSummary": "6-8 sentences covering: what happened, who is involved, key figures (dollar amounts, percentages, dates), geographic context, and direct implications for distressed CRE debt investors",
+  "dealSpecifics": {
+    "assetType": "property type if mentioned (office, multifamily, retail, etc.) or null",
+    "location": "city/market if mentioned or null",
+    "loanAmount": "dollar amount if mentioned or null",
+    "lender": "lender name if mentioned or null",
+    "borrower": "borrower/sponsor name if mentioned or null",
+    "dealStatus": "open, closed, distressed, in workout, foreclosure, etc. or null"
+  },
+  "keyBullets": ["up to 10 bullets — each with a specific fact, figure, named entity, or date. Lead with the most important."],
+  "whyItMatters": ["up to 6 bullets — implications for distressed debt investors, lenders, or market participants"],
+  "entities": ["named firms, individuals, properties, regulators — up to 15"],
+  "redFlags": ["data gaps, access limitations, unconfirmed claims — up to 8"],
+  "followUps": ["concrete next steps to validate or act on this — up to 6"],
   "relatedOpenSources": [{"title":"...","url":"..."}],
   "confidence": 0-100
 }`
@@ -424,11 +442,12 @@ Return JSON with EXACT keys:
       confidence_label,
       banner,
       executiveSummary: exec,
-      keyBullets: asStringArray(parsed?.keyBullets, 8),
+      dealSpecifics: parsed?.dealSpecifics ?? undefined,
+      keyBullets: asStringArray(parsed?.keyBullets, 10),
       whyItMatters: asStringArray(parsed?.whyItMatters, 6),
-      entities: asStringArray(parsed?.entities, 12),
+      entities: asStringArray(parsed?.entities, 15),
       redFlags: asStringArray(parsed?.redFlags, 8),
-      followUps: asStringArray(parsed?.followUps, 8),
+      followUps: asStringArray(parsed?.followUps, 6),
       confidence: clampNumber(parsed?.confidence, 0, 100, snippet ? 55 : 45),
       generatedAt: new Date().toISOString(),
       relatedOpenSources,
@@ -437,26 +456,35 @@ Return JSON with EXACT keys:
   }
 
   // full_summary
-  const prompt = `You are a meticulous market intelligence analyst focused on distressed commercial real estate debt and related counterparties.
+  const prompt = `You are a senior market intelligence analyst at a distressed CRE debt investment firm.
 
-Summarize the content below into a "bullet-proof" briefing.
-Do NOT invent facts. If key details are missing, put them in redFlags and lower confidence.
+Read the full article text below carefully and produce a COMPREHENSIVE briefing — not a headline summary.
+An executive needs enough detail to decide whether to act or investigate further.
+Do NOT invent facts. Cite specific sentences from the article when making claims. If key details are missing, note them in redFlags.
 
 TITLE: ${title}
 SOURCE: ${source || "Unknown"}
 DATE: ${date || "Unknown"}
 
-EXTRACTED TEXT (publicly fetched):
+FULL ARTICLE TEXT:
 ${clippedText || "[No extracted text]"}
 
 Return JSON with EXACT keys:
 {
-  "executiveSummary": "2-4 sentences, plain English, no hype",
-  "keyBullets": ["... up to 8 bullets ..."],
-  "whyItMatters": ["... up to 6 bullets ..."],
-  "entities": ["... named entities if present ..."],
-  "redFlags": ["... uncertainties, missing info, access limits ..."],
-  "followUps": ["... concrete questions to validate/act ..."],
+  "executiveSummary": "6-8 sentences covering: what happened, who is involved (named firms, individuals), key figures (dollar amounts, percentages, loan sizes, dates), geographic context, and direct implications for distressed CRE debt investors",
+  "dealSpecifics": {
+    "assetType": "property type (office, multifamily, retail, industrial, mixed-use, etc.) or null",
+    "location": "city/market or null",
+    "loanAmount": "dollar amount of loan/deal or null",
+    "lender": "lender or servicer name or null",
+    "borrower": "borrower/sponsor name or null",
+    "dealStatus": "open, closed, distressed, in workout, foreclosure, note sale, etc. or null"
+  },
+  "keyBullets": ["up to 10 bullets — each with a specific fact, figure, named entity, or date from the article. Lead with the most important."],
+  "whyItMatters": ["up to 6 bullets — implications for distressed debt investors, lenders, or market participants"],
+  "entities": ["all named firms, individuals, properties, regulators mentioned — up to 15"],
+  "redFlags": ["missing data, unverified claims, access limitations, conflicts of interest — up to 8"],
+  "followUps": ["concrete next steps to validate or act on this intelligence — up to 6"],
   "relatedOpenSources": [{"title":"...","url":"..."}],
   "confidence": 0-100
 }`
@@ -485,11 +513,12 @@ Return JSON with EXACT keys:
     confidence_label,
     banner,
     executiveSummary: exec,
-    keyBullets: asStringArray(parsed?.keyBullets, 8),
+    dealSpecifics: parsed?.dealSpecifics ?? undefined,
+    keyBullets: asStringArray(parsed?.keyBullets, 10),
     whyItMatters: asStringArray(parsed?.whyItMatters, 6),
-    entities: asStringArray(parsed?.entities, 12),
+    entities: asStringArray(parsed?.entities, 15),
     redFlags: asStringArray(parsed?.redFlags, 8),
-    followUps: asStringArray(parsed?.followUps, 8),
+    followUps: asStringArray(parsed?.followUps, 6),
     confidence: clampNumber(parsed?.confidence, 0, 100, 70),
     generatedAt: new Date().toISOString(),
     relatedOpenSources,

@@ -5,6 +5,8 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { Info } from "lucide-react"
 import {
   Table,
   TableBody,
@@ -169,7 +171,22 @@ export function PublicMentions({ level }: PublicMentionsProps) {
               <TableHead>Date</TableHead>
               <TableHead>Region</TableHead>
               <TableHead>Topic</TableHead>
-              <TableHead>Access</TableHead>
+              <TableHead>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="flex items-center gap-1 cursor-default">
+                        Access <Info className="h-3 w-3 text-slate-400" />
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="max-w-[260px] space-y-1.5 p-3 text-xs">
+                      <div className="flex items-start gap-2"><span>🟢</span><span><strong>Open</strong> — Full article text fetched. Brief uses complete content.</span></div>
+                      <div className="flex items-start gap-2"><span>🟡</span><span><strong>Partial</strong> — Article loaded but only a preview/snippet was accessible. Some content requires login or subscription.</span></div>
+                      <div className="flex items-start gap-2"><span>🔒</span><span><strong>Paywalled</strong> — Full article is behind a paywall. Brief uses headline and public snippet only.</span></div>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </TableHead>
               <TableHead>Link</TableHead>
               <TableHead>Brief</TableHead>
             </TableRow>
@@ -310,7 +327,21 @@ export function PublicMentions({ level }: PublicMentionsProps) {
 
             {!summaryLoading && brief && (
               <div className="space-y-4">
-                <div className="text-sm text-slate-800">{brief.executiveSummary}</div>
+                <div className="text-sm text-slate-800 leading-relaxed">{brief.executiveSummary}</div>
+
+                {brief.dealSpecifics && Object.values(brief.dealSpecifics).some(Boolean) && (
+                  <div className="rounded-lg border border-[#006D95]/20 bg-[#006D95]/5 p-3">
+                    <div className="text-xs font-semibold text-[#006D95] uppercase mb-2">Deal Specifics</div>
+                    <div className="grid gap-x-4 gap-y-1 sm:grid-cols-2">
+                      {brief.dealSpecifics.assetType && <div className="text-xs text-slate-700"><span className="font-medium">Asset Type:</span> {brief.dealSpecifics.assetType}</div>}
+                      {brief.dealSpecifics.location && <div className="text-xs text-slate-700"><span className="font-medium">Location:</span> {brief.dealSpecifics.location}</div>}
+                      {brief.dealSpecifics.loanAmount && <div className="text-xs text-slate-700"><span className="font-medium">Loan Amount:</span> {brief.dealSpecifics.loanAmount}</div>}
+                      {brief.dealSpecifics.lender && <div className="text-xs text-slate-700"><span className="font-medium">Lender:</span> {brief.dealSpecifics.lender}</div>}
+                      {brief.dealSpecifics.borrower && <div className="text-xs text-slate-700"><span className="font-medium">Borrower:</span> {brief.dealSpecifics.borrower}</div>}
+                      {brief.dealSpecifics.dealStatus && <div className="text-xs text-slate-700"><span className="font-medium">Status:</span> {brief.dealSpecifics.dealStatus}</div>}
+                    </div>
+                  </div>
+                )}
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">

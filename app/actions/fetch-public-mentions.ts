@@ -397,17 +397,20 @@ function feedsForLevel(level: "national" | "florida" | "miami"): FeedSpec[] {
 
   const feeds: FeedSpec[] = [
     ...queries.map((q, idx) => ({ name: `Google News ${idx + 1}`, url: googleUrl(q), kind: "rss" as const })),
-    // Open-access CRE publications — prioritized to reduce paywall noise in the feed
+    // Open-access CRE publications
     { name: "GlobeSt National", url: "https://feeds.feedblitz.com/globest/national", kind: "rss" },
     { name: "GlobeSt Southeast", url: "https://feeds.feedblitz.com/globest/southeast", kind: "rss" },
     { name: "GlobeSt Miami", url: "https://feeds.feedblitz.com/globest/miami", kind: "rss" },
     { name: "Bisnow", url: "https://www.bisnow.com/feed", kind: "rss" },
+    { name: "Bisnow South Florida", url: "https://www.bisnow.com/south-florida/feed", kind: "rss" },
     { name: "Commercial Observer", url: "https://commercialobserver.com/feed/", kind: "rss" },
     { name: "The Real Deal", url: "https://therealdeal.com/feed/", kind: "rss" },
+    { name: "The Real Deal South Florida", url: "https://therealdeal.com/miami/feed/", kind: "rss" },
     { name: "CRE Daily", url: "https://credaily.com/feed/", kind: "rss" },
     { name: "Propmodo", url: "https://propmodo.com/feed/", kind: "rss" },
     { name: "Trepp Talk", url: "https://www.trepp.com/trepptalk/rss.xml", kind: "rss" },
     { name: "South Florida Business Journal", url: "https://feeds.bizjournals.com/bizj_southflorida", kind: "rss" },
+    { name: "Miami Herald Business", url: "https://www.miamiherald.com/news/business/real-estate/?widgetName=rssfeed&widgetContentId=712015&getXmlFeed=true", kind: "rss" },
   ]
   return feeds
 }
@@ -724,7 +727,8 @@ export async function fetchPublicMentions(
   }
 
   // Rank by distress/CRE relevance + geo boost (for FL/Miami).
-  const relaxGeo = level !== "national" && combined.length < 20
+  // relaxGeo: lower threshold so FL/Miami levels always get national CRE as fill
+  const relaxGeo = level !== "national" && combined.length < 30
   const ranked = combined
     .map((x) => {
       const text = `${x.title || ""} ${x.snippet || ""} ${x.source || ""} ${x.url || ""}`
@@ -745,17 +749,24 @@ export async function fetchPublicMentions(
                   : cre
                     ? 1
                     : 0
+      const geoTag = regionTag(text)
+      // For FL/Miami levels: boost geo-matched articles but keep national CRE
+      // visible as fill (score +1) rather than leaving them at 0.
       const geo = relaxGeo
         ? 0
-        : regionTag(text) === "miami"
+        : geoTag === "miami"
           ? level === "miami"
             ? 4
-            : 0
-          : regionTag(text) === "florida"
+            : level === "florida"
+              ? 2
+              : 0
+          : geoTag === "florida"
             ? level === "florida"
               ? 3
               : 0
-            : 0
+            : level === "florida" || level === "miami"
+              ? 1  // national CRE articles fill when geo-specific coverage is thin
+              : 0
       const datePenalty = x.undated ? 2 : 0
       return { x, score: base + geo - datePenalty }
     })

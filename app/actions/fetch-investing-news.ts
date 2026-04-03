@@ -382,17 +382,23 @@ function feedsForInvestingLevel(level: "national" | "florida" | "miami"): FeedSp
         : "Miami OR Miami-Dade OR Brickell OR Miami Beach OR Fort Lauderdale OR Broward OR Doral"
 
   const generalFinanceQueries = [
-    `"interest rate" OR "Federal Reserve" OR "Fed" OR "rate cut" (${region})`,
-    `"earnings" OR "quarterly results" OR "revenue" OR "profit" (${region})`,
-    `"merger" OR "acquisition" OR "M&A" OR "buyout" (${region})`,
-    `"IPO" OR "initial public offering" OR "goes public" (${region})`,
-    `"bank" OR "hedge fund" OR "investment bank" (${region})`,
-    `"stock market" OR "S&P 500" OR "Dow Jones" OR "Nasdaq" (${region})`,
-    `"treasury yield" OR "basis points" OR "bond market" (${region})`,
-    `"share buyback" OR "dividend" OR "shareholder" (${region})`,
-    `"credit spread" OR "corporate bond" OR "investment grade" OR "high yield" (${region})`,
-    `"debt ceiling" OR "fiscal" OR "budget" OR "deficit" (${region})`,
-    `"SEC" OR "regulatory" OR "enforcement" OR "compliance" (${region})`,
+    // Banking & lender health — most relevant to distressed CRE investors
+    `"regional bank" OR "community bank" OR "bank earnings" OR "bank stress" OR "CRE loans" OR "commercial real estate exposure" (${region})`,
+    `"JPMorgan" OR "Wells Fargo" OR "Bank of America" OR "Goldman Sachs" OR "Morgan Stanley" earnings OR results (${region})`,
+    // Private credit & capital markets
+    `"private credit" OR "private equity" OR "debt fund" OR "credit fund" OR "CLO" OR "direct lending" OR "dry powder" (${region})`,
+    `"credit spread" OR "corporate bond" OR "investment grade" OR "high yield" OR "bond issuance" OR "capital raise" (${region})`,
+    // M&A, IPO, Corporate events
+    `"merger" OR "acquisition" OR "M&A" OR "buyout" OR "deal announced" (${region})`,
+    `"IPO" OR "initial public offering" OR "goes public" OR "fund closing" OR "fund raise" (${region})`,
+    // Regulation & lending standards
+    `"SEC" OR "FDIC" OR "OCC" OR "Basel" OR "lending standards" OR "reserve requirements" OR "regulatory" OR "enforcement" (${region})`,
+    `"earnings" OR "quarterly results" OR "revenue" OR "profit" OR "guidance" (${region})`,
+    // Macro & rates — capped lower in round-robin via MAX_PER_TOPIC_FED
+    `"Federal Reserve" OR "FOMC" OR "rate cut" OR "rate hike" OR "monetary policy" (${region})`,
+    `"treasury yield" OR "basis points" OR "SOFR" OR "interest rate" OR "10-year" (${region})`,
+    `"inflation" OR "CPI" OR "PCE" OR "GDP" OR "jobs report" OR "unemployment" (${region})`,
+    `"fiscal" OR "budget" OR "deficit" OR "debt ceiling" OR "government spending" (${region})`,
   ].map((q) => withWhen(q))
 
   const googleUrl = (q: string) =>
@@ -400,9 +406,10 @@ function feedsForInvestingLevel(level: "national" | "florida" | "miami"): FeedSp
 
   const feeds: FeedSpec[] = [
     ...generalFinanceQueries.map((q, idx) => ({ name: `Google News Finance ${idx + 1}`, url: googleUrl(q), kind: "rss" as const })),
-    { name: "CNBC US News", url: "https://www.cnbc.com/id/15837362/device/rss/rss.html", kind: "rss" },
-    { name: "Yahoo Finance", url: "https://finance.yahoo.com/news/rss", kind: "rss" },
-    { name: "MarketWatch", url: "https://feeds.content.dowjones.io/public/rss/mw_topstories", kind: "rss" },
+    // Broader financial press — kept but Fed/rates articles from these are balanced by topic cap
+    { name: "CNBC Finance", url: "https://www.cnbc.com/id/10000664/device/rss/rss.html", kind: "rss" },
+    { name: "Reuters Finance", url: "https://feeds.reuters.com/reuters/businessNews", kind: "rss" },
+    { name: "Bloomberg Markets", url: "https://feeds.bloomberg.com/markets/news.rss", kind: "rss" },
   ]
   return feeds
 }
@@ -779,10 +786,16 @@ export async function fetchInvestingNews(
   }
 
   const MAX_PER_TOPIC = 4
+  // Fed/rates topics are capped lower so they don't crowd out banking, private
+  // credit, earnings, and other categories that are more directly actionable.
+  const FED_TOPICS = new Set(["Interest Rates/Fed", "Rates/Yields", "Fiscal Policy/Budget"])
+  const MAX_PER_FED_TOPIC = 2
   const out: PublicMentionItem[] = []
   const topics = Array.from(byTopic.keys())
   for (let round = 0; round < MAX_PER_TOPIC && out.length < MAX_ITEMS; round++) {
     for (const topic of topics) {
+      const cap = FED_TOPICS.has(topic) ? MAX_PER_FED_TOPIC : MAX_PER_TOPIC
+      if (round >= cap) continue
       const list = byTopic.get(topic)!
       if (round < list.length && out.length < MAX_ITEMS) {
         out.push(list[round])
@@ -790,8 +803,9 @@ export async function fetchInvestingNews(
     }
   }
   for (const topic of topics) {
+    const cap = FED_TOPICS.has(topic) ? MAX_PER_FED_TOPIC : MAX_PER_TOPIC
     const list = byTopic.get(topic)!
-    for (let i = MAX_PER_TOPIC; i < list.length && out.length < MAX_ITEMS; i++) {
+    for (let i = cap; i < list.length && out.length < MAX_ITEMS; i++) {
       out.push(list[i])
     }
   }
