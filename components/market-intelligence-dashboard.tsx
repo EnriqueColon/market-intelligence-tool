@@ -12,6 +12,7 @@ import { ArticleDigest } from "@/components/article-digest"
 import { IndustryOutlook } from "@/components/industry-outlook"
 import { SendNewsEmailButton } from "@/components/send-news-email-button"
 import { MarketResearchLibrary } from "@/components/market-research-library"
+import { MarketResearchFeed } from "@/components/market-research-feed"
 
 const LEVEL_OPTIONS = [
   { value: "national", label: "National" },
@@ -163,9 +164,10 @@ export function MarketIntelligenceDashboard({
                     <h2 className="font-heading text-xl font-medium uppercase text-[#006D95] leading-[1.3]">Market Research</h2>
                   </div>
                   <p className="text-sm text-muted-foreground">
-                    Curated institutional reports (PDF) will be uploaded here.
+                    Live research feed from CBRE, JLL, Trepp, MBA, Moody&apos;s and more — plus your private PDF library.
                   </p>
                 </div>
+                <MarketResearchFeed />
                 <MarketResearchLibrary />
               </TabsContent>
             )}
