@@ -1,268 +1,230 @@
 "use server"
 
-export type LegalUpdate = {
+export type LegalItem = {
   id: string
-  billNumber?: string
+  section: "regulatory" | "legislative" | "enforcement"
   title: string
-  summary?: string
   source: string
-  jurisdiction: "Federal" | "Florida"
-  category: "Bill" | "Rule"
+  date: string
+  jurisdiction: "Federal" | "Florida" | "Multi-State"
+  summary: string
+  whyItMatters: string
   status?: string
-  date?: string
   url?: string
 }
 
 export type LegalUpdatesResponse = {
-  updates: LegalUpdate[]
-  sources: {
-    federalRegister: boolean
-    legiscan: boolean
-  }
+  items: LegalItem[]
+  generatedAt: string
   notes: string[]
 }
 
-const DEFAULT_TERMS = [
-  "commercial real estate",
-  "real estate",
-  "commercial property",
-  "commercial mortgage",
-  "mortgage",
-  "lending",
-  "loan",
-  "foreclosure",
-  "distressed debt",
-  "debt",
-  "CMBS",
-  "office",
-  "retail",
-  "industrial",
-  "multifamily",
-  "apartment",
-  "landlord",
-  "tenant",
-  "lease",
-  "property tax",
-]
+// ── Perplexity query per section ───────────────────────────────────────────────
 
-const SEARCH_QUERY = DEFAULT_TERMS.map((term) => `"${term}"`).join(" OR ")
-const FLORIDA_FALLBACK_QUERY = `"real estate" OR "commercial" OR "mortgage" OR "loan"`
+const SECTION_PROMPTS: Record<
+  "regulatory" | "legislative" | "enforcement",
+  string
+> = {
+  regulatory: `You are a CRE regulatory intelligence analyst. Use live web search to find the 4-5 most recent regulatory developments (past 90 days) from agencies including OCC, FDIC, Federal Reserve, CFPB, HUD, or Florida OFR that directly affect commercial real estate lending, CRE loan servicing, foreclosure processes, bank CRE concentration limits, or CMBS/securitization rules.
 
-const LEGISCAN_API_KEY = process.env.LEGISCAN_API_KEY
+For each item include:
+- The exact rule/guidance title
+- Issuing agency (source)
+- Publication or effective date
+- Whether it is Federal or Florida jurisdiction
+- A 2-3 sentence plain-English summary of what it changes
+- A 1-2 sentence "Why it matters" specifically for a distressed CRE debt investor (note sales, workouts, foreclosures, REO)
+- Direct URL to the rule or announcement if available
+- Status: Proposed Rule, Final Rule, Guidance, or Notice
 
-function normalizeDate(date?: string) {
-  if (!date) return undefined
-  const parsed = new Date(date)
-  if (Number.isNaN(parsed.getTime())) return date
-  return parsed.toISOString().slice(0, 10)
-}
-
-function getLatestAction(history?: Array<{ date?: string; action?: string }>) {
-  if (!Array.isArray(history)) return undefined
-  let latest: { date?: string; action?: string; time: number } | undefined
-
-  for (const entry of history) {
-    if (!entry?.date) continue
-    const time = Date.parse(entry.date)
-    if (Number.isNaN(time)) continue
-    if (!latest || time > latest.time) {
-      latest = { date: entry.date, action: entry.action, time }
+Return ONLY valid JSON:
+{
+  "items": [
+    {
+      "title": "exact rule or guidance title",
+      "source": "agency name",
+      "date": "YYYY-MM-DD",
+      "jurisdiction": "Federal or Florida",
+      "summary": "2-3 sentence plain-English summary",
+      "whyItMatters": "1-2 sentences on relevance to distressed CRE debt investing",
+      "status": "Proposed Rule | Final Rule | Guidance | Notice",
+      "url": "https://..."
     }
-  }
-
-  if (!latest) return undefined
-  return { date: latest.date, action: latest.action }
-}
-
-async function fetchLegiScanBillDetail(
-  billId: string | number
-): Promise<Partial<LegalUpdate>> {
-  if (!LEGISCAN_API_KEY) return {}
-
-  const params = new URLSearchParams({
-    key: LEGISCAN_API_KEY,
-    op: "getBill",
-    id: String(billId),
-  })
-
-  const url = `https://api.legiscan.com/?${params.toString()}`
-  const response = await fetch(url, { next: { revalidate: 3600 } })
-  if (!response.ok) return {}
-
-  const data = await response.json()
-  if (data?.status !== "OK") return {}
-
-  const bill = data?.bill
-  if (!bill) return {}
-
-  const latestAction = getLatestAction(bill.history)
-
-  return {
-    title: bill.title || undefined,
-    summary: bill.description || undefined,
-    billNumber: bill.bill_number || undefined,
-    url: bill.url || undefined,
-    status: latestAction?.action || undefined,
-    date: normalizeDate(latestAction?.date || bill.status_date),
-  }
-}
-
-async function fetchFederalRegisterUpdates(query: string): Promise<LegalUpdate[]> {
-  const params = new URLSearchParams({
-    per_page: "10",
-    order: "newest",
-    "conditions[term]": query,
-  })
-
-  const fields = [
-    "title",
-    "abstract",
-    "publication_date",
-    "document_number",
-    "html_url",
-    "type",
-    "agencies",
   ]
+}`,
 
-  fields.forEach((field) => params.append("fields[]", field))
+  legislative: `You are a CRE legislative intelligence analyst. Use live web search to find the 4-5 most recent (past 90 days) Florida state bills or U.S. federal bills with active legislative movement that affect commercial real estate, mortgage lending, foreclosure law, property rights, landlord/tenant regulations, property tax assessments, or CRE-related banking regulations.
 
-  const url = `https://www.federalregister.gov/api/v1/documents.json?${params.toString()}`
-  const response = await fetch(url, { next: { revalidate: 3600 } })
-  if (!response.ok) return []
+Prioritize bills that have passed a committee, received a floor vote, or been signed into law. Skip bills with no movement.
 
-  const data = await response.json()
-  const results = Array.isArray(data?.results) ? data.results : []
+For each item include:
+- The official bill title and bill number
+- Legislative body (e.g., Florida Senate, U.S. House)
+- Most recent action date
+- Whether it is Federal or Florida jurisdiction
+- A 2-3 sentence plain-English summary of what the bill does
+- A 1-2 sentence "Why it matters" for a distressed CRE debt investor
+- Direct URL to the bill text or tracker
+- Status: e.g., "Passed Senate Committee", "Signed into Law", "Awaiting Floor Vote"
 
-  return results.map((item: any) => ({
-    id: `fr-${item.document_number || item.html_url}`,
-    title: item.title || "Untitled Federal Register Item",
-    summary: item.abstract || undefined,
-    source: "Federal Register",
-    jurisdiction: "Federal",
-    category: "Rule",
-    status: item.type || "Rule",
-    date: normalizeDate(item.publication_date),
-    url: item.html_url || undefined,
-  }))
-}
-
-async function fetchFloridaUpdates(
-  query: string,
-  year: string = "2"
-): Promise<{ updates: LegalUpdate[]; note?: string }> {
-  if (!LEGISCAN_API_KEY) return []
-
-  const params = new URLSearchParams({
-    key: LEGISCAN_API_KEY,
-    op: "getSearch",
-    state: "FL",
-    query,
-    year,
-    page: "1",
-  })
-
-  const url = `https://api.legiscan.com/?${params.toString()}`
-  const response = await fetch(url, { next: { revalidate: 3600 } })
-  if (!response.ok) {
-    return { updates: [], note: `LegiScan request failed (${response.status}).` }
-  }
-
-  const data = await response.json()
-  if (data?.status !== "OK") {
-    const message = data?.alert?.message || "LegiScan returned status ERROR."
-    return { updates: [], note: message }
-  }
-
-  const searchResult = data.searchresult || {}
-  const entries = Array.isArray(searchResult.results)
-    ? searchResult.results
-    : Object.entries(searchResult)
-        .filter(([key]) => key !== "summary")
-        .map(([, value]) => value)
-
-  const sortedEntries = [...entries].sort((a: any, b: any) => {
-    const aTime = a?.last_action_date ? Date.parse(a.last_action_date) : 0
-    const bTime = b?.last_action_date ? Date.parse(b.last_action_date) : 0
-    return bTime - aTime
-  })
-
-  const limitedEntries = sortedEntries.slice(0, 10)
-  const billIds = limitedEntries
-    .map((item: any) => item.bill_id)
-    .filter((id: any) => id !== undefined && id !== null)
-
-  const detailPairs = await Promise.all(
-    billIds.slice(0, 10).map(async (id: number | string) => {
-      const detail = await fetchLegiScanBillDetail(id)
-      return [String(id), detail] as const
-    })
-  )
-
-  const detailMap = new Map(detailPairs)
-
-  const updates = limitedEntries.map((item: any) => {
-    const detail = detailMap.get(String(item.bill_id)) || {}
-    return {
-      id: `fl-${item.bill_id || item.bill_number}`,
-      billNumber: detail.billNumber || item.bill_number || undefined,
-      title: detail.title || item.title || "Untitled Florida Bill",
-      summary: detail.summary || item.description || undefined,
-      source: "LegiScan",
-      jurisdiction: "Florida",
-      category: "Bill",
-      status: detail.status || item.last_action || undefined,
-      date: detail.date || normalizeDate(item.last_action_date),
-      url: detail.url || item.url || undefined,
+Return ONLY valid JSON:
+{
+  "items": [
+    {
+      "title": "full bill title",
+      "source": "bill number + legislative body (e.g. SB 1234 — Florida Senate)",
+      "date": "YYYY-MM-DD",
+      "jurisdiction": "Federal or Florida",
+      "summary": "2-3 sentence plain-English summary",
+      "whyItMatters": "1-2 sentences on relevance to distressed CRE debt investing",
+      "status": "current legislative status",
+      "url": "https://..."
     }
-  })
+  ]
+}`,
 
-  const total = searchResult?.summary?.count
-  const note =
-    updates.length === 0
-      ? `LegiScan returned 0 results for FL query (year=${year}).`
-      : undefined
+  enforcement: `You are a CRE enforcement and litigation intelligence analyst. Use live web search to find the 4-5 most recent (past 90 days) high-impact developments in any of these categories:
+1. FDIC enforcement actions or consent orders against banks with significant CRE loan exposure
+2. OCC enforcement actions related to CRE lending practices
+3. Major commercial real estate Chapter 11 bankruptcy filings (assets > $50M)
+4. Court-appointed receiverships on large CRE assets in Florida or nationally
+5. High-profile lender liability or foreclosure litigation with broad market implications
 
-  return { updates, note: total ? `${note || ""} Total matches: ${total}.`.trim() : note }
+For each item include:
+- Descriptive title (institution name + action type, or property/borrower + filing type)
+- Source (FDIC, OCC, court, etc.)
+- Date of action or filing
+- Whether it is Federal or Florida (or Multi-State)
+- A 2-3 sentence summary of what happened and who is involved
+- A 1-2 sentence "Why it matters" for a distressed CRE debt investor looking for note sale or acquisition opportunities
+- Direct URL to the enforcement action, court filing, or press release if available
+- Status: e.g., "Consent Order Issued", "Chapter 11 Filed", "Receivership Appointed", "Settled"
+
+Return ONLY valid JSON:
+{
+  "items": [
+    {
+      "title": "descriptive title",
+      "source": "FDIC | OCC | U.S. Bankruptcy Court | etc.",
+      "date": "YYYY-MM-DD",
+      "jurisdiction": "Federal or Florida or Multi-State",
+      "summary": "2-3 sentence summary",
+      "whyItMatters": "1-2 sentences on relevance to distressed CRE debt investing",
+      "status": "action status",
+      "url": "https://..."
+    }
+  ]
+}`,
 }
 
-async function fetchFloridaUpdatesWithFallback(): Promise<{ updates: LegalUpdate[]; notes: string[] }> {
-  const notes: string[] = []
-  const primary = await fetchFloridaUpdates(SEARCH_QUERY, "1")
-  if (primary.note) notes.push(primary.note)
-  if (primary.updates.length > 0) return { updates: primary.updates, notes }
+// ── Perplexity fetch ───────────────────────────────────────────────────────────
 
-  const fallback = await fetchFloridaUpdates(FLORIDA_FALLBACK_QUERY, "1")
-  if (fallback.note) notes.push(fallback.note)
-  return { updates: fallback.updates, notes }
+async function querySection(
+  apiKey: string,
+  section: "regulatory" | "legislative" | "enforcement"
+): Promise<LegalItem[]> {
+  try {
+    const res = await fetch("https://api.perplexity.ai/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "sonar",
+        messages: [
+          {
+            role: "system",
+            content:
+              "Return ONLY valid JSON. Use live web search. Do not fabricate items — only include real, verifiable developments.",
+          },
+          { role: "user", content: SECTION_PROMPTS[section] },
+        ],
+        temperature: 0.1,
+        max_tokens: 1800,
+      }),
+      cache: "no-store",
+    })
+
+    if (!res.ok) return []
+
+    const data = await res.json()
+    const content: string = data?.choices?.[0]?.message?.content || ""
+    const match = content.match(/\{[\s\S]*\}/)
+    if (!match) return []
+
+    const parsed = JSON.parse(match[0])
+    const rawItems = Array.isArray(parsed?.items) ? parsed.items : []
+
+    return rawItems
+      .filter(
+        (item: Record<string, unknown>) =>
+          item && typeof item.title === "string" && item.title.trim()
+      )
+      .map((item: Record<string, unknown>, idx: number) => ({
+        id: `${section}-${idx}-${String(item.title).slice(0, 20).replace(/\s+/g, "-").toLowerCase()}`,
+        section,
+        title: String(item.title).trim(),
+        source: typeof item.source === "string" ? item.source.trim() : "",
+        date: typeof item.date === "string" ? item.date.trim() : "",
+        jurisdiction: (["Federal", "Florida", "Multi-State"].includes(
+          String(item.jurisdiction)
+        )
+          ? item.jurisdiction
+          : "Federal") as LegalItem["jurisdiction"],
+        summary: typeof item.summary === "string" ? item.summary.trim() : "",
+        whyItMatters:
+          typeof item.whyItMatters === "string"
+            ? item.whyItMatters.trim()
+            : "",
+        status: typeof item.status === "string" ? item.status.trim() : undefined,
+        url: typeof item.url === "string" ? item.url.trim() : undefined,
+      }))
+  } catch {
+    return []
+  }
 }
+
+// ── Simple in-process cache (avoids redundant calls within a session) ──────────
+
+const SESSION_KEY = "legal-updates:v1"
+let _cache: { key: string; data: LegalUpdatesResponse } | null = null
+
+// ── Main export ────────────────────────────────────────────────────────────────
 
 export async function fetchLegalUpdates(): Promise<LegalUpdatesResponse> {
+  if (_cache?.key === SESSION_KEY) return _cache.data
+
   const notes: string[] = []
-  const sources = {
-    federalRegister: true,
-    legiscan: Boolean(LEGISCAN_API_KEY),
+  const API_KEY = process.env.PERPLEXITY_API_KEY?.trim()
+
+  if (!API_KEY) {
+    return {
+      items: [],
+      generatedAt: new Date().toISOString(),
+      notes: ["Missing PERPLEXITY_API_KEY — legal intelligence feed unavailable."],
+    }
   }
 
-  if (!LEGISCAN_API_KEY) {
-    notes.push("Set LEGISCAN_API_KEY to enable Florida bill updates from LegiScan.")
-  }
-
-  const [federalRegister, florida] = await Promise.all([
-    fetchFederalRegisterUpdates(SEARCH_QUERY),
-    fetchFloridaUpdatesWithFallback(),
+  // Run all three section queries in parallel
+  const [regulatory, legislative, enforcement] = await Promise.all([
+    querySection(API_KEY, "regulatory"),
+    querySection(API_KEY, "legislative"),
+    querySection(API_KEY, "enforcement"),
   ])
 
-  if (florida.notes.length > 0) {
-    notes.push(...florida.notes)
+  const allItems = [...regulatory, ...legislative, ...enforcement]
+
+  if (allItems.length === 0) {
+    notes.push("No legal intelligence items returned. Check Perplexity API key and quota.")
   }
 
-  const updates = [...federalRegister, ...florida.updates]
-    .filter((item) => item.title)
-    .sort((a, b) => {
-      const aTime = a.date ? new Date(a.date).getTime() : 0
-      const bTime = b.date ? new Date(b.date).getTime() : 0
-      return bTime - aTime
-    })
+  const response: LegalUpdatesResponse = {
+    items: allItems,
+    generatedAt: new Date().toISOString(),
+    notes,
+  }
 
-  return { updates, sources, notes }
+  _cache = { key: SESSION_KEY, data: response }
+  return response
 }
