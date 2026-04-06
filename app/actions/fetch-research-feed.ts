@@ -11,8 +11,11 @@ export type ResearchReport = {
   url: string
 }
 
+export type ArchivedReport = ResearchReport & { fetchedAt: string }
+
 export type ResearchFeedResponse = {
-  reports: ResearchReport[]
+  reports: ResearchReport[]        // fresh from Perplexity this session
+  archive: ArchivedReport[]        // previously stored, not in fresh batch
   generatedAt: string
   notes: string[]
 }
@@ -184,6 +187,36 @@ async function runWithConcurrency<T>(
   return results
 }
 
+const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL
+  ? `https://${process.env.VERCEL_URL}`
+  : "http://localhost:3000"
+
+async function saveToArchive(reports: ResearchReport[]): Promise<void> {
+  try {
+    await fetch(`${BASE_URL}/api/research/feed-reports`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reports }),
+      cache: "no-store",
+    })
+  } catch {
+    // Non-critical — fresh results still show even if archive save fails
+  }
+}
+
+async function loadArchive(): Promise<ArchivedReport[]> {
+  try {
+    const res = await fetch(`${BASE_URL}/api/research/feed-reports`, {
+      cache: "no-store",
+    })
+    if (!res.ok) return []
+    const data = await res.json()
+    return Array.isArray(data?.reports) ? data.reports : []
+  } catch {
+    return []
+  }
+}
+
 export async function fetchResearchFeed(): Promise<ResearchFeedResponse> {
   const notes: string[] = []
   const API_KEY = process.env.PERPLEXITY_API_KEY?.trim()
@@ -191,20 +224,18 @@ export async function fetchResearchFeed(): Promise<ResearchFeedResponse> {
   if (!API_KEY) {
     return {
       reports: [],
+      archive: [],
       generatedAt: new Date().toISOString(),
       notes: ["Missing PERPLEXITY_API_KEY"],
     }
   }
 
   // Run one query per publisher, 5 at a time to stay within rate limits
-  const tasks = PUBLISHERS.map(
-    (pub) => () => queryPublisher(API_KEY, pub)
-  )
-
+  const tasks = PUBLISHERS.map((pub) => () => queryPublisher(API_KEY, pub))
   const results = await runWithConcurrency(tasks, 5)
   const allReports = results.flat()
 
-  // Deduplicate by title (case-insensitive)
+  // Deduplicate fresh results by title (case-insensitive)
   const seen = new Set<string>()
   const deduped: ResearchReport[] = []
   for (const r of allReports) {
@@ -214,25 +245,34 @@ export async function fetchResearchFeed(): Promise<ResearchFeedResponse> {
     deduped.push(r)
   }
 
-  // Sort: Florida/Southeast first, then Distressed/CMBS, then rest by publisher
+  // Sort: Florida/Southeast first, then Distressed/CMBS, Capital Markets, Banking
   const topicPriority: Record<string, number> = {
     "Florida/Southeast": 0,
-    "Distressed/CMBS": 1,
-    "Capital Markets": 2,
-    "Banking/Lending": 3,
+    "Distressed/CMBS":   1,
+    "Capital Markets":   2,
+    "Banking/Lending":   3,
   }
-  deduped.sort((a, b) => {
-    const pa = topicPriority[a.topic] ?? 9
-    const pb = topicPriority[b.topic] ?? 9
-    return pa - pb
-  })
+  deduped.sort((a, b) => (topicPriority[a.topic] ?? 9) - (topicPriority[b.topic] ?? 9))
 
   if (deduped.length === 0) {
     notes.push("No reports returned from any publisher.")
   }
 
+  // Persist fresh results and load archive in parallel
+  const [, archiveRaw] = await Promise.all([
+    saveToArchive(deduped),
+    loadArchive(),
+  ])
+
+  // Archive = stored reports NOT in the current fresh batch
+  const freshKeys = new Set(deduped.map((r) => r.title.toLowerCase().trim()))
+  const archive: ArchivedReport[] = archiveRaw.filter(
+    (r) => !freshKeys.has(r.title.toLowerCase().trim())
+  )
+
   return {
     reports: deduped,
+    archive,
     generatedAt: new Date().toISOString(),
     notes,
   }

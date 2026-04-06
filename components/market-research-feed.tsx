@@ -1,13 +1,13 @@
 "use client"
 
 import { useCallback, useState } from "react"
-import { fetchResearchFeed, type ResearchReport } from "@/app/actions/fetch-research-feed"
+import { fetchResearchFeed, type ResearchReport, type ArchivedReport } from "@/app/actions/fetch-research-feed"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { BookOpen, ExternalLink, RefreshCw } from "lucide-react"
+import { Archive, BookOpen, ExternalLink, RefreshCw } from "lucide-react"
 
-const SESSION_KEY = "market-research-feed:v2"
+const SESSION_KEY = "market-research-feed:v3"
 
 const TOPIC_COLORS: Record<string, string> = {
   "Distressed/CMBS":   "bg-red-50 text-red-700 border-red-200",
@@ -48,12 +48,14 @@ function formatGeneratedAt(iso: string) {
 
 export function MarketResearchFeed() {
   const [reports, setReports] = useState<ResearchReport[]>([])
+  const [archive, setArchive] = useState<ArchivedReport[]>([])
   const [generatedAt, setGeneratedAt] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(false)
   const [activeTopic, setActiveTopic] = useState("All")
   const [activePublisher, setActivePublisher] = useState("All")
   const [hasFetched, setHasFetched] = useState(false)
+  const [showArchive, setShowArchive] = useState(false)
 
   const load = useCallback(async (force = false) => {
     if (!force) {
@@ -62,6 +64,7 @@ export function MarketResearchFeed() {
         if (cached) {
           const parsed = JSON.parse(cached)
           setReports(parsed.reports ?? [])
+          setArchive(parsed.archive ?? [])
           setGeneratedAt(parsed.generatedAt ?? null)
           setHasFetched(true)
           return
@@ -74,12 +77,17 @@ export function MarketResearchFeed() {
     try {
       const result = await fetchResearchFeed()
       setReports(result.reports)
+      setArchive(result.archive)
       setGeneratedAt(result.generatedAt)
       setHasFetched(true)
       setActiveTopic("All")
       setActivePublisher("All")
       try {
-        sessionStorage.setItem(SESSION_KEY, JSON.stringify({ reports: result.reports, generatedAt: result.generatedAt }))
+        sessionStorage.setItem(SESSION_KEY, JSON.stringify({
+          reports: result.reports,
+          archive: result.archive,
+          generatedAt: result.generatedAt,
+        }))
       } catch { /* ignore */ }
     } catch {
       setError(true)
@@ -270,6 +278,74 @@ export function MarketResearchFeed() {
             <p className="mt-4 text-xs text-slate-400 text-right">
               {visible.length} of {reports.length} reports shown
             </p>
+          )}
+
+          {/* Archive section */}
+          {archive.length > 0 && (
+            <div className="mt-8">
+              <button
+                onClick={() => setShowArchive((v) => !v)}
+                className="flex items-center gap-2 w-full text-left group"
+              >
+                <div className="flex-1 h-px bg-slate-200" />
+                <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500 group-hover:text-slate-700 transition-colors whitespace-nowrap px-2">
+                  <Archive className="h-3.5 w-3.5" />
+                  Archive — {archive.length} older report{archive.length !== 1 ? "s" : ""}
+                  <span className="text-slate-400">{showArchive ? "▲" : "▼"}</span>
+                </div>
+                <div className="flex-1 h-px bg-slate-200" />
+              </button>
+
+              {showArchive && (
+                <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {archive.map((report) => (
+                    <div
+                      key={report.id}
+                      className="rounded-lg border border-slate-100 bg-slate-50 p-4 flex flex-col gap-3 opacity-80 hover:opacity-100 hover:border-slate-200 transition-all"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-semibold text-slate-500">{report.publisher}</span>
+                        {report.publishedDate && (
+                          <span className="text-xs text-slate-400">{formatDate(report.publishedDate)}</span>
+                        )}
+                      </div>
+                      <span className={`self-start rounded-full border px-2 py-0.5 text-xs font-medium ${topicClass(report.topic)}`}>
+                        {report.topic}
+                      </span>
+                      <p className="text-sm font-semibold text-slate-700 leading-snug">{report.title}</p>
+                      {report.summary && (
+                        <p className="text-xs text-slate-500 leading-relaxed">{report.summary}</p>
+                      )}
+                      {report.keyFindings.length > 0 && (
+                        <ul className="space-y-1">
+                          {report.keyFindings.map((f, i) => (
+                            <li key={i} className="flex items-start gap-1.5 text-xs text-slate-600">
+                              <span className="mt-1.5 flex-shrink-0 h-1 w-1 rounded-full bg-slate-400" />
+                              {f}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      <div className="mt-auto pt-1 flex items-center justify-between">
+                        {report.url && (
+                          <a
+                            href={report.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-[#006D95] font-medium"
+                          >
+                            View report <ExternalLink className="h-3 w-3" />
+                          </a>
+                        )}
+                        <span className="text-xs text-slate-400 ml-auto">
+                          Fetched {formatDate(report.fetchedAt)}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
         </>
       )}
