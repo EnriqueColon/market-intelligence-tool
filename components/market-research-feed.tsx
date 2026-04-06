@@ -5,7 +5,8 @@ import { fetchResearchFeed, type ResearchReport, type ArchivedReport } from "@/a
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Archive, BookOpen, ExternalLink, RefreshCw } from "lucide-react"
+import { Archive, BookOpen, ExternalLink, FileText, RefreshCw, X } from "lucide-react"
+import { ResearchMemoModal } from "@/components/research-memo-modal"
 
 const SESSION_KEY = "market-research-feed:v3"
 
@@ -56,6 +57,19 @@ export function MarketResearchFeed() {
   const [activePublisher, setActivePublisher] = useState("All")
   const [hasFetched, setHasFetched] = useState(false)
   const [showArchive, setShowArchive] = useState(false)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [memoOpen, setMemoOpen] = useState(false)
+  const [memoType, setMemoType] = useState<"market" | "ic">("market")
+
+  const toggleSelect = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+
+  const allReportsFlat = [...reports, ...archive]
+  const selectedReports = allReportsFlat.filter((r) => selected.has(r.id))
 
   const load = useCallback(async (force = false) => {
     if (!force) {
@@ -221,11 +235,27 @@ export function MarketResearchFeed() {
               {visible.map((report) => (
                 <div
                   key={report.id}
-                  className="rounded-lg border border-slate-200 bg-white p-4 flex flex-col gap-3 hover:border-slate-300 hover:shadow-sm transition-all"
+                  onClick={() => toggleSelect(report.id)}
+                  className={`rounded-lg border p-4 flex flex-col gap-3 cursor-pointer transition-all ${
+                    selected.has(report.id)
+                      ? "border-[#006D95] bg-[#006D95]/5 shadow-sm ring-1 ring-[#006D95]/20"
+                      : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm"
+                  }`}
                 >
-                  {/* Publisher + date row */}
+                  {/* Publisher + date + checkbox row */}
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-semibold text-[#006D95]">{report.publisher}</span>
+                    <div className="flex items-center gap-2">
+                      <div className={`h-4 w-4 rounded border flex-shrink-0 flex items-center justify-center transition-colors ${
+                        selected.has(report.id) ? "bg-[#006D95] border-[#006D95]" : "border-slate-300 bg-white"
+                      }`}>
+                        {selected.has(report.id) && (
+                          <svg className="h-2.5 w-2.5 text-white" viewBox="0 0 10 8" fill="none">
+                            <path d="M1 4l3 3 5-6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                        )}
+                      </div>
+                      <span className="text-xs font-semibold text-[#006D95]">{report.publisher}</span>
+                    </div>
                     {report.publishedDate && (
                       <span className="text-xs text-slate-400">{formatDate(report.publishedDate)}</span>
                     )}
@@ -348,6 +378,48 @@ export function MarketResearchFeed() {
             </div>
           )}
         </>
+      )}
+
+      {/* Selection tray */}
+      {selected.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-lg">
+          <span className="text-sm font-medium text-slate-700">
+            {selected.size} report{selected.size !== 1 ? "s" : ""} selected
+          </span>
+          <div className="h-4 w-px bg-slate-200" />
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 text-xs gap-1.5"
+            onClick={() => { setMemoType("market"); setMemoOpen(true) }}
+          >
+            <FileText className="h-3.5 w-3.5" />
+            Market Memo
+          </Button>
+          <Button
+            size="sm"
+            className="h-8 text-xs gap-1.5 bg-[#006D95] hover:bg-[#005a7a] text-white"
+            onClick={() => { setMemoType("ic"); setMemoOpen(true) }}
+          >
+            <FileText className="h-3.5 w-3.5" />
+            IC Memo
+          </Button>
+          <button
+            onClick={() => setSelected(new Set())}
+            className="ml-1 text-slate-400 hover:text-slate-600"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Memo modal */}
+      {memoOpen && (
+        <ResearchMemoModal
+          type={memoType}
+          reports={selectedReports}
+          onClose={() => setMemoOpen(false)}
+        />
       )}
     </Card>
   )
