@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { BookOpen, ExternalLink, RefreshCw } from "lucide-react"
 
-const SESSION_KEY = "market-research-feed:v1"
+const SESSION_KEY = "market-research-feed:v2"
 
 const TOPIC_COLORS: Record<string, string> = {
   "Distressed/CMBS":   "bg-red-50 text-red-700 border-red-200",
@@ -106,7 +106,7 @@ export function MarketResearchFeed() {
           <div>
             <h3 className="text-base font-semibold text-slate-800">Market Research</h3>
             <p className="text-xs text-slate-500 mt-0.5">
-              Latest research from CBRE, JLL, Trepp, MBA, Moody&apos;s and more — focused on distressed CRE debt and capital markets.
+              Latest research from Trepp, CBRE, JLL, Cushman, Colliers, Marcus & Millichap, MBA, Moody&apos;s, Green Street, Newmark, Walker & Dunlop and more.
             </p>
           </div>
         </div>
@@ -132,7 +132,7 @@ export function MarketResearchFeed() {
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <BookOpen className="h-10 w-10 text-slate-300 mb-3" />
           <p className="text-sm text-slate-500">Click <strong>Load Research</strong> to fetch the latest publications.</p>
-          <p className="text-xs text-slate-400 mt-1">Searches CBRE, JLL, Trepp, MBA, Moody&apos;s, and 10+ other sources in real time.</p>
+          <p className="text-xs text-slate-400 mt-1">Runs a dedicated search for each of 14 publishers — Trepp, CBRE, JLL, Cushman, Colliers, Marcus & Millichap, MBA, Moody&apos;s, Green Street, Newmark, Walker & Dunlop, CoStar, NAIOP, Avison Young.</p>
         </div>
       )}
 
