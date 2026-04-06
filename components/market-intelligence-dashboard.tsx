@@ -11,7 +11,6 @@ import { InvestingBusinessMentions } from "@/components/investing-business-menti
 import { ArticleDigest } from "@/components/article-digest"
 import { IndustryOutlook } from "@/components/industry-outlook"
 import { SendNewsEmailButton } from "@/components/send-news-email-button"
-import { MarketResearchLibrary } from "@/components/market-research-library"
 import { MarketResearchFeed } from "@/components/market-research-feed"
 
 const LEVEL_OPTIONS = [
@@ -164,11 +163,10 @@ export function MarketIntelligenceDashboard({
                     <h2 className="font-heading text-xl font-medium uppercase text-[#006D95] leading-[1.3]">Market Research</h2>
                   </div>
                   <p className="text-sm text-muted-foreground">
-                    Live research feed from CBRE, JLL, Trepp, MBA, Moody&apos;s and more — plus your private PDF library.
+                    Live research feed from Trepp, CBRE, JLL, Cushman, Colliers, Marcus & Millichap, MBA, Moody&apos;s, Green Street, Newmark and more.
                   </p>
                 </div>
                 <MarketResearchFeed />
-                <MarketResearchLibrary />
               </TabsContent>
             )}
 
