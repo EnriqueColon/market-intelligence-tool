@@ -9,7 +9,6 @@ export default function Page() {
     news: isFeatureEnabled("news"),
     marketAnalytics: isFeatureEnabled("market-analytics"),
     marketResearch: isFeatureEnabled("market-research"),
-    competitors: isFeatureEnabled("competitors"),
     legal: isFeatureEnabled("legal"),
   }
 

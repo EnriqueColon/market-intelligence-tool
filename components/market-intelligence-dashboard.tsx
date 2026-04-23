@@ -1,11 +1,10 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { FileText, LineChart, Newspaper, Scale, Users } from "lucide-react"
+import { FileText, LineChart, Newspaper, Scale } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { LegalUpdates } from "@/components/legal-updates"
 import { MarketAnalytics } from "@/components/market-analytics"
-import { MarketParticipantsIntel } from "@/components/market-participants-intel"
 import { PublicMentions } from "@/components/public-mentions"
 import { InvestingBusinessMentions } from "@/components/investing-business-mentions"
 import { ArticleDigest } from "@/components/article-digest"
@@ -20,13 +19,12 @@ const LEVEL_OPTIONS = [
 ] as const
 
 type LevelOption = (typeof LEVEL_OPTIONS)[number]["value"]
-type TabValue = "news" | "analytics" | "market-research" | "competitors" | "legal"
+type TabValue = "news" | "analytics" | "market-research" | "legal"
 
 export type EnabledTabs = {
   news: boolean
   marketAnalytics: boolean
   marketResearch: boolean
-  competitors: boolean
   legal: boolean
 }
 
@@ -42,7 +40,6 @@ export function MarketIntelligenceDashboard({
     if (enabledTabs.news) tabs.push("news")
     if (enabledTabs.marketAnalytics) tabs.push("analytics")
     if (enabledTabs.marketResearch) tabs.push("market-research")
-    if (enabledTabs.competitors) tabs.push("competitors")
     if (enabledTabs.legal) tabs.push("legal")
     return tabs
   }, [enabledTabs])
@@ -89,7 +86,7 @@ export function MarketIntelligenceDashboard({
       {availableTabs.length > 0 && (
         <main className="mx-auto w-full max-w-[1100px] px-5 py-12 md:px-[20px]">
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabValue)} className="flex flex-col gap-[60px]">
-            <TabsList className="grid w-full max-w-5xl grid-cols-5 gap-x-0 border border-[#006D95]/20 bg-white p-1.5 shadow-sm rounded-lg h-auto min-h-[56px]">
+            <TabsList className="grid w-full max-w-5xl grid-cols-4 gap-x-0 border border-[#006D95]/20 bg-white p-1.5 shadow-sm rounded-lg h-auto min-h-[56px]">
               {enabledTabs.news && (
                 <TabsTrigger
                   value="news"
@@ -115,15 +112,6 @@ export function MarketIntelligenceDashboard({
                 >
                   <FileText className="h-4 w-4 shrink-0" />
                   <span>Market Research</span>
-                </TabsTrigger>
-              )}
-              {enabledTabs.competitors && (
-                <TabsTrigger
-                  value="competitors"
-                  className="gap-2 px-4 py-3 text-base font-medium min-h-[52px] h-auto whitespace-normal text-left data-[state=active]:bg-[#006D95] data-[state=active]:text-white data-[state=active]:shadow-sm data-[state=inactive]:text-[#006D95] data-[state=inactive]:hover:bg-[#006D95]/5 rounded-md transition-colors border-0 [&>span]:leading-tight"
-                >
-                  <Users className="h-4 w-4 shrink-0 mt-0.5 self-start" />
-                  <span>Market Participants & Activity</span>
                 </TabsTrigger>
               )}
               {enabledTabs.legal && (
@@ -185,21 +173,6 @@ export function MarketIntelligenceDashboard({
                   </p>
                 </div>
                 <MarketAnalytics level={level} />
-              </TabsContent>
-            )}
-
-            {enabledTabs.competitors && (
-              <TabsContent value="competitors" className="flex flex-col gap-[60px]">
-                <div className="rounded-lg border border-[#006D95]/25 bg-white p-6 shadow-sm">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Users className="h-5 w-5 text-[#006D95]" />
-                    <h2 className="font-heading text-xl font-medium uppercase text-[#006D95] leading-[1.3]">Market Participants & Activity</h2>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    Peer landscape for distressed CRE debt buyers.
-                  </p>
-                </div>
-                <MarketParticipantsIntel level={level} />
               </TabsContent>
             )}
 
