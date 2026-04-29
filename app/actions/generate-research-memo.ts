@@ -2,17 +2,6 @@
 
 import type { ResearchReport } from "@/app/actions/fetch-research-feed"
 
-export type DealInputs = {
-  propertyAddress?: string
-  assetType?: string
-  loanAmount?: string
-  borrower?: string
-  lender?: string
-  strategy?: string           // e.g. "Note Sale", "REO", "Payoff", "Workout"
-  acquisitionBasis?: string
-  additionalNotes?: string
-}
-
 export type MemoSection = {
   heading: string
   body: string                // plain prose paragraph(s)
@@ -20,7 +9,7 @@ export type MemoSection = {
 }
 
 export type GeneratedMemo = {
-  type: "market" | "ic"
+  type: "market"
   title: string
   date: string
   sections: MemoSection[]
@@ -88,75 +77,6 @@ Write the memo in the following structure. Return ONLY valid JSON:
 }`
 }
 
-function buildICMemoPrompt(reports: ResearchReport[], deal: DealInputs): string {
-  const dealBlock = [
-    deal.propertyAddress ? `Property: ${deal.propertyAddress}` : null,
-    deal.assetType ? `Asset Type: ${deal.assetType}` : null,
-    deal.loanAmount ? `Loan Amount: ${deal.loanAmount}` : null,
-    deal.borrower ? `Borrower/Sponsor: ${deal.borrower}` : null,
-    deal.lender ? `Lender/Servicer: ${deal.lender}` : null,
-    deal.strategy ? `Investment Strategy: ${deal.strategy}` : null,
-    deal.acquisitionBasis ? `Acquisition Basis: ${deal.acquisitionBasis}` : null,
-    deal.additionalNotes ? `Additional Notes: ${deal.additionalNotes}` : null,
-  ]
-    .filter(Boolean)
-    .join("\n")
-
-  return `You are a senior analyst at a distressed commercial real estate debt investment firm writing an Investment Committee Memorandum.
-
-Use the deal information and research reports below to write a comprehensive IC Memo.
-Weave the market research context directly into the deal analysis — use specific data points from the reports to support the investment thesis.
-Cite publisher names inline (e.g. "Trepp data indicates..."). Do not invent facts.
-
-DEAL INFORMATION:
-${dealBlock || "No deal specifics provided — write as a general market opportunity memo."}
-
-SUPPORTING MARKET RESEARCH:
-${formatReportsContext(reports)}
-
-Write the IC Memo in the following structure. Return ONLY valid JSON:
-{
-  "title": "Investment Committee Memorandum${deal.propertyAddress ? ` — ${deal.propertyAddress}` : ""}",
-  "sections": [
-    {
-      "heading": "Executive Summary",
-      "body": "3-4 sentences: deal overview, strategy, and why current market conditions support this investment",
-      "bullets": ["key investment highlight 1", "key investment highlight 2", "key investment highlight 3"]
-    },
-    {
-      "heading": "Deal Overview",
-      "body": "Description of the asset, loan, borrower, and acquisition structure based on provided deal information",
-      "bullets": ["deal term 1", "deal term 2", "deal term 3"]
-    },
-    {
-      "heading": "Market Context",
-      "body": "How current CRE market conditions (drawn from research) create the opportunity for this investment",
-      "bullets": ["market data point 1", "market data point 2", "market data point 3"]
-    },
-    {
-      "heading": "Capital Markets & Financing Environment",
-      "body": "Lending conditions, credit availability, and how they affect deal execution and exit",
-      "bullets": ["financing condition 1", "financing condition 2"]
-    },
-    {
-      "heading": "Regional & Property Type Analysis",
-      "body": "Market-specific conditions relevant to the asset's location and property type, supported by research",
-      "bullets": ["local market factor 1", "local market factor 2", "local market factor 3"]
-    },
-    {
-      "heading": "Risk Factors",
-      "body": "Key risks to the investment thesis including market, execution, and exit risks",
-      "bullets": ["risk 1", "risk 2", "risk 3", "risk 4"]
-    },
-    {
-      "heading": "Investment Thesis & Recommendation",
-      "body": "Conclusion supporting the investment decision, strategy rationale, and expected outcome",
-      "bullets": ["thesis point 1", "thesis point 2", "thesis point 3"]
-    }
-  ]
-}`
-}
-
 async function callOpenAI(prompt: string): Promise<string> {
   const API_KEY = process.env.OPENAI_API_KEY?.trim()
   if (!API_KEY) throw new Error("Missing OPENAI_API_KEY")
@@ -192,16 +112,11 @@ async function callOpenAI(prompt: string): Promise<string> {
 }
 
 export async function generateResearchMemo(
-  type: "market" | "ic",
-  reports: ResearchReport[],
-  deal?: DealInputs
+  reports: ResearchReport[]
 ): Promise<GeneratedMemo> {
   if (reports.length === 0) throw new Error("No reports selected.")
 
-  const prompt =
-    type === "market"
-      ? buildMarketMemoPrompt(reports)
-      : buildICMemoPrompt(reports, deal ?? {})
+  const prompt = buildMarketMemoPrompt(reports)
 
   const raw = await callOpenAI(prompt)
 
@@ -223,13 +138,11 @@ export async function generateResearchMemo(
   )
 
   return {
-    type,
+    type: "market",
     title:
       typeof parsed.title === "string"
         ? parsed.title.trim()
-        : type === "market"
-          ? "CRE Market Conditions Brief"
-          : "Investment Committee Memorandum",
+        : "CRE Market Conditions Brief",
     date: new Date().toLocaleDateString("en-US", {
       month: "long",
       day: "numeric",

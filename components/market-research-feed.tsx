@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { fetchResearchFeed, type ResearchReport, type ArchivedReport } from "@/app/actions/fetch-research-feed"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -59,7 +59,6 @@ export function MarketResearchFeed() {
   const [showArchive, setShowArchive] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [memoOpen, setMemoOpen] = useState(false)
-  const [memoType, setMemoType] = useState<"market" | "ic">("market")
 
   const toggleSelect = (id: string) =>
     setSelected((prev) => {
@@ -81,6 +80,7 @@ export function MarketResearchFeed() {
           setArchive(parsed.archive ?? [])
           setGeneratedAt(parsed.generatedAt ?? null)
           setHasFetched(true)
+          setLoading(false)
           return
         }
       } catch { /* ignore */ }
@@ -105,10 +105,15 @@ export function MarketResearchFeed() {
       } catch { /* ignore */ }
     } catch {
       setError(true)
+      setHasFetched(true)
     } finally {
       setLoading(false)
     }
   }, [])
+
+  useEffect(() => {
+    void load(false)
+  }, [load])
 
   const topics = ["All", ...Array.from(new Set(reports.map((r) => r.topic).filter(Boolean))).sort()]
   const publishers = ["All", ...Array.from(new Set(reports.map((r) => r.publisher).filter(Boolean))).sort()]
@@ -141,7 +146,7 @@ export function MarketResearchFeed() {
             className="flex items-center gap-1.5 text-xs"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-            {hasFetched ? "Refresh" : "Load Research"}
+            Refresh
           </Button>
           {generatedAt && (
             <span className="text-xs text-slate-400">Updated {formatGeneratedAt(generatedAt)}</span>
@@ -151,10 +156,9 @@ export function MarketResearchFeed() {
 
       {/* Not yet loaded */}
       {!hasFetched && !loading && !error && (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
+        <div className="flex flex-col items-center justify-center py-8 text-center">
           <BookOpen className="h-10 w-10 text-slate-300 mb-3" />
-          <p className="text-sm text-slate-500">Click <strong>Load Research</strong> to fetch the latest publications.</p>
-          <p className="text-xs text-slate-400 mt-1">Runs a dedicated search for each of 14 publishers — Trepp, CBRE, JLL, Cushman, Colliers, Marcus & Millichap, MBA, Moody&apos;s, Green Street, Newmark, Walker & Dunlop, CoStar, NAIOP, Avison Young.</p>
+          <p className="text-sm text-slate-500">Loading the latest publications…</p>
         </div>
       )}
 
@@ -391,18 +395,10 @@ export function MarketResearchFeed() {
             size="sm"
             variant="outline"
             className="h-8 text-xs gap-1.5"
-            onClick={() => { setMemoType("market"); setMemoOpen(true) }}
+            onClick={() => setMemoOpen(true)}
           >
             <FileText className="h-3.5 w-3.5" />
-            Market Memo
-          </Button>
-          <Button
-            size="sm"
-            className="h-8 text-xs gap-1.5 bg-[#006D95] hover:bg-[#005a7a] text-white"
-            onClick={() => { setMemoType("ic"); setMemoOpen(true) }}
-          >
-            <FileText className="h-3.5 w-3.5" />
-            IC Memo
+            Market memo
           </Button>
           <button
             onClick={() => setSelected(new Set())}
@@ -416,7 +412,6 @@ export function MarketResearchFeed() {
       {/* Memo modal */}
       {memoOpen && (
         <ResearchMemoModal
-          type={memoType}
           reports={selectedReports}
           onClose={() => setMemoOpen(false)}
         />

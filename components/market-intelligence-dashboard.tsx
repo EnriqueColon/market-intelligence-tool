@@ -11,6 +11,7 @@ import { ArticleDigest } from "@/components/article-digest"
 import { IndustryOutlook } from "@/components/industry-outlook"
 import { SendNewsEmailButton } from "@/components/send-news-email-button"
 import { MarketResearchFeed } from "@/components/market-research-feed"
+import { MarketResearchReports } from "@/components/market-research-reports"
 
 const LEVEL_OPTIONS = [
   { value: "national", label: "National" },
@@ -155,6 +156,9 @@ export function MarketIntelligenceDashboard({
                   </p>
                 </div>
                 <MarketResearchFeed />
+                <MarketResearchReports
+                  isVercel={typeof process.env.NEXT_PUBLIC_VERCEL_ENV !== "undefined"}
+                />
               </TabsContent>
             )}
 

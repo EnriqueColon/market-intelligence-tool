@@ -1,12 +1,29 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useLayoutEffect, useState } from "react"
 import { Card } from "@/components/ui/card"
 import { Newspaper } from "lucide-react"
 
 const INDUSTRY_OUTLOOK_SESSION_KEY = "industry-outlook:v4"
 let industryOutlookMemoryCache: string | null = null
 let industryOutlookInFlight: Promise<string | null> | null = null
+
+function readOutlookFromSession(): string | null {
+  if (typeof window === "undefined") return null
+  if (industryOutlookMemoryCache) {
+    return industryOutlookMemoryCache
+  }
+  try {
+    const cached = sessionStorage.getItem(INDUSTRY_OUTLOOK_SESSION_KEY)?.trim()
+    if (cached) {
+      industryOutlookMemoryCache = cached
+      return cached
+    }
+  } catch {
+    /* ignore */
+  }
+  return null
+}
 
 async function generateIndustryOutlookOnce(): Promise<string | null> {
   if (industryOutlookInFlight) return industryOutlookInFlight
@@ -190,9 +207,27 @@ export function IndustryOutlook() {
   }
 
 
+  useLayoutEffect(() => {
+    const synced = readOutlookFromSession()
+    if (synced) {
+      setData(synced)
+      setLoading(false)
+      setError(false)
+    }
+  }, [])
+
   useEffect(() => {
     let mounted = true
     async function load() {
+      const synced = readOutlookFromSession()
+      if (synced) {
+        if (!mounted) return
+        setData(synced)
+        setError(false)
+        setLoading(false)
+        return
+      }
+
       setLoading(true)
       try {
         if (industryOutlookMemoryCache) {
@@ -262,13 +297,13 @@ export function IndustryOutlook() {
               {/* Key Signals Strip — Executive Summary bullets as callout cards */}
               {execSummary && execSummary.bullets.length > 0 && (
                 <div>
-                  <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Key Signals</div>
-                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  <div className="text-sm font-semibold text-slate-600 uppercase tracking-wide mb-3">Key Signals</div>
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     {execSummary.bullets.map((bullet, i) => (
-                      <div key={`sig-${i}`} className="rounded-lg border border-[#006D95]/20 bg-[#006D95]/5 px-3 py-2.5">
-                        <div className="flex items-start gap-2">
-                          <span className="mt-0.5 flex-shrink-0 h-2 w-2 rounded-full bg-[#006D95]" />
-                          <p className="text-xs text-slate-800 leading-relaxed">{bullet}</p>
+                      <div key={`sig-${i}`} className="rounded-xl border border-[#006D95]/25 bg-[#006D95]/8 px-4 py-4 shadow-sm">
+                        <div className="flex items-start gap-3">
+                          <span className="mt-1.5 flex-shrink-0 h-2.5 w-2.5 rounded-full bg-[#006D95]" />
+                          <p className="text-sm sm:text-base text-slate-800 leading-snug font-medium">{bullet}</p>
                         </div>
                       </div>
                     ))}

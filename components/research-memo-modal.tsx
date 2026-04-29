@@ -1,11 +1,7 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
-import {
-  generateResearchMemo,
-  type DealInputs,
-  type GeneratedMemo,
-} from "@/app/actions/generate-research-memo"
+import { useRef, useState } from "react"
+import { generateResearchMemo, type GeneratedMemo } from "@/app/actions/generate-research-memo"
 import type { ResearchReport } from "@/app/actions/fetch-research-feed"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -19,14 +15,11 @@ import {
 } from "lucide-react"
 
 interface Props {
-  type: "market" | "ic"
   reports: ResearchReport[]
   onClose: () => void
 }
 
-// ── Word (.docx) download ──────────────────────────────────────────────────────
 async function downloadAsDocx(memo: GeneratedMemo) {
-  // Dynamically import docx to keep initial bundle small
   const {
     Document,
     Packer,
@@ -39,7 +32,6 @@ async function downloadAsDocx(memo: GeneratedMemo) {
 
   const children: Paragraph[] = []
 
-  // Title
   children.push(
     new Paragraph({
       text: memo.title,
@@ -49,14 +41,13 @@ async function downloadAsDocx(memo: GeneratedMemo) {
     })
   )
 
-  // Date + type badge
   children.push(
     new Paragraph({
       alignment: AlignmentType.CENTER,
       spacing: { after: 400 },
       children: [
         new TextRun({
-          text: `${memo.date}  •  ${memo.type === "market" ? "Market Conditions Memo" : "Investment Committee Memorandum"}`,
+          text: `${memo.date}  •  Market Conditions Memo`,
           color: "555555",
           size: 20,
         }),
@@ -65,7 +56,6 @@ async function downloadAsDocx(memo: GeneratedMemo) {
   )
 
   for (const section of memo.sections) {
-    // Section heading
     children.push(
       new Paragraph({
         text: section.heading,
@@ -77,7 +67,6 @@ async function downloadAsDocx(memo: GeneratedMemo) {
       })
     )
 
-    // Body paragraph
     if (section.body) {
       children.push(
         new Paragraph({
@@ -87,7 +76,6 @@ async function downloadAsDocx(memo: GeneratedMemo) {
       )
     }
 
-    // Bullet points
     for (const bullet of section.bullets ?? []) {
       children.push(
         new Paragraph({
@@ -99,7 +87,6 @@ async function downloadAsDocx(memo: GeneratedMemo) {
     }
   }
 
-  // Disclaimer
   children.push(
     new Paragraph({
       spacing: { before: 600 },
@@ -127,67 +114,13 @@ async function downloadAsDocx(memo: GeneratedMemo) {
   URL.revokeObjectURL(url)
 }
 
-// ── IC deal form ───────────────────────────────────────────────────────────────
-function DealForm({
-  value,
-  onChange,
-}: {
-  value: DealInputs
-  onChange: (v: DealInputs) => void
-}) {
-  const field = (
-    label: string,
-    key: keyof DealInputs,
-    placeholder: string,
-    textarea = false
-  ) => (
-    <div className="space-y-1">
-      <label className="text-xs font-medium text-slate-600">{label}</label>
-      {textarea ? (
-        <textarea
-          rows={2}
-          placeholder={placeholder}
-          value={value[key] ?? ""}
-          onChange={(e) => onChange({ ...value, [key]: e.target.value })}
-          className="w-full rounded border border-slate-200 bg-white px-2.5 py-1.5 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-[#006D95] resize-none"
-        />
-      ) : (
-        <input
-          type="text"
-          placeholder={placeholder}
-          value={value[key] ?? ""}
-          onChange={(e) => onChange({ ...value, [key]: e.target.value })}
-          className="w-full rounded border border-slate-200 bg-white px-2.5 py-1.5 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-[#006D95]"
-        />
-      )}
-    </div>
-  )
-
-  return (
-    <div className="grid gap-3 sm:grid-cols-2">
-      {field("Property Address", "propertyAddress", "123 Main St, Miami, FL")}
-      {field("Asset Type", "assetType", "Office, Multifamily, Retail...")}
-      {field("Loan Amount", "loanAmount", "$12,500,000")}
-      {field("Borrower / Sponsor", "borrower", "ABC Capital LLC")}
-      {field("Lender / Servicer", "lender", "Wells Fargo / LNR Partners")}
-      {field("Investment Strategy", "strategy", "Note Sale, Payoff, REO, Workout...")}
-      {field("Acquisition Basis", "acquisitionBasis", "$0.72 on the dollar")}
-      {field("Additional Notes", "additionalNotes", "Anything else relevant to the deal...", true)}
-    </div>
-  )
-}
-
-// ── Memo renderer ──────────────────────────────────────────────────────────────
 function MemoRenderer({ memo }: { memo: GeneratedMemo }) {
   return (
     <div className="space-y-6 text-slate-800">
       <div className="text-center border-b border-slate-200 pb-4">
         <h2 className="text-lg font-bold text-slate-900">{memo.title}</h2>
         <p className="text-xs text-slate-500 mt-1">
-          {memo.date} &nbsp;·&nbsp;{" "}
-          {memo.type === "market"
-            ? "Market Conditions Memo"
-            : "Investment Committee Memorandum"}
+          {memo.date} &nbsp;·&nbsp; Market Conditions Memo
         </p>
       </div>
 
@@ -221,10 +154,7 @@ function MemoRenderer({ memo }: { memo: GeneratedMemo }) {
   )
 }
 
-// ── Main modal ─────────────────────────────────────────────────────────────────
-export function ResearchMemoModal({ type, reports, onClose }: Props) {
-  const [activeTab, setActiveTab] = useState<"market" | "ic">(type)
-  const [dealInputs, setDealInputs] = useState<DealInputs>({})
+export function ResearchMemoModal({ reports, onClose }: Props) {
   const [memo, setMemo] = useState<GeneratedMemo | null>(null)
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -232,22 +162,12 @@ export function ResearchMemoModal({ type, reports, onClose }: Props) {
   const [downloading, setDownloading] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  // Reset memo when tab switches
-  useEffect(() => {
-    setMemo(null)
-    setError(null)
-  }, [activeTab])
-
   const generate = async () => {
     setGenerating(true)
     setError(null)
     setMemo(null)
     try {
-      const result = await generateResearchMemo(
-        activeTab,
-        reports,
-        activeTab === "ic" ? dealInputs : undefined
-      )
+      const result = await generateResearchMemo(reports)
       setMemo(result)
       setTimeout(() => scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" }), 100)
     } catch (err) {
@@ -291,11 +211,10 @@ export function ResearchMemoModal({ type, reports, onClose }: Props) {
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
       <div className="relative flex flex-col w-full max-w-3xl max-h-[90vh] rounded-xl bg-white shadow-2xl overflow-hidden">
 
-        {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 flex-shrink-0">
           <div className="flex items-center gap-2">
             <FileText className="h-5 w-5 text-[#006D95]" />
-            <span className="font-semibold text-slate-800">Generate Memo</span>
+            <span className="font-semibold text-slate-800">Market Conditions Memo</span>
             <span className="text-xs text-slate-400 ml-1">
               {reports.length} report{reports.length !== 1 ? "s" : ""} selected
             </span>
@@ -305,27 +224,8 @@ export function ResearchMemoModal({ type, reports, onClose }: Props) {
           </button>
         </div>
 
-        {/* Tabs */}
-        <div className="flex border-b border-slate-200 flex-shrink-0">
-          {(["market", "ic"] as const).map((t) => (
-            <button
-              key={t}
-              onClick={() => setActiveTab(t)}
-              className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
-                activeTab === t
-                  ? "border-b-2 border-[#006D95] text-[#006D95]"
-                  : "text-slate-500 hover:text-slate-700"
-              }`}
-            >
-              {t === "market" ? "Market Conditions Memo" : "IC Memo"}
-            </button>
-          ))}
-        </div>
-
-        {/* Scrollable body */}
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
 
-          {/* Selected reports list */}
           <div className="rounded-lg bg-slate-50 border border-slate-200 p-3">
             <div className="text-xs font-semibold text-slate-500 uppercase mb-2">
               Sources
@@ -343,27 +243,15 @@ export function ResearchMemoModal({ type, reports, onClose }: Props) {
             </div>
           </div>
 
-          {/* IC deal form */}
-          {activeTab === "ic" && !memo && (
-            <div className="space-y-3">
-              <div className="text-xs font-semibold text-slate-500 uppercase">
-                Deal Information <span className="font-normal text-slate-400">(optional — fill in what you have)</span>
-              </div>
-              <DealForm value={dealInputs} onChange={setDealInputs} />
-            </div>
-          )}
-
-          {/* Generate button */}
           {!memo && !generating && (
             <Button
               className="w-full bg-[#006D95] hover:bg-[#005a7a] text-white"
               onClick={generate}
             >
-              Generate {activeTab === "market" ? "Market Memo" : "IC Memo"}
+              Generate memo
             </Button>
           )}
 
-          {/* Loading */}
           {generating && (
             <div className="space-y-4">
               <div className="flex items-center gap-2 text-sm text-slate-500">
@@ -381,18 +269,15 @@ export function ResearchMemoModal({ type, reports, onClose }: Props) {
             </div>
           )}
 
-          {/* Error */}
           {error && (
             <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
               {error}
             </div>
           )}
 
-          {/* Rendered memo */}
           {memo && <MemoRenderer memo={memo} />}
         </div>
 
-        {/* Footer actions */}
         {memo && (
           <div className="flex items-center justify-between gap-3 px-5 py-3 border-t border-slate-200 bg-slate-50 flex-shrink-0">
             <Button
