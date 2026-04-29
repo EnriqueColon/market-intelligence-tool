@@ -1,8 +1,10 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { FileText, LineChart, Newspaper, Scale } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { FileText, LineChart, LogOut, Newspaper, Scale } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Button } from "@/components/ui/button"
 import { LegalUpdates } from "@/components/legal-updates"
 import { MarketAnalytics } from "@/components/market-analytics"
 import { PublicMentions } from "@/components/public-mentions"
@@ -34,6 +36,8 @@ export function MarketIntelligenceDashboard({
 }: {
   enabledTabs: EnabledTabs
 }) {
+  const router = useRouter()
+  const [loggingOut, setLoggingOut] = useState(false)
   const [level, setLevel] = useState<LevelOption>("national")
 
   const availableTabs = useMemo(() => {
@@ -57,6 +61,17 @@ export function MarketIntelligenceDashboard({
     }
   }, [availableTabs, activeTab])
 
+  async function handleLogout() {
+    setLoggingOut(true)
+    try {
+      await fetch("/api/auth", { method: "DELETE" })
+      router.push("/login")
+      router.refresh()
+    } catch {
+      setLoggingOut(false)
+    }
+  }
+
   return (
     <div className="market-intelligence-tool min-h-screen bg-background">
       <header className="border-b border-[#006D95]/20 bg-white shadow-sm">
@@ -66,19 +81,32 @@ export function MarketIntelligenceDashboard({
               <h1 className="font-heading text-[28px] md:text-[38px] font-medium uppercase tracking-tight text-[#006D95] leading-[1.3]">Market Intelligence</h1>
               <p className="font-body text-base text-[#006D95]/90 mt-1">News and analytics</p>
             </div>
-            <div className="flex items-center gap-2 rounded-lg border border-[#006D95]/30 bg-[#006D95]/5 px-4 py-2.5">
-              <Newspaper className="h-4 w-4 text-[#006D95]" />
-              <select
-                value={level}
-                onChange={(e) => setLevel(e.target.value as LevelOption)}
-                className="bg-transparent text-sm font-medium text-[#006D95] outline-none [&>option]:bg-white [&>option]:text-[#006D95]"
+            <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center">
+              <div className="flex items-center gap-2 rounded-lg border border-[#006D95]/30 bg-[#006D95]/5 px-4 py-2.5">
+                <Newspaper className="h-4 w-4 text-[#006D95]" />
+                <select
+                  value={level}
+                  onChange={(e) => setLevel(e.target.value as LevelOption)}
+                  className="bg-transparent text-sm font-medium text-[#006D95] outline-none [&>option]:bg-white [&>option]:text-[#006D95]"
+                >
+                  {LEVEL_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={loggingOut}
+                onClick={() => void handleLogout()}
+                className="gap-1.5 border-[#006D95]/30 text-[#006D95] hover:bg-[#006D95]/10"
               >
-                {LEVEL_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+                <LogOut className="h-4 w-4" />
+                {loggingOut ? "Signing out…" : "Log out"}
+              </Button>
             </div>
           </div>
         </div>
