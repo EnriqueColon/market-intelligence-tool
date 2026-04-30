@@ -1,6 +1,8 @@
 "use server"
 
+import { unstable_cache } from "next/cache"
 import { classifyArticleAccess } from "@/app/actions/news-access"
+import { newsCalendarDayET, NEWS_TAB_REVALIDATE_SECONDS } from "@/lib/news-tab-cache"
 import type { PublicMentionItem } from "@/app/actions/fetch-public-mentions"
 
 export type InvestingNewsResponse = {
@@ -645,7 +647,7 @@ async function classifyTop(items: PublicMentionItem[]): Promise<PublicMentionIte
   return [...out, ...rest]
 }
 
-export async function fetchInvestingNews(
+async function fetchInvestingNewsImpl(
   level: "national" | "florida" | "miami"
 ): Promise<InvestingNewsResponse> {
   const notes: string[] = []
@@ -826,4 +828,15 @@ export async function fetchInvestingNews(
   })
 
   return { news: out, notes }
+}
+
+export async function fetchInvestingNews(
+  level: "national" | "florida" | "miami"
+): Promise<InvestingNewsResponse> {
+  const day = newsCalendarDayET()
+  return unstable_cache(
+    async () => fetchInvestingNewsImpl(level),
+    ["investing-news-v2", day, level],
+    { revalidate: NEWS_TAB_REVALIDATE_SECONDS }
+  )()
 }

@@ -1,17 +1,11 @@
 import { NextResponse } from "next/server"
+import { unstable_cache } from "next/cache"
 import { retrieveSources } from "@/app/services/industry-outlook/retrieveSources"
 import type { RetrievedSource } from "@/app/services/industry-outlook/schema"
+import { newsCalendarDayET, NEWS_TAB_REVALIDATE_SECONDS } from "@/lib/news-tab-cache"
+
 export const runtime = "nodejs"
-export const dynamic = "force-dynamic"
 export const maxDuration = 60
-
-type CacheEntry = {
-  text: string
-  fetchedAt: number
-}
-
-const CACHE_TTL_MS = 2 * 60 * 60 * 1000
-let cached: CacheEntry | null = null
 
 const SECTION_HEADINGS = [
   "Executive Summary",
@@ -21,11 +15,6 @@ const SECTION_HEADINGS = [
   "Key sources (for further reading)",
 ]
 
-function isFresh(entry: CacheEntry | null) {
-  if (!entry) return false
-  return Date.now() - entry.fetchedAt < CACHE_TTL_MS
-}
-
 function withTimeout<T>(task: Promise<T>, timeoutMs: number, message: string): Promise<T> {
   return Promise.race([
     task,
@@ -34,9 +23,7 @@ function withTimeout<T>(task: Promise<T>, timeoutMs: number, message: string): P
 }
 
 function hasRequiredSections(text: string): boolean {
-  return SECTION_HEADINGS.every((heading) =>
-    text.toLowerCase().includes(heading.toLowerCase())
-  )
+  return SECTION_HEADINGS.every((heading) => text.toLowerCase().includes(heading.toLowerCase()))
 }
 
 function hasOrderedSections(text: string): boolean {
@@ -107,8 +94,6 @@ function buildPrompt(sources: RetrievedSource[]): {
   system: string
   user: string
 } {
-  // Build rich source context — include publisher, date, and snippet so the
-  // LLM has actual data points to cite, not just headlines.
   const seen = new Set<string>()
   const richContext = sources
     .filter((s) => {
@@ -199,13 +184,8 @@ async function callPerplexity(
   return json.choices?.[0]?.message?.content?.trim() || ""
 }
 
-export async function POST() {
-  // Always serve from memory cache when fresh — this was previously disabled
-  // on Vercel which caused every page load to re-run the full generation.
-  if (isFresh(cached)) {
-    return NextResponse.json({ text: cached?.text })
-  }
-
+/** Full generation — only called inside unstable_cache when API key exists. */
+async function runIndustryOutlookGeneration(): Promise<string> {
   let sources: RetrievedSource[] = []
   try {
     sources = await withTimeout(
@@ -219,8 +199,7 @@ export async function POST() {
 
   const apiKey = process.env.PERPLEXITY_API_KEY?.trim()
   if (!apiKey) {
-    const fallback = buildFallbackMemo(sources, "Missing PERPLEXITY_API_KEY")
-    return NextResponse.json({ text: fallback }, { status: 200 })
+    return buildFallbackMemo(sources, "Missing PERPLEXITY_API_KEY")
   }
 
   try {
@@ -246,22 +225,41 @@ ${content || "(empty)"}
     }
 
     if (!content || !hasRequiredSections(content) || !hasOrderedSections(content)) {
-      const fallback = buildFallbackMemo(sources, "Output failed section-format requirements")
-      // Do NOT cache format failures — let next request retry.
-      return NextResponse.json({ text: fallback }, { status: 200 })
+      return buildFallbackMemo(sources, "Output failed section-format requirements")
     }
 
-    if (true /* always cache */) {
-      cached = { text: content, fetchedAt: Date.now() }
-    }
-    return NextResponse.json({ text: content }, { status: 200 })
+    return content
   } catch (err) {
     console.error("Industry outlook generation error:", err)
-    const fallback = buildFallbackMemo(
+    return buildFallbackMemo(
       sources,
       err instanceof Error ? err.message : "Unhandled generation error"
     )
-    // Do NOT cache errors — let the next request retry the API call.
-    return NextResponse.json({ text: fallback }, { status: 200 })
   }
+}
+
+export async function POST() {
+  const apiKey = process.env.PERPLEXITY_API_KEY?.trim()
+  if (!apiKey) {
+    let sources: RetrievedSource[] = []
+    try {
+      sources = await withTimeout(
+        retrieveSources(),
+        12000,
+        "Source retrieval timed out."
+      )
+    } catch (err) {
+      console.error("Industry outlook source retrieval error:", err)
+    }
+    return NextResponse.json({ text: buildFallbackMemo(sources, "Missing PERPLEXITY_API_KEY") })
+  }
+
+  const day = newsCalendarDayET()
+  const text = await unstable_cache(
+    async () => runIndustryOutlookGeneration(),
+    ["industry-outlook-shared-v2", day],
+    { revalidate: NEWS_TAB_REVALIDATE_SECONDS }
+  )()
+
+  return NextResponse.json({ text })
 }

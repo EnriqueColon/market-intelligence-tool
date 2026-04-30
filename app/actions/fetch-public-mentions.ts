@@ -1,6 +1,8 @@
 "use server"
 
+import { unstable_cache } from "next/cache"
 import { classifyArticleAccess, KNOWN_PAYWALL_DOMAINS, type AccessStatus } from "@/app/actions/news-access"
+import { newsCalendarDayET, NEWS_TAB_REVALIDATE_SECONDS } from "@/lib/news-tab-cache"
 
 export type PublicMentionItem = {
   id: string
@@ -651,7 +653,7 @@ async function classifyTop(items: PublicMentionItem[]): Promise<PublicMentionIte
   return [...out, ...rest]
 }
 
-export async function fetchPublicMentions(
+async function fetchPublicMentionsImpl(
   level: "national" | "florida" | "miami"
 ): Promise<PublicMentionsResponse> {
   const notes: string[] = []
@@ -812,5 +814,16 @@ export async function fetchPublicMentions(
   })
 
   return { news: out, notes }
+}
+
+export async function fetchPublicMentions(
+  level: "national" | "florida" | "miami"
+): Promise<PublicMentionsResponse> {
+  const day = newsCalendarDayET()
+  return unstable_cache(
+    async () => fetchPublicMentionsImpl(level),
+    ["public-mentions-v2", day, level],
+    { revalidate: NEWS_TAB_REVALIDATE_SECONDS }
+  )()
 }
 
