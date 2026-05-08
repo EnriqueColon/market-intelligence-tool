@@ -171,7 +171,7 @@ async function callPerplexity(
       }),
       cache: "no-store",
     }),
-    45000,
+    40000,
     "Industry outlook generation timed out."
   )
 
@@ -190,7 +190,7 @@ async function runIndustryOutlookGeneration(): Promise<string> {
   try {
     sources = await withTimeout(
       retrieveSources(),
-      12000,
+      8000,
       "Source retrieval timed out."
     )
   } catch (err) {
@@ -204,25 +204,7 @@ async function runIndustryOutlookGeneration(): Promise<string> {
 
   try {
     const { system, user } = buildPrompt(sources)
-    let content = cleanMemoText(await callPerplexity(apiKey, system, user))
-
-    if (!content || !hasRequiredSections(content) || !hasOrderedSections(content)) {
-      const repairUser =
-        `Reformat the following memo into EXACTLY these five section headers in this order:
-${SECTION_HEADINGS.join("\n")}
-
-Rules:
-- Plain text only, no markdown symbols.
-- Keep original meaning and data points.
-- Use bullet points under each section.
-- Ensure "Key sources (for further reading)" contains line items in format: Title — https://url
-
-MEMO TO REFORMAT:
-${content || "(empty)"}
-`
-      const repaired = await callPerplexity(apiKey, system, repairUser)
-      if (repaired) content = cleanMemoText(repaired)
-    }
+    const content = cleanMemoText(await callPerplexity(apiKey, system, user))
 
     if (!content || !hasRequiredSections(content) || !hasOrderedSections(content)) {
       return buildFallbackMemo(sources, "Output failed section-format requirements")
@@ -245,7 +227,7 @@ export async function POST() {
     try {
       sources = await withTimeout(
         retrieveSources(),
-        12000,
+        8000,
         "Source retrieval timed out."
       )
     } catch (err) {
