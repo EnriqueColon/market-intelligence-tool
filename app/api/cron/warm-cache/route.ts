@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server"
 import { fetchPublicMentions } from "@/app/actions/fetch-public-mentions"
 import { fetchInvestingNews } from "@/app/actions/fetch-investing-news"
+import { fetchLegalUpdates } from "@/app/actions/fetch-legal-updates"
+import { fetchMarketResearch } from "@/app/actions/fetch-market-research"
 
 export const runtime = "nodejs"
 // Allow up to 5 minutes — all warmings run concurrently so wall time is
@@ -71,6 +73,8 @@ export async function GET(request: Request) {
     warmWithLabel("investingNews:national", () => fetchInvestingNews("national"), results),
     warmWithLabel("investingNews:florida", () => fetchInvestingNews("florida"), results),
     warmWithLabel("investingNews:miami", () => fetchInvestingNews("miami"), results),
+    warmWithLabel("marketResearch", () => fetchMarketResearch(), results),
+    warmWithLabel("legalUpdates", () => fetchLegalUpdates(), results),
   ])
 
   const failed = Object.entries(results).filter(([, v]) => v !== "ok")

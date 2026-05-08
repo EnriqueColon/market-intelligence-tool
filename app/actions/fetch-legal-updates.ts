@@ -1,5 +1,8 @@
 "use server"
 
+import { unstable_cache } from "next/cache"
+import { newsCalendarDayET } from "@/lib/news-tab-cache"
+
 export type LegalItem = {
   id: string
   section: "regulatory" | "legislative" | "enforcement"
@@ -185,16 +188,9 @@ async function querySection(
   }
 }
 
-// ── Simple in-process cache (avoids redundant calls within a session) ──────────
-
-const SESSION_KEY = "legal-updates:v1"
-let _cache: { key: string; data: LegalUpdatesResponse } | null = null
-
 // ── Main export ────────────────────────────────────────────────────────────────
 
-export async function fetchLegalUpdates(): Promise<LegalUpdatesResponse> {
-  if (_cache?.key === SESSION_KEY) return _cache.data
-
+async function fetchLegalUpdatesImpl(): Promise<LegalUpdatesResponse> {
   const notes: string[] = []
   const API_KEY = process.env.PERPLEXITY_API_KEY?.trim()
 
@@ -219,12 +215,18 @@ export async function fetchLegalUpdates(): Promise<LegalUpdatesResponse> {
     notes.push("No legal intelligence items returned. Check Perplexity API key and quota.")
   }
 
-  const response: LegalUpdatesResponse = {
+  return {
     items: allItems,
     generatedAt: new Date().toISOString(),
     notes,
   }
+}
 
-  _cache = { key: SESSION_KEY, data: response }
-  return response
+export async function fetchLegalUpdates(): Promise<LegalUpdatesResponse> {
+  const day = newsCalendarDayET()
+  return unstable_cache(
+    async () => fetchLegalUpdatesImpl(),
+    ["legal-updates-v1", day],
+    { revalidate: 86400 }
+  )()
 }

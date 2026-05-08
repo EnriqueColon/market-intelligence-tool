@@ -1,5 +1,8 @@
- "use server"
- 
+"use server"
+
+import { unstable_cache } from "next/cache"
+import { newsCalendarDayET } from "@/lib/news-tab-cache"
+
 export type ResearchPoint = {
   date: string
   value: number
@@ -542,7 +545,7 @@ function buildCensusMetric({
   }
 }
 
-export async function fetchMarketResearch(): Promise<ResearchSection[]> {
+async function fetchMarketResearchImpl(): Promise<ResearchSection[]> {
   const [sfrNational, industrialNational, retailNational, hospitalityNational, officeNational] =
     await Promise.all([
       Promise.all(SFR_NATIONAL_SERIES.map(fetchSeries)),
@@ -833,4 +836,13 @@ export async function fetchMiamiIndustrialReport(): Promise<MarketReport> {
       },
     ],
   }
+}
+
+export async function fetchMarketResearch(): Promise<ResearchSection[]> {
+  const day = newsCalendarDayET()
+  return unstable_cache(
+    async () => fetchMarketResearchImpl(),
+    ["market-research-v1", day],
+    { revalidate: 3600 }
+  )()
 }
