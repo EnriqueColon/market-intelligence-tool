@@ -16,6 +16,7 @@ Server-only (do **not** expose as `NEXT_PUBLIC_*`):
 - `GOOGLE_CSE_ID`
 - `POSTGRES_URL` (from Vercel Postgres integration)
 - `ADMIN_INIT_TOKEN` (required to initialize Market Research DB tables)
+- `CRON_SECRET` (required to protect the /api/cron/warm-cache pre-warm endpoint)
 - `INGESTION_TOKEN` (required for protected ingestion run endpoint)
 - `ADMIN_UPLOAD_TOKEN` (required for protected manual PDF upload endpoint)
 - `FRED_API_KEY`
