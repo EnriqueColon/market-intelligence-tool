@@ -1,39 +1,15 @@
 import { NextResponse } from "next/server"
+import { getCachedIndustryOutlook } from "@/app/services/industry-outlook/getCachedOutlook"
 import { fetchPublicMentions } from "@/app/actions/fetch-public-mentions"
 import { fetchInvestingNews } from "@/app/actions/fetch-investing-news"
 import { fetchLegalUpdates } from "@/app/actions/fetch-legal-updates"
 import { fetchMarketResearch } from "@/app/actions/fetch-market-research"
 
 export const runtime = "nodejs"
-// Allow up to 5 minutes — all warmings run concurrently so wall time is
-// dominated by the single slowest call (~48s for industry-outlook).
+// 5 minutes — all 9 tasks run concurrently so wall time is the slowest single task (~48s)
 export const maxDuration = 300
 
 type WarmResult = "ok" | `error:${string}`
-
-function resolveBaseUrl(): string {
-  // VERCEL_PROJECT_PRODUCTION_URL is the stable production hostname (no protocol).
-  // VERCEL_URL is the per-deployment URL — also usable for self-calls on Vercel.
-  const host =
-    process.env.VERCEL_PROJECT_PRODUCTION_URL ||
-    process.env.VERCEL_URL ||
-    process.env.APP_URL
-  if (!host) return "http://localhost:3000"
-  if (host.startsWith("http://") || host.startsWith("https://")) return host
-  return `https://${host}`
-}
-
-async function warmIndustryOutlook(baseUrl: string): Promise<WarmResult> {
-  try {
-    const res = await fetch(`${baseUrl}/api/industry-outlook`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-    })
-    return res.ok ? "ok" : `error:${res.status}`
-  } catch (err) {
-    return `error:${err instanceof Error ? err.message : String(err)}`
-  }
-}
 
 async function warmWithLabel<T>(
   label: string,
@@ -50,7 +26,6 @@ async function warmWithLabel<T>(
 
 export async function GET(request: Request) {
   // Vercel sends: Authorization: Bearer <CRON_SECRET>
-  // Allow through if no secret is configured (local dev / first deploy).
   const cronSecret = process.env.CRON_SECRET?.trim()
   if (cronSecret) {
     const auth = request.headers.get("authorization") ?? ""
@@ -59,21 +34,27 @@ export async function GET(request: Request) {
     }
   }
 
-  const baseUrl = resolveBaseUrl()
   const results: Record<string, WarmResult> = {}
   const startedAt = new Date().toISOString()
 
-  // Run every warming task concurrently — wall time is bounded by the slowest
-  // single task (~48s for industry-outlook) not by the sum.
   await Promise.allSettled([
-    warmWithLabel("industryOutlook", () => warmIndustryOutlook(baseUrl), results),
+    // News tab — Industry Outlook (Key Signals)
+    warmWithLabel("industryOutlook", () => getCachedIndustryOutlook(), results),
+
+    // News tab — CRE Public Mentions
     warmWithLabel("publicMentions:national", () => fetchPublicMentions("national"), results),
     warmWithLabel("publicMentions:florida", () => fetchPublicMentions("florida"), results),
     warmWithLabel("publicMentions:miami", () => fetchPublicMentions("miami"), results),
+
+    // News tab — Investing & Finance News
     warmWithLabel("investingNews:national", () => fetchInvestingNews("national"), results),
     warmWithLabel("investingNews:florida", () => fetchInvestingNews("florida"), results),
     warmWithLabel("investingNews:miami", () => fetchInvestingNews("miami"), results),
+
+    // Market Research tab
     warmWithLabel("marketResearch", () => fetchMarketResearch(), results),
+
+    // Legal tab
     warmWithLabel("legalUpdates", () => fetchLegalUpdates(), results),
   ])
 
