@@ -3,14 +3,6 @@ import { retrieveSources } from "@/app/services/industry-outlook/retrieveSources
 import type { RetrievedSource } from "@/app/services/industry-outlook/schema"
 import { newsCalendarDayET, NEWS_TAB_REVALIDATE_SECONDS } from "@/lib/news-tab-cache"
 
-const SECTION_HEADINGS = [
-  "Executive Summary",
-  "U.S. commercial real estate outlook (CRE debt & distress)",
-  "Miami-specific CRE and distressed-debt outlook",
-  "How this shapes distressed-debt investing",
-  "Key sources (for further reading)",
-]
-
 function withTimeout<T>(task: Promise<T>, timeoutMs: number, message: string): Promise<T> {
   return Promise.race([
     task,
@@ -18,19 +10,18 @@ function withTimeout<T>(task: Promise<T>, timeoutMs: number, message: string): P
   ])
 }
 
-function hasRequiredSections(text: string): boolean {
-  return SECTION_HEADINGS.every((h) => text.toLowerCase().includes(h.toLowerCase()))
-}
-
-function hasOrderedSections(text: string): boolean {
-  const lowered = text.toLowerCase()
-  let lastIndex = -1
-  for (const h of SECTION_HEADINGS) {
-    const idx = lowered.indexOf(h.toLowerCase())
-    if (idx === -1 || idx < lastIndex) return false
-    lastIndex = idx
-  }
-  return true
+/** True if the text looks like a real AI-generated memo (has substance). */
+function hasUsableContent(text: string): boolean {
+  if (!text || text.trim().length < 200) return false
+  // At least one of the core section concepts must appear
+  const t = text.toLowerCase()
+  return (
+    t.includes("executive summary") ||
+    t.includes("commercial real estate") ||
+    t.includes("distressed") ||
+    t.includes("cmbs") ||
+    t.includes("special servicing")
+  )
 }
 
 function cleanMemoText(text: string): string {
@@ -182,10 +173,10 @@ async function runGeneration(): Promise<string> {
   try {
     const { system, user } = buildPrompt(sources)
     const content = cleanMemoText(await callPerplexity(apiKey, system, user))
-    if (!content || !hasRequiredSections(content) || !hasOrderedSections(content)) {
-      return buildFallbackMemo(sources, "Output failed section-format requirements")
-    }
-    return content
+    // Accept any substantive response — the component parser handles varied formats.
+    // Only fall back if the response is empty or clearly not a memo.
+    if (hasUsableContent(content)) return content
+    return buildFallbackMemo(sources, "Perplexity returned insufficient content")
   } catch (err) {
     console.error("Industry outlook generation error:", err)
     return buildFallbackMemo(
