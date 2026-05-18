@@ -1,0 +1,31 @@
+name: Warm Cache After Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  warm:
+    name: Warm Vercel cache
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for Vercel deployment
+        run: sleep 120
+
+      - name: Trigger cache warm-up
+        run: |
+          echo "Calling warm-cache endpoint..."
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            --max-time 120 \
+            "https://market-intelligence-tool-gilt.vercel.app/api/cron/warm-cache")
+          HTTP_STATUS=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | head -n-1)
+          echo "Status: $HTTP_STATUS"
+          echo "Response: $BODY"
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "Warm-up failed with status $HTTP_STATUS"
+            exit 1
+          fi
+          echo "$BODY" | grep -q '"all_ok"' && echo "All caches warm ✓" || echo "Some caches failed — check response above"
