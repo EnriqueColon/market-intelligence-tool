@@ -283,6 +283,9 @@ export function NewsHeadlines({ level }: NewsHeadlinesProps) {
 
             {summaryLoading && (
               <div className="space-y-3">
+                <p className="text-xs text-muted-foreground">
+                  Preparing brief… first view of an article can take up to a minute; it loads instantly after that.
+                </p>
                 <Skeleton className="h-4 w-3/4" />
                 <Skeleton className="h-4 w-11/12" />
                 <Skeleton className="h-4 w-10/12" />

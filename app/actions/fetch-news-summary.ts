@@ -1,8 +1,10 @@
 "use server"
 
+import { unstable_cache } from "next/cache"
 import { classifyArticleAccess, type AccessStatus, KNOWN_PAYWALL_DOMAINS } from "@/app/actions/news-access"
 import { callClaudeJson, getClaudeApiKey } from "@/lib/claude"
 import { findOpenBackfillSources } from "@/app/actions/fetch-open-backfill"
+import { newsCalendarDayET, NEWS_TAB_REVALIDATE_SECONDS } from "@/lib/news-tab-cache"
 
 export type NewsSummaryInput = {
   title: string
@@ -249,7 +251,40 @@ async function callAiJson(prompt: string, notes: string[]) {
   )
 }
 
+function isDegradedBrief(brief: NewsBrief): boolean {
+  if (brief.notes.some((n) => /claude call failed|could not find json|failed to parse json/i.test(n))) return true
+  if (!brief.keyBullets.length) return true
+  return false
+}
+
+/**
+ * Cached entry point: each article's brief is generated once per calendar day
+ * (keyed by URL + level) and served instantly afterwards. Degraded briefs
+ * (AI failure/parse error) are never cached — they throw inside the cache
+ * wrapper and we fall back to a fresh uncached attempt.
+ */
 export async function summarizeNewsItem(
+  input: NewsSummaryInput & { level?: "national" | "florida" | "miami" }
+): Promise<NewsBrief> {
+  const day = newsCalendarDayET()
+  const level = input.level ?? "national"
+  const urlKey = normalizeUrlForKey(input.url || "") || `title:${(input.title || "").slice(0, 120)}`
+  try {
+    return await unstable_cache(
+      async () => {
+        const brief = await summarizeNewsItemUncached(input)
+        if (isDegradedBrief(brief)) throw new Error("degraded brief — not caching")
+        return brief
+      },
+      ["news-brief-v1", day, level, urlKey],
+      { revalidate: NEWS_TAB_REVALIDATE_SECONDS }
+    )()
+  } catch {
+    return summarizeNewsItemUncached(input)
+  }
+}
+
+async function summarizeNewsItemUncached(
   input: NewsSummaryInput & { level?: "national" | "florida" | "miami" }
 ): Promise<NewsBrief> {
   const notes: string[] = []

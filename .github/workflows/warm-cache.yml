@@ -29,3 +29,18 @@ jobs:
             exit 1
           fi
           echo "$BODY" | grep -q '"all_ok"' && echo "All caches warm ✓" || echo "Some caches failed — check response above"
+
+      - name: Pre-generate article briefs
+        run: |
+          echo "Calling warm-briefs endpoint..."
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            --max-time 300 \
+            "https://market-intelligence-tool-gilt.vercel.app/api/cron/warm-briefs")
+          HTTP_STATUS=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | head -n-1)
+          echo "Status: $HTTP_STATUS"
+          echo "Response: $BODY"
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "Brief warm-up failed with status $HTTP_STATUS (non-fatal)"
+          fi
