@@ -1,6 +1,7 @@
 "use server"
 
 import { classifyArticleAccess, type AccessStatus, KNOWN_PAYWALL_DOMAINS } from "@/app/actions/news-access"
+import { callClaudeJson, getClaudeApiKey } from "@/lib/claude"
 import { findOpenBackfillSources } from "@/app/actions/fetch-open-backfill"
 
 export type NewsSummaryInput = {
@@ -231,42 +232,21 @@ async function fetchRelatedFromRss(level: "national" | "florida" | "miami", titl
   }
 }
 
-async function callPerplexityJson(prompt: string, notes: string[]) {
-  const API_KEY = process.env.PERPLEXITY_API_KEY?.trim()
-  if (!API_KEY) return null
-  try {
-    const res = await fetch("https://api.perplexity.ai/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "sonar",
-        messages: [
-          { role: "system", content: "Return ONLY valid JSON. Do not invent facts. Use your live web search when needed to supplement the provided content." },
-          { role: "user", content: prompt },
-        ],
-        temperature: 0.2,
-        max_tokens: 2500,
-      }),
-      cache: "no-store",
-    })
-    if (!res.ok) {
-      notes.push(`Perplexity error: ${res.status}`)
-      return null
-    }
-    const data = await res.json()
-    const content = data?.choices?.[0]?.message?.content
-    if (typeof content !== "string") return null
-    const match = content.match(/\{[\s\S]*\}/)
-    if (!match) return null
-    return JSON.parse(match[0])
-  } catch (err) {
-    const message = err instanceof Error ? err.message : typeof err === "string" ? err : "Unknown error"
-    notes.push(`Perplexity call failed: ${message}`)
-    return null
-  }
+async function callAiJson(prompt: string, notes: string[]) {
+  if (!getClaudeApiKey()) return null
+  return callClaudeJson(
+    {
+      system:
+        "Return ONLY valid JSON. Do not invent facts. Use your web search tool when needed to supplement the provided content.",
+      user: prompt,
+      tier: "fast",
+      temperature: 0.2,
+      maxTokens: 4000,
+      webSearch: true,
+      maxSearches: 3,
+    },
+    notes
+  )
 }
 
 export async function summarizeNewsItem(
@@ -323,24 +303,48 @@ export async function summarizeNewsItem(
         })
 
   if (summarization_mode === "paywall_signal") {
-    // Try to provide actionable open alternatives even when the main link is blocked.
-    const relatedPrompt = `You are a market intelligence analyst. The primary source is paywalled/blocked.
-Find 3-5 RELATED OPEN-ACCESS sources (avoid paywalls) from the past 7 days that likely cover the same topic/event.
-Return ONLY valid JSON:
-{
-  "relatedOpenSources": [{"title": "...", "url": "https://..."}]
-}
+    // The primary source is paywalled — reconstruct the story from open coverage
+    // of the same event via web search, so the user still gets a full briefing.
+    const prompt = `You are a senior market intelligence analyst at a distressed CRE debt investment firm.
 
-HEADLINE: ${title}
+The article below is PAYWALLED — you cannot read it directly. Use your web search tool to find OPEN coverage of the SAME story or event (other outlets, press releases, court records, trade publications) and reconstruct a comprehensive briefing from those open sources.
+Do NOT invent facts. Only report what open sources support. If key details could not be confirmed, note them in redFlags.
+
+PAYWALLED HEADLINE: ${title}
 SOURCE: ${source || "Unknown"}
 DATE: ${date || "Unknown"}
-SNIPPET: ${snippet || "[none]"}`
+PUBLIC SNIPPET/PREVIEW: ${snippet || "[none]"}
 
-    const relatedParsed = await callPerplexityJson(relatedPrompt, notes)
-    const modelRelated = parseRelatedFromModel(relatedParsed?.relatedOpenSources)
+Produce a COMPREHENSIVE briefing — not just a headline summary. An executive needs enough detail to decide whether to act or investigate further.
+
+Return JSON with EXACT keys:
+{
+  "executiveSummary": "6-8 sentences covering: what happened, who is involved, key figures (dollar amounts, percentages, dates), geographic context, and direct implications for distressed CRE debt investors",
+  "dealSpecifics": {
+    "assetType": "property type if mentioned (office, multifamily, retail, etc.) or null",
+    "location": "city/market if mentioned or null",
+    "loanAmount": "dollar amount if mentioned or null",
+    "lender": "lender name if mentioned or null",
+    "borrower": "borrower/sponsor name if mentioned or null",
+    "dealStatus": "open, closed, distressed, in workout, foreclosure, etc. or null"
+  },
+  "keyBullets": ["up to 10 bullets — each with a specific fact, figure, named entity, or date from open coverage. Lead with the most important."],
+  "whyItMatters": ["up to 6 bullets — implications for distressed debt investors, lenders, or market participants"],
+  "entities": ["named firms, individuals, properties, regulators — up to 15"],
+  "redFlags": ["details that could not be confirmed from open sources, data gaps — up to 8"],
+  "followUps": ["concrete next steps to validate or act on this — up to 6"],
+  "relatedOpenSources": [{"title":"...","url":"..."}],
+  "confidence": 0-100
+}`
+
+    const parsed = await callAiJson(prompt, notes)
+    const modelRelated = parseRelatedFromModel(parsed?.relatedOpenSources)
     const validatedModelRelated = modelRelated.length ? await validateOpenSources(modelRelated) : []
     const merged = [...backfillRelated, ...rssRelated, ...validatedModelRelated]
     const relatedOpenSources = merged.length ? merged.slice(0, 5) : undefined
+
+    const reconstructed =
+      parsed && typeof parsed.executiveSummary === "string" && parsed.executiveSummary.trim()
 
     return {
       title,
@@ -353,31 +357,43 @@ SNIPPET: ${snippet || "[none]"}`
       content_length_chars: access.content_length_chars,
       extracted_text_length_chars: access.extracted_text_length_chars,
       summarization_mode,
-      confidence_label,
-      banner:
-        "This source is paywalled or limited-access. This brief is grounded in open sources (when available) plus any public snippet/preview.",
-      executiveSummary: snippet
-        ? `${title} — ${snippet}`.slice(0, 360)
-        : `${title}. This page appears paywalled or blocked; summary uses only public info.`.slice(0, 360),
-      keyBullets: [
-        `Access: paywalled/blocked (${access.detection_reason}).`,
-        source ? `Source: ${source}.` : "Source not provided.",
-        date ? `Date: ${date}.` : "Date not provided.",
-      ],
-      whyItMatters: [
-        "This headline may signal distress activity (special servicing, delinquencies, note sales, refinancing stress).",
-        "Use open sources to confirm the facts before acting.",
-      ],
-      entities: [],
-      redFlags: [
-        "The full article could not be accessed; key details may be missing.",
-        "Treat conclusions as directional until validated by an open source.",
-      ],
-      followUps: [
-        "Find 1–2 open sources covering the same event.",
-        "Confirm asset type, location, transaction size, and named counterparties.",
-      ],
-      confidence: 20,
+      confidence_label: reconstructed ? "Medium" : "Low",
+      banner: reconstructed
+        ? "The original article is paywalled. This brief was reconstructed from open coverage of the same story."
+        : "This source is paywalled or limited-access. This brief is grounded in open sources (when available) plus any public snippet/preview.",
+      executiveSummary: reconstructed
+        ? parsed.executiveSummary.trim()
+        : (snippet
+            ? `${title} — ${snippet}`.slice(0, 360)
+            : `${title}. This page appears paywalled or blocked; summary uses only public info.`.slice(0, 360)),
+      dealSpecifics: parsed?.dealSpecifics ?? undefined,
+      keyBullets: reconstructed
+        ? asStringArray(parsed?.keyBullets, 10)
+        : [
+            `Access: paywalled/blocked (${access.detection_reason}).`,
+            source ? `Source: ${source}.` : "Source not provided.",
+            date ? `Date: ${date}.` : "Date not provided.",
+          ],
+      whyItMatters: reconstructed
+        ? asStringArray(parsed?.whyItMatters, 6)
+        : [
+            "This headline may signal distress activity (special servicing, delinquencies, note sales, refinancing stress).",
+            "Use open sources to confirm the facts before acting.",
+          ],
+      entities: asStringArray(parsed?.entities, 15),
+      redFlags: reconstructed
+        ? asStringArray(parsed?.redFlags, 8)
+        : [
+            "The full article could not be accessed; key details may be missing.",
+            "Treat conclusions as directional until validated by an open source.",
+          ],
+      followUps: reconstructed
+        ? asStringArray(parsed?.followUps, 6)
+        : [
+            "Find 1–2 open sources covering the same event.",
+            "Confirm asset type, location, transaction size, and named counterparties.",
+          ],
+      confidence: reconstructed ? clampNumber(parsed?.confidence, 0, 100, 50) : 20,
       generatedAt: new Date().toISOString(),
       relatedOpenSources,
       notes,
@@ -417,7 +433,7 @@ Return JSON with EXACT keys:
   "relatedOpenSources": [{"title":"...","url":"..."}],
   "confidence": 0-100
 }`
-    const parsed = await callPerplexityJson(prompt, notes)
+    const parsed = await callAiJson(prompt, notes)
     const exec =
       parsed && typeof parsed.executiveSummary === "string" && parsed.executiveSummary.trim()
         ? parsed.executiveSummary.trim()
@@ -488,7 +504,7 @@ Return JSON with EXACT keys:
   "relatedOpenSources": [{"title":"...","url":"..."}],
   "confidence": 0-100
 }`
-  const parsed = await callPerplexityJson(prompt, notes)
+  const parsed = await callAiJson(prompt, notes)
   const exec =
     parsed && typeof parsed.executiveSummary === "string" && parsed.executiveSummary.trim()
       ? parsed.executiveSummary.trim()

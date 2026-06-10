@@ -2,6 +2,7 @@ import { unstable_cache } from "next/cache"
 import { retrieveSources } from "@/app/services/industry-outlook/retrieveSources"
 import type { RetrievedSource } from "@/app/services/industry-outlook/schema"
 import { newsCalendarDayET, NEWS_TAB_REVALIDATE_SECONDS } from "@/lib/news-tab-cache"
+import { callClaude, getClaudeApiKey } from "@/lib/claude"
 
 function withTimeout<T>(task: Promise<T>, timeoutMs: number, message: string): Promise<T> {
   return Promise.race([
@@ -25,11 +26,21 @@ function hasUsableContent(text: string): boolean {
 }
 
 function cleanMemoText(text: string): string {
-  return text
+  let cleaned = text
     .replace(/\*\*/g, "")
+    .replace(/^#+\s*/gm, "")
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim()
+
+  // Drop any preamble/memo header before the first real section heading,
+  // e.g. "I'll search for..." narration or TO:/FROM:/DATE: lines. Not anchored
+  // to line start because search narration can fuse onto the same line.
+  const firstSection = cleaned.search(/(?:\d+\)\s*)?executive summary/i)
+  if (firstSection > 0) {
+    cleaned = cleaned.slice(firstSection).trim()
+  }
+  return cleaned
 }
 
 function normalizeSources(sources: RetrievedSource[]): Array<{ title: string; url: string }> {
@@ -100,11 +111,11 @@ function buildPrompt(sources: RetrievedSource[]): { system: string; user: string
   const system =
     "You are a senior CRE distressed-debt analyst at a private equity firm specializing in distressed commercial real estate debt, NPL acquisitions, and loan workouts. " +
     "Write for the investment committee: plain text only, data-forward, specific numbers and dates. " +
-    "Use your live web search to find the most current market data — CMBS delinquency rates, special servicing volumes, foreclosure filings, note sale pipelines, and deal activity. " +
+    "Use your web search tool to find the most current market data — CMBS delinquency rates, special servicing volumes, foreclosure filings, note sale pipelines, and deal activity. " +
     "Supplement with the source articles provided below. Prioritize verifiable, cited facts. " +
     "Never use markdown symbols (no **, no #, no bullet dashes — use plain hyphens)."
 
-  const user = `Write a distressed commercial real estate debt outlook memo. Use your live search AND the source articles below.
+  const user = `Write a distressed commercial real estate debt outlook memo. Use your web search tool AND the source articles below.
 
 SCOPE: U.S. national, Florida, Miami-Dade
 
@@ -116,49 +127,22 @@ OUTPUT — use these exact five section headers in this order:
 5) Key sources (for further reading)
 
 WRITING RULES:
+- Start your response DIRECTLY with the text "Executive Summary" — no preamble, no memo header (no TO:/FROM:/DATE: lines), no commentary about searching.
+- EVERY section must be formatted as plain hyphen bullets ("- "), INCLUDING the Executive Summary. Never write paragraphs.
 - 4-6 bullets per section (except Key sources).
-- Each bullet: 1-2 sentences. Lead with a concrete metric, named entity, or date when available.
+- Each bullet: 1-2 SHORT sentences maximum. Be concise — lead with a concrete metric, named entity, or date when available.
 - Include dollar amounts, percentages, basis points, delinquency rates, loan counts, or deal sizes.
 - Name specific properties, cities, lenders, borrowers, or servicers when known.
 - Search for: current CMBS delinquency rates, special servicing volumes, CRE loan maturity wall data, South Florida foreclosure activity, distressed note sale transactions.
 - Key sources: list 4-8 URLs, one per line, format: Title — https://url
 
 SUPPLEMENTAL SOURCE ARTICLES:
-${richContext || "No supplemental articles provided — rely on live search."}`
+${richContext || "No supplemental articles provided — rely on web search."}`
 
   return { system, user }
 }
 
-async function callPerplexity(apiKey: string, system: string, user: string): Promise<string> {
-  const response = await withTimeout(
-    fetch("https://api.perplexity.ai/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "sonar",
-        temperature: 0.2,
-        max_tokens: 1400,
-        messages: [
-          { role: "system", content: system },
-          { role: "user", content: user },
-        ],
-      }),
-      cache: "no-store",
-    }),
-    40000,
-    "Industry outlook generation timed out."
-  )
-
-  if (!response.ok) throw new Error(`Provider error ${response.status}`)
-  const json = (await response.json()) as {
-    choices?: Array<{ message?: { content?: string } }>
-  }
-  return json.choices?.[0]?.message?.content?.trim() || ""
-}
-
+/** Generates the memo. Throws on any failure so callers can decide whether to cache. */
 async function runGeneration(): Promise<string> {
   let sources: RetrievedSource[] = []
   try {
@@ -167,44 +151,54 @@ async function runGeneration(): Promise<string> {
     console.error("Industry outlook source retrieval error:", err)
   }
 
-  const apiKey = process.env.PERPLEXITY_API_KEY?.trim()
-  if (!apiKey) return buildFallbackMemo(sources, "Missing PERPLEXITY_API_KEY")
-
-  try {
-    const { system, user } = buildPrompt(sources)
-    const content = cleanMemoText(await callPerplexity(apiKey, system, user))
-    // Accept any substantive response — the component parser handles varied formats.
-    // Only fall back if the response is empty or clearly not a memo.
-    if (hasUsableContent(content)) return content
-    return buildFallbackMemo(sources, "Perplexity returned insufficient content")
-  } catch (err) {
-    console.error("Industry outlook generation error:", err)
-    return buildFallbackMemo(
-      sources,
-      err instanceof Error ? err.message : "Unhandled generation error"
-    )
+  const { system, user } = buildPrompt(sources)
+  const raw = await callClaude({
+    system,
+    user,
+    tier: "fast",
+    maxTokens: 3200,
+    temperature: 0.2,
+    webSearch: true,
+    maxSearches: 4,
+    timeoutMs: 90_000,
+  })
+  const content = cleanMemoText(raw)
+  if (!hasUsableContent(content)) {
+    throw new Error("Claude returned insufficient content")
   }
+  return content
 }
 
 /**
  * Returns today's industry outlook from cache, or generates + caches it.
  * Safe to call from both the API route and the cron warm-up directly —
  * no HTTP round-trip, no middleware interception.
+ *
+ * Failed generations are NEVER cached: the cached function throws on failure,
+ * and the fallback memo is built fresh per request so the next request retries.
  */
 export async function getCachedIndustryOutlook(): Promise<string> {
-  const apiKey = process.env.PERPLEXITY_API_KEY?.trim()
-  if (!apiKey) {
+  const day = newsCalendarDayET()
+  const cachedGeneration = unstable_cache(
+    async () => runGeneration(),
+    ["industry-outlook-shared-v7", day],
+    { revalidate: NEWS_TAB_REVALIDATE_SECONDS }
+  )
+
+  try {
+    if (!getClaudeApiKey()) throw new Error("Missing ANTHROPIC_API_KEY")
+    return await cachedGeneration()
+  } catch (err) {
+    console.error("Industry outlook generation error:", err)
     let sources: RetrievedSource[] = []
     try {
       sources = await withTimeout(retrieveSources(), 8000, "Source retrieval timed out.")
-    } catch { /* ignore */ }
-    return buildFallbackMemo(sources, "Missing PERPLEXITY_API_KEY")
+    } catch {
+      /* fallback proceeds without sources */
+    }
+    return buildFallbackMemo(
+      sources,
+      err instanceof Error ? err.message : "Unhandled generation error"
+    )
   }
-
-  const day = newsCalendarDayET()
-  return unstable_cache(
-    async () => runGeneration(),
-    ["industry-outlook-shared-v2", day],
-    { revalidate: NEWS_TAB_REVALIDATE_SECONDS }
-  )()
 }

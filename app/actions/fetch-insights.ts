@@ -1,6 +1,8 @@
 "use server"
 
-const PERPLEXITY_API_KEY = process.env.PERPLEXITY_API_KEY
+import { unstable_cache } from "next/cache"
+import { callClaude, getClaudeApiKey } from "@/lib/claude"
+import { newsCalendarDayET } from "@/lib/news-tab-cache"
 
 interface MarketInsight {
   summary: string
@@ -10,9 +12,10 @@ interface MarketInsight {
 }
 
 /**
- * Generate AI market insights based on current market conditions
+ * Generates AI market insights. Throws on failure so callers can decide
+ * whether to cache the result.
  */
-export async function fetchMarketInsights(
+async function generateMarketInsights(
   level: "national" | "florida" | "miami",
   kpiData?: {
     priceChange?: string
@@ -21,9 +24,8 @@ export async function fetchMarketInsights(
     foreclosures?: string
   }
 ): Promise<MarketInsight> {
-  if (!PERPLEXITY_API_KEY) {
-    console.warn("PERPLEXITY_API_KEY not found, using fallback insights")
-    return getFallbackInsights(level)
+  if (!getClaudeApiKey()) {
+    throw new Error("ANTHROPIC_API_KEY not found")
   }
 
   const levelNames = {
@@ -41,7 +43,7 @@ export async function fetchMarketInsights(
 ${contextData}
 
 Focus on:
-1. Current market conditions (Q4 2024 / Q1 2025)
+1. Current market conditions (most recent quarter)
 2. Key trends in office, retail, multifamily, and industrial sectors
 3. Delinquency and distress trends
 4. Lending environment (bank pullback, CMBS, life insurance)
@@ -57,41 +59,16 @@ Provide your response as a JSON object with this exact format:
 Be specific with numbers and trends. Focus on distressed debt opportunities and market stress indicators.`
 
   try {
-    const response = await fetch("https://api.perplexity.ai/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${PERPLEXITY_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "sonar-pro",
-        messages: [
-          {
-            role: "system",
-            content: "You are a commercial real estate market analyst specializing in distressed assets and market intelligence. Always respond with valid JSON.",
-          },
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
-        temperature: 0.2,
-        max_tokens: 1000,
-      }),
-      next: { revalidate: 1800 }, // Cache for 30 minutes
+    const content = await callClaude({
+      system:
+        "You are a commercial real estate market analyst specializing in distressed assets and market intelligence. Use your web search tool for current data. Always respond with valid JSON.",
+      user: prompt,
+      tier: "smart",
+      temperature: 0.2,
+      maxTokens: 1000,
+      webSearch: true,
+      maxSearches: 3,
     })
-
-    if (!response.ok) {
-      console.error(`Perplexity API error: ${response.status}`)
-      return getFallbackInsights(level)
-    }
-
-    const data = await response.json()
-    const content = data.choices?.[0]?.message?.content
-
-    if (!content) {
-      return getFallbackInsights(level)
-    }
 
     // Try to parse JSON from response
     try {
@@ -118,6 +95,33 @@ Be specific with numbers and trends. Focus on distressed debt opportunities and 
     }
   } catch (error) {
     console.error("Error fetching market insights:", error)
+    throw error
+  }
+}
+
+/**
+ * Cached entry point. One generation per region per day (refreshed every 4h),
+ * pre-warmed by the cron so users never wait. Failures are never cached.
+ * Note: kpiData is intentionally NOT part of the cache key — the daily insight
+ * narrative is region-level and doesn't change materially with KPI decimals.
+ */
+export async function fetchMarketInsights(
+  level: "national" | "florida" | "miami",
+  kpiData?: {
+    priceChange?: string
+    delinquencyRate?: string
+    transactionVolume?: string
+    foreclosures?: string
+  }
+): Promise<MarketInsight> {
+  const day = newsCalendarDayET()
+  try {
+    return await unstable_cache(
+      async () => generateMarketInsights(level, kpiData),
+      ["market-insights-v1", level, day],
+      { revalidate: 14400 }
+    )()
+  } catch {
     return getFallbackInsights(level)
   }
 }

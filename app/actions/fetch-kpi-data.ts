@@ -1,6 +1,9 @@
 "use server"
 
+import { unstable_cache } from "next/cache"
 import { FRED_SERIES } from "@/lib/fred-constants"
+import { callClaudeJson, getClaudeApiKey } from "@/lib/claude"
+import { newsCalendarDayET } from "@/lib/news-tab-cache"
 
 interface KpiData {
   label: string
@@ -11,7 +14,6 @@ interface KpiData {
 }
 
 const FRED_API_KEY = process.env.FRED_API_KEY
-const PERPLEXITY_API_KEY = process.env.PERPLEXITY_API_KEY
 const FRED_BASE_URL = "https://api.stlouisfed.org/fred/series/observations"
 
 /**
@@ -59,10 +61,28 @@ async function fetchFredLatest(seriesId: string): Promise<{ value: number; chang
 }
 
 /**
- * Fetch real-time market KPIs using Perplexity
+ * Fetch real-time market KPIs using Claude (with web search).
+ * Cached per region per day (4h refresh); null results are never cached.
  */
-async function fetchPerplexityKpis(level: string): Promise<Partial<Record<string, { value: string; change: string }>> | null> {
-  if (!PERPLEXITY_API_KEY) return null
+async function fetchAiKpis(level: string): Promise<Partial<Record<string, { value: string; change: string }>> | null> {
+  const day = newsCalendarDayET()
+  try {
+    return await unstable_cache(
+      async () => {
+        const result = await fetchAiKpisUncached(level)
+        if (!result) throw new Error("AI KPI generation failed")
+        return result
+      },
+      ["ai-kpis-v1", level, day],
+      { revalidate: 14400 }
+    )()
+  } catch {
+    return null
+  }
+}
+
+async function fetchAiKpisUncached(level: string): Promise<Partial<Record<string, { value: string; change: string }>> | null> {
+  if (!getClaudeApiKey()) return null
 
   const levelNames = {
     national: "United States",
@@ -81,44 +101,21 @@ Return ONLY a JSON object with this exact format:
   "foreclosures": { "value": "X,XXX", "change": "+/-XX.X%" }
 }
 
-Use the most recent available data from Q4 2024 or Q1 2025.`
+Use the most recent available data (search for the latest quarter).`
 
   try {
-    const response = await fetch("https://api.perplexity.ai/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${PERPLEXITY_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "sonar-pro",
-        messages: [
-          {
-            role: "system",
-            content: "You are a commercial real estate data analyst. Provide accurate, current market data in JSON format.",
-          },
-          { role: "user", content: prompt },
-        ],
-        temperature: 0.1,
-        max_tokens: 500,
-      }),
-      next: { revalidate: 1800 }, // Cache for 30 minutes
+    return await callClaudeJson({
+      system:
+        "You are a commercial real estate data analyst. Use your web search tool to find accurate, current market data. Respond in JSON format.",
+      user: prompt,
+      tier: "smart",
+      temperature: 0.1,
+      maxTokens: 500,
+      webSearch: true,
+      maxSearches: 2,
     })
-
-    if (!response.ok) return null
-
-    const data = await response.json()
-    const content = data.choices?.[0]?.message?.content
-
-    if (!content) return null
-
-    // Extract JSON from response
-    const jsonMatch = content.match(/\{[\s\S]*\}/)
-    if (jsonMatch) {
-      return JSON.parse(jsonMatch[0])
-    }
   } catch (error) {
-    console.error("Error fetching Perplexity KPIs:", error)
+    console.error("Error fetching Claude KPIs:", error)
   }
 
   return null
@@ -168,26 +165,26 @@ export async function fetchKpiData(
     })
   }
 
-  // 3. Fetch additional KPIs from Perplexity
-  const perplexityKpis = await fetchPerplexityKpis(level)
-  if (perplexityKpis) {
-    if (perplexityKpis.transactionVolume) {
-      const changeValue = parseFloat(perplexityKpis.transactionVolume.change.replace(/[^-\d.]/g, ""))
+  // 3. Fetch additional KPIs from Claude
+  const aiKpis = await fetchAiKpis(level)
+  if (aiKpis) {
+    if (aiKpis.transactionVolume) {
+      const changeValue = parseFloat(aiKpis.transactionVolume.change.replace(/[^-\d.]/g, ""))
       kpis.push({
         label: "Transaction Volume",
-        value: perplexityKpis.transactionVolume.value,
-        change: perplexityKpis.transactionVolume.change,
+        value: aiKpis.transactionVolume.value,
+        change: aiKpis.transactionVolume.change,
         trend: changeValue >= 0 ? "up" : "down",
         dataSource: "https://www.msci.com/real-capital-analytics",
       })
     }
 
-    if (perplexityKpis.foreclosures) {
-      const changeValue = parseFloat(perplexityKpis.foreclosures.change.replace(/[^-\d.]/g, ""))
+    if (aiKpis.foreclosures) {
+      const changeValue = parseFloat(aiKpis.foreclosures.change.replace(/[^-\d.]/g, ""))
       kpis.push({
         label: "Foreclosure Filings",
-        value: perplexityKpis.foreclosures.value,
-        change: perplexityKpis.foreclosures.change,
+        value: aiKpis.foreclosures.value,
+        change: aiKpis.foreclosures.change,
         trend: changeValue >= 0 ? "up" : "down",
         dataSource: "https://www.attomdata.com/solutions/real-estate-market-data/",
       })

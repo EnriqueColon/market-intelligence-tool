@@ -4,7 +4,12 @@ import { useEffect, useLayoutEffect, useState } from "react"
 import { Card } from "@/components/ui/card"
 import { Newspaper } from "lucide-react"
 
-const INDUSTRY_OUTLOOK_SESSION_KEY = "industry-outlook:v4"
+const INDUSTRY_OUTLOOK_SESSION_KEY = "industry-outlook:v5"
+
+/** Fallback memos must not be persisted — the next request should retry generation. */
+function isFallbackMemo(text: string): boolean {
+  return text.includes("could not complete a full generated outlook")
+}
 let industryOutlookMemoryCache: string | null = null
 let industryOutlookInFlight: Promise<string | null> | null = null
 
@@ -33,7 +38,7 @@ async function generateIndustryOutlookOnce(): Promise<string | null> {
     if (!res.ok) throw new Error("Request failed")
     const json = (await res.json()) as { text?: string }
     const text = json.text?.trim() || null
-    if (text) {
+    if (text && !isFallbackMemo(text)) {
       industryOutlookMemoryCache = text
       try {
         sessionStorage.setItem(INDUSTRY_OUTLOOK_SESSION_KEY, text)

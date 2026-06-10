@@ -10,7 +10,7 @@
 ## Required Environment Variables (names only)
 Server-only (do **not** expose as `NEXT_PUBLIC_*`):
 - `APP_URL` (fallback base URL for server-side PDF report rendering when `VERCEL_URL` is unavailable)
-- `PERPLEXITY_API_KEY`
+- `ANTHROPIC_API_KEY` (Claude — powers all AI summarization/outlook features)
 - `OPENAI_API_KEY`
 - `GOOGLE_API_KEY`
 - `GOOGLE_CSE_ID`

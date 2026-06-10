@@ -1,5 +1,9 @@
 "use server"
 
+import { unstable_cache } from "next/cache"
+import { callClaudeJson, getClaudeApiKey } from "@/lib/claude"
+import { newsCalendarDayET } from "@/lib/news-tab-cache"
+
 export type ResearchReport = {
   id: string
   title: string
@@ -14,13 +18,13 @@ export type ResearchReport = {
 export type ArchivedReport = ResearchReport & { fetchedAt: string }
 
 export type ResearchFeedResponse = {
-  reports: ResearchReport[]        // fresh from Perplexity this session
+  reports: ResearchReport[]        // fresh from Claude this session
   archive: ArchivedReport[]        // previously stored, not in fresh batch
   generatedAt: string
   notes: string[]
 }
 
-// One entry per publisher — each gets its own dedicated Perplexity search
+// One entry per publisher — each gets its own dedicated Claude web search
 // so no single firm dominates the results.
 const PUBLISHERS = [
   { name: "Trepp",                site: "trepp.com",                focus: "CMBS delinquency, special servicing, loan maturities, distressed CRE debt" },
@@ -103,7 +107,6 @@ function normalizeReport(
 }
 
 async function queryPublisher(
-  apiKey: string,
   publisher: { name: string; site: string; focus: string }
 ): Promise<ResearchReport[]> {
   const prompt = `You are a CRE market intelligence analyst. Use your live web search to find the 1-2 most recent research reports, market outlooks, or data publications from ${publisher.name} (${publisher.site}).
@@ -128,36 +131,17 @@ Return ONLY valid JSON:
 }`
 
   try {
-    const res = await fetch("https://api.perplexity.ai/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "sonar",
-        messages: [
-          {
-            role: "system",
-            content:
-              "Return ONLY valid JSON. Use live web search. Do not fabricate publications.",
-          },
-          { role: "user", content: prompt },
-        ],
-        temperature: 0.1,
-        max_tokens: 1200,
-      }),
-      cache: "no-store",
+    const parsed = await callClaudeJson({
+      system: "Return ONLY valid JSON. Use your web search tool. Do not fabricate publications.",
+      user: prompt,
+      tier: "fast",
+      temperature: 0.1,
+      maxTokens: 1200,
+      webSearch: true,
+      maxSearches: 2,
     })
+    if (!parsed) return []
 
-    if (!res.ok) return []
-
-    const data = await res.json()
-    const content: string = data?.choices?.[0]?.message?.content || ""
-    const match = content.match(/\{[\s\S]*\}/)
-    if (!match) return []
-
-    const parsed = JSON.parse(match[0])
     const rawReports = Array.isArray(parsed?.reports) ? parsed.reports : []
 
     return rawReports
@@ -217,21 +201,48 @@ async function loadArchive(): Promise<ArchivedReport[]> {
   }
 }
 
+/**
+ * Cached entry point: one full publisher sweep per day, pre-warmed by the cron.
+ * Empty/failed sweeps are never cached so the next request retries.
+ */
 export async function fetchResearchFeed(): Promise<ResearchFeedResponse> {
-  const notes: string[] = []
-  const API_KEY = process.env.PERPLEXITY_API_KEY?.trim()
-
-  if (!API_KEY) {
+  const day = newsCalendarDayET()
+  try {
+    return await unstable_cache(
+      async () => {
+        const result = await fetchResearchFeedUncached()
+        if (result.reports.length === 0) {
+          throw new Error("Research feed sweep returned no reports")
+        }
+        return result
+      },
+      ["research-feed-v1", day],
+      { revalidate: 86400 }
+    )()
+  } catch {
     return {
       reports: [],
       archive: [],
       generatedAt: new Date().toISOString(),
-      notes: ["Missing PERPLEXITY_API_KEY"],
+      notes: ["Research feed unavailable in this run — will retry on next request."],
+    }
+  }
+}
+
+async function fetchResearchFeedUncached(): Promise<ResearchFeedResponse> {
+  const notes: string[] = []
+
+  if (!getClaudeApiKey()) {
+    return {
+      reports: [],
+      archive: [],
+      generatedAt: new Date().toISOString(),
+      notes: ["Missing ANTHROPIC_API_KEY"],
     }
   }
 
   // Run one query per publisher, 5 at a time to stay within rate limits
-  const tasks = PUBLISHERS.map((pub) => () => queryPublisher(API_KEY, pub))
+  const tasks = PUBLISHERS.map((pub) => () => queryPublisher(pub))
   const results = await runWithConcurrency(tasks, 5)
   const allReports = results.flat()
 

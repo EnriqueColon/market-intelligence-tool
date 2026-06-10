@@ -4,9 +4,13 @@ import { fetchPublicMentions } from "@/app/actions/fetch-public-mentions"
 import { fetchInvestingNews } from "@/app/actions/fetch-investing-news"
 import { fetchLegalUpdates } from "@/app/actions/fetch-legal-updates"
 import { fetchMarketResearch } from "@/app/actions/fetch-market-research"
+import { fetchResearchFeed } from "@/app/actions/fetch-research-feed"
+import { fetchKpiData } from "@/app/actions/fetch-kpi-data"
+import { fetchMarketInsights } from "@/app/actions/fetch-insights"
+import { fetchPriceIndexData, fetchTransactionVolumeData } from "@/app/actions/fetch-cre-data"
 
 export const runtime = "nodejs"
-// 5 minutes — all 9 tasks run concurrently so wall time is the slowest single task (~48s)
+// 5 minutes — all tasks run concurrently so wall time is the slowest single task
 export const maxDuration = 300
 
 type WarmResult = "ok" | `error:${string}`
@@ -53,9 +57,24 @@ export async function GET(request: Request) {
 
     // Market Research tab
     warmWithLabel("marketResearch", () => fetchMarketResearch(), results),
+    warmWithLabel("researchFeed", () => fetchResearchFeed(), results),
 
     // Legal tab
     warmWithLabel("legalUpdates", () => fetchLegalUpdates(), results),
+
+    // Dashboard tab — KPIs, AI insights, charts (per region)
+    warmWithLabel("kpiData:national", () => fetchKpiData("national"), results),
+    warmWithLabel("kpiData:florida", () => fetchKpiData("florida"), results),
+    warmWithLabel("kpiData:miami", () => fetchKpiData("miami"), results),
+    warmWithLabel("insights:national", () => fetchMarketInsights("national"), results),
+    warmWithLabel("insights:florida", () => fetchMarketInsights("florida"), results),
+    warmWithLabel("insights:miami", () => fetchMarketInsights("miami"), results),
+    warmWithLabel("priceIndex:national", () => fetchPriceIndexData("national"), results),
+    warmWithLabel("priceIndex:florida", () => fetchPriceIndexData("florida"), results),
+    warmWithLabel("priceIndex:miami", () => fetchPriceIndexData("miami"), results),
+    warmWithLabel("txVolume:national", () => fetchTransactionVolumeData("national"), results),
+    warmWithLabel("txVolume:florida", () => fetchTransactionVolumeData("florida"), results),
+    warmWithLabel("txVolume:miami", () => fetchTransactionVolumeData("miami"), results),
   ])
 
   const failed = Object.entries(results).filter(([, v]) => v !== "ok")

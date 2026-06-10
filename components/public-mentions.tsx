@@ -5,8 +5,6 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { Info } from "lucide-react"
 import {
   Table,
   TableBody,
@@ -171,22 +169,6 @@ export function PublicMentions({ level }: PublicMentionsProps) {
               <TableHead>Date</TableHead>
               <TableHead>Region</TableHead>
               <TableHead>Topic</TableHead>
-              <TableHead>
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span className="flex items-center gap-1 cursor-default">
-                        Access <Info className="h-3 w-3 text-slate-400" />
-                      </span>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" className="max-w-[260px] space-y-1.5 p-3 text-xs">
-                      <div className="flex items-start gap-2"><span>🟢</span><span><strong>Open</strong> — Full article text fetched. Brief uses complete content.</span></div>
-                      <div className="flex items-start gap-2"><span>🟡</span><span><strong>Partial</strong> — Article loaded but only a preview/snippet was accessible. Some content requires login or subscription.</span></div>
-                      <div className="flex items-start gap-2"><span>🔒</span><span><strong>Paywalled</strong> — Full article is behind a paywall. Brief uses headline and public snippet only.</span></div>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </TableHead>
               <TableHead>Link</TableHead>
               <TableHead>Brief</TableHead>
             </TableRow>
@@ -249,9 +231,6 @@ export function PublicMentions({ level }: PublicMentionsProps) {
                 <TableCell>{regionLabel(item.region)}</TableCell>
                 <TableCell>{item.topic}</TableCell>
                 <TableCell>
-                  {item.access_status === "open" ? "🟢 open" : item.access_status === "partial" ? "🟡 partial" : "🔒 paywalled"}
-                </TableCell>
-                <TableCell>
                   {item.url ? (
                     <a className="text-primary underline" href={item.resolved_url || item.url} target="_blank" rel="noreferrer">
                       View
@@ -261,26 +240,22 @@ export function PublicMentions({ level }: PublicMentionsProps) {
                   )}
                 </TableCell>
                 <TableCell>
-                  {item.access_status === "paywalled" ? (
-                    <span className="text-xs text-slate-400 italic">Paywalled</span>
-                  ) : (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => {
-                        setSelected({
-                          title: item.title,
-                          url: item.resolved_url || item.url,
-                          source: item.source,
-                          date: item.date,
-                          summary: item.snippet,
-                        })
-                        setSummaryOpen(true)
-                      }}
-                    >
-                      Brief
-                    </Button>
-                  )}
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      setSelected({
+                        title: item.title,
+                        url: item.resolved_url || item.url,
+                        source: item.source,
+                        date: item.date,
+                        summary: item.snippet,
+                      })
+                      setSummaryOpen(true)
+                    }}
+                  >
+                    Brief
+                  </Button>
                 </TableCell>
               </TableRow>
             ))}

@@ -191,7 +191,7 @@ export function NewsHeadlines({ level }: NewsHeadlinesProps) {
                                 ? "Open access (full summary)"
                                 : item.access_status === "partial"
                                   ? "Partial access — brief uses publicly available info only"
-                                  : "Paywalled/blocked — signal summary only"}
+                                  : "Paywalled — brief reconstructed from open coverage of the same story"}
                             </TooltipContent>
                           </Tooltip>
                           {item.title}

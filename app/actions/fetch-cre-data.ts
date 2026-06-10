@@ -1,6 +1,9 @@
 "use server"
 
+import { unstable_cache } from "next/cache"
 import { FRED_SERIES } from "@/lib/fred-constants"
+import { callClaude, getClaudeApiKey } from "@/lib/claude"
+import { newsCalendarDayET } from "@/lib/news-tab-cache"
 
 export interface DataPoint {
   date: string
@@ -32,7 +35,6 @@ type SeriesResult = {
 
 // API Configuration
 const FRED_API_KEY = process.env.FRED_API_KEY
-const PERPLEXITY_API_KEY = process.env.PERPLEXITY_API_KEY
 const FRED_BASE_URL = "https://api.stlouisfed.org/fred/series/observations"
 
 // Helper function to add delay between requests (rate limiting)
@@ -129,96 +131,73 @@ async function fetchFredData(seriesId: string, limit: number = 12): Promise<Data
 }
 
 /**
- * Fetch market data using Perplexity API
+ * Fetch market data using the Claude API (with web search).
+ * The returned source label stays "perplexity" — the UI treats it as "AI-assisted fallback".
+ * Cached per query per day (4h refresh); null results are never cached.
  */
-async function fetchPerplexityMarketData(
+async function fetchAiMarketData(
   query: string,
   extractDataPoints: boolean = true
 ): Promise<any> {
-  if (!PERPLEXITY_API_KEY) {
-    console.warn("PERPLEXITY_API_KEY not found")
+  const day = newsCalendarDayET()
+  const cacheKey = query.slice(0, 80).replace(/\s+/g, "-").toLowerCase()
+  try {
+    return await unstable_cache(
+      async () => {
+        const result = await fetchAiMarketDataUncached(query, extractDataPoints)
+        if (!result) throw new Error("AI market data generation failed")
+        return result
+      },
+      ["ai-market-data-v1", cacheKey, day],
+      { revalidate: 14400 }
+    )()
+  } catch {
+    return null
+  }
+}
+
+async function fetchAiMarketDataUncached(
+  query: string,
+  extractDataPoints: boolean = true
+): Promise<any> {
+  if (!getClaudeApiKey()) {
+    console.warn("ANTHROPIC_API_KEY not found")
     return null
   }
 
   try {
-    const response = await fetch("https://api.perplexity.ai/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${PERPLEXITY_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "sonar-pro",
-        messages: [
-          {
-            role: "system",
-            content: "You are a commercial real estate data analyst. Provide accurate, recent data in JSON format when requested. Focus on US CRE markets."
-          },
-          {
-            role: "user",
-            content: query,
-          },
-        ],
-        temperature: 0.1,
-        max_tokens: 1000,
-      }),
-      next: { revalidate: 1800 }, // Cache for 30 minutes (more dynamic than FRED)
+    const content = await callClaude({
+      system:
+        "You are a commercial real estate data analyst. Provide accurate, recent data in JSON format when requested. Use your web search tool to find current figures. Focus on US CRE markets.",
+      user: query,
+      tier: "smart",
+      temperature: 0.1,
+      maxTokens: 1000,
+      webSearch: true,
+      maxSearches: 3,
     })
 
-    if (!response.ok) {
-      let errorMessage = `Perplexity API error: ${response.status}`
-      try {
-        const errorData = await response.text()
-        if (errorData) {
-          try {
-            const jsonError = JSON.parse(errorData)
-            if (jsonError.error?.message) {
-              errorMessage = `Perplexity API error: ${jsonError.error.message} (${response.status})`
-            } else if (jsonError.message) {
-              errorMessage = `Perplexity API error: ${jsonError.message} (${response.status})`
-            } else {
-              errorMessage = `Perplexity API error: ${errorData.substring(0, 200)} (${response.status})`
-            }
-          } catch {
-            errorMessage = `Perplexity API error: ${errorData.substring(0, 200)} (${response.status})`
-          }
-        }
-      } catch (e) {
-        // If we can't parse the error, use the status code
-      }
-      console.error(errorMessage)
-      return null
-    }
-
-    const data = await response.json()
-    const content = data.choices?.[0]?.message?.content
-    
-    if (!content) {
-      console.warn("No content returned from Perplexity")
-      return null
-    }
-
     if (extractDataPoints) {
-      // Try to extract JSON from the response
+      // Try to extract a JSON array from the response
       const jsonMatch = content.match(/\[[\s\S]*?\]/)
       if (jsonMatch) {
         try {
           return JSON.parse(jsonMatch[0])
         } catch (e) {
-          console.error("Failed to parse JSON from Perplexity response")
+          console.error("Failed to parse JSON from Claude response")
         }
       }
     }
-    
+
     return content
   } catch (error) {
-    console.error("Error fetching from Perplexity:", error)
+    console.error("Error fetching from Claude:", error)
     return null
   }
 }
 
 /**
- * Hybrid approach: Try FRED first, fallback to Perplexity, then to static data
+ * Hybrid approach: Try FRED first, fallback to Claude, then to static data
  */
 export async function fetchPriceIndexData(
   level: "national" | "florida" | "miami"
@@ -240,21 +219,21 @@ export async function fetchPriceIndexData(
     }
   }
 
-  // Fallback to Perplexity for recent trends
+  // Fallback to Claude (web search) for recent trends
   const levelQueries = {
     national: "What is the current US commercial real estate price index trend for the last 12 months? Provide monthly data points.",
     florida: "What is the current Florida commercial real estate price index trend for the last 12 months? Provide monthly data points.",
     miami: "What is the current Miami Metro commercial real estate price index trend for the last 12 months? Provide monthly data points.",
   }
 
-  const perplexityData = await fetchPerplexityMarketData(
+  const aiData = await fetchAiMarketData(
     `${levelQueries[level]} Return only a JSON array with format: [{"month": "Jan", "index": 100.5}, ...]`,
     true
   )
 
-  if (perplexityData && Array.isArray(perplexityData) && perplexityData.length > 0) {
-    console.log("Using Perplexity data for price index")
-    return { data: perplexityData, source: "perplexity" }
+  if (aiData && Array.isArray(aiData) && aiData.length > 0) {
+    console.log("Using Claude data for price index")
+    return { data: aiData, source: "perplexity" }
   }
 
   return { data: [], source: "unavailable" }
@@ -290,21 +269,21 @@ export async function fetchDelinquencyData(
 export async function fetchTransactionVolumeData(
   level: "national" | "florida" | "miami"
 ): Promise<SeriesResult> {
-  // Transaction volume primarily from Perplexity (not available in FRED)
+  // Transaction volume primarily from Claude web search (not available in FRED)
   const queries = {
     national: "What were the quarterly commercial real estate transaction volumes in the United States for the last 4 quarters? Provide data in billions of dollars.",
     florida: "What were the quarterly commercial real estate transaction volumes in Florida for the last 4 quarters? Provide data in billions of dollars.",
     miami: "What were the quarterly commercial real estate transaction volumes in Miami Metro area for the last 4 quarters? Provide data in billions of dollars.",
   }
 
-  const perplexityData = await fetchPerplexityMarketData(
+  const aiData = await fetchAiMarketData(
     `${queries[level]} Return only a JSON array with format: [{"quarter": "Q1 '24", "volume": 38.5}, ...]`,
     true
   )
 
-  if (perplexityData && Array.isArray(perplexityData) && perplexityData.length > 0) {
-    console.log("Using Perplexity data for transaction volume")
-    return { data: perplexityData.map(d => ({ ...d, month: "" })), source: "perplexity" }
+  if (aiData && Array.isArray(aiData) && aiData.length > 0) {
+    console.log("Using Claude data for transaction volume")
+    return { data: aiData.map(d => ({ ...d, month: "" })), source: "perplexity" }
   }
 
   return { data: [], source: "unavailable" }

@@ -1,6 +1,7 @@
 "use server"
 
 import { classifyArticleAccess, KNOWN_PAYWALL_DOMAINS } from "@/app/actions/news-access"
+import { callClaudeJson, getClaudeApiKey } from "@/lib/claude"
 
 export type OpenBackfillSource = { title: string; url: string }
 
@@ -50,37 +51,18 @@ function parseCandidateArray(value: unknown): OpenBackfillSource[] {
   return out
 }
 
-async function callPerplexityJson(prompt: string): Promise<any | null> {
-  const API_KEY = process.env.PERPLEXITY_API_KEY?.trim()
-  if (!API_KEY) return null
-  try {
-    const res = await fetch("https://api.perplexity.ai/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "sonar-pro",
-        messages: [
-          { role: "system", content: "Return ONLY valid JSON. Do not invent facts. No markdown." },
-          { role: "user", content: prompt },
-        ],
-        temperature: 0.2,
-        max_tokens: 1400,
-      }),
-      cache: "no-store",
-    })
-    if (!res.ok) return null
-    const data = await res.json()
-    const content = data?.choices?.[0]?.message?.content
-    if (typeof content !== "string") return null
-    const match = content.match(/\{[\s\S]*\}/)
-    if (!match) return null
-    return JSON.parse(match[0])
-  } catch {
-    return null
-  }
+async function callAiJson(prompt: string): Promise<any | null> {
+  if (!getClaudeApiKey()) return null
+  return callClaudeJson({
+    system:
+      "Return ONLY valid JSON. Do not invent facts. No markdown. Use your web search tool to find real, current open-access sources.",
+    user: prompt,
+    tier: "smart",
+    temperature: 0.2,
+    maxTokens: 1400,
+    webSearch: true,
+    maxSearches: 3,
+  })
 }
 
 async function googleNewsRssTokenFallback(title: string, excludeUrl?: string): Promise<OpenBackfillSource[]> {
@@ -190,7 +172,7 @@ DATE (if provided): ${input.date || "Unknown"}
 HEADLINE: ${title}
 EXCLUDE_URL (if provided): ${input.excludeUrl || "none"}`
 
-  const parsed = await callPerplexityJson(prompt)
+  const parsed = await callAiJson(prompt)
   const modelCandidates = parseCandidateArray(parsed?.sources)
 
   const fallbackCandidates = modelCandidates.length

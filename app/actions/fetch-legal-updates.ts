@@ -2,6 +2,7 @@
 
 import { unstable_cache } from "next/cache"
 import { newsCalendarDayET } from "@/lib/news-tab-cache"
+import { callClaudeJson, getClaudeApiKey } from "@/lib/claude"
 
 export type LegalItem = {
   id: string
@@ -22,7 +23,7 @@ export type LegalUpdatesResponse = {
   notes: string[]
 }
 
-// ── Perplexity query per section ───────────────────────────────────────────────
+// ── Claude query per section ───────────────────────────────────────────────────
 
 const SECTION_PROMPTS: Record<
   "regulatory" | "legislative" | "enforcement",
@@ -120,43 +121,24 @@ Return ONLY valid JSON:
 }`,
 }
 
-// ── Perplexity fetch ───────────────────────────────────────────────────────────
+// ── Claude fetch ───────────────────────────────────────────────────────────────
 
 async function querySection(
-  apiKey: string,
   section: "regulatory" | "legislative" | "enforcement"
 ): Promise<LegalItem[]> {
   try {
-    const res = await fetch("https://api.perplexity.ai/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "sonar",
-        messages: [
-          {
-            role: "system",
-            content:
-              "Return ONLY valid JSON. Use live web search. Do not fabricate items — only include real, verifiable developments.",
-          },
-          { role: "user", content: SECTION_PROMPTS[section] },
-        ],
-        temperature: 0.1,
-        max_tokens: 1800,
-      }),
-      cache: "no-store",
+    const parsed = await callClaudeJson({
+      system:
+        "Return ONLY valid JSON. Use your web search tool. Do not fabricate items — only include real, verifiable developments.",
+      user: SECTION_PROMPTS[section],
+      tier: "fast",
+      temperature: 0.1,
+      maxTokens: 1800,
+      webSearch: true,
+      maxSearches: 4,
     })
+    if (!parsed) return []
 
-    if (!res.ok) return []
-
-    const data = await res.json()
-    const content: string = data?.choices?.[0]?.message?.content || ""
-    const match = content.match(/\{[\s\S]*\}/)
-    if (!match) return []
-
-    const parsed = JSON.parse(match[0])
     const rawItems = Array.isArray(parsed?.items) ? parsed.items : []
 
     return rawItems
@@ -192,27 +174,26 @@ async function querySection(
 
 async function fetchLegalUpdatesImpl(): Promise<LegalUpdatesResponse> {
   const notes: string[] = []
-  const API_KEY = process.env.PERPLEXITY_API_KEY?.trim()
 
-  if (!API_KEY) {
+  if (!getClaudeApiKey()) {
     return {
       items: [],
       generatedAt: new Date().toISOString(),
-      notes: ["Missing PERPLEXITY_API_KEY — legal intelligence feed unavailable."],
+      notes: ["Missing ANTHROPIC_API_KEY — legal intelligence feed unavailable."],
     }
   }
 
   // Run all three section queries in parallel
   const [regulatory, legislative, enforcement] = await Promise.all([
-    querySection(API_KEY, "regulatory"),
-    querySection(API_KEY, "legislative"),
-    querySection(API_KEY, "enforcement"),
+    querySection("regulatory"),
+    querySection("legislative"),
+    querySection("enforcement"),
   ])
 
   const allItems = [...regulatory, ...legislative, ...enforcement]
 
   if (allItems.length === 0) {
-    notes.push("No legal intelligence items returned. Check Perplexity API key and quota.")
+    notes.push("No legal intelligence items returned. Check Claude API key and quota.")
   }
 
   return {

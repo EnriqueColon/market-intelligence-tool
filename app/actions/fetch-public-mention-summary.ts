@@ -1,5 +1,7 @@
 "use server"
 
+import { callClaudeJson, getClaudeApiKey } from "@/lib/claude"
+
 export type PublicMentionSummary = {
   title: string
   source?: string
@@ -50,8 +52,8 @@ function buildFallback(input: MentionInput, notes?: string[]): PublicMentionSumm
   const url = input.url?.trim()
   const snippet = input.snippet?.trim()
 
-  if (!process.env.PERPLEXITY_API_KEY) {
-    notes?.push("PERPLEXITY_API_KEY not found; using fallback summary.")
+  if (!getClaudeApiKey()) {
+    notes?.push("ANTHROPIC_API_KEY not found; using fallback summary.")
   } else {
     notes?.push("Using fallback summary (AI unavailable or parse failed).")
   }
@@ -100,8 +102,7 @@ export async function summarizePublicMention(input: MentionInput): Promise<Publi
   const title = (input.title || "").trim()
   if (!title) return buildFallback({ ...input, title: "Untitled" }, notes)
 
-  const API_KEY = process.env.PERPLEXITY_API_KEY?.trim()
-  if (!API_KEY) {
+  if (!getClaudeApiKey()) {
     return buildFallback(input, notes)
   }
 
@@ -137,51 +138,20 @@ Return JSON with EXACT keys:
 }`
 
   try {
-    const response = await fetch("https://api.perplexity.ai/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "sonar-pro",
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are a careful analyst. Always respond with valid JSON only, matching the requested schema.",
-          },
-          { role: "user", content: prompt },
-        ],
+    const parsed = await callClaudeJson(
+      {
+        system:
+          "You are a careful analyst. Always respond with valid JSON only, matching the requested schema. Use your web search tool to read the article URL and find related coverage.",
+        user: prompt,
+        tier: "smart",
         temperature: 0.2,
-        max_tokens: 1100,
-      }),
-      next: { revalidate: 86400 },
-    })
-
-    if (!response.ok) {
-      notes.push(`Perplexity API error: ${response.status} ${response.statusText}`)
-      return buildFallback(input, notes)
-    }
-
-    const data = await response.json()
-    const content = data?.choices?.[0]?.message?.content
-    if (typeof content !== "string" || !content.trim()) {
-      notes.push("No content in Perplexity response.")
-      return buildFallback(input, notes)
-    }
-
-    const jsonText = extractJsonObject(content)
-    if (!jsonText) {
-      notes.push("Could not find JSON object in Perplexity response.")
-      return buildFallback(input, notes)
-    }
-
-    let parsed: any
-    try {
-      parsed = JSON.parse(jsonText)
-    } catch {
-      notes.push("Failed to parse JSON from Perplexity response.")
+        maxTokens: 1100,
+        webSearch: true,
+        maxSearches: 3,
+      },
+      notes
+    )
+    if (!parsed) {
       return buildFallback(input, notes)
     }
 

@@ -1,5 +1,7 @@
 "use server"
 
+import { callClaudeJson, getClaudeApiKey } from "@/lib/claude"
+
 // Centralized PDF extraction with multi-engine fallbacks + OCR.
 // Kept in a separate module to avoid runtime/bundler crashes from PDF parsers.
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -96,11 +98,11 @@ function buildFallback(
   extraction?: ArticleDigest["extraction"],
   notes?: string[]
 ): ArticleDigest {
-  const hasKey = Boolean(process.env.PERPLEXITY_API_KEY?.trim())
+  const hasKey = Boolean(getClaudeApiKey())
   notes?.push(
     hasKey
       ? "Using fallback digest (AI unavailable or parse failed)."
-      : "PERPLEXITY_API_KEY not found; using fallback digest."
+      : "ANTHROPIC_API_KEY not found; using fallback digest."
   )
 
   const text = (sourceText || "").trim()
@@ -139,52 +141,21 @@ function buildFallback(
   }
 }
 
-async function callPerplexity(prompt: string, notes: string[]): Promise<any | null> {
-  const API_KEY = process.env.PERPLEXITY_API_KEY?.trim()
-  if (!API_KEY) return null
+async function callAi(prompt: string, notes: string[]): Promise<any | null> {
+  if (!getClaudeApiKey()) return null
 
-  const response = await fetch("https://api.perplexity.ai/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "sonar-pro",
-      messages: [
-        {
-          role: "system",
-          content: "You are a careful analyst. Always respond with valid JSON only, matching the requested schema. Do not invent facts.",
-        },
-        { role: "user", content: prompt },
-      ],
+  // No web search: digests must stay grounded in the provided text only.
+  return callClaudeJson(
+    {
+      system:
+        "You are a careful analyst. Always respond with valid JSON only, matching the requested schema. Do not invent facts.",
+      user: prompt,
+      tier: "smart",
       temperature: 0.2,
-      max_tokens: 1200,
-    }),
-    cache: "no-store",
-  })
-
-  if (!response.ok) {
-    notes.push(`Perplexity API error: ${response.status} ${response.statusText}`)
-    return null
-  }
-  const data = await response.json()
-  const content = data?.choices?.[0]?.message?.content
-  if (typeof content !== "string" || !content.trim()) {
-    notes.push("No content in Perplexity response.")
-    return null
-  }
-  const jsonText = extractJsonObject(content)
-  if (!jsonText) {
-    notes.push("Could not find JSON object in Perplexity response.")
-    return null
-  }
-  try {
-    return JSON.parse(jsonText)
-  } catch {
-    notes.push("Failed to parse JSON from Perplexity response.")
-    return null
-  }
+      maxTokens: 1200,
+    },
+    notes
+  )
 }
 
 function normalizeDigest(
@@ -310,7 +281,7 @@ Return JSON with EXACT keys:
 }`
 
   try {
-    const parsed = await callPerplexity(prompt, notes)
+    const parsed = await callAi(prompt, notes)
     if (!parsed) return buildFallback("url", cleanUrl, extractedText, extraction, notes)
     return normalizeDigest(parsed, "url", cleanUrl, extractedText, extraction, notes)
   } catch (err) {
@@ -349,7 +320,7 @@ Return JSON with EXACT keys:
 }`
 
   try {
-    const parsed = await callPerplexity(prompt, notes)
+    const parsed = await callAi(prompt, notes)
     if (!parsed) return buildFallback("text", label, clipped, undefined, notes)
     return normalizeDigest(parsed, "text", label, clipped, undefined, notes)
   } catch (err) {
@@ -440,7 +411,7 @@ Return JSON with EXACT keys:
 }`
 
   try {
-    const parsed = await callPerplexity(prompt, notes)
+    const parsed = await callAi(prompt, notes)
     // Final guard: only claim "no readable text" after we truly have none.
     const totalChars = extraction?.coverage?.total_chars ?? (extractedText ? extractedText.length : 0)
     const pagesWithText = extraction?.coverage?.pages_with_text ?? 0
