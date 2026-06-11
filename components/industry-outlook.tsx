@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useState } from "react"
 import { Card } from "@/components/ui/card"
 import { Newspaper } from "lucide-react"
 
-const INDUSTRY_OUTLOOK_SESSION_KEY = "industry-outlook:v5"
+const INDUSTRY_OUTLOOK_SESSION_KEY = "industry-outlook:v6"
 
 /** Fallback memos must not be persisted — the next request should retry generation. */
 function isFallbackMemo(text: string): boolean {

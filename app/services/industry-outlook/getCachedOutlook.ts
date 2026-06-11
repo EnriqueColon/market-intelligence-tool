@@ -25,6 +25,69 @@ function hasUsableContent(text: string): boolean {
   )
 }
 
+const MEMO_HEADINGS = [
+  "Executive Summary",
+  "U.S. commercial real estate outlook (CRE debt & distress)",
+  "Miami-specific CRE and distressed-debt outlook",
+  "How this shapes distressed-debt investing",
+  "Key sources (for further reading)",
+]
+
+function escapeRegex(s: string) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+
+// Sentence boundary: period/!/? followed by space and a capital/digit/$.
+// Negative lookbehind avoids splitting after two-letter abbreviations (U.S., D.C.).
+const SENTENCE_SPLIT_RE = /(?<![A-Z]\.[A-Z]\.)(?<=[.!?])\s+(?=[A-Z0-9$"(])/
+
+/**
+ * Generation is flaky about line breaks: sometimes a whole section arrives as
+ * one fused paragraph (especially with web-search citation blocks). Enforce
+ * one bullet per key point so the UI never renders a wall of text.
+ */
+function enforceBulletStructure(text: string): string {
+  const out: string[] = []
+  let inSources = false
+
+  for (const line of text.split("\n")) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+
+    const isHeading = MEMO_HEADINGS.some((h) => trimmed.toLowerCase() === h.toLowerCase())
+    if (isHeading) {
+      inSources = /^key sources/i.test(trimmed)
+      out.push("", trimmed)
+      continue
+    }
+    if (inSources) {
+      out.push(trimmed)
+      continue
+    }
+
+    // Re-split bullet markers that got glued mid-line ("...defaults. - CMBS...")
+    const pieces = trimmed.replace(/([.!?])\s+-\s+(?=[A-Z0-9$"])/g, "$1\n").split("\n")
+    for (const piece of pieces) {
+      const body = piece.replace(/^[-•]\s*/, "").trim()
+      if (!body) continue
+      if (body.length <= 300) {
+        out.push(`- ${body}`)
+        continue
+      }
+      // Merged blob: one sentence per bullet; tiny fragments join the previous.
+      const bullets: string[] = []
+      for (const sentence of body.split(SENTENCE_SPLIT_RE)) {
+        const s = sentence.trim()
+        if (!s) continue
+        if (s.length < 60 && bullets.length) bullets[bullets.length - 1] += ` ${s}`
+        else bullets.push(s)
+      }
+      for (const b of bullets) out.push(`- ${b}`)
+    }
+  }
+  return out.join("\n").trim()
+}
+
 function cleanMemoText(text: string): string {
   let cleaned = text
     .replace(/\*\*/g, "")
@@ -40,7 +103,17 @@ function cleanMemoText(text: string): string {
   if (firstSection > 0) {
     cleaned = cleaned.slice(firstSection).trim()
   }
-  return cleaned
+
+  // Put every known section heading on its own line (handles "5) Key sources"
+  // numbering and headings fused onto the end of a paragraph).
+  for (const heading of MEMO_HEADINGS) {
+    cleaned = cleaned.replace(
+      new RegExp(`\\s*(?:\\d+\\)\\s*)?${escapeRegex(heading)}\\s*:?\\s*`, "gi"),
+      `\n\n${heading}\n`
+    )
+  }
+
+  return enforceBulletStructure(cleaned)
 }
 
 function normalizeSources(sources: RetrievedSource[]): Array<{ title: string; url: string }> {
@@ -129,7 +202,9 @@ OUTPUT — use these exact five section headers in this order:
 WRITING RULES:
 - Start your response DIRECTLY with the text "Executive Summary" — no preamble, no memo header (no TO:/FROM:/DATE: lines), no commentary about searching.
 - EVERY section must be formatted as plain hyphen bullets ("- "), INCLUDING the Executive Summary. Never write paragraphs.
-- 4-6 bullets per section (except Key sources).
+- Each bullet starts on its OWN LINE with "- ".
+- ONE key point per bullet. Never combine multiple facts, deals, or data points into a single bullet — split them.
+- 4-8 bullets per section (except Key sources).
 - Each bullet: 1-2 SHORT sentences maximum. Be concise — lead with a concrete metric, named entity, or date when available.
 - Include dollar amounts, percentages, basis points, delinquency rates, loan counts, or deal sizes.
 - Name specific properties, cities, lenders, borrowers, or servicers when known.
@@ -181,7 +256,7 @@ export async function getCachedIndustryOutlook(): Promise<string> {
   const day = newsCalendarDayET()
   const cachedGeneration = unstable_cache(
     async () => runGeneration(),
-    ["industry-outlook-shared-v7", day],
+    ["industry-outlook-shared-v8", day],
     { revalidate: NEWS_TAB_REVALIDATE_SECONDS }
   )
 
