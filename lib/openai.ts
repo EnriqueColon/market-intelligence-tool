@@ -3,8 +3,8 @@
  * Replaces the previous Anthropic (Claude) integration in lib/claude.ts.
  *
  * Tiers mirror the old Claude model split:
- * - "fast"  (was claude-haiku-4-5)  → gpt-5-mini
- * - "smart" (was claude-sonnet-4-6) → gpt-5-mini (upgrade via OPENAI_SMART_MODEL)
+ * - "fast"  (was claude-haiku-4-5)  → gpt-4.1-mini
+ * - "smart" (was claude-sonnet-4-6) → gpt-4.1-mini (upgrade via OPENAI_SMART_MODEL)
  *
  * Web search is OpenAI's hosted `web_search` tool on the Responses API and is
  * enabled per call site only where live grounding is actually needed.
@@ -16,12 +16,14 @@ const DEFAULT_TIMEOUT_MS = 55_000
 export type OpenAiTier = "fast" | "smart"
 
 function modelForTier(tier: OpenAiTier): string {
-  // Both tiers default to gpt-5-mini for cost control (low-traffic deployment).
-  // Set OPENAI_SMART_MODEL=gpt-5 to upgrade the smart tier.
+  // Both tiers default to gpt-4.1-mini: cheap, supports web search, and does
+  // NOT require OpenAI organization verification (gpt-5 models do).
+  // Set OPENAI_SMART_MODEL / OPENAI_FAST_MODEL to upgrade (e.g. gpt-5-mini
+  // after verifying the org at platform.openai.com/settings/organization).
   if (tier === "smart") {
-    return process.env.OPENAI_SMART_MODEL?.trim() || "gpt-5-mini"
+    return process.env.OPENAI_SMART_MODEL?.trim() || "gpt-4.1-mini"
   }
-  return process.env.OPENAI_FAST_MODEL?.trim() || "gpt-5-mini"
+  return process.env.OPENAI_FAST_MODEL?.trim() || "gpt-4.1-mini"
 }
 
 /** GPT-5 / o-series reasoning models reject sampling params like temperature. */
