@@ -66,6 +66,38 @@ type ResponsesApiResponse = {
 }
 
 /**
+ * OpenAI's hosted web search inserts inline markdown citations into the output
+ * text — e.g. "([trepp.com](https://trepp.com/...?utm_source=openai))" — and
+ * appends a utm_source tracking param to cited URLs. The app renders plain
+ * text (and parses JSON) from this output, so strip citation markup here,
+ * mirroring how the old Claude client stripped <cite> markers.
+ */
+function stripInlineCitations(text: string): string {
+  let out = text
+
+  // Parenthesized citation clusters: "([a.com](url))" or "([a](u1), [b](u2))".
+  out = out.replace(/\s*\((?:\s*[,;]?\s*\[[^\]]*\]\([^)\s]*\))+\s*\)/g, "")
+
+  // Remaining inline markdown links. Bare-domain labels are citations — keep
+  // just the URL (useful in source lists, rare in prose). Descriptive labels
+  // become "label — url" to match the app's plain-text source format.
+  out = out.replace(
+    /\[([^\]]*)\]\((https?:\/\/[^)\s]+)\)/g,
+    (_match, label: string, url: string) => {
+      const cleanLabel = label.trim()
+      if (!cleanLabel || /^[\w.-]+\.[a-z]{2,}$/i.test(cleanLabel)) return url
+      return `${cleanLabel} — ${url}`
+    }
+  )
+
+  // Tracking param OpenAI appends to cited URLs.
+  out = out.replace(/\?utm_source=openai&/g, "?").replace(/[?&]utm_source=openai/g, "")
+
+  // Tidy whitespace left behind by removed citations.
+  return out.replace(/[ \t]+([.,;])/g, "$1").replace(/[ \t]{2,}/g, " ")
+}
+
+/**
  * Calls the OpenAI Responses API and returns the concatenated text output.
  * Throws on missing key, HTTP error, timeout, or empty response.
  */
@@ -151,6 +183,8 @@ export async function callOpenAi(options: CallOpenAiOptions): Promise<string> {
         .join("")
         .trim()
     }
+
+    text = stripInlineCitations(text).trim()
 
     if (!text) throw new Error("OpenAI returned an empty response")
     return text

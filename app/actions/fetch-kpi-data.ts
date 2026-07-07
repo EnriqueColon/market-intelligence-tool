@@ -73,7 +73,7 @@ async function fetchAiKpis(level: string): Promise<Partial<Record<string, { valu
         if (!result) throw new Error("AI KPI generation failed")
         return result
       },
-      ["ai-kpis-v1", level, day],
+      ["ai-kpis-v2", level, day],
       { revalidate: 14400 }
     )()
   } catch {

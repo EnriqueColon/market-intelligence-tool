@@ -255,7 +255,7 @@ export async function getCachedIndustryOutlook(): Promise<string> {
   const day = newsCalendarDayET()
   const cachedGeneration = unstable_cache(
     async () => runGeneration(),
-    ["industry-outlook-shared-v8", day],
+    ["industry-outlook-shared-v9", day],
     { revalidate: NEWS_TAB_REVALIDATE_SECONDS }
   )
 

@@ -148,7 +148,7 @@ async function fetchAiMarketData(
         if (!result) throw new Error("AI market data generation failed")
         return result
       },
-      ["ai-market-data-v1", cacheKey, day],
+      ["ai-market-data-v2", cacheKey, day],
       { revalidate: 14400 }
     )()
   } catch {

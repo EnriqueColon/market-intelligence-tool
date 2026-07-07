@@ -206,7 +206,7 @@ export async function fetchLegalUpdates(): Promise<LegalUpdatesResponse> {
   const day = newsCalendarDayET()
   return unstable_cache(
     async () => fetchLegalUpdatesImpl(),
-    ["legal-updates-v1", day],
+    ["legal-updates-v2", day],
     { revalidate: 86400 }
   )()
 }

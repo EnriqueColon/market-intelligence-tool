@@ -215,7 +215,7 @@ export async function fetchResearchFeed(): Promise<ResearchFeedResponse> {
         }
         return result
       },
-      ["research-feed-v1", day],
+      ["research-feed-v2", day],
       { revalidate: 86400 }
     )()
   } catch {

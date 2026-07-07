@@ -117,7 +117,7 @@ export async function fetchMarketInsights(
   try {
     return await unstable_cache(
       async () => generateMarketInsights(level, kpiData),
-      ["market-insights-v1", level, day],
+      ["market-insights-v2", level, day],
       { revalidate: 14400 }
     )()
   } catch {
