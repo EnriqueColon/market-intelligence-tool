@@ -216,7 +216,8 @@ export async function fetchResearchFeed(): Promise<ResearchFeedResponse> {
         return result
       },
       ["research-feed-v2", day],
-      { revalidate: 86400 }
+      // 25h so the entry outlives the day and never expires just before the cron.
+      { revalidate: 90000 }
     )()
   } catch {
     return {
