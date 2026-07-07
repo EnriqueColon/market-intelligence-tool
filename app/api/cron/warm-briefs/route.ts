@@ -69,7 +69,7 @@ export async function GET(request: Request) {
     }
   }
 
-  // Limited-concurrency pool so we don't hammer the Claude API.
+  // Limited-concurrency pool so we don't hammer the OpenAI API.
   // Deadline-aware: briefs cache individually, so if we run out of time the
   // next trigger (deploy hook or daily cron) picks up only the remainder.
   const deadlineMs = Date.now() + 240_000

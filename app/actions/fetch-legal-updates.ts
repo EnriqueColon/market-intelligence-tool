@@ -2,7 +2,7 @@
 
 import { unstable_cache } from "next/cache"
 import { newsCalendarDayET } from "@/lib/news-tab-cache"
-import { callClaudeJson, getClaudeApiKey } from "@/lib/claude"
+import { callOpenAiJson, getOpenAiApiKey } from "@/lib/openai"
 
 export type LegalItem = {
   id: string
@@ -121,13 +121,13 @@ Return ONLY valid JSON:
 }`,
 }
 
-// ── Claude fetch ───────────────────────────────────────────────────────────────
+// ── OpenAI fetch ───────────────────────────────────────────────────────────────
 
 async function querySection(
   section: "regulatory" | "legislative" | "enforcement"
 ): Promise<LegalItem[]> {
   try {
-    const parsed = await callClaudeJson({
+    const parsed = await callOpenAiJson({
       system:
         "Return ONLY valid JSON. Use your web search tool. Do not fabricate items — only include real, verifiable developments.",
       user: SECTION_PROMPTS[section],
@@ -135,7 +135,6 @@ async function querySection(
       temperature: 0.1,
       maxTokens: 1800,
       webSearch: true,
-      maxSearches: 4,
     })
     if (!parsed) return []
 
@@ -175,11 +174,11 @@ async function querySection(
 async function fetchLegalUpdatesImpl(): Promise<LegalUpdatesResponse> {
   const notes: string[] = []
 
-  if (!getClaudeApiKey()) {
+  if (!getOpenAiApiKey()) {
     return {
       items: [],
       generatedAt: new Date().toISOString(),
-      notes: ["Missing ANTHROPIC_API_KEY — legal intelligence feed unavailable."],
+      notes: ["Missing OPENAI_API_KEY — legal intelligence feed unavailable."],
     }
   }
 
@@ -193,7 +192,7 @@ async function fetchLegalUpdatesImpl(): Promise<LegalUpdatesResponse> {
   const allItems = [...regulatory, ...legislative, ...enforcement]
 
   if (allItems.length === 0) {
-    notes.push("No legal intelligence items returned. Check Claude API key and quota.")
+    notes.push("No legal intelligence items returned. Check OpenAI API key and quota.")
   }
 
   return {

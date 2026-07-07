@@ -1,6 +1,6 @@
 "use server"
 
-import { callClaudeJson, getClaudeApiKey } from "@/lib/claude"
+import { callOpenAiJson, getOpenAiApiKey } from "@/lib/openai"
 
 export type PublicMentionSummary = {
   title: string
@@ -52,8 +52,8 @@ function buildFallback(input: MentionInput, notes?: string[]): PublicMentionSumm
   const url = input.url?.trim()
   const snippet = input.snippet?.trim()
 
-  if (!getClaudeApiKey()) {
-    notes?.push("ANTHROPIC_API_KEY not found; using fallback summary.")
+  if (!getOpenAiApiKey()) {
+    notes?.push("OPENAI_API_KEY not found; using fallback summary.")
   } else {
     notes?.push("Using fallback summary (AI unavailable or parse failed).")
   }
@@ -102,7 +102,7 @@ export async function summarizePublicMention(input: MentionInput): Promise<Publi
   const title = (input.title || "").trim()
   if (!title) return buildFallback({ ...input, title: "Untitled" }, notes)
 
-  if (!getClaudeApiKey()) {
+  if (!getOpenAiApiKey()) {
     return buildFallback(input, notes)
   }
 
@@ -138,7 +138,7 @@ Return JSON with EXACT keys:
 }`
 
   try {
-    const parsed = await callClaudeJson(
+    const parsed = await callOpenAiJson(
       {
         system:
           "You are a careful analyst. Always respond with valid JSON only, matching the requested schema. Use your web search tool to read the article URL and find related coverage.",
@@ -147,7 +147,6 @@ Return JSON with EXACT keys:
         temperature: 0.2,
         maxTokens: 1100,
         webSearch: true,
-        maxSearches: 3,
       },
       notes
     )

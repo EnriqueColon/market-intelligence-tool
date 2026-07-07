@@ -2,7 +2,7 @@
 
 import { unstable_cache } from "next/cache"
 import { FRED_SERIES } from "@/lib/fred-constants"
-import { callClaudeJson, getClaudeApiKey } from "@/lib/claude"
+import { callOpenAiJson, getOpenAiApiKey } from "@/lib/openai"
 import { newsCalendarDayET } from "@/lib/news-tab-cache"
 
 interface KpiData {
@@ -61,7 +61,7 @@ async function fetchFredLatest(seriesId: string): Promise<{ value: number; chang
 }
 
 /**
- * Fetch real-time market KPIs using Claude (with web search).
+ * Fetch real-time market KPIs using OpenAI (with web search).
  * Cached per region per day (4h refresh); null results are never cached.
  */
 async function fetchAiKpis(level: string): Promise<Partial<Record<string, { value: string; change: string }>> | null> {
@@ -82,7 +82,7 @@ async function fetchAiKpis(level: string): Promise<Partial<Record<string, { valu
 }
 
 async function fetchAiKpisUncached(level: string): Promise<Partial<Record<string, { value: string; change: string }>> | null> {
-  if (!getClaudeApiKey()) return null
+  if (!getOpenAiApiKey()) return null
 
   const levelNames = {
     national: "United States",
@@ -104,7 +104,7 @@ Return ONLY a JSON object with this exact format:
 Use the most recent available data (search for the latest quarter).`
 
   try {
-    return await callClaudeJson({
+    return await callOpenAiJson({
       system:
         "You are a commercial real estate data analyst. Use your web search tool to find accurate, current market data. Respond in JSON format.",
       user: prompt,
@@ -112,10 +112,9 @@ Use the most recent available data (search for the latest quarter).`
       temperature: 0.1,
       maxTokens: 500,
       webSearch: true,
-      maxSearches: 2,
     })
   } catch (error) {
-    console.error("Error fetching Claude KPIs:", error)
+    console.error("Error fetching OpenAI KPIs:", error)
   }
 
   return null
@@ -165,7 +164,7 @@ export async function fetchKpiData(
     })
   }
 
-  // 3. Fetch additional KPIs from Claude
+  // 3. Fetch additional KPIs from OpenAI
   const aiKpis = await fetchAiKpis(level)
   if (aiKpis) {
     if (aiKpis.transactionVolume) {

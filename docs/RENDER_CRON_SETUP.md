@@ -4,7 +4,7 @@ The background job fetches report URLs, extracts content (PDF or page text), and
 
 ## Prerequisites
 
-- **ANTHROPIC_API_KEY** in environment variables (for AI summarization via Claude)
+- **OPENAI_API_KEY** in environment variables (for AI summarization via OpenAI)
 - Render.com account with Cron Job support
 
 ## Option A: Render Cron Job
@@ -20,7 +20,7 @@ The background job fetches report URLs, extracts content (PDF or page text), and
    npm run refresh-reports
    ```
 5. **Schedule:** Use cron format, e.g. `0 9 * * 1` (Mondays 9am UTC).
-6. **Environment:** Add `ANTHROPIC_API_KEY` (and any other secrets).
+6. **Environment:** Add `OPENAI_API_KEY` (and any other secrets).
 7. **Persistent Disk (optional):** If you want summaries to persist across deploys, add a disk mount at `/data` and update the script to write to that path. Otherwise, the job writes to `data/report-summaries.json` in the build; without a disk, this file is ephemeral.
 
 ## Option B: API Route + External Cron
@@ -44,7 +44,7 @@ If Render Cron cannot persist files or you prefer to run the refresh from your w
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| ANTHROPIC_API_KEY | Yes | For AI summarization. Get from console.anthropic.com |
+| OPENAI_API_KEY | Yes | For AI summarization. Get from platform.openai.com |
 
 ## Data File
 
@@ -60,4 +60,4 @@ To run the refresh manually (e.g. for testing):
 npm run refresh-reports
 ```
 
-Requires `ANTHROPIC_API_KEY` in `.env.local` or environment.
+Requires `OPENAI_API_KEY` in `.env.local` or environment.

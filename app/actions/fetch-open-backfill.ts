@@ -1,7 +1,7 @@
 "use server"
 
 import { classifyArticleAccess, KNOWN_PAYWALL_DOMAINS } from "@/app/actions/news-access"
-import { callClaudeJson, getClaudeApiKey } from "@/lib/claude"
+import { callOpenAiJson, getOpenAiApiKey } from "@/lib/openai"
 
 export type OpenBackfillSource = { title: string; url: string }
 
@@ -52,8 +52,8 @@ function parseCandidateArray(value: unknown): OpenBackfillSource[] {
 }
 
 async function callAiJson(prompt: string): Promise<any | null> {
-  if (!getClaudeApiKey()) return null
-  return callClaudeJson({
+  if (!getOpenAiApiKey()) return null
+  return callOpenAiJson({
     system:
       "Return ONLY valid JSON. Do not invent facts. No markdown. Use your web search tool to find real, current open-access sources.",
     user: prompt,
@@ -61,7 +61,6 @@ async function callAiJson(prompt: string): Promise<any | null> {
     temperature: 0.2,
     maxTokens: 1400,
     webSearch: true,
-    maxSearches: 3,
   })
 }
 

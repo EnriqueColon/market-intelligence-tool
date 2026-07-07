@@ -5,7 +5,7 @@ import { promisify } from "node:util"
 import path from "node:path"
 import fs from "node:fs/promises"
 import { buildIndustryOutlookPrompt } from "@/app/services/industry-outlook/buildPrompt"
-import { callClaude, getClaudeApiKey } from "@/lib/claude"
+import { callOpenAi, getOpenAiApiKey } from "@/lib/openai"
 import { retrieveSources } from "@/app/services/industry-outlook/retrieveSources"
 import {
   IndustryOutlookSchema,
@@ -130,18 +130,17 @@ function isFresh(cachedAt: string) {
 }
 
 async function callAi(messages: { role: "system" | "user"; content: string }[]): Promise<string | null> {
-  if (!getClaudeApiKey()) return null
+  if (!getOpenAiApiKey()) return null
   const system = messages.find((m) => m.role === "system")?.content || ""
   const user = messages.find((m) => m.role === "user")?.content || ""
   try {
-    return await callClaude({
+    return await callOpenAi({
       system,
       user,
       tier: "fast",
       temperature: 0.2,
       maxTokens: 1800,
       webSearch: true,
-      maxSearches: 3,
     })
   } catch {
     return null

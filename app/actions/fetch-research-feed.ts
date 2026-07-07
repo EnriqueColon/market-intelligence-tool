@@ -1,7 +1,7 @@
 "use server"
 
 import { unstable_cache } from "next/cache"
-import { callClaudeJson, getClaudeApiKey } from "@/lib/claude"
+import { callOpenAiJson, getOpenAiApiKey } from "@/lib/openai"
 import { newsCalendarDayET } from "@/lib/news-tab-cache"
 
 export type ResearchReport = {
@@ -18,13 +18,13 @@ export type ResearchReport = {
 export type ArchivedReport = ResearchReport & { fetchedAt: string }
 
 export type ResearchFeedResponse = {
-  reports: ResearchReport[]        // fresh from Claude this session
+  reports: ResearchReport[]        // fresh from OpenAI this session
   archive: ArchivedReport[]        // previously stored, not in fresh batch
   generatedAt: string
   notes: string[]
 }
 
-// One entry per publisher — each gets its own dedicated Claude web search
+// One entry per publisher — each gets its own dedicated OpenAI web search
 // so no single firm dominates the results.
 const PUBLISHERS = [
   { name: "Trepp",                site: "trepp.com",                focus: "CMBS delinquency, special servicing, loan maturities, distressed CRE debt" },
@@ -131,14 +131,13 @@ Return ONLY valid JSON:
 }`
 
   try {
-    const parsed = await callClaudeJson({
+    const parsed = await callOpenAiJson({
       system: "Return ONLY valid JSON. Use your web search tool. Do not fabricate publications.",
       user: prompt,
       tier: "fast",
       temperature: 0.1,
       maxTokens: 1200,
       webSearch: true,
-      maxSearches: 2,
     })
     if (!parsed) return []
 
@@ -232,12 +231,12 @@ export async function fetchResearchFeed(): Promise<ResearchFeedResponse> {
 async function fetchResearchFeedUncached(): Promise<ResearchFeedResponse> {
   const notes: string[] = []
 
-  if (!getClaudeApiKey()) {
+  if (!getOpenAiApiKey()) {
     return {
       reports: [],
       archive: [],
       generatedAt: new Date().toISOString(),
-      notes: ["Missing ANTHROPIC_API_KEY"],
+      notes: ["Missing OPENAI_API_KEY"],
     }
   }
 

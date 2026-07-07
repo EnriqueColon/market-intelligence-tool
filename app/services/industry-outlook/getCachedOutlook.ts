@@ -2,7 +2,7 @@ import { unstable_cache } from "next/cache"
 import { retrieveSources } from "@/app/services/industry-outlook/retrieveSources"
 import type { RetrievedSource } from "@/app/services/industry-outlook/schema"
 import { newsCalendarDayET, NEWS_TAB_REVALIDATE_SECONDS } from "@/lib/news-tab-cache"
-import { callClaude, getClaudeApiKey } from "@/lib/claude"
+import { callOpenAi, getOpenAiApiKey } from "@/lib/openai"
 
 function withTimeout<T>(task: Promise<T>, timeoutMs: number, message: string): Promise<T> {
   return Promise.race([
@@ -227,19 +227,18 @@ async function runGeneration(): Promise<string> {
   }
 
   const { system, user } = buildPrompt(sources)
-  const raw = await callClaude({
+  const raw = await callOpenAi({
     system,
     user,
     tier: "fast",
     maxTokens: 3200,
     temperature: 0.2,
     webSearch: true,
-    maxSearches: 4,
     timeoutMs: 90_000,
   })
   const content = cleanMemoText(raw)
   if (!hasUsableContent(content)) {
-    throw new Error("Claude returned insufficient content")
+    throw new Error("OpenAI returned insufficient content")
   }
   return content
 }
@@ -261,7 +260,7 @@ export async function getCachedIndustryOutlook(): Promise<string> {
   )
 
   try {
-    if (!getClaudeApiKey()) throw new Error("Missing ANTHROPIC_API_KEY")
+    if (!getOpenAiApiKey()) throw new Error("Missing OPENAI_API_KEY")
     return await cachedGeneration()
   } catch (err) {
     console.error("Industry outlook generation error:", err)

@@ -2,7 +2,7 @@
 
 import { unstable_cache } from "next/cache"
 import { FRED_SERIES } from "@/lib/fred-constants"
-import { callClaude, getClaudeApiKey } from "@/lib/claude"
+import { callOpenAi, getOpenAiApiKey } from "@/lib/openai"
 import { newsCalendarDayET } from "@/lib/news-tab-cache"
 
 export interface DataPoint {
@@ -131,7 +131,7 @@ async function fetchFredData(seriesId: string, limit: number = 12): Promise<Data
 }
 
 /**
- * Fetch market data using the Claude API (with web search).
+ * Fetch market data using the OpenAI API (with web search).
  * The returned source label stays "perplexity" — the UI treats it as "AI-assisted fallback".
  * Cached per query per day (4h refresh); null results are never cached.
  */
@@ -160,13 +160,13 @@ async function fetchAiMarketDataUncached(
   query: string,
   extractDataPoints: boolean = true
 ): Promise<any> {
-  if (!getClaudeApiKey()) {
-    console.warn("ANTHROPIC_API_KEY not found")
+  if (!getOpenAiApiKey()) {
+    console.warn("OPENAI_API_KEY not found")
     return null
   }
 
   try {
-    const content = await callClaude({
+    const content = await callOpenAi({
       system:
         "You are a commercial real estate data analyst. Provide accurate, recent data in JSON format when requested. Use your web search tool to find current figures. Focus on US CRE markets.",
       user: query,
@@ -174,7 +174,6 @@ async function fetchAiMarketDataUncached(
       temperature: 0.1,
       maxTokens: 1000,
       webSearch: true,
-      maxSearches: 3,
     })
 
     if (extractDataPoints) {
@@ -184,20 +183,20 @@ async function fetchAiMarketDataUncached(
         try {
           return JSON.parse(jsonMatch[0])
         } catch (e) {
-          console.error("Failed to parse JSON from Claude response")
+          console.error("Failed to parse JSON from OpenAI response")
         }
       }
     }
 
     return content
   } catch (error) {
-    console.error("Error fetching from Claude:", error)
+    console.error("Error fetching from OpenAI:", error)
     return null
   }
 }
 
 /**
- * Hybrid approach: Try FRED first, fallback to Claude, then to static data
+ * Hybrid approach: Try FRED first, fallback to OpenAI, then to static data
  */
 export async function fetchPriceIndexData(
   level: "national" | "florida" | "miami"
@@ -219,7 +218,7 @@ export async function fetchPriceIndexData(
     }
   }
 
-  // Fallback to Claude (web search) for recent trends
+  // Fallback to OpenAI (web search) for recent trends
   const levelQueries = {
     national: "What is the current US commercial real estate price index trend for the last 12 months? Provide monthly data points.",
     florida: "What is the current Florida commercial real estate price index trend for the last 12 months? Provide monthly data points.",
@@ -232,7 +231,7 @@ export async function fetchPriceIndexData(
   )
 
   if (aiData && Array.isArray(aiData) && aiData.length > 0) {
-    console.log("Using Claude data for price index")
+    console.log("Using OpenAI data for price index")
     return { data: aiData, source: "perplexity" }
   }
 
@@ -269,7 +268,7 @@ export async function fetchDelinquencyData(
 export async function fetchTransactionVolumeData(
   level: "national" | "florida" | "miami"
 ): Promise<SeriesResult> {
-  // Transaction volume primarily from Claude web search (not available in FRED)
+  // Transaction volume primarily from OpenAI web search (not available in FRED)
   const queries = {
     national: "What were the quarterly commercial real estate transaction volumes in the United States for the last 4 quarters? Provide data in billions of dollars.",
     florida: "What were the quarterly commercial real estate transaction volumes in Florida for the last 4 quarters? Provide data in billions of dollars.",
@@ -282,7 +281,7 @@ export async function fetchTransactionVolumeData(
   )
 
   if (aiData && Array.isArray(aiData) && aiData.length > 0) {
-    console.log("Using Claude data for transaction volume")
+    console.log("Using OpenAI data for transaction volume")
     return { data: aiData.map(d => ({ ...d, month: "" })), source: "perplexity" }
   }
 

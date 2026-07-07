@@ -189,8 +189,7 @@ Stored in `.env.local`.
 
 - **`FRED_API_KEY`** (optional): used by some KPI fetching code in `app/actions/fetch-kpi-data.ts` (JSON endpoint approach).
   - Market Research uses **public FRED CSV** (no key) via `fredgraph.csv`.
-- **`ANTHROPIC_API_KEY`** (optional): used for AI-powered KPI/news/outlook workflows via the Claude API (see `lib/claude.ts`).
-- **`OPENAI_API_KEY`** (optional): used by `app/actions/fetch-ai-market-report.ts` to generate an AI report from market research metrics.
+- **`OPENAI_API_KEY`** (optional): used for AI-powered KPI/news/outlook workflows via the OpenAI API (see `lib/openai.ts`), and by `app/actions/fetch-ai-market-report.ts` to generate an AI report from market research metrics.
 
 ---
 

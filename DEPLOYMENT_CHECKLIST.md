@@ -10,8 +10,7 @@
 ## Required Environment Variables (names only)
 Server-only (do **not** expose as `NEXT_PUBLIC_*`):
 - `APP_URL` (fallback base URL for server-side PDF report rendering when `VERCEL_URL` is unavailable)
-- `ANTHROPIC_API_KEY` (Claude — powers all AI summarization/outlook features)
-- `OPENAI_API_KEY`
+- `OPENAI_API_KEY` (OpenAI — powers all AI summarization/outlook/search features)
 - `GOOGLE_API_KEY`
 - `GOOGLE_CSE_ID`
 - `POSTGRES_URL` (from Vercel Postgres integration)

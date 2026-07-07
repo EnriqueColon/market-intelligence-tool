@@ -1,6 +1,6 @@
 "use server"
 
-import { callClaudeJson, getClaudeApiKey } from "@/lib/claude"
+import { callOpenAiJson, getOpenAiApiKey } from "@/lib/openai"
 
 // Centralized PDF extraction with multi-engine fallbacks + OCR.
 // Kept in a separate module to avoid runtime/bundler crashes from PDF parsers.
@@ -98,11 +98,11 @@ function buildFallback(
   extraction?: ArticleDigest["extraction"],
   notes?: string[]
 ): ArticleDigest {
-  const hasKey = Boolean(getClaudeApiKey())
+  const hasKey = Boolean(getOpenAiApiKey())
   notes?.push(
     hasKey
       ? "Using fallback digest (AI unavailable or parse failed)."
-      : "ANTHROPIC_API_KEY not found; using fallback digest."
+      : "OPENAI_API_KEY not found; using fallback digest."
   )
 
   const text = (sourceText || "").trim()
@@ -142,10 +142,10 @@ function buildFallback(
 }
 
 async function callAi(prompt: string, notes: string[]): Promise<any | null> {
-  if (!getClaudeApiKey()) return null
+  if (!getOpenAiApiKey()) return null
 
   // No web search: digests must stay grounded in the provided text only.
-  return callClaudeJson(
+  return callOpenAiJson(
     {
       system:
         "You are a careful analyst. Always respond with valid JSON only, matching the requested schema. Do not invent facts.",

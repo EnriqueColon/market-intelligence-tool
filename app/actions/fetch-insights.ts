@@ -1,7 +1,7 @@
 "use server"
 
 import { unstable_cache } from "next/cache"
-import { callClaude, getClaudeApiKey } from "@/lib/claude"
+import { callOpenAi, getOpenAiApiKey } from "@/lib/openai"
 import { newsCalendarDayET } from "@/lib/news-tab-cache"
 
 interface MarketInsight {
@@ -24,8 +24,8 @@ async function generateMarketInsights(
     foreclosures?: string
   }
 ): Promise<MarketInsight> {
-  if (!getClaudeApiKey()) {
-    throw new Error("ANTHROPIC_API_KEY not found")
+  if (!getOpenAiApiKey()) {
+    throw new Error("OPENAI_API_KEY not found")
   }
 
   const levelNames = {
@@ -59,7 +59,7 @@ Provide your response as a JSON object with this exact format:
 Be specific with numbers and trends. Focus on distressed debt opportunities and market stress indicators.`
 
   try {
-    const content = await callClaude({
+    const content = await callOpenAi({
       system:
         "You are a commercial real estate market analyst specializing in distressed assets and market intelligence. Use your web search tool for current data. Always respond with valid JSON.",
       user: prompt,
@@ -67,7 +67,6 @@ Be specific with numbers and trends. Focus on distressed debt opportunities and 
       temperature: 0.2,
       maxTokens: 1000,
       webSearch: true,
-      maxSearches: 3,
     })
 
     // Try to parse JSON from response

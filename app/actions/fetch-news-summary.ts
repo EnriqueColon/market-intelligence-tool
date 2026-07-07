@@ -2,7 +2,7 @@
 
 import { unstable_cache } from "next/cache"
 import { classifyArticleAccess, type AccessStatus, KNOWN_PAYWALL_DOMAINS } from "@/app/actions/news-access"
-import { callClaudeJson, getClaudeApiKey } from "@/lib/claude"
+import { callOpenAiJson, getOpenAiApiKey } from "@/lib/openai"
 import { findOpenBackfillSources } from "@/app/actions/fetch-open-backfill"
 import { newsCalendarDayET, NEWS_TAB_REVALIDATE_SECONDS } from "@/lib/news-tab-cache"
 
@@ -235,8 +235,8 @@ async function fetchRelatedFromRss(level: "national" | "florida" | "miami", titl
 }
 
 async function callAiJson(prompt: string, notes: string[]) {
-  if (!getClaudeApiKey()) return null
-  return callClaudeJson(
+  if (!getOpenAiApiKey()) return null
+  return callOpenAiJson(
     {
       system:
         "Return ONLY valid JSON. Do not invent facts. Use your web search tool when needed to supplement the provided content.",
@@ -245,14 +245,13 @@ async function callAiJson(prompt: string, notes: string[]) {
       temperature: 0.2,
       maxTokens: 4000,
       webSearch: true,
-      maxSearches: 3,
     },
     notes
   )
 }
 
 function isDegradedBrief(brief: NewsBrief): boolean {
-  if (brief.notes.some((n) => /claude call failed|could not find json|failed to parse json/i.test(n))) return true
+  if (brief.notes.some((n) => /openai call failed|could not find json|failed to parse json/i.test(n))) return true
   if (!brief.keyBullets.length) return true
   return false
 }
