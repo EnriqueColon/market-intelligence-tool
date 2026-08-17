@@ -65,18 +65,40 @@ type ResponsesApiResponse = {
   error?: { code?: string; message?: string } | null
 }
 
+function hostnameOf(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "").toLowerCase()
+  } catch {
+    return ""
+  }
+}
+
 /**
  * OpenAI's hosted web search inserts inline markdown citations into the output
  * text — e.g. "([trepp.com](https://trepp.com/...?utm_source=openai))" — and
  * appends a utm_source tracking param to cited URLs. The app renders plain
- * text (and parses JSON) from this output, so strip citation markup here,
- * mirroring how the old Claude client stripped <cite> markers.
+ * text (and parses JSON), so the markup has to go.
+ *
+ * The publisher name is kept as a plain-text attribution, e.g. "(trepp.com)":
+ * these citations are the only audit trail behind a figure, and deleting them
+ * outright leaves bare unverifiable numbers in the memo.
  */
 function stripInlineCitations(text: string): string {
   let out = text
 
   // Parenthesized citation clusters: "([a.com](url))" or "([a](u1), [b](u2))".
-  out = out.replace(/\s*\((?:\s*[,;]?\s*\[[^\]]*\]\([^)\s]*\))+\s*\)/g, "")
+  out = out.replace(/\s*\((?:\s*[,;]?\s*\[[^\]]*\]\([^)\s]*\))+\s*\)/g, (cluster) => {
+    const publishers: string[] = []
+    const linkPattern = /\[([^\]]*)\]\(([^)\s]*)\)/g
+    let match: RegExpExecArray | null
+    while ((match = linkPattern.exec(cluster))) {
+      const label = match[1].trim()
+      // Bare-domain labels are already the publisher; otherwise use the host.
+      const name = /^[\w.-]+\.[a-z]{2,}$/i.test(label) ? label.toLowerCase() : hostnameOf(match[2])
+      if (name && !publishers.includes(name)) publishers.push(name)
+    }
+    return publishers.length ? ` (${publishers.join(", ")})` : ""
+  })
 
   // Remaining inline markdown links. Bare-domain labels are citations — keep
   // just the URL (useful in source lists, rare in prose). Descriptive labels

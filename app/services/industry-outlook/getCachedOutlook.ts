@@ -4,6 +4,16 @@ import type { RetrievedSource } from "@/app/services/industry-outlook/schema"
 import { newsCalendarDayET, NEWS_TAB_REVALIDATE_SECONDS } from "@/lib/news-tab-cache"
 import { callOpenAi, getOpenAiApiKey } from "@/lib/openai"
 
+/** Human-readable current date (ET) so the model can't present a stale quarter as current. */
+function todayLongET(): string {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  }).format(new Date())
+}
+
 function withTimeout<T>(task: Promise<T>, timeoutMs: number, message: string): Promise<T> {
   return Promise.race([
     task,
@@ -183,12 +193,22 @@ function buildPrompt(sources: RetrievedSource[]): { system: string; user: string
 
   const system =
     "You are a senior CRE distressed-debt analyst at a private equity firm specializing in distressed commercial real estate debt, NPL acquisitions, and loan workouts. " +
-    "Write for the investment committee: plain text only, data-forward, specific numbers and dates. " +
-    "Use your web search tool to find the most current market data — CMBS delinquency rates, special servicing volumes, foreclosure filings, note sale pipelines, and deal activity. " +
-    "Supplement with the source articles provided below. Prioritize verifiable, cited facts. " +
-    "Never use markdown symbols (no **, no #, no bullet dashes — use plain hyphens)."
+    "Write for the investment committee: plain text only, concise and analytical. " +
+    "Use your web search tool to find current market data — CMBS delinquency rates, special servicing volumes, foreclosure filings, note sale pipelines, and deal activity. " +
+    "Supplement with the source articles provided below.\n\n" +
+    "EVIDENCE RULES — these override every formatting or style instruction that follows:\n" +
+    "1. Every figure you state must come from a search result or a supplied source article that you actually read. " +
+    "Never invent, estimate, extrapolate, average, or infer a number, and never restate a figure from memory.\n" +
+    "2. Immediately after each figure, attribute it in plain parentheses: (Publisher, Month Year). " +
+    "Example: CMBS office delinquency reached 11.7% (Trepp, July 2026).\n" +
+    "3. If you cannot source a figure for a point worth making, make the point qualitatively with no number. " +
+    "A bullet with no statistic is strongly preferred over a bullet with an unverified one.\n" +
+    "4. Do not present a quarter, month, or year as current unless a source dates it that way.\n" +
+    "5. Never use markdown symbols (no **, no #, no bullet dashes — use plain hyphens)."
 
   const user = `Write a distressed commercial real estate debt outlook memo. Use your web search tool AND the source articles below.
+
+TODAY'S DATE: ${todayLongET()}
 
 SCOPE: U.S. national, Florida, Miami-Dade
 
@@ -205,10 +225,11 @@ WRITING RULES:
 - Each bullet starts on its OWN LINE with "- ".
 - ONE key point per bullet. Never combine multiple facts, deals, or data points into a single bullet — split them.
 - 4-8 bullets per section (except Key sources).
-- Each bullet: 1-2 SHORT sentences maximum. Be concise — lead with a concrete metric, named entity, or date when available.
-- Include dollar amounts, percentages, basis points, delinquency rates, loan counts, or deal sizes.
-- Name specific properties, cities, lenders, borrowers, or servicers when known.
+- Each bullet: 1-2 SHORT sentences maximum. Be concise.
+- Include a dollar amount, percentage, basis-point move, delinquency rate, loan count or deal size ONLY when a source gives you that exact figure, and attach its attribution: (Publisher, Month Year).
+- Name specific properties, cities, lenders, borrowers, or servicers only when a source names them.
 - Search for: current CMBS delinquency rates, special servicing volumes, CRE loan maturity wall data, South Florida foreclosure activity, distressed note sale transactions.
+- If searches return nothing usable for a section, say so plainly in that section instead of filling it with estimated numbers.
 - Key sources: list 4-8 URLs, one per line, format: Title — https://url
 
 SUPPLEMENTAL SOURCE ARTICLES:
