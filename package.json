@@ -13,7 +13,8 @@
     "refresh-reports": "tsx scripts/refresh-report-summaries.ts",
     "cbre-automate": "tsx scripts/cbre-automate.ts",
     "test:allowlist": "node --test --experimental-strip-types lib/domain-allowlist.test.ts",
-    "test:metrics": "node --test --experimental-strip-types lib/format/metrics.test.ts"
+    "test:metrics": "node --test --experimental-strip-types lib/format/metrics.test.ts",
+    "test:memo-evidence": "node --test --experimental-strip-types lib/memo-evidence.test.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

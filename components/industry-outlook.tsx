@@ -3,25 +3,35 @@
 import { useEffect, useLayoutEffect, useState } from "react"
 import { Card } from "@/components/ui/card"
 import { Newspaper } from "lucide-react"
+import { newsCalendarDayET } from "@/lib/news-tab-cache"
 
-const INDUSTRY_OUTLOOK_SESSION_KEY = "industry-outlook:v6"
+// Day-scoped so a tab left open across midnight (or across a deploy that fixes
+// the memo) cannot keep serving yesterday's cached copy from sessionStorage.
+function outlookSessionKey(): string {
+  return `industry-outlook:v7:${newsCalendarDayET()}`
+}
 
 /** Fallback memos must not be persisted — the next request should retry generation. */
 function isFallbackMemo(text: string): boolean {
   return text.includes("could not complete a full generated outlook")
 }
-let industryOutlookMemoryCache: string | null = null
+let industryOutlookMemoryCache: { day: string; text: string } | null = null
 let industryOutlookInFlight: Promise<string | null> | null = null
+
+function readMemoryCache(): string | null {
+  return industryOutlookMemoryCache?.day === newsCalendarDayET()
+    ? industryOutlookMemoryCache.text
+    : null
+}
 
 function readOutlookFromSession(): string | null {
   if (typeof window === "undefined") return null
-  if (industryOutlookMemoryCache) {
-    return industryOutlookMemoryCache
-  }
+  const inMemory = readMemoryCache()
+  if (inMemory) return inMemory
   try {
-    const cached = sessionStorage.getItem(INDUSTRY_OUTLOOK_SESSION_KEY)?.trim()
+    const cached = sessionStorage.getItem(outlookSessionKey())?.trim()
     if (cached) {
-      industryOutlookMemoryCache = cached
+      industryOutlookMemoryCache = { day: newsCalendarDayET(), text: cached }
       return cached
     }
   } catch {
@@ -39,9 +49,9 @@ async function generateIndustryOutlookOnce(): Promise<string | null> {
     const json = (await res.json()) as { text?: string }
     const text = json.text?.trim() || null
     if (text && !isFallbackMemo(text)) {
-      industryOutlookMemoryCache = text
+      industryOutlookMemoryCache = { day: newsCalendarDayET(), text }
       try {
-        sessionStorage.setItem(INDUSTRY_OUTLOOK_SESSION_KEY, text)
+        sessionStorage.setItem(outlookSessionKey(), text)
       } catch {
         // Ignore storage failures (private mode/quota), keep memory cache.
       }
@@ -235,25 +245,6 @@ export function IndustryOutlook() {
 
       setLoading(true)
       try {
-        if (industryOutlookMemoryCache) {
-          if (!mounted) return
-          setData(industryOutlookMemoryCache)
-          setError(false)
-          return
-        }
-        try {
-          const cached = sessionStorage.getItem(INDUSTRY_OUTLOOK_SESSION_KEY)?.trim() || ""
-          if (cached) {
-            industryOutlookMemoryCache = cached
-            if (!mounted) return
-            setData(cached)
-            setError(false)
-            return
-          }
-        } catch {
-          // Ignore sessionStorage read failures and continue to network path.
-        }
-
         const text = await generateIndustryOutlookOnce()
         if (!mounted) return
         setData(text)

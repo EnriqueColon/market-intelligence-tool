@@ -3,6 +3,7 @@ import { retrieveSources } from "@/app/services/industry-outlook/retrieveSources
 import type { RetrievedSource } from "@/app/services/industry-outlook/schema"
 import { newsCalendarDayET, NEWS_TAB_REVALIDATE_SECONDS } from "@/lib/news-tab-cache"
 import { callOpenAi, getOpenAiApiKey } from "@/lib/openai"
+import { MEMO_HEADINGS, sanitizeMemoEvidence } from "@/lib/memo-evidence"
 
 /** Human-readable current date (ET) so the model can't present a stale quarter as current. */
 function todayLongET(): string {
@@ -21,27 +22,20 @@ function withTimeout<T>(task: Promise<T>, timeoutMs: number, message: string): P
   ])
 }
 
-/** True if the text looks like a real AI-generated memo (has substance). */
+/**
+ * True if the text looks like a real AI-generated memo (has substance).
+ *
+ * The section headings are load-bearing, not cosmetic: the UI splits the memo
+ * on them and renders the Executive Summary as the Key Signals cards. When the
+ * model occasionally omits them, every bullet — including the raw source URLs —
+ * collapses into Key Signals. A memo without headings must never be cached.
+ */
 function hasUsableContent(text: string): boolean {
   if (!text || text.trim().length < 200) return false
-  // At least one of the core section concepts must appear
-  const t = text.toLowerCase()
-  return (
-    t.includes("executive summary") ||
-    t.includes("commercial real estate") ||
-    t.includes("distressed") ||
-    t.includes("cmbs") ||
-    t.includes("special servicing")
-  )
+  const lines = text.split("\n").map((l) => l.trim().toLowerCase())
+  const present = MEMO_HEADINGS.filter((h) => lines.includes(h.toLowerCase()))
+  return present.includes("Executive Summary") && present.length >= 3
 }
-
-const MEMO_HEADINGS = [
-  "Executive Summary",
-  "U.S. commercial real estate outlook (CRE debt & distress)",
-  "Miami-specific CRE and distressed-debt outlook",
-  "How this shapes distressed-debt investing",
-  "Key sources (for further reading)",
-]
 
 function escapeRegex(s: string) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
@@ -78,7 +72,7 @@ function enforceBulletStructure(text: string): string {
     // Re-split bullet markers that got glued mid-line ("...defaults. - CMBS...")
     const pieces = trimmed.replace(/([.!?])\s+-\s+(?=[A-Z0-9$"])/g, "$1\n").split("\n")
     for (const piece of pieces) {
-      const body = piece.replace(/^[-•]\s*/, "").trim()
+      const body = piece.replace(/^(?:[-•*]\s*)+/, "").trim()
       if (!body) continue
       if (body.length <= 300) {
         out.push(`- ${body}`)
@@ -201,10 +195,18 @@ function buildPrompt(sources: RetrievedSource[]): { system: string; user: string
     "Never invent, estimate, extrapolate, average, or infer a number, and never restate a figure from memory.\n" +
     "2. Immediately after each figure, attribute it in plain parentheses: (Publisher, Month Year). " +
     "Example: CMBS office delinquency reached 11.7% (Trepp, July 2026).\n" +
-    "3. If you cannot source a figure for a point worth making, make the point qualitatively with no number. " +
+    "3. A figure is only usable if it comes from a recognized publisher — a data or ratings provider " +
+    "(Trepp, S&P Global, Moody's, Fitch, KBRA, CoStar, ATTOM, CoreLogic, CRED iQ), CRE trade press " +
+    "(CRE Daily, Bisnow, Commercial Observer, The Real Deal, GlobeSt), a major brokerage, a government " +
+    "body, or an established news organization. Blogs, SEO content sites and lead-generation pages are " +
+    "not sources: omit their numbers.\n" +
+    "4. If you cannot source a figure for a point worth making, make the point qualitatively with no number. " +
     "A bullet with no statistic is strongly preferred over a bullet with an unverified one.\n" +
-    "4. Do not present a quarter, month, or year as current unless a source dates it that way.\n" +
-    "5. Never use markdown symbols (no **, no #, no bullet dashes — use plain hyphens)."
+    "5. Do not present a quarter, month, or year as current unless a source dates it that way.\n" +
+    "6. The Executive Summary contains NO figures at all — it states, in words, the conclusions that the " +
+    "sourced bullets in the later sections support.\n" +
+    "7. Never use markdown symbols (no **, no #, no bullet dashes — use plain hyphens).\n" +
+    "8. Always emit all five required section headings, each on its own line, exactly as named by the user."
 
   const user = `Write a distressed commercial real estate debt outlook memo. Use your web search tool AND the source articles below.
 
@@ -221,7 +223,10 @@ OUTPUT — use these exact five section headers in this order:
 
 WRITING RULES:
 - Start your response DIRECTLY with the text "Executive Summary" — no preamble, no memo header (no TO:/FROM:/DATE: lines), no commentary about searching.
+- Write each of the five section headers on its own line, spelled exactly as listed above, before that section's bullets.
 - EVERY section must be formatted as plain hyphen bullets ("- "), INCLUDING the Executive Summary. Never write paragraphs.
+- The Executive Summary carries NO figures — it is the qualitative takeaway of the sections below it. Put every statistic in the body section it belongs to, with its attribution.
+- Never repeat a point. If two bullets would say the same thing, write only one of them.
 - Each bullet starts on its OWN LINE with "- ".
 - ONE key point per bullet. Never combine multiple facts, deals, or data points into a single bullet — split them.
 - 4-8 bullets per section (except Key sources).
@@ -257,7 +262,16 @@ async function runGeneration(): Promise<string> {
     webSearch: true,
     timeoutMs: 90_000,
   })
-  const content = cleanMemoText(raw)
+  const { text: content, dropped, duplicates } = sanitizeMemoEvidence(cleanMemoText(raw))
+  if (dropped.length) {
+    console.warn(
+      `Industry outlook: dropped ${dropped.length} bullet(s) stating unattributed figures:\n` +
+        dropped.map((b) => `  - ${b}`).join("\n")
+    )
+  }
+  if (duplicates.length) {
+    console.warn(`Industry outlook: removed ${duplicates.length} repeated bullet(s).`)
+  }
   if (!hasUsableContent(content)) {
     throw new Error("OpenAI returned insufficient content")
   }
@@ -276,7 +290,7 @@ export async function getCachedIndustryOutlook(): Promise<string> {
   const day = newsCalendarDayET()
   const cachedGeneration = unstable_cache(
     async () => runGeneration(),
-    ["industry-outlook-shared-v9", day],
+    ["industry-outlook-shared-v10", day],
     { revalidate: NEWS_TAB_REVALIDATE_SECONDS }
   )
 
