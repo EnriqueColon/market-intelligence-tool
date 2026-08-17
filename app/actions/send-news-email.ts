@@ -4,8 +4,6 @@ import { Resend } from "resend"
 import { fetchIndustryOutlook } from "@/app/actions/fetch-industry-outlook"
 import { fetchPublicMentions, type PublicMentionItem } from "@/app/actions/fetch-public-mentions"
 
-type SendInput = { token: string; level?: "national" | "florida" | "miami" }
-
 function requireEnv(name: string) {
   const value = process.env[name]
   if (!value || !value.trim()) {
@@ -52,17 +50,11 @@ function dedupeMentions(items: PublicMentionItem[]) {
   return out
 }
 
-export async function sendNewsEmail(
-  input: SendInput
-): Promise<{ ok: true; sentToCount: number }> {
+export async function sendNewsEmail(): Promise<{ ok: true; sentToCount: number }> {
+  // Access is gated by the app's login cookie (middleware); no extra token needed.
   const apiKey = requireEnv("RESEND_API_KEY")
   const recipientsRaw = requireEnv("NEWS_RECIPIENTS")
   const from = requireEnv("NEWS_FROM_EMAIL")
-  const tokenGate = requireEnv("NEWS_SEND_TOKEN")
-
-  if (!input?.token || input.token !== tokenGate) {
-    throw new Error("Invalid admin token.")
-  }
 
   const recipients = parseRecipients(recipientsRaw)
   if (recipients.length === 0) {

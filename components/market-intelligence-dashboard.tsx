@@ -14,13 +14,6 @@ import { IndustryOutlook } from "@/components/industry-outlook"
 import { SendNewsEmailButton } from "@/components/send-news-email-button"
 import { MarketResearchFeed } from "@/components/market-research-feed"
 
-const LEVEL_OPTIONS = [
-  { value: "national", label: "National" },
-  { value: "florida", label: "Florida" },
-  { value: "miami", label: "Miami Metro" },
-] as const
-
-type LevelOption = (typeof LEVEL_OPTIONS)[number]["value"]
 type TabValue = "news" | "analytics" | "market-research" | "legal"
 
 export type EnabledTabs = {
@@ -37,7 +30,6 @@ export function MarketIntelligenceDashboard({
 }) {
   const router = useRouter()
   const [loggingOut, setLoggingOut] = useState(false)
-  const [level, setLevel] = useState<LevelOption>("national")
 
   const availableTabs = useMemo(() => {
     const tabs: TabValue[] = []
@@ -81,20 +73,6 @@ export function MarketIntelligenceDashboard({
               <p className="font-body text-base text-[#006D95]/90 mt-1">News and analytics</p>
             </div>
             <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center">
-              <div className="flex items-center gap-2 rounded-lg border border-[#006D95]/30 bg-[#006D95]/5 px-4 py-2.5">
-                <Newspaper className="h-4 w-4 text-[#006D95]" />
-                <select
-                  value={level}
-                  onChange={(e) => setLevel(e.target.value as LevelOption)}
-                  className="bg-transparent text-sm font-medium text-[#006D95] outline-none [&>option]:bg-white [&>option]:text-[#006D95]"
-                >
-                  {LEVEL_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
               <Button
                 type="button"
                 variant="outline"
@@ -160,10 +138,10 @@ export function MarketIntelligenceDashboard({
                 </div>
                 <IndustryOutlook />
                 <div>
-                  <PublicMentions level={level} />
+                  <PublicMentions />
                 </div>
                 <div>
-                  <InvestingBusinessMentions level={level} />
+                  <InvestingBusinessMentions />
                 </div>
                 <div>
                   <ArticleDigest />
@@ -200,7 +178,7 @@ export function MarketIntelligenceDashboard({
                     FDIC data is quarterly and lagged by 1–2 quarters. Filter by United States or any state.
                   </p>
                 </div>
-                <MarketAnalytics level={level} />
+                <MarketAnalytics level="national" />
               </TabsContent>
             )}
 

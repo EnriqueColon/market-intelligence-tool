@@ -27,19 +27,35 @@ import {
 import { summarizeNewsItem, type NewsBrief, type NewsSummaryInput } from "@/app/actions/fetch-news-summary"
 import type { PublicMentionItem } from "@/app/actions/fetch-public-mentions"
 
-interface InvestingBusinessMentionsProps {
-  level: "national" | "florida" | "miami"
+type Level = "national" | "florida" | "miami"
+const LEVELS: Level[] = ["national", "florida", "miami"]
+
+/** Item annotated with the feed level it came from (matches warm-briefs cache keys). */
+type MergedItem = PublicMentionItem & { feedLevel: Level }
+
+function mergeAllLevels(perLevel: Array<{ level: Level; items: PublicMentionItem[] }>): MergedItem[] {
+  const seen = new Set<string>()
+  const out: MergedItem[] = []
+  for (const { level, items } of perLevel) {
+    for (const item of items) {
+      const key = item.url ? `u:${item.url}` : `t:${item.source || ""}:${item.title}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      out.push({ ...item, feedLevel: level })
+    }
+  }
+  return out
 }
 
-const cache = new Map<string, PublicMentionItem[]>()
-const inflight = new Map<string, Promise<InvestingNewsResponse["news"]>>()
-const CACHE_VERSION = "investing_news:v1"
+const cache = new Map<string, MergedItem[]>()
+const inflight = new Map<string, Promise<MergedItem[]>>()
+const CACHE_VERSION = "investing_news:v2"
 
-export function InvestingBusinessMentions({ level }: InvestingBusinessMentionsProps) {
-  const [news, setNews] = useState<PublicMentionItem[]>([])
+export function InvestingBusinessMentions() {
+  const [news, setNews] = useState<MergedItem[]>([])
   const [loading, setLoading] = useState(true)
   const [note, setNote] = useState<string | undefined>()
-  const [selected, setSelected] = useState<NewsSummaryInput | null>(null)
+  const [selected, setSelected] = useState<(NewsSummaryInput & { level?: Level }) | null>(null)
   const [summaryOpen, setSummaryOpen] = useState(false)
   const [summaryLoading, setSummaryLoading] = useState(false)
   const [summaryError, setSummaryError] = useState<string | undefined>()
@@ -57,13 +73,9 @@ export function InvestingBusinessMentions({ level }: InvestingBusinessMentionsPr
   const visibleNews = activeTopic === "All" ? news : news.filter((n) => n.topic === activeTopic)
 
   useEffect(() => {
-    setActiveTopic("All")
-  }, [level])
-
-  useEffect(() => {
     let mounted = true
     async function loadData() {
-      const cacheKey = `${level}:${CACHE_VERSION}`
+      const cacheKey = `all:${CACHE_VERSION}`
       const cached = cache.get(cacheKey)
       if (cached) {
         setNews(cached)
@@ -74,7 +86,14 @@ export function InvestingBusinessMentions({ level }: InvestingBusinessMentionsPr
       setLoading(true)
       let req = inflight.get(cacheKey)
       if (!req) {
-        req = fetchInvestingNews(level).then((res) => res.news)
+        req = Promise.allSettled(LEVELS.map((lvl) => fetchInvestingNews(lvl))).then((results) =>
+          mergeAllLevels(
+            results.map((res, i) => ({
+              level: LEVELS[i],
+              items: res.status === "fulfilled" ? res.value.news : [],
+            }))
+          )
+        )
         inflight.set(cacheKey, req)
       }
       try {
@@ -82,7 +101,7 @@ export function InvestingBusinessMentions({ level }: InvestingBusinessMentionsPr
         if (!mounted) return
         if (items.length > 0) cache.set(cacheKey, items)
         setNews(items)
-        setNote(items.length === 0 ? "No general finance news (non–real estate) for this region." : undefined)
+        setNote(items.length === 0 ? "No general finance news (non–real estate) in past 7 days." : undefined)
       } catch (err) {
         if (!mounted) return
         const raw = err instanceof Error ? err.message : typeof err === "string" ? err : "Unknown error"
@@ -101,7 +120,7 @@ export function InvestingBusinessMentions({ level }: InvestingBusinessMentionsPr
     return () => {
       mounted = false
     }
-  }, [level])
+  }, [])
 
   useEffect(() => {
     let mounted = true
@@ -111,7 +130,7 @@ export function InvestingBusinessMentions({ level }: InvestingBusinessMentionsPr
       setSummaryError(undefined)
       setBrief(null)
       try {
-        const result = await summarizeNewsItem({ ...selected, level })
+        const result = await summarizeNewsItem(selected)
         if (!mounted) return
         setBrief(result)
       } catch (err) {
@@ -126,7 +145,7 @@ export function InvestingBusinessMentions({ level }: InvestingBusinessMentionsPr
     return () => {
       mounted = false
     }
-  }, [summaryOpen, selected, level])
+  }, [summaryOpen, selected])
 
   return (
     <Card className="p-6 border-slate-200/80 bg-slate-50/30">
@@ -186,12 +205,8 @@ export function InvestingBusinessMentions({ level }: InvestingBusinessMentionsPr
               const accessOrder = { open: 0, partial: 1, paywalled: 2 } as const
               const accessDiff = (accessOrder[a.access_status] ?? 1) - (accessOrder[b.access_status] ?? 1)
               if (accessDiff !== 0) return accessDiff
-              const geoScore = (item: typeof a) => {
-                if (level === "florida") return item.region === "florida" || item.region === "miami" ? 0 : 1
-                if (level === "miami") return item.region === "miami" ? 0 : item.region === "florida" ? 1 : 2
-                return 0
-              }
-              return geoScore(a) - geoScore(b)
+              // Within same access tier, newest first (undated last)
+              return (b.date || "").localeCompare(a.date || "")
             }).map((item, index) => (
               <TableRow key={`${item.id}-${item.url || "no-url"}-${item.date || "no-date"}-${index}`}>
                 <TableCell className="max-w-[520px]">
@@ -250,6 +265,7 @@ export function InvestingBusinessMentions({ level }: InvestingBusinessMentionsPr
                         source: item.source,
                         date: item.date,
                         summary: item.snippet,
+                        level: item.feedLevel,
                       })
                       setSummaryOpen(true)
                     }}
