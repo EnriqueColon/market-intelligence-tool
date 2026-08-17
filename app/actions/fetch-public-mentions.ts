@@ -148,6 +148,11 @@ function decodeHtmlEntities(value: string) {
     .replace(/&gt;/gi, ">")
     .replace(/&quot;/gi, "\"")
     .replace(/&#39;/g, "'")
+    .replace(/&(?:apos|rsquo|lsquo);/gi, "'")
+    .replace(/&(?:ldquo|rdquo);/gi, "\"")
+    .replace(/&mdash;/gi, "—")
+    .replace(/&ndash;/gi, "–")
+    .replace(/&hellip;/gi, "…")
     .replace(/&#x([0-9a-fA-F]+);/g, (_m, hex) => {
       try {
         return String.fromCodePoint(parseInt(hex, 16))
@@ -823,7 +828,7 @@ export async function fetchPublicMentions(
   const day = newsCalendarDayET()
   return unstable_cache(
     async () => fetchPublicMentionsImpl(level),
-    ["public-mentions-v3", day, level],
+    ["public-mentions-v4", day, level],
     { revalidate: NEWS_TAB_REVALIDATE_SECONDS }
   )()
 }

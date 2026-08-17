@@ -275,7 +275,7 @@ export async function summarizeNewsItem(
         if (isDegradedBrief(brief)) throw new Error("degraded brief — not caching")
         return brief
       },
-      ["news-brief-v3", day, level, urlKey],
+      ["news-brief-v4", day, level, urlKey],
       { revalidate: NEWS_TAB_REVALIDATE_SECONDS }
     )()
   } catch {
