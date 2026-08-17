@@ -4,12 +4,15 @@ import type { RetrievedSource } from "@/app/services/industry-outlook/schema"
 import { newsCalendarDayET, NEWS_TAB_REVALIDATE_SECONDS } from "@/lib/news-tab-cache"
 import { callOpenAi, getOpenAiApiKey } from "@/lib/openai"
 import {
+  ensureKeySignalFigures,
   hasDeniedSource,
   hasTrustedAttribution,
   MEMO_HEADINGS,
   SEARCH_ALLOWED_DOMAINS,
   sanitizeMemoEvidence,
 } from "@/lib/memo-evidence"
+import { getVerifiedMetrics } from "@/app/services/industry-outlook/verifiedMetrics"
+import { formatVerifiedDataBlock, type VerifiedMetric } from "@/lib/verified-metrics"
 
 /** Human-readable current date (ET) so the model can't present a stale quarter as current. */
 function todayLongET(): string {
@@ -143,7 +146,11 @@ function normalizeSources(sources: RetrievedSource[]): Array<{ title: string; ur
   return output
 }
 
-export function buildFallbackMemo(sources: RetrievedSource[], reason: string): string {
+export function buildFallbackMemo(
+  sources: RetrievedSource[],
+  reason: string,
+  metrics: VerifiedMetric[] = []
+): string {
   const sourceLines = normalizeSources(sources)
   const renderedSources =
     sourceLines.length > 0
@@ -152,9 +159,13 @@ export function buildFallbackMemo(sources: RetrievedSource[], reason: string): s
 
   return [
     "Executive Summary",
-    "- We could not complete a full generated outlook in this run.",
+    // The measured figures do not depend on generation succeeding, so a failed
+    // run still shows current market data rather than only an apology.
+    ...metrics.map((m) => `- ${m.sentence}`),
+    // Wording is load-bearing: the client detects a fallback memo by this
+    // phrase and declines to cache it, so the next request retries generation.
+    "- We could not complete a full generated outlook in this run; the measured figures above are current.",
     `- Reason: ${reason}.`,
-    "- A provisional update is provided below with available sources.",
     "",
     "U.S. commercial real estate outlook (CRE debt & distress)",
     "- Data retrieval was partially available; re-run is recommended for a fuller update.",
@@ -206,12 +217,22 @@ function classifySources(sources: RetrievedSource[]): {
     ordered: [
       ...citable.map((source) => ({ source, citable: true })),
       ...background.map((source) => ({ source, citable: false })),
-    ].slice(0, 6),
+    ].slice(0, PROMPT_SOURCE_SLOTS),
     deniedCount,
   }
 }
 
-function buildPrompt(sources: RetrievedSource[]): {
+/**
+ * Articles quoted into the prompt. Raised from six because the citation rules
+ * discard any figure from an unrecognized publisher: a narrow feed leaves the
+ * model with too little citable material and it falls back to vague prose.
+ */
+const PROMPT_SOURCE_SLOTS = 10
+
+function buildPrompt(
+  sources: RetrievedSource[],
+  metrics: VerifiedMetric[]
+): {
   system: string
   user: string
   deniedSourceCount: number
@@ -239,30 +260,38 @@ function buildPrompt(sources: RetrievedSource[]): {
     "Use your web search tool to find current market data — CMBS delinquency rates, special servicing volumes, foreclosure filings, note sale pipelines, and deal activity. " +
     "Supplement with the source articles provided below.\n\n" +
     "EVIDENCE RULES — these override every formatting or style instruction that follows:\n" +
-    "1. Every figure you state must come from a search result or a supplied source article that you actually read. " +
+    "1. Every figure you state must come from one of exactly three places: the VERIFIED MARKET DATA block, " +
+    "a search result you actually read, or a supplied source article you actually read. " +
     "Never invent, estimate, extrapolate, average, or infer a number, and never restate a figure from memory.\n" +
     "2. Immediately after each figure, attribute it in plain parentheses: (Publisher, Month Year). " +
     "Example: CMBS office delinquency reached 11.7% (Trepp, July 2026).\n" +
-    "3. A figure is only usable if it comes from a recognized publisher — a data or ratings provider " +
+    "3. The VERIFIED MARKET DATA block is measured, not searched, and is the most reliable evidence you have. " +
+    "Quote those figures verbatim with the attribution given, and never alter, re-round or 'update' them.\n" +
+    "4. A searched figure is only usable if it comes from a recognized publisher — a data or ratings provider " +
     "(Trepp, S&P Global, Moody's, Fitch, KBRA, CoStar, ATTOM, CoreLogic, CRED iQ), CRE trade press " +
     "(CRE Daily, Bisnow, Commercial Observer, The Real Deal, GlobeSt), a major brokerage, a government " +
     "body, or an established news organization. Blogs, SEO content sites and lead-generation pages are " +
     "not sources: omit their numbers.\n" +
-    "4. If you cannot source a figure for a point worth making, make the point qualitatively with no number. " +
+    "5. If you cannot source a figure for a point worth making, make the point qualitatively with no number. " +
     "A bullet with no statistic is strongly preferred over a bullet with an unverified one.\n" +
-    "5. Do not present a quarter, month, or year as current unless a source dates it that way.\n" +
-    "6. The Executive Summary contains NO figures at all — it states, in words, the conclusions that the " +
-    "sourced bullets in the later sections support.\n" +
-    "7. Never use markdown symbols (no **, no #, no bullet dashes — use plain hyphens).\n" +
-    "8. Always emit all five required section headings, each on its own line, exactly as named by the user.\n" +
-    "9. Each supplied source article is tagged RECOGNIZED PUBLISHER or BACKGROUND ONLY. Never cite, quote, " +
+    "6. Do not present a quarter, month, or year as current unless a source dates it that way.\n" +
+    "7. The Executive Summary is the section a reader sees first, so it must be quantitative: at least three " +
+    "of its bullets state a specific figure, each carrying its attribution exactly as it would in the body. " +
+    "Lead with the VERIFIED MARKET DATA figures — they are the ones you can be certain of. An Executive " +
+    "Summary of generic statements with no numbers is a failed memo.\n" +
+    "8. Never use markdown symbols (no **, no #, no bullet dashes — use plain hyphens).\n" +
+    "9. Always emit all five required section headings, each on its own line, exactly as named by the user.\n" +
+    "10. Each supplied source article is tagged RECOGNIZED PUBLISHER or BACKGROUND ONLY. Never cite, quote, " +
     "or take a figure from a BACKGROUND ONLY source — use it for orientation only."
+
+  const verifiedBlock = formatVerifiedDataBlock(metrics)
 
   const user = `Write a distressed commercial real estate debt outlook memo. Use your web search tool AND the source articles below.
 
 TODAY'S DATE: ${todayLongET()}
 
 SCOPE: U.S. national, Florida, Miami-Dade
+${verifiedBlock ? `\n${verifiedBlock}\n` : ""}
 
 OUTPUT — use these exact five section headers in this order:
 1) Executive Summary
@@ -275,15 +304,16 @@ WRITING RULES:
 - Start your response DIRECTLY with the text "Executive Summary" — no preamble, no memo header (no TO:/FROM:/DATE: lines), no commentary about searching.
 - Write each of the five section headers on its own line, spelled exactly as listed above, before that section's bullets.
 - EVERY section must be formatted as plain hyphen bullets ("- "), INCLUDING the Executive Summary. Never write paragraphs.
-- The Executive Summary carries NO figures — it is the qualitative takeaway of the sections below it. Put every statistic in the body section it belongs to, with its attribution.
-- Never repeat a point. If two bullets would say the same thing, write only one of them.
+- The Executive Summary is the highest-value section: at least three of its bullets must carry a specific, attributed figure, drawn first from VERIFIED MARKET DATA and then from your strongest sourced findings. Restating a body figure here is expected, not a repetition error.
+- Never repeat a point within a section. If two bullets in the same section would say the same thing, write only one of them.
 - Each bullet starts on its OWN LINE with "- ".
 - ONE key point per bullet. Never combine multiple facts, deals, or data points into a single bullet — split them.
 - 4-8 bullets per section (except Key sources).
 - Each bullet: 1-2 SHORT sentences maximum. Be concise.
 - Include a dollar amount, percentage, basis-point move, delinquency rate, loan count or deal size ONLY when a source gives you that exact figure, and attach its attribution: (Publisher, Month Year).
 - Name specific properties, cities, lenders, borrowers, or servicers only when a source names them.
-- Search for: current CMBS delinquency rates, special servicing volumes, CRE loan maturity wall data, South Florida foreclosure activity, distressed note sale transactions.
+- Run several distinct searches rather than one: CMBS delinquency and special servicing rates by property type; CRE loan maturity volumes coming due; South Florida and Miami-Dade foreclosure and lis pendens activity; recent distressed note and loan sale transactions with pricing; office and multifamily valuation marks; bank CRE portfolio sales.
+- Prefer the most recent figure you can source, and always state the period it covers.
 - If searches return nothing usable for a section, say so plainly in that section instead of filling it with estimated numbers.
 - Key sources: list 4-8 URLs, one per line, format: Title — https://url
 
@@ -312,6 +342,12 @@ export type EvidenceGuardReport = {
   unrecognizedDomains: string[]
   /** A few removed bullets, truncated, so a bad pattern is recognizable. */
   samples: string[]
+  /** Measured FRED/FDIC figures available to this run. */
+  verifiedMetrics: number
+  /** Measured bullets added because the model's summary was short on figures. */
+  verifiedBulletsInserted: number
+  /** Figure-bearing Key Signals bullets after every rule ran. */
+  keySignalFigures: number
 }
 
 let lastEvidenceGuardReport: EvidenceGuardReport | null = null
@@ -326,14 +362,19 @@ function countBullets(memo: string): number {
 
 /** Generates the memo. Throws on any failure so callers can decide whether to cache. */
 async function runGeneration(): Promise<string> {
-  let sources: RetrievedSource[] = []
-  try {
-    sources = await withTimeout(retrieveSources(), 8000, "Source retrieval timed out.")
-  } catch (err) {
-    console.error("Industry outlook source retrieval error:", err)
-  }
+  // Both inputs are optional and independently time-boxed, so a slow or broken
+  // feed costs latency at worst — never the memo.
+  const [sources, metrics] = await Promise.all([
+    withTimeout(retrieveSources(), 8000, "Source retrieval timed out.").catch(
+      (err): RetrievedSource[] => {
+        console.error("Industry outlook source retrieval error:", err)
+        return []
+      }
+    ),
+    getVerifiedMetrics(),
+  ])
 
-  const { system, user, deniedSourceCount } = buildPrompt(sources)
+  const { system, user, deniedSourceCount } = buildPrompt(sources, metrics)
   const raw = await callOpenAi({
     system,
     user,
@@ -347,13 +388,15 @@ async function runGeneration(): Promise<string> {
     timeoutMs: 90_000,
   })
   const {
-    text: content,
+    text: sanitized,
     dropped,
     denied,
     duplicates,
     strippedAttributions,
     unrecognizedDomains,
   } = sanitizeMemoEvidence(cleanMemoText(raw))
+
+  const { text: content, inserted, figures } = ensureKeySignalFigures(sanitized, metrics)
 
   const report: EvidenceGuardReport = {
     generatedAt: new Date().toISOString(),
@@ -365,6 +408,9 @@ async function runGeneration(): Promise<string> {
     deniedSourceArticles: deniedSourceCount,
     unrecognizedDomains: unrecognizedDomains.slice(0, 12),
     samples: [...denied, ...dropped].slice(0, 3).map((b) => b.slice(0, 140)),
+    verifiedMetrics: metrics.length,
+    verifiedBulletsInserted: inserted,
+    keySignalFigures: figures,
   }
   lastEvidenceGuardReport = report
   console.info("industry-outlook:evidence-guard", JSON.stringify(report))
@@ -387,7 +433,7 @@ export async function getCachedIndustryOutlook(): Promise<string> {
   const day = newsCalendarDayET()
   const cachedGeneration = unstable_cache(
     async () => runGeneration(),
-    ["industry-outlook-shared-v11", day],
+    ["industry-outlook-shared-v12", day],
     { revalidate: NEWS_TAB_REVALIDATE_SECONDS }
   )
 
@@ -396,15 +442,16 @@ export async function getCachedIndustryOutlook(): Promise<string> {
     return await cachedGeneration()
   } catch (err) {
     console.error("Industry outlook generation error:", err)
-    let sources: RetrievedSource[] = []
-    try {
-      sources = await withTimeout(retrieveSources(), 8000, "Source retrieval timed out.")
-    } catch {
-      /* fallback proceeds without sources */
-    }
+    const [sources, metrics] = await Promise.all([
+      withTimeout(retrieveSources(), 8000, "Source retrieval timed out.").catch(
+        (): RetrievedSource[] => []
+      ),
+      getVerifiedMetrics(),
+    ])
     return buildFallbackMemo(
       sources,
-      err instanceof Error ? err.message : "Unhandled generation error"
+      err instanceof Error ? err.message : "Unhandled generation error",
+      metrics
     )
   }
 }

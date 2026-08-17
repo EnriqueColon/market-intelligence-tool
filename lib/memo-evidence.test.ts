@@ -2,12 +2,16 @@ import { test } from "node:test"
 import assert from "node:assert/strict"
 import {
   containsStatistic,
+  ensureKeySignalFigures,
   hasDeniedSource,
   hasTrustedAttribution,
   isTrustedDomain,
+  MIN_KEY_SIGNAL_FIGURES,
+  NO_DATA_LINE,
   sanitizeMemoEvidence,
   SEARCH_ALLOWED_DOMAINS,
   TRUSTED_PUBLISHER_DOMAINS,
+  type MeasuredFigure,
 } from "./memo-evidence.ts"
 
 test("dates and bare years are not statistics", () => {
@@ -206,6 +210,39 @@ test("repeated points are collapsed to one bullet", () => {
   assert.match(text, /9\.7%/)
 })
 
+test("an Executive Summary restating a body figure keeps both bullets", () => {
+  // Key Signals renders the Executive Summary, so it is meant to repeat the
+  // body's strongest figures. Comparing across sections let the summary delete
+  // the bullets it was summarizing, gutting the body sections.
+  const memo = [
+    "Executive Summary",
+    "- The CMBS distress rate reached 10.91% in July 2026, led by office weakness. (credaily.com)",
+    "",
+    "U.S. commercial real estate outlook (CRE debt & distress)",
+    "- The CMBS distress rate reached 10.91% in July 2026, driven by office sector weakness. (credaily.com)",
+  ].join("\n")
+
+  const { text, duplicates } = sanitizeMemoEvidence(memo)
+  assert.equal(duplicates.length, 0)
+  assert.equal(text.split("\n").filter((l) => l.includes("10.91%")).length, 2)
+})
+
+test("measured Federal Reserve and FDIC figures are citable", () => {
+  assert.equal(
+    hasTrustedAttribution(
+      "CRE delinquency was 1.56% in Q1 2026. (Federal Reserve Board via FRED series DRCRELEXFACBS, Q1 2026)"
+    ),
+    true
+  )
+  assert.equal(
+    hasTrustedAttribution("Florida banks held $92.4 billion of CRE loans. (FDIC call reports, Q1 2026)"),
+    true
+  )
+  // "fred" must not match inside another word, which would credit anything
+  // mentioning Freddie Mac's name without naming a publisher.
+  assert.equal(hasTrustedAttribution("Fredonia County filings rose 12%."), false)
+})
+
 test("untrusted source links are dropped only when trusted ones remain", () => {
   const withEnoughTrusted = [
     "Key sources (for further reading)",
@@ -236,6 +273,82 @@ test("untrusted source links are dropped only when trusted ones remain", () => {
   assert.doesNotMatch(result.text, /real-estate-tycoon/)
   assert.match(result.text, /credaily/)
   assert.ok(result.unrecognizedDomains.includes("real-estate-tycoon.org"))
+})
+
+const MEASURED: MeasuredFigure[] = [
+  { value: "1.56%", sentence: "CRE delinquency was 1.56% in Q1 2026. (Federal Reserve via FRED)" },
+  { value: "0.17%", sentence: "CRE charge-offs were 0.17% in Q1 2026. (Federal Reserve via FRED)" },
+  { value: "4.68%", sentence: "The 10-year Treasury yield was 4.68%. (U.S. Treasury via FRED)" },
+  { value: "6.67%", sentence: "The 30-year fixed mortgage rate was 6.67%. (Freddie Mac via FRED)" },
+]
+
+test("a summary of generalities is backfilled with measured figures", () => {
+  // The exact Key Signals failure this replaced: accurate, and saying nothing.
+  const memo = [
+    "Executive Summary",
+    "- U.S. CRE distress remains elevated.",
+    "- These trends present both challenges and opportunities.",
+    "",
+    "U.S. commercial real estate outlook (CRE debt & distress)",
+    "- Office fundamentals remain weak.",
+  ].join("\n")
+
+  const { text, inserted, figures } = ensureKeySignalFigures(memo, MEASURED)
+  assert.equal(inserted, MIN_KEY_SIGNAL_FIGURES)
+  assert.equal(figures, MIN_KEY_SIGNAL_FIGURES)
+  // Measured bullets lead, and the model's qualitative points are preserved.
+  assert.match(text, /Executive Summary\n- CRE delinquency was 1\.56%/)
+  assert.match(text, /U\.S\. CRE distress remains elevated/)
+  // Only the Executive Summary is touched.
+  assert.match(text, /outlook \(CRE debt & distress\)\n- Office fundamentals remain weak\./)
+})
+
+test("a summary already carrying enough figures is left alone", () => {
+  const memo = [
+    "Executive Summary",
+    "- CMBS delinquency reached 7.2% (Trepp, July 2026).",
+    "- Special servicing hit 10.4% (Trepp, July 2026).",
+    "- $290 billion of CRE debt matures this year (Mortgage Bankers Association, 2026).",
+    "- Lenders continue to extend rather than foreclose.",
+  ].join("\n")
+
+  const result = ensureKeySignalFigures(memo, MEASURED)
+  assert.equal(result.inserted, 0)
+  assert.equal(result.figures, 3)
+  assert.equal(result.text, memo)
+})
+
+test("only the shortfall is backfilled, and a figure already quoted is not repeated", () => {
+  const memo = [
+    "Executive Summary",
+    "- CRE delinquency was 1.56% in Q1 2026 (Federal Reserve, Q1 2026).",
+    "- Distress is broadening beyond office.",
+  ].join("\n")
+
+  const { text, inserted } = ensureKeySignalFigures(memo, MEASURED)
+  assert.equal(inserted, 2)
+  assert.equal(text.split("\n").filter((l) => l.includes("1.56%")).length, 1)
+  assert.match(text, /0\.17%/)
+  assert.match(text, /4\.68%/)
+})
+
+test("the empty-section placeholder gives way to real data", () => {
+  const memo = ["Executive Summary", NO_DATA_LINE].join("\n")
+  const { text } = ensureKeySignalFigures(memo, MEASURED)
+  assert.doesNotMatch(text, /No independently sourced figures/)
+  assert.match(text, /1\.56%/)
+})
+
+test("with nothing measured the memo is returned untouched", () => {
+  const memo = ["Executive Summary", "- Distress is broadening beyond office."].join("\n")
+  assert.equal(ensureKeySignalFigures(memo, []).text, memo)
+})
+
+test("a memo with no Executive Summary heading is not rewritten", () => {
+  const memo = "- Some stray bullet."
+  const result = ensureKeySignalFigures(memo, MEASURED)
+  assert.equal(result.text, memo)
+  assert.equal(result.inserted, 0)
 })
 
 test("qualitative memos pass through unchanged", () => {

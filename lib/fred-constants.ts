@@ -94,8 +94,10 @@ export const FRED_SERIES = {
   // BANKING SECTOR HEALTH
   // ============================================
   
-  // Net Charge-Off Rate on Commercial Real Estate Loans
-  creChargeOffRate: "CABOREA",
+  // Net Charge-Off Rate on Commercial Real Estate Loans, Excluding Farmland
+  // ("CABOREA" was listed here previously and is not a real series id — the
+  // endpoint returns an error page for it.)
+  creChargeOffRate: "CORCREXFACBS",
   
   // Allowance for Loan and Lease Losses
   loanLossAllowance: "ALLACBW027SBOG",
@@ -144,9 +146,10 @@ export const FRED_SERIES_INFO: Record<string, { name: string; description: strin
     description: "Bank Prime Loan Rate",
     frequency: "Daily",
   },
-  CABOREA: {
+  CORCREXFACBS: {
     name: "CRE Charge-Off Rate",
-    description: "Charge-Off Rate on Commercial Real Estate Loans, All Commercial Banks",
+    description:
+      "Charge-Off Rate on Commercial Real Estate Loans, Excluding Farmland, All Commercial Banks",
     frequency: "Quarterly",
   },
 }

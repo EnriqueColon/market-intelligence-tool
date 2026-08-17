@@ -8,7 +8,7 @@ import { newsCalendarDayET } from "@/lib/news-tab-cache"
 // Day-scoped so a tab left open across midnight (or across a deploy that fixes
 // the memo) cannot keep serving yesterday's cached copy from sessionStorage.
 function outlookSessionKey(): string {
-  return `industry-outlook:v7:${newsCalendarDayET()}`
+  return `industry-outlook:v8:${newsCalendarDayET()}`
 }
 
 /** Fallback memos must not be persisted — the next request should retry generation. */

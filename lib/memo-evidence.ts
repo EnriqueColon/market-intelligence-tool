@@ -182,6 +182,10 @@ export const TRUSTED_PUBLISHER_NAMES = [
   "federal reserve",
   "new york fed",
   "st. louis fed",
+  // FRED redistributes the Fed, Treasury and Freddie Mac series behind the
+  // memo's measured figures, and is named in their attributions.
+  "fred",
+  "ice data indices",
   "fdic",
   "occ",
   "u.s. treasury",
@@ -533,7 +537,7 @@ export type MemoSanitizeResult = {
   unrecognizedDomains: string[]
 }
 
-const NO_DATA_LINE =
+export const NO_DATA_LINE =
   "- No independently sourced figures were available for this section in today's run."
 
 /** Letters remaining after a strip, below which the bullet says nothing. */
@@ -560,6 +564,10 @@ function contentWords(text: string): Set<string> {
  * The model frequently restates the same finding several times in one section
  * — sometimes looping the identical sentence — which reads as padding in a
  * memo. Two bullets sharing most of their content words are the same point.
+ *
+ * Compared within a section only. The Executive Summary is a deliberate
+ * restatement of the body's strongest figures, so comparing across sections
+ * would let the summary delete the very bullets it is summarizing.
  */
 function isRestatement(candidate: Set<string>, seen: Set<string>[]): boolean {
   if (candidate.size === 0) return false
@@ -584,7 +592,7 @@ export function sanitizeMemoEvidence(memo: string): MemoSanitizeResult {
   const duplicates: string[] = []
   const audit: AttributionAudit = { stripped: [], unrecognized: [] }
   const out: string[] = []
-  const seenPoints: Set<string>[] = []
+  let seenPoints: Set<string>[] = []
   const sourceLines: string[] = []
   let section = ""
   let bulletsInSection = 0
@@ -607,6 +615,7 @@ export function sanitizeMemoEvidence(memo: string): MemoSanitizeResult {
       flushSection()
       section = heading
       bulletsInSection = 0
+      seenPoints = []
       out.push(trimmed)
       continue
     }
@@ -659,6 +668,89 @@ export function sanitizeMemoEvidence(memo: string): MemoSanitizeResult {
     duplicates,
     strippedAttributions: audit.stripped,
     unrecognizedDomains: audit.unrecognized,
+  }
+}
+
+/**
+ * Key Signals bullets that must state a figure. Three fills the first row of
+ * the card grid, which is what a reader sees without scrolling.
+ */
+export const MIN_KEY_SIGNAL_FIGURES = 3
+
+/** Bounds of the Executive Summary's body lines, exclusive of its heading. */
+function executiveSummaryRange(lines: string[]): { start: number; end: number } | null {
+  const heading = lines.findIndex((l) => l.trim().toLowerCase() === "executive summary")
+  if (heading === -1) return null
+  let end = lines.length
+  for (let i = heading + 1; i < lines.length; i++) {
+    if (MEMO_HEADINGS.some((h) => lines[i].trim().toLowerCase() === h.toLowerCase())) {
+      end = i
+      break
+    }
+  }
+  return { start: heading + 1, end }
+}
+
+/**
+ * A figure this system measured itself, as a printable sentence. Structural on
+ * purpose: lib/verified-metrics.ts produces these, and importing it here would
+ * make both modules circular and neither of them unit testable.
+ */
+export type MeasuredFigure = {
+  /** The figure alone, used to detect that the memo already states it. */
+  value: string
+  /** Complete attributed sentence, printable as a bullet without editing. */
+  sentence: string
+}
+
+/**
+ * Guarantees Key Signals states real numbers.
+ *
+ * Key Signals renders the Executive Summary, so when the model writes a summary
+ * of generalities — which it does often enough to matter, and did every time
+ * while figures were banned there outright — the most prominent section of the
+ * memo carries no information. Prompt wording alone never fixed this.
+ *
+ * Measured figures are the remedy: they need no publisher to vouch for them, so
+ * they can be inserted after the rules above have run and still be trustworthy.
+ * A figure the summary already quotes is skipped, and the "no figures available"
+ * placeholder gives way to the real data.
+ *
+ * Call this after sanitizeMemoEvidence, so an inserted bullet is never at risk
+ * of being deleted as unsourced.
+ */
+export function ensureKeySignalFigures(
+  memo: string,
+  measured: MeasuredFigure[]
+): { text: string; inserted: number; figures: number } {
+  const lines = memo.split("\n")
+  const range = executiveSummaryRange(lines)
+  if (!range) return { text: memo, inserted: 0, figures: 0 }
+
+  const section = lines.slice(range.start, range.end)
+  const figures = section.filter(
+    (l) => /^[-•*]\s/.test(l.trim()) && containsStatistic(l)
+  ).length
+  const shortfall = MIN_KEY_SIGNAL_FIGURES - figures
+  if (shortfall <= 0 || measured.length === 0) return { text: memo, inserted: 0, figures }
+
+  const existing = section.join(" ")
+  const additions = measured
+    .filter((m) => !existing.includes(m.value))
+    .slice(0, shortfall)
+    .map((m) => `- ${m.sentence}`)
+  if (additions.length === 0) return { text: memo, inserted: 0, figures }
+
+  const kept = section.filter((l) => l.trim() !== NO_DATA_LINE.trim())
+  return {
+    text: [
+      ...lines.slice(0, range.start),
+      ...additions,
+      ...kept,
+      ...lines.slice(range.end),
+    ].join("\n"),
+    inserted: additions.length,
+    figures: figures + additions.length,
   }
 }
 
