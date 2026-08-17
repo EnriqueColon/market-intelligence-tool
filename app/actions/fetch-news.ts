@@ -319,7 +319,7 @@ function extractTag(block: string, tag: string) {
   const pattern = `<(?:[a-zA-Z0-9]+:)?${tag}(?:\\s[^>]*)?>([\\s\\S]*?)</(?:[a-zA-Z0-9]+:)?${tag}>`
   const match = block.match(new RegExp(pattern, "i"))
   if (!match) return ""
-  return match[1].replace(/<!\\[CDATA\\[(.*?)\\]\\]>/g, "$1").trim()
+  return match[1].replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").trim()
 }
 
 function decodeHtmlEntities(value: string) {
@@ -613,7 +613,7 @@ function parseRssItems(xml: string): Array<{ title: string; link: string; pubDat
   let m: RegExpExecArray | null
   while ((m = itemRegex.exec(xml))) {
     const block = m[1]
-    const title = extractTag(block, "title") || "Untitled"
+    const title = extractTag(block, "title") || ""
     const link = extractTag(block, "link") || ""
     const pubDate = extractTag(block, "pubDate") || ""
     const source = extractTag(block, "source") || ""
@@ -629,7 +629,7 @@ function parseAtomItems(xml: string): Array<{ title: string; link: string; updat
   let m: RegExpExecArray | null
   while ((m = entryRegex.exec(xml))) {
     const block = m[1]
-    const title = extractTag(block, "title") || "Untitled"
+    const title = extractTag(block, "title") || ""
     const linkMatch = block.match(/<link[^>]+href="([^"]+)"/i)
     const link = linkMatch ? linkMatch[1] : ""
     const updated = extractTag(block, "updated") || extractTag(block, "published") || ""
@@ -667,7 +667,7 @@ async function fetchFeed(spec: FeedSpec): Promise<NewsItem[]> {
         const date = normalizeDate(dateRaw) || ""
         if (!isWithinLastDays(dateRaw || date, MAX_AGE_DAYS)) continue
         items.push({
-          title: stripHtmlToText(e.title) || "Untitled",
+          title: stripHtmlToText(e.title) || "",
           url: (e.link || "").trim(),
           source: stripHtmlToText(e.source) || spec.name,
           date,
@@ -680,7 +680,7 @@ async function fetchFeed(spec: FeedSpec): Promise<NewsItem[]> {
         const date = normalizeDate(dateRaw) || ""
         if (!isWithinLastDays(dateRaw || date, MAX_AGE_DAYS)) continue
         items.push({
-          title: stripHtmlToText(it.title) || "Untitled",
+          title: stripHtmlToText(it.title) || "",
           url: (it.link || "").trim(),
           source: stripHtmlToText(it.source) || spec.name,
           date,

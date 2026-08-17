@@ -84,7 +84,7 @@ async function googleNewsRssTokenFallback(title: string, excludeUrl?: string): P
       const pattern = `<(?:[a-zA-Z0-9]+:)?${tag}>([\\s\\S]*?)</(?:[a-zA-Z0-9]+:)?${tag}>`
       const m = block.match(new RegExp(pattern, "i"))
       if (!m) return ""
-      return m[1].replace(/<!\\[CDATA\\[(.*?)\\]\\]>/g, "$1").trim()
+      return m[1].replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").trim()
     }
     const out: OpenBackfillSource[] = []
     let m: RegExpExecArray | null

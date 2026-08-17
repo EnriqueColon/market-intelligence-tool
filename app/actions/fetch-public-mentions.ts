@@ -125,7 +125,7 @@ function extractTag(block: string, tag: string) {
   const pattern = `<(?:[a-zA-Z0-9]+:)?${tag}(?:\\s[^>]*)?>([\\s\\S]*?)</(?:[a-zA-Z0-9]+:)?${tag}>`
   const match = block.match(new RegExp(pattern, "i"))
   if (!match) return undefined
-  return match[1].replace(/<!\\[CDATA\\[(.*?)\\]\\]>/g, "$1").trim()
+  return match[1].replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").trim()
 }
 
 function extractAllTags(block: string, tag: string) {
@@ -134,7 +134,7 @@ function extractAllTags(block: string, tag: string) {
   return matches
     .map((m) => {
       const inner = m.match(new RegExp(pattern, "i"))
-      const value = inner?.[1] ? inner[1].replace(/<!\\[CDATA\\[(.*?)\\]\\]>/g, "$1").trim() : ""
+      const value = inner?.[1] ? inner[1].replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").trim() : ""
       return value
     })
     .filter(Boolean)
@@ -168,7 +168,7 @@ function stripHtml(value?: string) {
   if (!value) return undefined
   const decoded = decodeHtmlEntities(value)
   const withoutTags = decoded.replace(/<[^>]*>/g, " ")
-  const collapsed = withoutTags.replace(/\\s+/g, " ").trim()
+  const collapsed = withoutTags.replace(/\s+/g, " ").trim()
   return collapsed || undefined
 }
 
@@ -430,7 +430,7 @@ function parseRssItems(xml: string): Array<{
   let m: RegExpExecArray | null
   while ((m = itemRegex.exec(xml))) {
     const block = m[1]
-    const title = extractTag(block, "title") || "Untitled"
+    const title = extractTag(block, "title") || ""
     const link = extractTag(block, "link") || ""
     const pubDate = extractTag(block, "pubDate") || ""
     const dcDate = extractTag(block, "dc:date") || extractTag(block, "date") || ""
@@ -450,7 +450,7 @@ function parseAtomItems(xml: string): Array<{ title: string; link: string; dateR
   let m: RegExpExecArray | null
   while ((m = entryRegex.exec(xml))) {
     const block = m[1]
-    const title = extractTag(block, "title") || "Untitled"
+    const title = extractTag(block, "title") || ""
     const linkMatch = block.match(/<link[^>]+href="([^"]+)"/i)
     const link = linkMatch ? linkMatch[1] : ""
     const updated = extractTag(block, "updated") || extractTag(block, "published") || ""
@@ -501,7 +501,7 @@ async function fetchFeed(spec: FeedSpec): Promise<FeedFetchResult> {
         keptAfterDate += 1
         items.push({
           id: `rss-${spec.name}-${e.title.slice(0, 24)}`,
-          title: stripHtml(e.title) || "Untitled",
+          title: stripHtml(e.title) || "",
           url: (e.link || "").trim(),
           source: stripHtml(e.source) || spec.name,
           date,
@@ -526,7 +526,7 @@ async function fetchFeed(spec: FeedSpec): Promise<FeedFetchResult> {
         keptAfterDate += 1
         items.push({
           id: `rss-${spec.name}-${it.title.slice(0, 24)}`,
-          title: stripHtml(it.title) || "Untitled",
+          title: stripHtml(it.title) || "",
           url: (it.link || "").trim(),
           source: stripHtml(it.source) || spec.name,
           date,
@@ -594,11 +594,12 @@ async function fetchGdelt(level: "national" | "florida" | "miami"): Promise<Publ
       const seendate = typeof a?.seendate === "string" ? a.seendate : ""
       const date = normalizeDate(seendate) || normalizeDate(a?.datetime)
       const summary = typeof a?.summary === "string" ? a.summary : ""
-      if (!title || !link) continue
+      const cleanTitle = stripHtml(title) || ""
+      if (!cleanTitle || !link) continue
       if (date && !isWithinLastDays(date, MAX_AGE_DAYS)) continue
       out.push({
-        id: `gdelt-${title.slice(0, 24)}`,
-        title: stripHtml(title) || "Untitled",
+        id: `gdelt-${cleanTitle.slice(0, 24)}`,
+        title: cleanTitle,
         url: link,
         source: stripHtml(source) || "GDELT",
         date,
@@ -822,7 +823,7 @@ export async function fetchPublicMentions(
   const day = newsCalendarDayET()
   return unstable_cache(
     async () => fetchPublicMentionsImpl(level),
-    ["public-mentions-v2", day, level],
+    ["public-mentions-v3", day, level],
     { revalidate: NEWS_TAB_REVALIDATE_SECONDS }
   )()
 }

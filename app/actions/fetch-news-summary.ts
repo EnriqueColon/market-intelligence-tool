@@ -189,7 +189,7 @@ async function fetchRelatedFromRss(level: "national" | "florida" | "miami", titl
       const pattern = `<(?:[a-zA-Z0-9]+:)?${tag}>([\\s\\S]*?)</(?:[a-zA-Z0-9]+:)?${tag}>`
       const match = block.match(new RegExp(pattern, "i"))
       if (!match) return ""
-      return match[1].replace(/<!\\[CDATA\\[(.*?)\\]\\]>/g, "$1").trim()
+      return match[1].replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").trim()
     }
     const rawItems: Array<{ title: string; url: string }> = []
     let m: RegExpExecArray | null
@@ -275,7 +275,7 @@ export async function summarizeNewsItem(
         if (isDegradedBrief(brief)) throw new Error("degraded brief — not caching")
         return brief
       },
-      ["news-brief-v2", day, level, urlKey],
+      ["news-brief-v3", day, level, urlKey],
       { revalidate: NEWS_TAB_REVALIDATE_SECONDS }
     )()
   } catch {

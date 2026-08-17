@@ -297,7 +297,7 @@ function extractTag(block: string, tag: string) {
   const pattern = `<(?:[a-zA-Z0-9]+:)?${tag}>([\\s\\S]*?)</(?:[a-zA-Z0-9]+:)?${tag}>`
   const match = block.match(new RegExp(pattern, "i"))
   if (!match) return undefined
-  return match[1].replace(/<!\\[CDATA\\[(.*?)\\]\\]>/g, "$1").trim()
+  return match[1].replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").trim()
 }
 
 function stripHtml(value?: string) {
