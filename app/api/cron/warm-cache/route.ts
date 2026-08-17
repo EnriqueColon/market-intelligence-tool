@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server"
-import { getCachedIndustryOutlook } from "@/app/services/industry-outlook/getCachedOutlook"
+import {
+  getCachedIndustryOutlook,
+  getLastEvidenceGuardReport,
+} from "@/app/services/industry-outlook/getCachedOutlook"
 import { fetchPublicMentions } from "@/app/actions/fetch-public-mentions"
 import { fetchInvestingNews } from "@/app/actions/fetch-investing-news"
 import { fetchLegalUpdates } from "@/app/actions/fetch-legal-updates"
@@ -78,12 +81,16 @@ export async function GET(request: Request) {
   ])
 
   const failed = Object.entries(results).filter(([, v]) => v !== "ok")
+  // Null when the outlook was served from cache, i.e. the guard did not re-run.
+  const evidenceGuard = getLastEvidenceGuardReport()
   console.info("cron:warm-cache", { startedAt, finishedAt: new Date().toISOString(), results })
+  if (evidenceGuard) console.info("cron:warm-cache:evidence-guard", JSON.stringify(evidenceGuard))
 
   return NextResponse.json({
     startedAt,
     finishedAt: new Date().toISOString(),
     results,
+    evidenceGuard,
     status: failed.length === 0 ? "all_ok" : `${failed.length}_failed`,
   })
 }

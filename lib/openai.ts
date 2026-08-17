@@ -45,6 +45,22 @@ export type CallOpenAiOptions = {
   temperature?: number
   /** Enable OpenAI's hosted web search tool. */
   webSearch?: boolean
+  /**
+   * Restrict hosted web search to these hosts, so an unrecognized source never
+   * enters the model's context. Opt-in per call site: omit it and search behaves
+   * exactly as before.
+   *
+   * Requires a model that supports the tool's `filters` parameter — the mini
+   * models reject it — so pass `searchFilterModel` alongside, or the request
+   * falls back to unrestricted search. Ignored unless `webSearch` is true.
+   */
+  searchAllowedDomains?: string[]
+  /**
+   * Model to use when `searchAllowedDomains` is set, overriding the tier.
+   * Defaults to OPENAI_SEARCH_FILTER_MODEL or gpt-4.1: as of this writing
+   * gpt-4.1-mini and gpt-4o-mini return 400 for `filters`.
+   */
+  searchFilterModel?: string
   timeoutMs?: number
 }
 
@@ -119,48 +135,20 @@ function stripInlineCitations(text: string): string {
   return out.replace(/[ \t]+([.,;])/g, "$1").replace(/[ \t]{2,}/g, " ")
 }
 
-/**
- * Calls the OpenAI Responses API and returns the concatenated text output.
- * Throws on missing key, HTTP error, timeout, or empty response.
- */
-export async function callOpenAi(options: CallOpenAiOptions): Promise<string> {
-  const apiKey = getOpenAiApiKey()
-  if (!apiKey) throw new Error("Missing OPENAI_API_KEY")
+function searchFilterModel(explicit?: string): string {
+  return explicit?.trim() || process.env.OPENAI_SEARCH_FILTER_MODEL?.trim() || "gpt-4.1"
+}
 
-  const {
-    system,
-    user,
-    tier = "fast",
-    maxTokens = 1200,
-    temperature = 0.2,
-    webSearch = false,
-    timeoutMs = DEFAULT_TIMEOUT_MS,
-  } = options
+/** A 400 naming the tool's `filters` parameter — the model does not support it. */
+function isSearchFilterRejection(err: unknown): boolean {
+  return err instanceof Error && /OpenAI API error 400/.test(err.message) && /filters/i.test(err.message)
+}
 
-  const model = modelForTier(tier)
-  const reasoning = isReasoningModel(model)
-
-  const body: Record<string, unknown> = {
-    model,
-    // Reasoning tokens count against max_output_tokens on GPT-5 models, so we
-    // add headroom to preserve the visible-output budget call sites expect.
-    max_output_tokens: reasoning ? maxTokens + 2000 : maxTokens,
-    instructions: system,
-    input: user,
-  }
-
-  if (reasoning) {
-    // "low" keeps latency close to the old Haiku calls while still supporting
-    // web search (which rejects "minimal").
-    body.reasoning = { effort: "low" }
-  } else {
-    body.temperature = temperature
-  }
-
-  if (webSearch) {
-    body.tools = [{ type: "web_search" }]
-  }
-
+async function postResponses(
+  apiKey: string,
+  body: Record<string, unknown>,
+  timeoutMs: number
+): Promise<string> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
 
@@ -217,6 +205,70 @@ export async function callOpenAi(options: CallOpenAiOptions): Promise<string> {
     throw err
   } finally {
     clearTimeout(timer)
+  }
+}
+
+/**
+ * Calls the OpenAI Responses API and returns the concatenated text output.
+ * Throws on missing key, HTTP error, timeout, or empty response.
+ */
+export async function callOpenAi(options: CallOpenAiOptions): Promise<string> {
+  const apiKey = getOpenAiApiKey()
+  if (!apiKey) throw new Error("Missing OPENAI_API_KEY")
+
+  const {
+    system,
+    user,
+    tier = "fast",
+    maxTokens = 1200,
+    temperature = 0.2,
+    webSearch = false,
+    searchAllowedDomains,
+    timeoutMs = DEFAULT_TIMEOUT_MS,
+  } = options
+
+  const restrictSearch = Boolean(webSearch && searchAllowedDomains?.length)
+
+  const buildBody = (model: string, tools?: unknown[]): Record<string, unknown> => {
+    const reasoning = isReasoningModel(model)
+    const body: Record<string, unknown> = {
+      model,
+      // Reasoning tokens count against max_output_tokens on GPT-5 models, so we
+      // add headroom to preserve the visible-output budget call sites expect.
+      max_output_tokens: reasoning ? maxTokens + 2000 : maxTokens,
+      instructions: system,
+      input: user,
+    }
+    if (reasoning) {
+      // "low" keeps latency close to the old Haiku calls while still supporting
+      // web search (which rejects "minimal").
+      body.reasoning = { effort: "low" }
+    } else {
+      body.temperature = temperature
+    }
+    if (tools) body.tools = tools
+    return body
+  }
+
+  const unrestricted = () =>
+    postResponses(apiKey, buildBody(modelForTier(tier), webSearch ? [{ type: "web_search" }] : undefined), timeoutMs)
+
+  if (!restrictSearch) return unrestricted()
+
+  const filtered = buildBody(searchFilterModel(options.searchFilterModel), [
+    { type: "web_search", filters: { allowed_domains: searchAllowedDomains } },
+  ])
+
+  try {
+    return await postResponses(apiKey, filtered, timeoutMs)
+  } catch (err) {
+    // Never let an unsupported parameter take a feature down: degrade to
+    // unrestricted search, which the downstream evidence guard still covers.
+    if (!isSearchFilterRejection(err)) throw err
+    console.warn(
+      `openai: web_search domain filtering rejected by ${filtered.model}; retrying unrestricted. ${(err as Error).message}`
+    )
+    return unrestricted()
   }
 }
 

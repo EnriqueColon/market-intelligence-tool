@@ -3,7 +3,13 @@ import { retrieveSources } from "@/app/services/industry-outlook/retrieveSources
 import type { RetrievedSource } from "@/app/services/industry-outlook/schema"
 import { newsCalendarDayET, NEWS_TAB_REVALIDATE_SECONDS } from "@/lib/news-tab-cache"
 import { callOpenAi, getOpenAiApiKey } from "@/lib/openai"
-import { MEMO_HEADINGS, sanitizeMemoEvidence } from "@/lib/memo-evidence"
+import {
+  hasDeniedSource,
+  hasTrustedAttribution,
+  MEMO_HEADINGS,
+  SEARCH_ALLOWED_DOMAINS,
+  sanitizeMemoEvidence,
+} from "@/lib/memo-evidence"
 
 /** Human-readable current date (ET) so the model can't present a stale quarter as current. */
 function todayLongET(): string {
@@ -126,6 +132,8 @@ function normalizeSources(sources: RetrievedSource[]): Array<{ title: string; ur
   for (const item of sources) {
     const url = String(item.url || "").trim()
     if (!/^https?:\/\//i.test(url)) continue
+    // The fallback memo prints these as a reading list; a denied actor is not one.
+    if (hasDeniedSource(`${item.publisher || ""} ${url} ${item.title || ""}`)) continue
     const key = url.toLowerCase()
     if (seen.has(key)) continue
     seen.add(key)
@@ -162,19 +170,59 @@ export function buildFallbackMemo(sources: RetrievedSource[], reason: string): s
   ].join("\n")
 }
 
-function buildPrompt(sources: RetrievedSource[]): { system: string; user: string } {
+/**
+ * Second way an unrecognized source reaches the model: the supplemental feed is
+ * Google News RSS, which is not domain-restricted the way web search now is.
+ * Its links are news.google.com redirects (resolution is skipped for latency),
+ * so the publisher name is the only usable trust signal.
+ *
+ * Denied actors are excluded outright. The rest are ordered recognized-first so
+ * the six prompt slots go to citable publishers, and anything unrecognized that
+ * still makes the cut is labelled as background the model may not quote.
+ */
+function classifySources(sources: RetrievedSource[]): {
+  ordered: Array<{ source: RetrievedSource; citable: boolean }>
+  deniedCount: number
+} {
   const seen = new Set<string>()
-  const richContext = sources
-    .filter((s) => {
-      const url = String(s.url || "").trim()
-      if (!/^https?:\/\//i.test(url) || seen.has(url.toLowerCase())) return false
-      seen.add(url.toLowerCase())
-      return true
-    })
-    .slice(0, 6)
-    .map((s, i) => {
+  const citable: RetrievedSource[] = []
+  const background: RetrievedSource[] = []
+  let deniedCount = 0
+
+  for (const s of sources) {
+    const url = String(s.url || "").trim()
+    if (!/^https?:\/\//i.test(url) || seen.has(url.toLowerCase())) continue
+    seen.add(url.toLowerCase())
+
+    if (hasDeniedSource(`${s.publisher || ""} ${url} ${s.title || ""}`)) {
+      deniedCount += 1
+      continue
+    }
+    if (hasTrustedAttribution(`${s.publisher || ""} ${url}`)) citable.push(s)
+    else background.push(s)
+  }
+
+  return {
+    ordered: [
+      ...citable.map((source) => ({ source, citable: true })),
+      ...background.map((source) => ({ source, citable: false })),
+    ].slice(0, 6),
+    deniedCount,
+  }
+}
+
+function buildPrompt(sources: RetrievedSource[]): {
+  system: string
+  user: string
+  deniedSourceCount: number
+} {
+  const { ordered, deniedCount } = classifySources(sources)
+  const richContext = ordered
+    .map(({ source: s, citable }, i) => {
       const lines = [
-        `[Source ${i + 1} — ${(s.region || "national").toUpperCase()}]`,
+        `[Source ${i + 1} — ${(s.region || "national").toUpperCase()} — ${
+          citable ? "RECOGNIZED PUBLISHER: figures may be cited" : "BACKGROUND ONLY: do not cite, do not quote any figure from it"
+        }]`,
         `Title: ${s.title}`,
         `Publisher: ${s.publisher || "Unknown"} | Date: ${s.date || "Recent"}`,
         `URL: ${s.url}`,
@@ -206,7 +254,9 @@ function buildPrompt(sources: RetrievedSource[]): { system: string; user: string
     "6. The Executive Summary contains NO figures at all — it states, in words, the conclusions that the " +
     "sourced bullets in the later sections support.\n" +
     "7. Never use markdown symbols (no **, no #, no bullet dashes — use plain hyphens).\n" +
-    "8. Always emit all five required section headings, each on its own line, exactly as named by the user."
+    "8. Always emit all five required section headings, each on its own line, exactly as named by the user.\n" +
+    "9. Each supplied source article is tagged RECOGNIZED PUBLISHER or BACKGROUND ONLY. Never cite, quote, " +
+    "or take a figure from a BACKGROUND ONLY source — use it for orientation only."
 
   const user = `Write a distressed commercial real estate debt outlook memo. Use your web search tool AND the source articles below.
 
@@ -240,7 +290,38 @@ WRITING RULES:
 SUPPLEMENTAL SOURCE ARTICLES:
 ${richContext || "No supplemental articles provided — rely on web search."}`
 
-  return { system, user }
+  return { system, user, deniedSourceCount: deniedCount }
+}
+
+/**
+ * What the evidence guard removed from the most recent generation in this
+ * process. A bad source used to be discovered only by a reader noticing a bad
+ * bullet; this is read back by /api/cron/warm-cache so every deploy reports it.
+ * Null when the memo came from cache, i.e. the guard did not run.
+ */
+export type EvidenceGuardReport = {
+  generatedAt: string
+  bulletsKept: number
+  droppedUnsourced: number
+  droppedDenied: number
+  removedDuplicates: number
+  attributionsStripped: number
+  /** Supplemental feed articles kept out of the prompt for being denied actors. */
+  deniedSourceArticles: number
+  /** Unrecognized hosts a citation pointed at — the list to review and act on. */
+  unrecognizedDomains: string[]
+  /** A few removed bullets, truncated, so a bad pattern is recognizable. */
+  samples: string[]
+}
+
+let lastEvidenceGuardReport: EvidenceGuardReport | null = null
+
+export function getLastEvidenceGuardReport(): EvidenceGuardReport | null {
+  return lastEvidenceGuardReport
+}
+
+function countBullets(memo: string): number {
+  return memo.split("\n").filter((l) => /^[-•*]\s/.test(l.trim())).length
 }
 
 /** Generates the memo. Throws on any failure so callers can decide whether to cache. */
@@ -252,7 +333,7 @@ async function runGeneration(): Promise<string> {
     console.error("Industry outlook source retrieval error:", err)
   }
 
-  const { system, user } = buildPrompt(sources)
+  const { system, user, deniedSourceCount } = buildPrompt(sources)
   const raw = await callOpenAi({
     system,
     user,
@@ -260,18 +341,34 @@ async function runGeneration(): Promise<string> {
     maxTokens: 3200,
     temperature: 0.2,
     webSearch: true,
+    // Keep content farms out of the model's context in the first place. This is
+    // the only call site that restricts search; every other feature is unchanged.
+    searchAllowedDomains: SEARCH_ALLOWED_DOMAINS,
     timeoutMs: 90_000,
   })
-  const { text: content, dropped, duplicates } = sanitizeMemoEvidence(cleanMemoText(raw))
-  if (dropped.length) {
-    console.warn(
-      `Industry outlook: dropped ${dropped.length} bullet(s) stating unattributed figures:\n` +
-        dropped.map((b) => `  - ${b}`).join("\n")
-    )
+  const {
+    text: content,
+    dropped,
+    denied,
+    duplicates,
+    strippedAttributions,
+    unrecognizedDomains,
+  } = sanitizeMemoEvidence(cleanMemoText(raw))
+
+  const report: EvidenceGuardReport = {
+    generatedAt: new Date().toISOString(),
+    bulletsKept: countBullets(content),
+    droppedUnsourced: dropped.length,
+    droppedDenied: denied.length,
+    removedDuplicates: duplicates.length,
+    attributionsStripped: strippedAttributions.length,
+    deniedSourceArticles: deniedSourceCount,
+    unrecognizedDomains: unrecognizedDomains.slice(0, 12),
+    samples: [...denied, ...dropped].slice(0, 3).map((b) => b.slice(0, 140)),
   }
-  if (duplicates.length) {
-    console.warn(`Industry outlook: removed ${duplicates.length} repeated bullet(s).`)
-  }
+  lastEvidenceGuardReport = report
+  console.info("industry-outlook:evidence-guard", JSON.stringify(report))
+
   if (!hasUsableContent(content)) {
     throw new Error("OpenAI returned insufficient content")
   }
@@ -290,7 +387,7 @@ export async function getCachedIndustryOutlook(): Promise<string> {
   const day = newsCalendarDayET()
   const cachedGeneration = unstable_cache(
     async () => runGeneration(),
-    ["industry-outlook-shared-v10", day],
+    ["industry-outlook-shared-v11", day],
     { revalidate: NEWS_TAB_REVALIDATE_SECONDS }
   )
 
