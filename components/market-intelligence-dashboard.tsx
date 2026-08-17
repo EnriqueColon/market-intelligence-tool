@@ -11,7 +11,6 @@ import { PublicMentions } from "@/components/public-mentions"
 import { InvestingBusinessMentions } from "@/components/investing-business-mentions"
 import { ArticleDigest } from "@/components/article-digest"
 import { IndustryOutlook } from "@/components/industry-outlook"
-import { SendNewsEmailButton } from "@/components/send-news-email-button"
 import { MarketResearchFeed } from "@/components/market-research-feed"
 
 type TabValue = "news" | "analytics" | "market-research" | "legal"
@@ -133,9 +132,6 @@ export function MarketIntelligenceDashboard({
 
             {enabledTabs.news && (
               <TabsContent value="news">
-                <div className="flex justify-end">
-                  <SendNewsEmailButton />
-                </div>
                 <IndustryOutlook />
                 <div>
                   <PublicMentions />
