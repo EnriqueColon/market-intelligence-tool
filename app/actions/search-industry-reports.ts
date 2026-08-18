@@ -6,6 +6,7 @@ import { filterByAllowlist, extractHostname } from "@/lib/domain-allowlist"
 import type { EntityId } from "@/lib/entity-sources"
 import { resolveReportDocument } from "@/lib/report-resolver"
 import { isDbEnabled, sql } from "@/lib/db"
+import { isProductionDeployment } from "@/lib/environment"
 import { getSearchCache, setSearchCache } from "@/lib/market-research-memory"
 
 export type SearchResult = {
@@ -134,7 +135,11 @@ export async function searchIndustryReports(
     }
   }
 
-  if (!isDbEnabled() && process.env.NODE_ENV === "production") {
+  // Production insists on persistence; a dev deployment runs without it and
+  // simply does not cache. Keyed on the deployment rather than NODE_ENV, which
+  // is "production" for preview builds too and would refuse the search
+  // outright on a dev environment that deliberately has no database.
+  if (!isDbEnabled() && isProductionDeployment()) {
     return {
       ok: false,
       error: "Database is required in production. Configure POSTGRES_URL for Market Research search persistence.",

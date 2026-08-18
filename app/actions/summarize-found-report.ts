@@ -7,6 +7,7 @@ import { reportIdFromUrl } from "@/lib/report-id"
 import { resolveReportDocument } from "@/lib/report-resolver"
 import type { EntityId } from "@/lib/entity-sources"
 import { isDbEnabled, sql } from "@/lib/db"
+import { isProductionDeployment } from "@/lib/environment"
 import { setSummaryByHash } from "@/lib/market-research-memory"
 import { upsertResearchReport } from "@/app/ingestion/storage/upsert-report"
 import type { ReportSummaryEntry } from "./fetch-report-summaries"
@@ -29,7 +30,9 @@ export async function summarizeFoundReport(
     publishedDate?: string
   }
 ): Promise<SummarizeFoundReportResult> {
-  if (!isDbEnabled() && process.env.NODE_ENV === "production") {
+  // See search-industry-reports: a dev deployment summarizes without persisting
+  // rather than refusing, since NODE_ENV cannot tell preview from production.
+  if (!isDbEnabled() && isProductionDeployment()) {
     return {
       ok: false,
       error: "Database is required in production. Configure POSTGRES_URL for summary persistence.",

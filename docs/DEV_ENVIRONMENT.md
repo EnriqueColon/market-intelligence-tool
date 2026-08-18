@@ -27,35 +27,34 @@ will fire for `dev`.
 
 ## One-time Vercel setup
 
-### 1. Give the Preview environment its own stores
+### 1. Keep the production stores out of Preview
 
-Both stores fit inside the free tiers this project runs on (Vercel Hobby, Neon Free), but the two
-have different limits and want different treatment.
+The current setup runs the dev environment **without a database or Blob store**. Nothing to create:
+in **Settings → Environment Variables**, scope both `POSTGRES_URL` and `BLOB_READ_WRITE_TOKEN` to
+**Production only**. If either is set to all environments, edit it — that single setting is the
+difference between an isolated dev environment and one quietly writing to real data.
 
-**Postgres — create a separate Neon _project_, not a branch.** Neon Free allows 100 projects, and
-the meaningful allowances (0.5 GB storage, 100 CU-hours of compute per month) are counted
-*per project*. A separate project therefore leaves production's budget untouched, while a branch of
-the production project would draw down the same compute and storage. A branch gives you a
-copy-on-write copy of real data, which is tempting — take it only if dev needs realistic report
-data and you are willing to share the quota.
+This is the same shape as local development, where `.env.local` has no `POSTGRES_URL`. The app
+degrades rather than breaks: `isDbEnabled()` returns false, Market Research search and report
+summarization still run against Google and OpenAI but skip persistence, and cached summaries come
+back empty. No filesystem writes are attempted either, so the read-only Vercel filesystem is not a
+problem.
 
-**Blob — create a second store.** Hobby allows up to 100.
+Adopt real stores later if phase 2 needs them:
 
-Connect each to the project with the **Preview environment selected, and Production cleared**. Then
-confirm in **Settings → Environment Variables** that the production `POSTGRES_URL` and
-`BLOB_READ_WRITE_TOKEN` are scoped to **Production only**; if they are still scoped to all
-environments they will override, or collide with, the dev values.
+- **Postgres** — create a separate Neon *project*, not a branch. Neon Free allows 100 projects, and
+  the allowances that matter (0.5 GB storage, 100 CU-hours per month) are counted *per project*, so
+  a separate project leaves production's budget untouched while a branch would spend it. A branch's
+  advantage is a copy-on-write copy of real report data.
+- **Blob** — create a second store; Hobby allows up to 100. Then run step 5 to create the tables.
 
-> **The one thing that can still hurt production on Hobby.** Separate Blob stores isolate the
+> **If you do add a Blob store, note what it does not isolate.** Separate stores isolate the
 > *files*, but not the *quota* — storage, reads and writes are pooled across every store on the
-> account, and the monthly allowance is 1 GB, 10,000 simple operations and only 2,000 advanced
-> operations (writes, modifications, listings). Exceeding it does not incur a charge; it revokes
-> Blob access until the 30-day window rolls over, which would take the production report library
-> offline. So do not bulk-test uploads or run listing loops in dev. Nothing in the code can guard
-> this, because the limit is enforced at the account level.
-
-Neon computes suspend after five minutes of inactivity on the free plan, so expect a short cold
-start on the dev database's first query.
+> account, and the monthly Hobby allowance is 1 GB, 10,000 simple operations and only 2,000
+> advanced operations (writes, modifications, listings). Exceeding it does not incur a charge; it
+> revokes Blob access until the 30-day window rolls over, which would take the production report
+> library offline. So do not bulk-test uploads or run listing loops in dev. Nothing in the code can
+> guard this, because Vercel enforces it at the account level.
 
 ### 2. Declare the Preview environment as isolated
 
@@ -65,9 +64,10 @@ Add to the **Preview** scope:
 DATA_ENVIRONMENT=isolated
 ```
 
-Until this is set, the two delete routes above return `403` on any non-production deployment. The
-default is deliberate: Vercel copies variables into Preview automatically, so absence of this flag
-most likely means the isolation was never completed. See `lib/environment.ts`.
+This asserts that step 1 was actually done. Until it is set, the two delete routes above return
+`403` on any non-production deployment. The default is deliberate: Vercel copies variables into
+Preview automatically, so absence of this flag most likely means the isolation was never completed.
+See `lib/environment.ts`.
 
 Leave it unset in Production. Production is identified by `VERCEL_ENV`, not by this flag.
 
@@ -96,21 +96,32 @@ New Vercel projects protect preview deployments behind Vercel account authentica
 Vercel access, disable that protection or issue a bypass token — the app's own password gate still
 applies underneath.
 
-### 5. Create the tables in the dev database
+### 5. Confirm the isolation
 
-A new Postgres database is empty. The init route sits behind the password gate, so it needs both the
-admin token and the auth cookie:
+Redeploy `dev` first — Vercel only picks up environment variables on a new build. Then, with no
+database wired, this should report `"vercelEnv":"preview"` and
+`"hasBlobReadWriteToken":false`:
 
 ```bash
 DEV_URL="https://market-intelligence-tool-git-dev-<your-scope>.vercel.app"
 
+curl -H "Cookie: auth_token=$COOKIE_SECRET" "$DEV_URL/api/research/blob-health"
+```
+
+An HTML redirect instead of JSON means `COOKIE_SECRET` is missing from Preview or does not match.
+A `blobTokenMasked` value identical to production's means step 1 was not applied and dev is still
+writing to the production store.
+
+**Only if you later add a database (step 1):** it starts empty, so create the tables. This route
+sits behind the password gate, so it needs the admin token *and* the auth cookie:
+
+```bash
 curl -X POST "$DEV_URL/api/admin/init-db" \
   -H "x-admin-init-token: $ADMIN_INIT_TOKEN" \
   -H "Cookie: auth_token=$COOKIE_SECRET"
 ```
 
-Expect `{"ok":true}`. `{"error":"POSTGRES_URL is not configured"}` means step 1 did not apply to
-Preview; an HTML redirect means the cookie is missing or does not match `COOKIE_SECRET`.
+Expect `{"ok":true}`.
 
 ## Day-to-day workflow
 
