@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { sql } from "@/lib/db"
+import { assertSafeToMutateProductionData, ProductionDataWriteError } from "@/lib/environment"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -13,6 +14,9 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    // Bulk and irreversible: removes every manually uploaded report at once.
+    assertSafeToMutateProductionData("bulk-delete manually uploaded research reports")
+
     const result = await sql<{ id: number }>`
       DELETE FROM research_reports
       WHERE producer = 'manual'
@@ -25,6 +29,9 @@ export async function POST(request: NextRequest) {
       deleted: result.rowCount || 0,
     })
   } catch (err) {
+    if (err instanceof ProductionDataWriteError) {
+      return NextResponse.json({ ok: false, error: err.message }, { status: 403 })
+    }
     console.error("[research-delete-test-reports] Failed:", err)
     return NextResponse.json(
       { ok: false, error: err instanceof Error ? err.message : "Failed to delete test reports." },

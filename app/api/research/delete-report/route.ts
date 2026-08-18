@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { sql } from "@/lib/db"
+import { assertSafeToMutateProductionData, ProductionDataWriteError } from "@/lib/environment"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -17,6 +18,8 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    assertSafeToMutateProductionData("delete a research report")
+
     const body = (await request.json()) as DeleteReportBody
     const id = Number(body?.id)
     if (!Number.isFinite(id) || id <= 0) {
@@ -36,6 +39,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ ok: true, id: row.id, title: row.title })
   } catch (err) {
+    if (err instanceof ProductionDataWriteError) {
+      return NextResponse.json({ ok: false, error: err.message }, { status: 403 })
+    }
     console.error("[research-delete-report] Failed:", err)
     return NextResponse.json(
       { ok: false, error: err instanceof Error ? err.message : "Failed to delete report." },

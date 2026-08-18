@@ -15,7 +15,8 @@
     "test:allowlist": "node --test --experimental-strip-types lib/domain-allowlist.test.ts",
     "test:metrics": "node --test --experimental-strip-types lib/format/metrics.test.ts",
     "test:memo-evidence": "node --test --experimental-strip-types lib/memo-evidence.test.ts",
-    "test:verified-metrics": "node --test --experimental-strip-types lib/verified-metrics.test.ts"
+    "test:verified-metrics": "node --test --experimental-strip-types lib/verified-metrics.test.ts",
+    "test:environment": "node --test --experimental-strip-types lib/environment.test.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
