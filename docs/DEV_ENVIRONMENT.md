@@ -29,13 +29,33 @@ will fire for `dev`.
 
 ### 1. Give the Preview environment its own stores
 
-In **Storage**, create a second Postgres database and a second Blob store (suggested names
-`market-intel-dev-postgres` and `market-intel-dev-blob`). When connecting each to the project,
-**select the Preview environment only**.
+Both stores fit inside the free tiers this project runs on (Vercel Hobby, Neon Free), but the two
+have different limits and want different treatment.
 
-Then confirm in **Settings → Environment Variables** that the production `POSTGRES_URL` and
-`BLOB_READ_WRITE_TOKEN` are scoped to **Production only**. If they are still scoped to all
+**Postgres — create a separate Neon _project_, not a branch.** Neon Free allows 100 projects, and
+the meaningful allowances (0.5 GB storage, 100 CU-hours of compute per month) are counted
+*per project*. A separate project therefore leaves production's budget untouched, while a branch of
+the production project would draw down the same compute and storage. A branch gives you a
+copy-on-write copy of real data, which is tempting — take it only if dev needs realistic report
+data and you are willing to share the quota.
+
+**Blob — create a second store.** Hobby allows up to 100.
+
+Connect each to the project with the **Preview environment selected, and Production cleared**. Then
+confirm in **Settings → Environment Variables** that the production `POSTGRES_URL` and
+`BLOB_READ_WRITE_TOKEN` are scoped to **Production only**; if they are still scoped to all
 environments they will override, or collide with, the dev values.
+
+> **The one thing that can still hurt production on Hobby.** Separate Blob stores isolate the
+> *files*, but not the *quota* — storage, reads and writes are pooled across every store on the
+> account, and the monthly allowance is 1 GB, 10,000 simple operations and only 2,000 advanced
+> operations (writes, modifications, listings). Exceeding it does not incur a charge; it revokes
+> Blob access until the 30-day window rolls over, which would take the production report library
+> offline. So do not bulk-test uploads or run listing loops in dev. Nothing in the code can guard
+> this, because the limit is enforced at the account level.
+
+Neon computes suspend after five minutes of inactivity on the free plan, so expect a short cold
+start on the dev database's first query.
 
 ### 2. Declare the Preview environment as isolated
 
