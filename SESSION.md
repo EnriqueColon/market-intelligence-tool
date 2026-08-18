@@ -138,3 +138,19 @@ version. It was 63 commits stale and conflicted in five files.
   `data/competitor_surveillance.sqlite*`, `data/README-aom-import.md`,
   `scripts/import_aom_to_sqlite.py`, `.claude/`, `.DS_Store`.
 - **Phase two is unscoped.** No decision yet on what to build first.
+
+### Surfaced by the codebase inventory, not yet acted on
+
+A full architecture inventory was run to write `confluence.md`. It turned up four things worth
+scheduling, none of them urgent:
+
+- **`CRON_SECRET` gates the cron routes only when it is set.** If it were ever unset in Vercel, both
+  warm endpoints would be publicly callable. Worth confirming it is present in Production.
+- **Hardcoded figures presented as current data** — `fetch-market-research.ts` carries static Miami
+  office/industrial metrics labelled "2025 YTD" and a hardcoded `CENSUS_YEAR = 2022`. The same class
+  of problem as the fabricated Key Signals figures, just stale rather than invented.
+- **Substantial orphaned UI** — the participants-intel components, `national-view`, `florida-view`,
+  `miami-view`, `market-research-library`, `market-research-reports` and `competitor-analysis` are not
+  mounted anywhere. Notably this means the Blob upload library has no live UI.
+- **The daily cron warms caches for those orphaned features** (KPI, insights, price index,
+  transaction volume), spending OpenAI and FRED calls every morning on views nobody can reach.

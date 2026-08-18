@@ -58,10 +58,10 @@ tab is developed on `dev` before being exposed in production.
 
 | Tab | Feature key | What it shows |
 | --- | --- | --- |
-| News | `news` | Industry Outlook / Key Signals memo, Industry-Specific News, General Finance News |
-| Market Analytics | `market-analytics` | Bank and CRE metrics, FDIC-driven institution data, charts, PDF/CSV export |
-| Market Research | `market-research` | Research report feed and library, AI summaries, investment memo generation |
-| Legal | `legal` | AI-generated legal and legislative intelligence feed |
+| News | `news` | Industry Outlook / Key Signals memo (`industry-outlook.tsx`), Industry-Specific News (`public-mentions.tsx`), General Finance News (`investing-business-mentions.tsx`), and an on-demand Article Digest (`article-digest.tsx`) |
+| Market Analytics | `market-analytics` | FDIC bank financials with state filter, institution drawer and export (`market-analytics.tsx`), plus a nested FRED/Census indicator panel (`market-research.tsx`) |
+| Market Research | `market-research` | Live publisher-by-publisher research feed with Postgres-backed archive (`market-research-feed.tsx`) and memo generation (`research-memo-modal.tsx`) |
+| Legal Landscape | `legal` | Three AI-generated sections — Regulatory Watch, Legislative Tracker, Enforcement & Litigation (`legal-updates.tsx`). Despite the name, no LegiScan data is involved |
 
 Production currently runs `ENABLED_TABS=news,market-analytics,market-research` (plus `legal` where
 enabled) — confirm the live value in Vercel rather than trusting this line.
@@ -69,6 +69,12 @@ enabled) — confirm the live value in Vercel rather than trusting this line.
 The news feeds merge all three geographies (national, Florida, Miami) into one list. The region
 selector was removed in `984a361`; the underlying per-region feeds still exist and are fetched
 concurrently, then merged and sorted by access tier and date.
+
+Both news feeds source from Google News RSS queries plus direct publisher RSS (GlobeSt, Bisnow,
+Commercial Observer, The Real Deal, CRE Daily, Trepp, Miami Herald for CRE; CNBC, Reuters, Bloomberg
+for finance), and fall back to the **GDELT DOC 2.0 API** when RSS yields fewer than 15 items. The two
+actions carry near-duplicate fetching logic, so a parsing bug tends to need fixing in both — as
+happened with the CDATA regex.
 
 ## 4. The Industry Outlook / Key Signals pipeline
 
@@ -90,7 +96,11 @@ Flow, in `app/services/industry-outlook/getCachedOutlook.ts`:
      `FRED_API_KEY` appearing in older docs.
 2. **Prompt construction** injects today's date (stops stale quarter references), the retrieved
    sources, and a `VERIFIED MARKET DATA` block the model may quote verbatim.
-3. **Generation** through `lib/openai.ts` with web search enabled.
+3. **Generation** through `lib/openai.ts` (OpenAI **Responses API**) with web search enabled and
+   restricted to `SEARCH_ALLOWED_DOMAINS`. Uses the `fast` tier — `gpt-4.1-mini` by default — with a
+   90s timeout inside a route whose `maxDuration` is 120s. Domain filtering requires a larger model,
+   so `OPENAI_SEARCH_FILTER_MODEL` defaults to `gpt-4.1`; if the filtered call 400s, `lib/openai.ts`
+   retries unrestricted.
 4. **Post-processing:**
    - `stripInlineCitations` removes citation markup but *preserves publisher domains*, since the
      evidence guard needs attribution to survive.
@@ -99,8 +109,12 @@ Flow, in `app/services/industry-outlook/getCachedOutlook.ts`:
      bullets do not delete body bullets.
    - `ensureKeySignalFigures` guarantees at least three figure-bearing summary bullets, backfilling
      from verified metrics when the model underdelivers.
-5. **Fallback memo** if generation fails, containing measured figures and a sentinel phrase so
-   fallbacks are detectable in logs.
+5. **Usability check** — `hasUsableContent()` requires 200+ characters, an "Executive Summary"
+   heading, and at least 3 of the 5 expected headings.
+6. **Fallback memo** if generation fails, containing the measured figures plus the sentinel phrase
+   *"could not complete a full generated outlook"*, which the client detects. Failures **throw inside
+   the cache function so they are never cached**, meaning the next request retries rather than
+   serving a bad memo all day.
 
 Health is observable in the warm-cache response: `verifiedMetrics`, `verifiedBulletsInserted`,
 `keySignalFigures`, `droppedUnsourced`, `droppedDenied`. **A `keySignalFigures` of 0 means the
@@ -129,12 +143,18 @@ before trusting it.
 
 Generated content is expensive, so nearly everything is cached for a day.
 
-- **Server:** `unstable_cache` keyed by a version string plus the current day, e.g.
-  `["industry-outlook-shared-v12", day]`. **Bumping the version string is how you force
-  regeneration in production** — the standard tool after fixing prompt or pipeline behaviour.
-- **Client:** `sessionStorage`, with its own version constants (e.g. `public_mentions:v4`,
-  `investing_news:v2`). Bump these when the shape of cached data changes, or returning users get
-  stale structures.
+- **Server:** `unstable_cache` keyed by a version string plus the current Eastern-time day.
+  **Bumping the version string is how you force regeneration in production** — the standard tool
+  after fixing prompt or pipeline behaviour.
+
+  | Key | Contents |
+  | --- | --- |
+  | `industry-outlook-shared-v12` | The generated memo |
+  | `industry-outlook-verified-metrics-v1` | Fetched FRED/FDIC figures |
+
+- **Client:** `sessionStorage`, with its own version constants — `industry-outlook:v8`,
+  `public_mentions:v4`, `investing_news:v2`. Bump these when the shape of cached data changes, or
+  returning users get stale structures. There is also a same-day in-memory singleton for the memo.
 - **Postgres:** `research_search_cache`, `research_feed_cache`, `research_summaries` persist across
   deployments.
 
@@ -171,9 +191,10 @@ and the symptom is a slow tool rather than an error.
 | `research_reports` | `app/ingestion/storage/upsert-report.ts`, deleted by `delete-report` / `delete-test-reports` |
 | `research_summaries` | `summarize-report`, `research-feed.ts`, `summarize-found-report.ts` |
 | `research_search_cache` | `search-industry-reports.ts` |
-| `research_feed_cache` | `api/research/feed-reports` |
-| `industry_outlook_cache` | `fetch-industry-outlook.ts` |
-| `firm`, `firm_alias`, `firm_entity` | `lib/participant-intel.ts`, `participant-lookup.ts` (SQLite-backed) |
+| `research_feed_cache` | `api/research/feed-reports` (auto-creates itself) |
+
+Those four are the whole Postgres surface. `industry_outlook_cache` and the `firm` / `firm_alias` /
+`firm_entity` tables are **SQLite, not Postgres** — see the local-files section below.
 
 Tables are created by `POST /api/admin/init-db` (header `x-admin-init-token`). Note this route sits
 *behind* the password gate, so it needs the auth cookie as well as the token.
@@ -187,9 +208,18 @@ because the store is private. All eight call sites check for the token at reques
 clean JSON error, so a missing token degrades rather than crashing. **Nothing deletes blobs** — only
 `put`.
 
-**Local SQLite and JSON files** — `app/ingestion/competitor_surveillance/`, `lib/participant-intel.ts`
-and `data/*.sqlite`. Vercel's filesystem is read-only apart from `/tmp` and is not durable across
-deployments, so **these are effectively local-development-only**. Do not add runtime writes to them.
+**Local SQLite and JSON files.** Vercel's filesystem is read-only apart from `/tmp` and is not
+durable across deployments, so **all of these are effectively local-development-only**. Do not add
+runtime writes to them.
+
+| Path | Purpose | Written by |
+| --- | --- | --- |
+| `data/aom.sqlite` | Miami-Dade AOM mortgage events | `scripts/import_aom_to_sqlite.py` |
+| `data/competitor_surveillance.sqlite` | Competitor events | `app/ingestion/competitor_surveillance/` |
+| `data/participant_intel.sqlite` | `firm`, `firm_alias`, `firm_entity` lookup | `lib/participant-intel.ts`, `participant-lookup.ts` |
+| `data/ingestion.sqlite` | FFIEC / Census ingested data | `app/ingestion/` |
+| `data/industry_outlook_cache.sqlite` / `.json` | Legacy outlook cache | `fetch-industry-outlook.ts` (dead path) |
+| `data/watchlist.json`, `watchlist-aliases.json` | Competitor watchlist | `app/actions/watchlist.ts` |
 
 ## 7. Auth
 
@@ -220,20 +250,20 @@ Every variable referenced in code. Scope matters: `POSTGRES_URL` and `BLOB_READ_
 | `OPENAI_API_KEY` | All AI features fail: outlook, briefs, summaries, legal feed |
 | `APP_PASSWORD` | Nobody can log in |
 | `COOKIE_SECRET` | Infinite redirect loop to `/login` |
-| `CRON_SECRET` | Cron and post-deploy warming return 401; tool becomes slow |
+| `CRON_SECRET` | **Security-relevant: the cron routes only check a bearer token when this is set, so if it is unset they are publicly callable.** A mismatch between GitHub and Vercel instead returns 401 and the tool becomes slow |
 | `POSTGRES_URL` | Research persistence off; features degrade (intended on dev) |
 | `BLOB_READ_WRITE_TOKEN` | Report uploads and PDF serving fail (intended on dev) |
 | `DATA_ENVIRONMENT` | Assumed to be production data; destructive routes refuse on non-production |
 | `ENABLED_TABS` | **No tabs render in production.** Ignored outside production |
 | `GOOGLE_API_KEY`, `GOOGLE_CSE_ID` | Market Research search unavailable |
+| `GOOGLE_CSE_API_KEY` | Separate key, used only by CBRE ingestion (`app/ingestion/sources/cbre-cse.ts`) |
 | `ADMIN_INIT_TOKEN` | Cannot initialize database tables |
 | `ADMIN_UPLOAD_TOKEN` | Cannot upload or delete reports |
 | `INGESTION_TOKEN` | Ingestion endpoint unavailable |
-| `ELEMENTIX_API_KEY` | AOM / participants data unavailable |
-| `LEGISCAN_API_KEY` | Legislative signals unavailable |
-| `CENSUS_API_KEY`, `FFIEC_USER_ID`, `FFIEC_TOKEN` | Corresponding analytics degraded |
-| `NEXT_PUBLIC_FDIC_API_KEY`, `FDIC_API_URL`, `FDIC_API_KEY` | FDIC access; the public API works keyless |
-| `FRED_API_KEY` | **Not required.** Verified metrics use FRED's keyless CSV endpoint |
+| `ELEMENTIX_API_KEY` | Participants-intel API returns null (feeds orphaned UI — see §10) |
+| `CENSUS_API_KEY`, `FFIEC_USER_ID`, `FFIEC_TOKEN` | Corresponding analytics sections report `configured: false` |
+| `NEXT_PUBLIC_FDIC_API_KEY`, `FDIC_API_URL`, `FDIC_API_KEY` | All optional; anonymous FDIC access works today |
+| `FRED_API_KEY` | **Not needed by the outlook**, which uses FRED's keyless CSV endpoint. Still read by `fetch-kpi-data.ts` and `fetch-cre-data.ts`, whose FRED paths return null without it (KPI then falls back to an AI-written narrative) |
 | `APP_URL`, `NEXT_PUBLIC_APP_URL` | Fallback base URL for server-side PDF rendering |
 | `OPENAI_FAST_MODEL`, `OPENAI_SMART_MODEL`, `OPENAI_SUMMARY_MODEL`, `OPENAI_SUMMARY_PDF_MODEL`, `OPENAI_SEARCH_FILTER_MODEL` | Model overrides; defaults apply if unset |
 | `CBRE_COVEO_SEARCH_URL` | Legacy CBRE ingestion |
@@ -243,7 +273,12 @@ Every variable referenced in code. Scope matters: `POSTGRES_URL` and `BLOB_READ_
 
 Historical note: the project migrated OpenAI → Perplexity → Claude → OpenAI. `ANTHROPIC_API_KEY`,
 `PERPLEXITY_API_KEY`, `RESEND_API_KEY`, `NEWS_*` and `NEWS_SEND_TOKEN` may linger in Vercel or
-`.env.local` but are **no longer read by any code**.
+`.env.local` but are **no longer read by any code**. `lib/claude.ts` no longer exists; comments
+elsewhere still mention Claude and are stale.
+
+`LEGISCAN_API_KEY` is listed in `DEPLOYMENT_CHECKLIST.md` but **is not read anywhere in the code**.
+The Legal tab is entirely OpenAI-generated, not LegiScan-sourced. Conversely, that checklist omits
+`APP_PASSWORD`, `COOKIE_SECRET`, `BLOB_READ_WRITE_TOKEN` and `DATA_ENVIRONMENT`; prefer this table.
 
 ## 9. Build and tests
 
@@ -261,7 +296,11 @@ Tests use Node's built-in runner with `--experimental-strip-types`, which requir
 modules **with the `.ts` extension** — `import { x } from "./y.ts"`. TypeScript flags this as an
 error, which is expected and harmless.
 
-`next.config` sets **`typescript.ignoreBuildErrors: true`**. The repo has pre-existing type errors
+There is no aggregate `npm test`; each suite runs individually. `scripts/pdf_extraction.test.js`
+exists outside these scripts.
+
+`next.config.mjs` sets **`typescript.ignoreBuildErrors: true`**, plus `images.unoptimized: true` and
+`serverExternalPackages: ["better-sqlite3"]`. The repo has pre-existing type errors
 across roughly a dozen files, so `npx tsc --noEmit` is noisy and the build does not gate on it. When
 changing code, check that *your* files are clean rather than expecting a clean overall run.
 
@@ -277,10 +316,28 @@ changing code, check that *your* files are clean rather than expecting a clean o
   programmatic guard did.
 - **Cache keys hide fixes.** After changing generation behaviour, bump the cache version or
   production will serve yesterday's output.
-- **Participants-intel code** (`components/market-participants-intel.tsx`,
-  `components/participants-intel/*`, `app/api/participants-intel/`) survives, but the Market
-  Participants tab was removed in `259fa20` and has no feature flag in `app/page.tsx`. Treat as
-  likely-orphaned and verify reachability before investing in it.
+- **A lot of orphaned UI.** None of these are mounted from `app/page.tsx` or the dashboard:
+  `market-participants-intel.tsx` and `components/participants-intel/*` (the tab was removed in
+  `259fa20`), `national-view.tsx`, `florida-view.tsx`, `miami-view.tsx`, `market-research-library.tsx`,
+  `market-research-reports.tsx`, `competitor-analysis.tsx`. Confirm reachability before investing
+  effort in any of them. Note the admin upload library is in this list, so the Blob upload path has
+  no live UI even though its API routes work.
+- **The daily cron still warms caches for orphaned features** — KPI, insights, price index and
+  transaction volume are warmed by `warm-cache` but only consumed by unmounted views. That is
+  needless OpenAI and FRED usage every morning.
+- **Hardcoded figures presented as data.** `fetch-market-research.ts` contains static Miami
+  office/industrial metrics labelled "2025 YTD" (around L708–835) and a hardcoded `CENSUS_YEAR = 2022`.
+  Given the effort spent eliminating fabricated numbers from the outlook, these deserve the same
+  scrutiny — they are stale rather than invented, but they read as current to a user.
+- **Dead code:** `app/actions/fetch-industry-outlook.ts` (superseded by `getCachedOutlook.ts`, still
+  writes local SQLite/JSON), `app/actions/fetch-public-mention-summary.ts` (no importers), and
+  `fetchMiamiIndustrialReport()` (no callers).
+- **Two OpenAI integration styles** coexist: the Responses API via `lib/openai.ts`, and direct Chat
+  Completions in `generate-research-memo.ts` (hardcoded `gpt-4o`), `lib/report-summarizer.ts`,
+  `lib/report/interpretation.ts` and `generate-analyst-narrative.ts`. Only the first honours the
+  shared timeout and citation-stripping logic.
+- **The post-deploy workflow can report a false failure.** Its curl caps at 120s while the
+  warm-cache route allows 300s, so a slow warm shows as a CI failure even though the route completes.
 - **`app/api/cbre-automate/route.ts`** intentionally returns 501 on Vercel; it spawns a local
   process.
 - **Playwright** is used by `app/api/report/market-analytics-pdf/route.ts`, which makes that route
