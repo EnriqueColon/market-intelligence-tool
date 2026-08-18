@@ -1,0 +1,40 @@
+---
+description: Required end-of-session documentation and branch discipline for this project
+alwaysApply: true
+---
+
+# End of every session, update three files
+
+Do this before ending a session in which anything was committed. Do not wait to be asked.
+
+1. **`SESSION.md`** — add a new dated entry at the top. Cover what changed and *why*, the resulting
+   state, and what is still open. Write it for someone who was not present. Carry forward any open
+   item that is still open; delete ones that were resolved.
+2. **`ROLLBACK.md`** — add every new commit to the `dev` or production table with its short SHA,
+   date and summary. Update the "Current state" table. If a commit is a sensible rollback target or
+   a known-bad point, note it under "Known-good checkpoints".
+3. **`confluence.md`** — only where behaviour actually changed. Update the affected section, plus
+   the env var table, cache-key table, or data-source table if those moved. It is a maintenance
+   reference, not a changelog: describe how the system works now, not what changed.
+
+Verify SHAs with `git log --format='%h|%ci|%s'` rather than writing them from memory.
+
+# Branch discipline
+
+- Production is `main`, deployed automatically on push, and is in active use.
+- Development happens on `dev`, which deploys as an isolated Vercel preview.
+- Never push feature work directly to `main`. Ship with `git checkout main && git merge dev`.
+- Do not commit unrelated files. This repo usually carries uncommitted churn in
+  `data/*.sqlite*`, `scripts/import_aom_to_sqlite.py` and `.DS_Store` — leave it alone.
+
+# Environment detection
+
+Never use `process.env.NODE_ENV` to detect production. Vercel sets it to `"production"` on preview
+builds too, so a dev deployment is indistinguishable from the live tool. Use `lib/environment.ts`:
+
+```ts
+import { isProductionDeployment, assertSafeToMutateProductionData } from "@/lib/environment"
+```
+
+Call `assertSafeToMutateProductionData("...")` before any irreversible write, and map the thrown
+`ProductionDataWriteError` to a 403. See `docs/DEV_ENVIRONMENT.md`.
