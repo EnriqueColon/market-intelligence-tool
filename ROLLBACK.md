@@ -8,7 +8,7 @@ end of every session, alongside `SESSION.md` and `confluence.md`.
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
 | `main` | `e8bf8ad` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `e8bf8ad` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `dev` | `5bb9074` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 Production deploys automatically on every push to `main`. `dev` deploys as a Vercel preview on every
 push. Crons run only against production, and the post-deploy warm-cache GitHub Action triggers only
@@ -92,8 +92,15 @@ the Market Participants tab.
 
 Not in production. Merge to `main` to ship.
 
-Nothing unmerged. `dev` and `main` are level at `e8bf8ad` as of 2026-08-21; everything that was
-listed here shipped in that merge and now appears under Production commits.
+Documentation only, safe to merge or to leave. `main` sits at `e8bf8ad`; everything that was
+previously listed here shipped in that merge and now appears under Production commits.
+
+| Commit | Date | Summary |
+| --- | --- | --- |
+| `5bb9074` | 08-21 | docs: record verified Market Analytics data faults and correct the reference |
+
+Plus the immediately following commit, which only adds this row — its SHA cannot be written into the
+commit that contains it.
 
 ---
 
