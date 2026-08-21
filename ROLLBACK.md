@@ -7,8 +7,8 @@ end of every session, alongside `SESSION.md` and `confluence.md`.
 
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
-| `main` | `eabf088` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `908d083` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `main` | `74807d8` | Production | https://market-intelligence-tool-gilt.vercel.app |
+| `dev` | `74807d8` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 Production deploys automatically on every push to `main`. `dev` deploys as a Vercel preview on every
 push. Crons run only against production, and the post-deploy warm-cache GitHub Action triggers only
@@ -66,7 +66,8 @@ git push --force-with-lease origin dev
 
 | Commit | Date | Why it is a safe target |
 | --- | --- | --- |
-| `eabf088` | 2026-08-17 | Current production. Key Signals verified carrying 5 sourced figures. |
+| `74807d8` | 2026-08-21 | Current production. Sessions last a year and renew on use. |
+| `eabf088` | 2026-08-17 | Last commit before the isolated dev environment and the year-long session reached production. Roll back here to restore the seven-day login expiry. |
 | `2191ff3` | 2026-08-17 | Last commit before the verified-metrics pipeline. Key Signals carried **no** figures but nothing fabricated. |
 | `cf9e8a2` | 2026-08-17 | Before the fabricated-statistics work began. Known to serve invented figures — avoid unless isolating that work. |
 | `33c3615` | 2026-07-07 | End of the OpenAI migration, stable for ~6 weeks. Predates all UI removals. |
@@ -90,22 +91,25 @@ the Market Participants tab.
 
 Not in production. Merge to `main` to ship.
 
-| Commit | Date | Summary |
-| --- | --- | --- |
-| `908d083` | 2026-08-18 | fix: let a database-less dev deployment degrade instead of refusing |
-| `27a00b8` | 2026-08-18 | docs: record free-tier constraints for the dev environment stores |
-| `255828f` | 2026-08-17 | chore: add isolated dev environment on a long-lived dev branch |
+Nothing unmerged. `dev` and `main` are level at `74807d8` as of 2026-08-21; everything that was
+listed here shipped in that merge and now appears under Production commits.
 
 ---
 
 ## Production commits
 
-Complete history of `main`, newest first. 125 commits, first on 2026-03-01.
+Complete history of `main`, newest first. 131 commits, first on 2026-03-01.
 
-### 2026-08 — data accuracy and UI cleanup
+### 2026-08 — sessions, dev environment, data accuracy and UI cleanup
 
 | Commit | Date | Summary |
 | --- | --- | --- |
+| `74807d8` | 08-21 | feat: keep users signed in instead of expiring the session weekly |
+| `43fb6dd` | 08-18 | docs: correct the technical reference against a full codebase inventory |
+| `6263857` | 08-18 | docs: add session, rollback and technical reference records |
+| `908d083` | 08-18 | fix: let a database-less dev deployment degrade instead of refusing |
+| `27a00b8` | 08-18 | docs: record free-tier constraints for the dev environment stores |
+| `255828f` | 08-17 | chore: add isolated dev environment on a long-lived dev branch |
 | `eabf088` | 08-17 | feat: anchor Key Signals on measured market data |
 | `2191ff3` | 08-17 | fix: keep content farms out of the outlook memo's sources, not just its figures |
 | `25b6dfb` | 08-17 | fix: enforce sourced figures in the outlook memo instead of asking for them |

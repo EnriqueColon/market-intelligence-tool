@@ -228,6 +228,23 @@ It compares an `auth_token` cookie against `COOKIE_SECRET`; `/api/auth` sets tha
 checking `APP_PASSWORD`. **If `COOKIE_SECRET` is missing the comparison always fails and every
 request redirects to `/login` in a loop** — the classic symptom of an unconfigured environment.
 
+The session is meant to be effectively permanent, so nobody re-types the password during normal use:
+
+- `lib/auth.ts` holds the single definition of the cookie name, options and lifetime. Both the
+  middleware and `/api/auth` use it, so the two can never drift apart.
+- The cookie lives for **one year** (`AUTH_COOKIE_MAX_AGE`). Browsers clamp persistent cookies to
+  400 days, so a longer value would be silently truncated.
+- Middleware **re-issues the cookie on every authenticated page view**, sliding the expiry forward.
+  Anyone who opens the tool at least once a year is never asked to log in again. API responses are
+  deliberately skipped so data fetches do not carry a `Set-Cookie` header.
+- Requesting `/login` while already authenticated redirects to the app instead of showing the form.
+- The `?from=` redirect target is passed through `safeRedirectPath()`, which rejects anything that
+  is not a same-site path (`//host` and `/\host` parse as absolute URLs and are dropped).
+
+Two things still end a session: pressing **Log out** (`DELETE /api/auth`, which expires the cookie),
+and **rotating `COOKIE_SECRET`**, which invalidates every outstanding cookie at once. Rotate that
+variable only when you intend to sign everyone out.
+
 Additional token-protected endpoints, each authenticated by header:
 
 | Endpoint | Header |

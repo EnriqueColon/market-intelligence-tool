@@ -8,6 +8,89 @@ is it in now, and what is still open.
 
 ---
 
+## 2026-08-21
+
+One change, plus the decision to finally ship the dev-environment work that had been sitting on
+`dev` since 2026-08-18.
+
+### Stay signed in (shipped to production)
+
+**Trigger.** Users were being asked for the password again roughly once a week.
+
+**Cause.** `/api/auth` issued the `auth_token` cookie with a seven-day `maxAge` and nothing ever
+renewed it. Regular daily use made no difference: the clock started at login and ran out on
+schedule. Nobody had noticed it was a fixed expiry rather than an idle timeout.
+
+What was done:
+
+- **`lib/auth.ts`** (new) — the single definition of the cookie name, its options and its lifetime.
+  Previously `middleware.ts` and `app/api/auth/route.ts` each hardcoded the name and the flags, so
+  changing one without the other was a silent way to break the gate.
+- **One-year lifetime** (`AUTH_COOKIE_MAX_AGE`). Not longer, because browsers clamp persistent
+  cookies to 400 days and would truncate anything past that without telling anyone.
+- **Sliding expiry** — the middleware re-issues the cookie on every authenticated page view, so the
+  expiry keeps moving forward and someone who opens the tool at least once a year is never asked
+  again. API responses are deliberately excluded so ordinary data fetches carry no `Set-Cookie`.
+- **`/login` while signed in** now redirects into the app instead of presenting the form again.
+- **`?from=` is validated** through `safeRedirectPath()` in both the middleware and the login page.
+  It previously accepted `//evil.com`, which the URL parser reads as an absolute address, so a
+  crafted login link could have bounced someone off-site immediately after they authenticated. Not
+  known to have been exploited; found while touching the redirect.
+
+**Verified against a local dev server**, not just by reading the code: login issued a cookie
+expiring Aug 2027; a page view twelve seconds later moved the expiry forward by exactly twelve
+seconds, which is the sliding renewal working; a wrong password still returned 401 with no cookie;
+an API call returned no `Set-Cookie`; `/login` with a valid cookie redirected to `/`;
+`?from=//evil.com` redirected to `/` rather than off-site; and Log out still cleared the cookie and
+sent the browser back to the login screen.
+
+**Existing sessions were not disrupted.** Anyone still holding a seven-day cookie has it silently
+upgraded to the one-year one on their next page view.
+
+Commit: `74807d8`.
+
+### Merging `dev` into production
+
+Shipping the above meant shipping the five commits that had accumulated on `dev`: the isolated dev
+environment, the database-less degradation fix, and the documentation set.
+
+This was checked rather than assumed. Every one of those changes is keyed on
+`isProductionDeployment()`, which returns true on production, so all of them are no-ops there:
+`lib/features.ts` still reads `ENABLED_TABS`, `search-industry-reports.ts` still insists on a
+database, and `assertSafeToMutateProductionData()` returns immediately on the first line without
+blocking a legitimate delete. The only behavioural change reaching users is the auth cookie.
+
+### Current status
+
+- **Production** — `main` at `74807d8`. Users stay signed in for a year of continuous use.
+- **Dev** — `dev` at `74807d8`, level with `main` for the first time since 2026-08-17.
+
+### Open items
+
+Carried forward from the previous session, all still open:
+
+- **`Needs Attention` flags** on several Postgres environment variables in Vercel, never
+  investigated. May affect the live research library. Still the highest-value loose end.
+- **The dev URL used for verification is build-specific** and changes every push; the stable branch
+  alias is still unrecorded.
+- **`.env.local` still holds the production `BLOB_READ_WRITE_TOKEN`**, so local development writes
+  to the production Blob store.
+- **Pre-existing uncommitted changes**, deliberately left alone: `data/competitor_surveillance.sqlite*`,
+  `data/README-aom-import.md`, `scripts/import_aom_to_sqlite.py`, `.claude/`, `.DS_Store`.
+- **Phase two is unscoped.**
+- The four items surfaced by the codebase inventory (see the previous entry) remain unaddressed.
+
+New this session:
+
+- **`COOKIE_SECRET` is now the only lever that signs everyone out**, and doing so is silent — there
+  is no notice to users and no staged rollout. Rotate it only deliberately.
+- **The password is still shared and compared with `!==`**, so it is neither per-user nor
+  constant-time. A year-long session raises the value of a leaked cookie, though the cookie is
+  `httpOnly`, `secure` and `sameSite=lax`. Per-user accounts remain the real fix if the audience
+  ever grows beyond a trusted group.
+
+---
+
 ## 2026-08-17 → 2026-08-18
 
 Two distinct pieces of work: fixing fabricated statistics in the live tool (shipped to production),
