@@ -60,10 +60,55 @@ This was checked rather than assumed. Every one of those changes is keyed on
 database, and `assertSafeToMutateProductionData()` returns immediately on the first line without
 blocking a legitimate delete. The only behavioural change reaching users is the auth cookie.
 
+### Market Analytics investigation — no code changes
+
+The afternoon was spent understanding the Market Analytics tab before touching it, ahead of scoping
+work for the client (Safe Harbor Capital Partners, a private credit manager buying distressed CRE
+debt). A full audit of the tab was run, and its riskiest claims were then checked against the **live
+FDIC API** rather than accepted. That verification is the valuable part of this session, because it
+overturned two of the audit's conclusions and confirmed a real bug.
+
+**`LNLSDEPR` is not what the app thinks it is — a client-facing number is wrong.** It is labelled
+`Loan Loss Reserve / Total Loans` in `lib/fdic-config.ts` (L60), transformed into `loanLossReserve`,
+and displayed as **Reserve Coverage** in the screening table and **Avg Reserve Coverage** in the
+Cohort Summary. For Seacoast National (CERT 131, Q1 2026) it returns `74.98932`, which matches
+`LNLSNET / DEP` to four decimals: it is the **net loans-to-deposits ratio**. Actual reserve coverage
+is `LNATRES / LNLSNET` = **1.41%**, so the tab overstates it by roughly 53×. The two metrics also
+mean close to opposite things — high reserve coverage is a well-provisioned bank, high
+loans-to-deposits is a loan-heavy illiquid one — and the export's Opportunity Score weights this
+field at 15% *inverted*, so that score is contaminated and arguably sign-flipped. `LNATRES` is
+available from the API and is not currently requested.
+
+**The `CRE / (T1+T2)` column understates concentration.** `lib/fdic-ratio-helpers.ts` derives capital
+from `RBCRWAJ × (0.75 × assets)`, using a constant `RWA_TO_ASSETS_PROXY` in place of real
+risk-weighted assets, and never populates Tier 2 at all (L85). For Seacoast the proxy overstates RWA
+by 12.4%, which overstates capital, which understates the ratio: **394.1% displayed versus 443.0%
+actual**. The error runs in the worst direction for this client, since it under-flags exactly the
+concentrated banks they are hunting. The real fields exist and reconcile exactly —
+`(RBCT1J + RBCT2) / RWAJ` reproduces FDIC's published `RBCRWAJ` of 15.1242%.
+
+**Two audit findings were disproved, both in our favour.** The `P3ASSET`/`P9ASSET` past-due columns
+are computed **correctly**; `P3ASSET` returns 28,187 against 21.1B in assets, so it is plainly a
+dollar amount in thousands and the transformer's treatment is right — only the config comment is
+wrong. And the hardcoded CoStar Miami figures are **not displayed anywhere**, so nobody is
+underwriting off stale numbers (see the correction to `confluence.md`).
+
+Also confirmed: `opportunityScore`, `earningsScore` and `vulnerabilityScore` are hardcoded to `0` in
+the live tab (`market-analytics.tsx` L427–429) while the full scoring logic exists in the export
+path, so the institution drawer displays zeros. The live cohort is 5,000 rows sorted by assets
+descending, which biases it hard toward the largest banks — wrong for a client that buys from Florida
+community banks. And there is **no LTV anywhere**, which is not fixable here: FDIC call reports carry
+no loan-level or collateral data, so LTV needs an external source (CoStar/Reonomy/Trepp are paid;
+Miami-Dade county records are public) or has to stay a post-screen diligence step.
+
+**Nothing was committed and no code was written.** Four options were put to the user for where to
+start; the decision was deferred to Monday 2026-08-24.
+
 ### Current status
 
-- **Production** — `main` at `74807d8`. Users stay signed in for a year of continuous use.
-- **Dev** — `dev` at `74807d8`, level with `main` for the first time since 2026-08-17.
+- **Production** — `main` at `e8bf8ad`. Users stay signed in for a year of continuous use.
+- **Dev** — `dev` at `e8bf8ad`, level with `main` for the first time since 2026-08-17.
+- **Market Analytics work is scoped but not started.** No branch, no commits.
 
 ### Open items
 
@@ -82,6 +127,23 @@ Carried forward from the previous session, all still open:
 
 New this session:
 
+- **Reserve Coverage shows the wrong metric in production**, verified against the live API. This is
+  the highest-priority fix in Market Analytics: it is client-facing, wrong by ~53×, and misleading in
+  direction. Fix is `LNATRES / LNLSNET` with `LNATRES` added to the requested fields.
+- **`CRE / (T1+T2)` understates concentration** because capital is derived from a `0.75 × assets`
+  proxy. Fix is to request `RBCT1J`, `RBCT2` and `RWAJ` and use them directly.
+- **Live-tab scores are hardcoded to 0** while the export computes them. Fix after the two above,
+  since the score consumes the broken reserve field.
+- **The live cohort is large-bank biased** (5,000 rows sorted by assets), so Florida community banks
+  are largely absent from the default view.
+- **The 100%/300% supervisory CRE test is not implemented.** Both ratio prongs are computable from
+  fields already available; the 50%-growth prong needs the FDIC date window widened past its current
+  18 months. Note the guidance excludes owner-occupied CRE, which the app's CRE sum includes, so
+  today's figure is a close proxy rather than the regulatory ratio.
+- **No LTV, and none obtainable from FDIC.** Needs an external data source or a documented decision
+  to treat it as post-screen diligence.
+- **`EQCAP` is requested but returns nothing**, so `CRE / Equity` silently falls back to Tier 1
+  capital rather than equity.
 - **`COOKIE_SECRET` is now the only lever that signs everyone out**, and doing so is silent — there
   is no notice to users and no staged rollout. Rotate it only deliberately.
 - **The password is still shared and compared with `!==`**, so it is neither per-user nor

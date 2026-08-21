@@ -342,10 +342,33 @@ changing code, check that *your* files are clean rather than expecting a clean o
 - **The daily cron still warms caches for orphaned features** — KPI, insights, price index and
   transaction volume are warmed by `warm-cache` but only consumed by unmounted views. That is
   needless OpenAI and FRED usage every morning.
-- **Hardcoded figures presented as data.** `fetch-market-research.ts` contains static Miami
-  office/industrial metrics labelled "2025 YTD" (around L708–835) and a hardcoded `CENSUS_YEAR = 2022`.
-  Given the effort spent eliminating fabricated numbers from the outlook, these deserve the same
-  scrutiny — they are stale rather than invented, but they read as current to a user.
+- **Hardcoded figures, but not user-facing.** `fetch-market-research.ts` contains static Miami
+  office/industrial metrics labelled "2025 YTD" (around L708–835). Verified 2026-08-21:
+  `fetchMiamiIndustrialReport()` has **no callers**, so none of it reaches a user. Delete it rather
+  than refresh it; the hazard is a future session wiring it up without noticing the dates. The
+  hardcoded `CENSUS_YEAR = 2022` is separate and does run, but the Miami ACS metrics it produces are
+  written to `section.miamiDade`, which the UI never reads.
+- **Two FDIC metrics in Market Analytics are wrong.** Both verified against the live API on
+  2026-08-21 and both still present:
+  - `LNLSDEPR` is commented as `Loan Loss Reserve / Total Loans` in `lib/fdic-config.ts` (L60) and
+    rendered as **Reserve Coverage**, but it is the **net loans-to-deposits ratio** — it matches
+    `LNLSNET / DEP` exactly. Real reserve coverage is `LNATRES / LNLSNET`, roughly 53× smaller, and
+    means the opposite thing. The export's Opportunity Score weights this field 15% inverted, so that
+    score is affected too. `LNATRES` is not currently among the requested fields.
+  - `CRE / (T1+T2)` derives capital via `RBCRWAJ × (RWA_TO_ASSETS_PROXY × assets)` in
+    `lib/fdic-ratio-helpers.ts`, with Tier 2 never populated (L85). The 0.75 proxy overstates
+    risk-weighted assets, so the ratio is **understated** — 394% against a true 443% on a sample
+    Florida bank. `RBCT1J`, `RBCT2` and `RWAJ` are available and reconcile exactly to FDIC's own
+    published `RBCRWAJ`.
+
+  For contrast, the `P3ASSET`/`P9ASSET` past-due columns *are* correct despite comments suggesting
+  they are ratios; the fields really are dollar amounts in thousands. Fix the comments, not the code.
+- **Live-tab scores are always zero.** `opportunityScore`, `earningsScore` and `vulnerabilityScore`
+  are hardcoded to `0` in `market-analytics.tsx` (L427–429), so the institution drawer shows zeros.
+  The real computation exists only on the export path, which also paginates the full FDIC result set
+  while the live tab caps at 5,000 rows sorted by assets descending. The same scope can therefore
+  show different institution counts and averages in the tab versus the export, and the live tab
+  under-represents smaller institutions.
 - **Dead code:** `app/actions/fetch-industry-outlook.ts` (superseded by `getCachedOutlook.ts`, still
   writes local SQLite/JSON), `app/actions/fetch-public-mention-summary.ts` (no importers), and
   `fetchMiamiIndustrialReport()` (no callers).
