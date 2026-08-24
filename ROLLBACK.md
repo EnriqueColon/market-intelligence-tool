@@ -8,11 +8,11 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
 | `main` | `e8bf8ad` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `1a21230` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `dev` | `703bed6` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 A SHA here can never name the commit that writes it, so the true head is usually one documentation
 commit further on. Only behavioural commits matter as rollback targets; on `dev` the newest is
-**`1a21230`**.
+**`703bed6`**.
 
 Production deploys automatically on every push to `main`. `dev` deploys as a Vercel preview on every
 push. Crons run only against production, and the post-deploy warm-cache GitHub Action triggers only
@@ -70,6 +70,7 @@ git push --force-with-lease origin dev
 
 | Commit | Date | Why it is a safe target |
 | --- | --- | --- |
+| `703bed6` | 2026-08-24 | Newest behavioural commit on `dev`. Adds the department selector, the department watchlist table and the change-detection engine. Low risk to roll back: the only user-visible addition is the header selector, and nothing else yet reads what it produces. Creates `department_watchlist` on first use, which a rollback leaves behind harmlessly. |
 | `1a21230` | 2026-08-24 | Newest behavioural commit on `dev`. Opportunity Score ranks by percentile rather than min-max, verified on live FDIC data for Florida and national scope; fixes the map's inverted CRE/Capital colouring and the permanently-null Net Income YoY. **Every score changes at this commit** — rolling back past it restores rankings where 55% of the national cohort sits in one 10-point band. |
 | `7286e71` | 2026-08-23 | Last commit before the scoring rework, so scores here are the compressed min-max ones. Reserve Coverage and CRE/(T1+T2) verified figure-by-figure against the live FDIC API. Prefer this over `bb5e5f8`, which renders a Reserve Coverage roughly 30x too large. |
 | `bb5e5f8` | 2026-08-23 | Builds clean; charts, pulse strip and map verified against a running server. Roll back to `016d162` to remove the visual layer entirely. **Serves a wrong Reserve Coverage** — avoid unless isolating the visual layer. |
@@ -103,6 +104,8 @@ Not in production. Merge to `main` to ship.
 
 | Commit | Date | Summary |
 | --- | --- | --- |
+| `703bed6` | 08-24 | feat: give the tool a department and a memory of what changed |
+| `706b895` | 08-24 | docs: list the scoring docs commit in the rollback reference |
 | `0d6169b` | 08-24 | docs: record the scoring rework and the cohort gap it exposed |
 | `1a21230` | 08-24 | fix: rank institutions by percentile so the Opportunity Score discriminates |
 | `eb3d684` | 08-24 | docs: list the document cleanup commit in the rollback reference |

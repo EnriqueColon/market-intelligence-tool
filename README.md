@@ -179,6 +179,7 @@ Each suite runs individually; there is no aggregate `npm test`.
 npm run test:environment      # environment detection
 npm run test:metrics          # number formatting and unit normalisation
 npm run test:opportunity-score # cohort scoring, including outlier compression
+npm run test:institution-change # threshold crossings and deterioration trends
 npm run test:memo-evidence    # the evidence guard
 npm run test:verified-metrics
 npm run test:allowlist
@@ -188,10 +189,15 @@ npm run build                 # next build
 Tests use Node's built-in runner with `--experimental-strip-types`, which requires importing local
 modules **with the `.ts` extension**. TypeScript flags that as an error; it is expected and harmless.
 
-Some checks need live data rather than fixtures. `scripts/verify-score-distribution.mjs [STATE]`
-reports how Opportunity Scores spread across a real FDIC cohort — run it after changing any scoring
-input or weight, and watch the IQR and the most crowded band. A score that puts most of the cohort in
-one 10-point band has stopped ranking.
+Some checks need live data rather than fixtures, because they are calibrations rather than assertions
+— the question is not "is this correct" but "is this still useful":
+
+- `scripts/verify-score-distribution.mjs [STATE]` — how Opportunity Scores spread across a real FDIC
+  cohort. Run after changing any scoring input or weight, and watch the IQR and the most crowded
+  band. A score that puts most of the cohort in one 10-point band has stopped ranking.
+- `scripts/verify-change-detection.mjs [STATE]` — what share of institutions produce a change event.
+  Run after changing any threshold, the trajectory run length, or a materiality level. Fire on
+  everything and it is noise; fire on nothing and the feature is dead.
 
 ---
 

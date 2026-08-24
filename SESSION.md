@@ -8,7 +8,64 @@ is it in now, and what is still open.
 
 ---
 
-## 2026-08-24 (latest) — the Opportunity Score now actually ranks
+## 2026-08-24 (latest) — a department, and a memory of what changed
+
+Phase 1 of `docs/NEXT_VERSION_PLAN.md`, committed as `703bed6` on `dev`. Two capabilities the tool
+has never had. **Neither is surfaced in a view yet** — that is Phase 2, and someone reading this
+expecting visible change will not find any beyond the department selector in the header.
+
+**Department, not user identity.** There are no accounts, only a shared password, so a department is
+all the tool can know and all it needs to know. The cookie is deliberately *not* httpOnly and is read
+server-side in `app/page.tsx`, which had to become `async`; that is what makes the first paint
+correct rather than flashing the wrong view and swapping it. `parseDepartment` returns null for an
+unrecognised value rather than defaulting to one, because "not chosen" is a real state. Anything
+stored against a department is shared by everyone in it, which was agreed as intended.
+
+**The change engine is the more substantial half.** The tool only ever showed the current quarter, so
+it could say an institution *is* stressed but not that it is *becoming* stressed — while already
+fetching nine quarters per institution to draw the sparklines and throwing the history away. It now
+separates **crossings**, where a level meaning something outside this tool has been passed, from
+**trajectories**, where nothing has been crossed but a metric has moved the wrong way for several
+consecutive quarters. The second is the early-warning half and is what the original brief meant by
+"potential opportunities".
+
+Thresholds are labelled by origin rather than presented as uniform: only the 300% CRE-to-capital and
+100% construction figures are supervisory, from the 2006 interagency guidance. The rest are working
+conventions and the code says so.
+
+**Calibrating against live data changed the design.** A first pass produced findings like
+"construction to capital has risen for 3 consecutive quarters, from 2% to 3%" and "noncurrent has
+risen from 0.00% to 0.08%" — true and worthless. A relative-movement filter cannot help when a metric
+starts near zero. Trajectories now also require an absolute materiality level: a floor for rising
+metrics, a ceiling for falling ones, since a reserve slipping from 2.44% to 2.08% is still amply
+reserved. That cut Florida from 30.8% of institutions to 22%, and every remaining sample was a real
+signal. Texas gives 4.1% supervisory crossings and 19.1% trajectories.
+
+**One planning assumption was wrong.** `data/watchlist.json` is not an empty user watchlist to
+migrate to Postgres — it is curated reference data: 45 named distressed-credit firms with aliases and
+categories, used to match news and counterparties. It belongs in the repository as a file. Tracking
+FDIC institutions by CERT is a different concept, and that is what the new `department_watchlist`
+table holds.
+
+**State now.** Builds clean. Nine unit tests cover the change engine, plus the seven on scoring.
+`scripts/verify-change-detection.mjs [STATE]` recalibrates against a live cohort and should be run
+after touching any threshold.
+
+**Still open.**
+
+- **`app/actions/watchlist.ts` is a landmine.** It is orphaned, but if anything ever called it, it
+  would overwrite the curated 45-firm reference file with a flat array of strings and destroy the
+  aliases and categories. It should be deleted; nothing imports it.
+- **Crossings only compare the two most recent quarters**, so a threshold crossed two quarters ago is
+  reported as a trajectory rather than a crossing. That is the correct semantic given there is no
+  per-user "last seen" — with department-level identity, "since last quarter" is the only well-defined
+  answer — but it is a real limitation to remember.
+- `department_watchlist` has no UI yet, and no environment currently has `POSTGRES_URL` on `dev`, so
+  it degrades to `ok: false` there by design and has not been exercised against a real database.
+- The national cohort gap from Phase 0 is unchanged and still belongs to the cached data layer.
+- Phases 2 and 3 untouched.
+
+## 2026-08-24 (earlier) — the Opportunity Score now actually ranks
 
 Start of a larger piece of work. The brief was to make the tool useful to four groups —
 underwriting, investor relations / business development, accounting / finance, and senior executives

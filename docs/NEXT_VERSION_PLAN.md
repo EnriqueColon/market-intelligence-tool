@@ -115,7 +115,22 @@ currently work.
 
 ## Phase 1 — Memory and change
 
-**Status: not started.**
+**Status: done, `703bed6`, 2026-08-24.** Capability only; none of it is surfaced in a view yet,
+which is Phase 2.
+
+One assumption in the original plan was wrong. `data/watchlist.json` is not an empty user watchlist
+to migrate — it is curated reference data, 45 named distressed-credit firms with aliases and
+categories, used to match news and counterparties. It belongs in the repository as a file. Tracking
+FDIC institutions by CERT is a different thing and is what went into Postgres.
+
+`app/actions/watchlist.ts` is a landmine worth removing: it is orphaned, but if anything called it,
+it would overwrite that curated file with a flat array of strings and destroy the aliases and
+categories.
+
+Thresholds in the change engine were calibrated against live cohorts, not chosen by eye. Texas gives
+4.1% of institutions a supervisory crossing and 19.1% a trajectory. Calibration is also what showed
+that a relative movement filter is not enough — a metric starting near zero makes any increase look
+enormous — so trajectories now require an absolute materiality floor as well.
 
 1. **Department selector** in the header beside the scope selector; cookie-persisted and
    server-readable.

@@ -241,6 +241,35 @@ where a *smaller* value means more stress, so it inverts. The map's holds CRE-to
 where a *larger* multiple does, so it must not. While the logic existed as three copies the map
 inherited the table's inversion and coloured the least concentrated banks as the most stressed.
 
+### Change detection
+
+`lib/scoring/institution-change.ts`. Turns the nine quarters already fetched per institution into
+events, which is what separates "this bank is stressed" from "this bank is becoming stressed".
+
+Two kinds, and the distinction carries the meaning:
+
+- **Crossings** — a level was passed that means something outside this tool. Only the 300%
+  CRE-to-capital and 100% construction-to-capital figures are supervisory, from the 2006 interagency
+  guidance on CRE concentrations; the noncurrent, reserve and capital levels are working conventions.
+  `Threshold.supervisory` records which is which, and the interface should not present them as equal.
+- **Trajectories** — nothing crossed, but the metric moved adversely for at least three consecutive
+  quarters. This is the early-warning half.
+
+**Trajectories need an absolute materiality level, not just a relative one**, and this is the part
+that will look like an arbitrary constant later. A relative filter cannot help when a metric starts
+near zero: construction lending rising from 2% to 3% of capital is a 50% relative move and worthless,
+and a reserve slipping from 2.44% to 2.08% is still amply reserved. Rising metrics therefore carry a
+floor and falling metrics a ceiling in `MetricSpec.material`. Removing those reintroduces a flood of
+technically-true findings.
+
+Crossings compare only the two most recent quarters, so a threshold crossed earlier surfaces as a
+trajectory instead. That is deliberate: with department-level rather than per-user identity there is
+no "last seen", so "since last quarter" is the only well-defined answer.
+
+Calibrate with `scripts/verify-change-detection.mjs [STATE]` after changing any threshold, the run
+length, or a materiality level. Texas currently gives 4.1% of institutions a supervisory crossing and
+19.1% a trajectory. Far above those and it is noise; near zero and the feature is dead.
+
 ## 4a. Charts
 
 All Recharts instances share `lib/chart-theme.tsx` — palette, axis, grid, tooltip. Colours are
@@ -350,6 +379,21 @@ and the symptom is a slow tool rather than an error.
 | `research_summaries` | `summarize-report`, `research-feed.ts`, `summarize-found-report.ts` |
 | `research_search_cache` | `search-industry-reports.ts` |
 | `research_feed_cache` | `api/research/feed-reports` (auto-creates itself) |
+| `department_watchlist` | `app/actions/department-watchlist.ts` (auto-creates itself) |
+
+`department_watchlist` holds FDIC institutions a department is tracking, keyed `(department, cert)`.
+It is **not** related to `data/watchlist.json`, which is curated reference data — 45 named
+distressed-credit firms with aliases and categories, loaded by `app/lib/watchlist.ts` and used to
+match news and counterparties. That file belongs in the repository; this table is user state.
+
+Note that `app/actions/watchlist.ts` is orphaned **and dangerous**: it writes a flat array of strings
+to `data/watchlist.json` and would destroy the curated schema if ever called. Nothing imports it. It
+should be deleted rather than reused.
+
+Its functions return `ok: false` with a reason rather than an empty success when Postgres is absent.
+That is deliberate: the previous filesystem watchlist wrote to a path that is read-only on Vercel, so
+it worked locally and silently did nothing in production. An empty success would repeat that failure
+in mirror image, and the interface needs to be able to say persistence is unavailable.
 
 Those four are the whole Postgres surface. `industry_outlook_cache` and the `firm` / `firm_alias` /
 `firm_entity` tables are **SQLite, not Postgres** — see the local-files section below.
@@ -377,7 +421,7 @@ runtime writes to them.
 | `data/participant_intel.sqlite` | `firm`, `firm_alias`, `firm_entity` lookup | `lib/participant-intel.ts`, `participant-lookup.ts` |
 | `data/ingestion.sqlite` | FFIEC / Census ingested data | `app/ingestion/` |
 | `data/industry_outlook_cache.sqlite` / `.json` | Legacy outlook cache | `fetch-industry-outlook.ts` (dead path) |
-| `data/watchlist.json`, `watchlist-aliases.json` | Competitor watchlist | `app/actions/watchlist.ts` |
+| `data/watchlist.json`, `watchlist-aliases.json` | Curated 45-firm reference list | `app/lib/watchlist.ts` (read-only) |
 
 ## 7. Auth
 
@@ -402,6 +446,26 @@ The session is meant to be effectively permanent, so nobody re-types the passwor
 Two things still end a session: pressing **Log out** (`DELETE /api/auth`, which expires the cookie),
 and **rotating `COOKIE_SECRET`**, which invalidates every outstanding cookie at once. Rotate that
 variable only when you intend to sign everyone out.
+
+### Department, and why there is no user identity
+
+There are no accounts. One shared `APP_PASSWORD` means the tool cannot know *who* you are, only which
+department you said you belong to — a `department` cookie defined in `lib/department.ts`, set by the
+header selector and read server-side in `app/page.tsx`.
+
+Three consequences worth holding onto:
+
+- **The cookie is not httpOnly**, unlike `auth_token`. It has to be, because the client writes it and
+  the server reads it during render. Do not copy `AUTH_COOKIE_OPTIONS` for it.
+- **`app/page.tsx` is `async`** solely so it can call `cookies()`. Reading the preference in an effect
+  instead would render the wrong view and then swap it.
+- **Anything keyed by department is shared** by everyone in that department, including watchlists.
+  There is no private workspace and no attribution. This was an explicit product decision, not an
+  oversight: a team's context should survive any one person being away.
+
+`parseDepartment` returns null for an unrecognised value rather than defaulting to one, since "not
+chosen" is a real state and guessing would put someone in the wrong view without telling them.
+Middleware ignores this cookie entirely; it only ever reads and re-issues `auth_token`.
 
 Additional token-protected endpoints, each authenticated by header:
 
