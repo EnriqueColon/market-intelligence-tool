@@ -105,6 +105,7 @@ Not in production. Merge to `main` to ship.
 
 | Commit | Date | Summary |
 | --- | --- | --- |
+| `5de965e` | 08-24 | docs: record the Executive Brief and the ranking choice behind it |
 | `1162934` | 08-24 | feat: add the Executive Brief lens |
 | `3a320b2` | 08-24 | docs: list the Phase 1 docs commit in the rollback reference |
 | `cfa6995` | 08-24 | docs: record Phase 1 and the calibration that shaped it |
