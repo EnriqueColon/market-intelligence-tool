@@ -58,7 +58,7 @@ export function MarketAnalyticsReportView({ data }: { data: ReportData }) {
         <h2 className="text-lg font-bold text-slate-900 mb-4">Opportunity Score Distribution</h2>
         <p className="text-slate-700 mb-2 leading-relaxed">{dispersionNarrative.headerBlurb}</p>
         <p className="text-slate-600 text-sm mb-4 italic">
-          <strong>Key insight:</strong> The histogram reveals where institutions cluster by structural CRE exposure and credit stress. Institutions in the upper score bands (70+) represent the primary screening cohort with elevated concentration and asset-quality sensitivity.
+          <strong>Key insight:</strong> The histogram reveals where institutions cluster by structural CRE exposure and credit stress. Scores rank each institution against the others in this scope rather than against a fixed scale, so a score of 70 means roughly the top 30% of this cohort — the primary screening set, with elevated concentration and asset-quality sensitivity. The same institution will score differently under a national screen than under a state one.
         </p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
           <div><p className="text-xs text-slate-600">Median</p><p className="font-semibold tabular-nums">{dispersionStats.p50.toFixed(1)}</p></div>
@@ -244,10 +244,10 @@ export function MarketAnalyticsReportView({ data }: { data: ReportData }) {
               <>Among the top five by vulnerability—{topByOpportunityScore.slice(0, 5).map((r) => `${r.name}${r.state ? ` (${r.state})` : ""}`).join(", ")}—key data points to monitor include CRE concentration (share of assets in CRE loans), CRE/(T1+T2) (capital sensitivity), NPL ratio (current credit stress), and the earnings buffer (net income as a share of CRE).</>
             ) : (
               "Key data points to monitor include CRE concentration (share of assets in CRE loans), CRE/(T1+T2) (capital sensitivity), NPL ratio (current credit stress), and the earnings buffer (net income as a share of CRE)."
-            )} Institutions with high vulnerability scores (e.g., 70+) and CRE-to-capital ratios above 4x represent the highest concentration of structural risk and capital sensitivity.
+            )} Institutions in the upper vulnerability band for this scope that also carry CRE-to-capital ratios above 4x represent the highest concentration of structural risk and capital sensitivity. Note that the 4x ratio is an absolute threshold and comparable across scopes, whereas the vulnerability score is relative to the cohort in view.
           </p>
           <p>
-            <strong>Data points explained:</strong> <strong>Structural</strong> reflects CRE concentration (35%), NPL from noncurrent-to-loans (35%), reserves (15%), and capital (15%)—higher scores indicate elevated CRE exposure and credit stress. <strong>Earnings</strong> reflects ROA, earnings buffer, and income trends—higher scores indicate stronger income as a cushion against CRE losses. <strong>Vulnerability</strong> adjusts structural risk by earnings; high structural + low earnings yields high vulnerability. The full interactive table with 4-quarter CRE and NPL trends, capital ratios, and earnings KPIs is available in the Market Analytics view. Primary filings and loan-level data should be consulted for deal-specific verification.
+            <strong>Data points explained:</strong> <strong>Structural</strong> reflects CRE concentration (35%), NPL from noncurrent-to-loans (35%), reserves (15%), and capital (15%)—higher scores indicate elevated CRE exposure and credit stress. Each input is scored by where an institution ranks within this scope rather than on an absolute scale, so the cohort spreads across the full range and a score can be read directly as a percentile. <strong>Earnings</strong> reflects ROA, earnings buffer, and income trends—higher scores indicate stronger income as a cushion against CRE losses. <strong>Vulnerability</strong> adjusts structural risk by earnings; high structural + low earnings yields high vulnerability. The full interactive table with 4-quarter CRE and NPL trends, capital ratios, and earnings KPIs is available in the Market Analytics view. Primary filings and loan-level data should be consulted for deal-specific verification.
           </p>
         </div>
       </section>

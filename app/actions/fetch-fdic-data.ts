@@ -15,9 +15,19 @@ import { buildNoncurrentDebugSnapshot, type NoncurrentDebugSnapshot } from "@/li
 import { buildFilterString, fetchFDICData } from "@/lib/fdic-client"
 
 /** Last ~6 quarters for trend analysis; keeps API dataset small (~36k vs 1.6M rows) */
+/**
+ * Reporting window for the screening table and the export.
+ *
+ * 27 months, which yields nine quarters. Eight is the true requirement: the
+ * year-over-year net income comparison reads quarters 4–7 against 0–3. The
+ * previous 18-month window returned only five, so that condition could never be
+ * satisfied and Net Income YoY was permanently null — silently redistributing
+ * its 20% weight in the Earnings Resilience Score to the other three inputs.
+ * The ninth quarter is headroom for the FDIC's publication lag.
+ */
 function recentQuartersFilter(): string {
   const d = new Date()
-  d.setMonth(d.getMonth() - 18)
+  d.setMonth(d.getMonth() - 27)
   const startDate = d.toISOString().slice(0, 7) + '-01'
   return `[${startDate} TO *]`
 }

@@ -24,6 +24,12 @@ import { DefTerm } from "@/components/def-term"
 import { fetchFDICFinancials } from "@/app/actions/fetch-fdic-data"
 import { MarketResearch } from "@/components/market-research"
 import { computeCapitalRatios, type CapitalRatios } from "@/lib/fdic-ratio-helpers"
+import {
+  computeOpportunityDistributions,
+  computeOpportunityScore,
+} from "@/lib/scoring/opportunity-score"
+import { computeEarningsScore, computeEarningsRanges } from "@/lib/scoring/earnings-score"
+import { computeVulnerabilityScore } from "@/lib/scoring/vulnerability-score"
 import { toast } from "@/hooks/use-toast"
 import { KPI_EXPLANATION_NARRATIVE } from "@/lib/report/kpi-explanation"
 import {
@@ -132,6 +138,19 @@ type ScreeningRow = Financial & {
   earningsBufferPct?: number | null
 }
 
+/**
+ * Row cap for the live tab's single-page fetch. Nine quarters per institution
+ * means this covers roughly 1,100 institutions nationally; state scopes are far
+ * smaller than the cap and so are complete.
+ */
+const TAB_ROW_CAP = 10000
+
+/** A row before cohort-relative scoring has been applied. */
+type UnscoredRow = Omit<
+  ScreeningRow,
+  "opportunityScore" | "earningsScore" | "vulnerabilityScore"
+>
+
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
@@ -212,10 +231,10 @@ export function MarketAnalytics({
   const [filters, setFilters] = useState<Filters>(() => {
     if (reportMode && initialScope) {
       const s = initialScope.trim()
-      if (s === "National" || s === "national") return { region: "national", limit: 5000 }
-      return { region: s as RegionKey, limit: 5000 }
+      if (s === "National" || s === "national") return { region: "national", limit: TAB_ROW_CAP }
+      return { region: s as RegionKey, limit: TAB_ROW_CAP }
     }
-    return { region: PAGE_LEVEL_TO_REGION[level] ?? "national", limit: 5000 }
+    return { region: PAGE_LEVEL_TO_REGION[level] ?? "national", limit: TAB_ROW_CAP }
   })
   const [showCapitalColumns, setShowCapitalColumns] = useState(false)
   const [showEarningsColumns, setShowEarningsColumns] = useState(false)
@@ -242,9 +261,14 @@ export function MarketAnalytics({
 
       try {
         const stateFilter = filters.region === "national" ? undefined : filters.region
-        // Use fetchAll: false for faster load; full pagination (200k rows) can timeout or take minutes
+        // Full pagination is ~40k rows nationally across nine quarters, which
+        // takes roughly 20s and exceeds the 2MB data-cache ceiling, so the tab
+        // takes a single capped page instead. The cap is by row, and rows are
+        // sorted by assets descending, so nationally this is the largest ~1,100
+        // institutions rather than all ~4,450 — see SCOPE_COVERAGE_NOTE, which
+        // surfaces that limit in the UI. Phase 1's cached data layer removes it.
         const fetchAll = false
-        const limit = Math.min(filters.limit, 5000)
+        const limit = Math.min(filters.limit, TAB_ROW_CAP)
         const [financialsResult] = await Promise.all([fetchFDICFinancials(stateFilter, limit, fetchAll)])
 
         if (!mounted) return
@@ -377,7 +401,9 @@ export function MarketAnalytics({
 
     const mostRecentQuarter = lastQuarterDates[0]
     const mostRecentNorm = normalizeReportDate(mostRecentQuarter)
-    const rows: ScreeningRow[] = []
+    // Scores are cohort-relative, so they cannot be filled in per row here.
+    // Rows are collected first, then scored together below.
+    const rows: UnscoredRow[] = []
     grouped.forEach((items) => {
       const sorted = [...items].sort((a, b) => {
         const aNorm = normalizeReportDate(a.reportDate)
@@ -455,9 +481,6 @@ export function MarketAnalytics({
       rows.push({
         ...latest,
         trend,
-        opportunityScore: 0,
-        earningsScore: 0,
-        vulnerabilityScore: 0,
         capitalRatio,
         capitalRatios,
         roaLatest: roaLatest ?? undefined,
@@ -470,7 +493,36 @@ export function MarketAnalytics({
       })
     })
 
-    return rows
+    // Every score below ranks a row against the cohort currently in view, so
+    // the same institution scores differently under a national screen than a
+    // state one. That is intended: the question is always "compared with what".
+    const opportunityInputs = rows.map((r) => ({
+      creConcentration: r.creConcentration,
+      noncurrentToLoansRatio: r.noncurrent_to_loans_ratio,
+      loanLossReserve: r.loanLossReserve,
+      cet1Ratio: r.cet1Ratio,
+      leverageRatio: r.leverageRatio,
+    }))
+    const distributions = computeOpportunityDistributions(opportunityInputs)
+
+    const earningsInputs = rows.map((r) => ({
+      earningsBufferPct: r.earningsBufferPct ?? null,
+      roaLatest: r.roaLatest ?? null,
+      roaDelta4Q: r.roaDelta4Q ?? null,
+      netIncomeYoYPct: r.netIncomeYoYPct ?? null,
+    }))
+    const earningsRanges = computeEarningsRanges(earningsInputs)
+
+    return rows.map((row, i) => {
+      const opportunityScore = computeOpportunityScore(opportunityInputs[i], distributions)
+      const earningsScore = computeEarningsScore(earningsInputs[i], earningsRanges)
+      return {
+        ...row,
+        opportunityScore,
+        earningsScore,
+        vulnerabilityScore: computeVulnerabilityScore(opportunityScore, earningsScore),
+      }
+    })
   }, [filteredFinancials, lastQuarterDates])
 
   const sortedScreeningTable = useMemo(() => {
@@ -488,6 +540,25 @@ export function MarketAnalytics({
 
   const reportScope = filters.region === "national" ? "National" : filters.region
   const asOfQuarter = lastQuarterDates[0] ? formatQuarter(lastQuarterDates[0]) : "Latest"
+
+  /**
+   * Scores rank an institution against whoever else is in the cohort, so the
+   * cohort has to be stated. Nationally the row cap truncates it to the largest
+   * institutions, which would otherwise make a score quietly mean something
+   * different from what it appears to mean.
+   */
+  const scopeCoverageNote = useMemo(() => {
+    const count = screeningTable.length
+    if (count === 0) return ""
+
+    const capHit = financials.length >= TAB_ROW_CAP
+    const basis = `Scores are percentile ranks within this scope, so they compare these ${count.toLocaleString()} institutions against each other rather than against a fixed scale.`
+
+    if (!capHit) return basis
+
+    const floor = Math.min(...screeningTable.map((r) => r.totalAssets || 0))
+    return `${basis} This view is capped at the largest ${count.toLocaleString()} institutions (those above roughly ${formatMoney(floor)} in assets); the downloadable report covers the full cohort.`
+  }, [screeningTable, financials.length])
 
   const regionLabels: Record<string, string> = {
     national: "United States",
@@ -757,6 +828,7 @@ export function MarketAnalytics({
               Bank-level screening table focused on NPL (nonaccrual loans in dollars), CRE loans, and CRE concentration (CRE as % of total loans). Sort by NPL ($) or CRE Concentration to prioritize. Use as a starting screen—verify exposures from primary filings and loan-level data.
             </p>
             <p className="text-xs text-slate-600">{getRegionNote(filters.region)}</p>
+            <p className="text-xs text-slate-600 mt-1">{scopeCoverageNote}</p>
           </div>
           {!reportMode && screeningTable.length > 0 && (
             <Select

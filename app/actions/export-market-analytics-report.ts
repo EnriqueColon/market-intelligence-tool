@@ -8,8 +8,29 @@ import {
   type DispersionStats,
 } from "@/lib/opportunity-score-dispersion"
 import type { BankFinancialData } from "@/lib/fdic-data-transformer"
+import {
+  computeOpportunityDistributions,
+  computeOpportunityScore,
+  computeLegacyOpportunityScore,
+  type OpportunityInput,
+} from "@/lib/scoring/opportunity-score"
 
-const SCENARIO_WEIGHTS = { cre: 0.35, npl: 0.35, reserve: 0.15, capital: 0.15, capitalInvert: true }
+/** Map an export row onto the scorer's input shape. */
+function toOpportunityInput(r: {
+  creConcentration?: number
+  noncurrent_to_loans_ratio?: number
+  loanLossReserve?: number
+  cet1Ratio?: number
+  leverageRatio?: number
+}): OpportunityInput {
+  return {
+    creConcentration: r.creConcentration,
+    noncurrentToLoansRatio: r.noncurrent_to_loans_ratio,
+    loanLossReserve: r.loanLossReserve,
+    cet1Ratio: r.cet1Ratio,
+    leverageRatio: r.leverageRatio,
+  }
+}
 
 export type ExportRow = {
   id: string
@@ -30,6 +51,8 @@ export type ExportRow = {
   noncurrent_to_assets_ratio?: number
   loanLossReserve?: number
   opportunityScore: number
+  /** Previous min-max score, shown alongside during the transition. */
+  opportunityScoreLegacy?: number
   capitalRatios?: CapitalRatios
   cet1Ratio?: number
   leverageRatio?: number
@@ -205,42 +228,17 @@ export async function buildExportData(scope: string): Promise<ExportData> {
     })
   })
 
-  const metricRange = (values: number[]) => {
-    const filtered = values.filter((v) => Number.isFinite(v))
-    const min = filtered.length ? Math.min(...filtered) : 0
-    const max = filtered.length ? Math.max(...filtered) : 0
-    return { min, max }
-  }
+  const opportunityInputs = rows.map(toOpportunityInput)
+  const distributions = computeOpportunityDistributions(opportunityInputs)
 
-  const creRange = metricRange(rows.map((r) => r.creConcentration || 0))
-  const nplRange = metricRange(rows.map((r) => (r.noncurrent_to_loans_ratio ?? 0) * 100))
-  const reserveRange = metricRange(rows.map((r) => (r.loanLossReserve ?? 0) * 100))
-  const capitalRange = metricRange(rows.map((r) => r.cet1Ratio ?? r.leverageRatio ?? 0))
-
-  const normalize = (value: number, range: { min: number; max: number }, invert = false) => {
-    if (range.max === range.min) return 0
-    const raw = (value - range.min) / (range.max - range.min)
-    const score = invert ? 1 - raw : raw
-    return Math.max(0, Math.min(1, score))
-  }
-
-  const capitalRatioValue = (r: ExportRow) => r.cet1Ratio ?? r.leverageRatio ?? 0
-
-  const scored = rows.map((r) => {
-    const creScore = normalize(r.creConcentration || 0, creRange)
-    const nplScore = normalize((r.noncurrent_to_loans_ratio ?? 0) * 100, nplRange)
-    const reserveScore = normalize((r.loanLossReserve ?? 0) * 100, reserveRange, true)
-    const capVal = capitalRatioValue(r)
-    const capitalScore = normalize(capVal, capitalRange, SCENARIO_WEIGHTS.capitalInvert)
-
-    const total =
-      creScore * SCENARIO_WEIGHTS.cre +
-      nplScore * SCENARIO_WEIGHTS.npl +
-      reserveScore * SCENARIO_WEIGHTS.reserve +
-      capitalScore * SCENARIO_WEIGHTS.capital
-
-    return { ...r, opportunityScore: Number((total * 100).toFixed(1)) }
-  })
+  const scored = rows.map((r, i) => ({
+    ...r,
+    opportunityScore: computeOpportunityScore(opportunityInputs[i], distributions),
+    opportunityScoreLegacy: computeLegacyOpportunityScore(
+      opportunityInputs[i],
+      opportunityInputs
+    ),
+  }))
 
   const sortedRows = scored.sort((a, b) => b.opportunityScore - a.opportunityScore)
 

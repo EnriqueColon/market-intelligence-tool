@@ -200,8 +200,8 @@ export const METRIC_DEFINITIONS: Record<string, MetricDef> = {
   },
   "Structural Opportunity Score": {
     definition: "A 0–100 score that flags banks whose loan books and financial health show early warning signs. Higher scores mean more loans in commercial real estate, more delinquent loans, and thinner safety cushions.",
-    howCalculated: "Weighted combination of CRE concentration (35%), NPL from noncurrent-to-loans (35%), reserve coverage (15%), and capital (15%). All values scaled 0–100 within the cohort.",
-    whyValuable: "Surfaces banks that may need closer attention because of concentrated real estate exposure and weakening credit quality compared to peers.",
+    howCalculated: "Weighted combination of CRE concentration (35%), NPL from noncurrent-to-loans (35%), reserve coverage (15%), and capital (15%). Each input is scored by percentile rank within the cohort in view, so a score reads directly as a ranking: 90 means the top tenth of this scope.",
+    whyValuable: "Surfaces banks that may need closer attention because of concentrated real estate exposure and weakening credit quality compared to peers. Because it is relative, the same bank scores differently under a national screen than a state one.",
   },
   "Earnings Resilience Score": {
     definition: "A 0–100 score measuring how much profit a bank makes and whether it's growing. Higher scores mean the bank earns more relative to its size and has a bigger cushion of income to absorb losses if loans go bad.",
@@ -244,7 +244,7 @@ export const METRIC_DEFINITIONS: Record<string, MetricDef> = {
   "CRE / (Tier1 + Tier2)": "Commercial real estate loans divided by Tier 1 + Tier 2 capital. Capital derived from FDIC total RBC ratio when available; otherwise from leverage ratio.",
   "Construction / (Tier1 + Tier2)": "Construction & land development loans divided by Tier 1 + Tier 2 capital.",
   "Multifamily / (Tier1 + Tier2)": "Multifamily real estate loans divided by Tier 1 + Tier 2 capital.",
-  "Opportunity Score": "Weighted score (0–100) combining CRE concentration, NPL ratio, noncurrent loan ratio, reserve coverage, and capital strength under the selected scenario.",
+  "Opportunity Score": "Weighted score (0–100) combining CRE concentration, NPL ratio, noncurrent loan ratio, reserve coverage, and capital strength under the selected scenario. Each input is ranked by percentile within the cohort in view, so the score reads as a ranking against the current scope rather than an absolute measure.",
   "Rising NPL (4Q)": "Count of Top 10 institutions where NPL ratio increased over 4 quarters.",
   "CRE / Assets": {
     definition: "CRE loans as a percent of total assets.",
@@ -363,7 +363,7 @@ export const METRIC_DEFINITIONS: Record<string, MetricDef> = {
   },
   Score: {
     definition: "Structural Opportunity Score (0–100).",
-    howCalculated: "Weighted combination of CRE concentration (35%), NPL from noncurrent-to-loans (35%), reserves (15%), and capital (15%). Scaled within cohort.",
+    howCalculated: "Weighted combination of CRE concentration (35%), NPL from noncurrent-to-loans (35%), reserves (15%), and capital (15%). Each input is scored by percentile rank within the cohort in view.",
     whyValuable: "Surfaces banks with elevated CRE exposure and credit stress compared to peers.",
   },
   "T1+T2": {
