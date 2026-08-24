@@ -32,9 +32,12 @@ what you need rather than starting at the top.
 | `ROLLBACK.md` | Which commit do I go back to, and how? | Recovery |
 
 `docs/` holds narrower guides, of which `docs/DEV_ENVIRONMENT.md` is the one most worth reading
-early. Several older top-level files (`APP_TABS_AND_DATA_SOURCES.md`, `TOOL_OVERVIEW_SIMPLE.md`,
-`DEPLOYMENT_CHECKLIST.md`, `NEWS_ACCESS_STATUS.md`, `CBRE_FILTERS_REPORT.md`) predate this set and are
-**not maintained** — where they disagree with `confluence.md`, `confluence.md` is right.
+early. `EXEC_SUMMARY_WITH_KEYWORDS.md` is an older file recording the search keyword criteria behind
+the news feeds; the code in `app/actions/` is the source of truth if the two disagree.
+
+Five superseded documents were deleted on 2026-08-24 — they described Perplexity as the outlook
+engine, listed tabs that no longer exist, and named environment variables no code reads. Git history
+still has them if you need one. Anything in them that was still true now lives in `confluence.md`.
 
 ---
 
@@ -259,6 +262,10 @@ There is no `.gitattributes` to normalise this yet.
 
 **`CRON_SECRET` must match between GitHub Actions and Vercel.** A mismatch does not error visibly —
 the post-deploy warm-cache run returns 401 and the symptom is simply that the tool is slow.
+
+**Local dev is sensitive to a corrupted `.next` cache.** Missing chunk or module errors that make no
+sense against your source usually mean the build cache, not your code. Stop the dev server,
+`rm -rf .next`, and start it again.
 
 ### Making common adjustments
 

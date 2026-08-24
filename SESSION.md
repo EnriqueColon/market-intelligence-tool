@@ -8,6 +8,43 @@ is it in now, and what is still open.
 
 ---
 
+## 2026-08-24 (later) — five stale documents removed
+
+Writing the README surfaced ten top-level markdown files, most unmaintained. Five were deleted after
+checking each one for content not captured elsewhere, rather than on age alone.
+
+**Why they had to go: they were not merely stale, they were wrong.** Both
+`APP_TABS_AND_DATA_SOURCES.md` and `TOOL_OVERVIEW_SIMPLE.md` described **Perplexity** as the outlook
+engine — two migrations out of date — and documented a Competitor Analysis tab and a header region
+selector that no longer exist. `TOOL_OVERVIEW_SIMPLE.md` even carried a verbatim LLM prompt that no
+longer resembles the pipeline. `DEPLOYMENT_CHECKLIST.md` listed `LEGISCAN_API_KEY` as required, which
+no code reads, while omitting `APP_PASSWORD` and `COOKIE_SECRET` — following it would produce a
+deployment nobody can log into. A wrong document is worse than none, because it is trusted.
+
+`CBRE_FILTERS_REPORT.md` was a session artifact, complete with commentary about which tools were
+unavailable that day, and had already drifted from the code it documented: it recorded the property
+type value as `industrial` where `lib/cbre-options.ts` defines `industrial-and-logistics`. The dialog
+it describes is reachable only from `market-research-reports.tsx`, itself orphaned.
+
+**One file was not stale and its content was migrated first.** `NEWS_ACCESS_STATUS.md` documented the
+paywall classification in `app/actions/news-access.ts` — live code, imported by five actions, with
+its documented constants (`ACCESS_TEXT_MIN_CHARS` 1200, `ACCESS_TEXT_TINY_CHARS` 200) unchanged.
+`confluence.md` mentioned "access tier" only in passing. It now has a "Paywall classification"
+subsection under §3 covering the three status values, the heuristics, the tuning constants and the
+explicit no-bypass, no-credentials policy, which is worth stating deliberately rather than losing.
+The `.next` cache-corruption tip from `APP_TABS_AND_DATA_SOURCES.md` moved to the README's
+maintenance notes.
+
+`EXEC_SUMMARY_WITH_KEYWORDS.md` was **kept**. It records the keyword criteria behind the news
+searches, which is a business decision rather than an implementation detail, and it was not part of
+the removal request. It is a snapshot, so the README notes that `app/actions/` wins if the two
+disagree. It is a candidate for folding into `confluence.md` later.
+
+Nothing referenced the deleted files except the three maintained documents, all of which were
+updated. Git history retains them.
+
+---
+
 ## 2026-08-24 — a README, and a fourth maintained document
 
 The repository had no root `README.md`. Someone cloning it met ten top-level markdown files, most of
@@ -24,10 +61,8 @@ of the data sources are keyless — FDIC, FRED, GDELT, Google News RSS, OpenFree
 tool runs on a preview deployment with almost no configuration. Only `APP_PASSWORD` and
 `COOKIE_SECRET` are needed for a working local instance, plus `OPENAI_API_KEY` for AI features.
 
-It also names the unmaintained older files (`APP_TABS_AND_DATA_SOURCES.md`, `TOOL_OVERVIEW_SIMPLE.md`,
-`DEPLOYMENT_CHECKLIST.md`, `NEWS_ACCESS_STATUS.md`, `CBRE_FILTERS_REPORT.md`) and states that
-`confluence.md` wins where they disagree. They were left in place rather than deleted, but a reader
-is now told not to trust them.
+Writing it surfaced five unmaintained top-level documents, which were then deleted — see the entry
+below.
 
 `.cursor/rules/session-docs.mdc` was updated from three files to four, with a question attached to
 each so the four do not collapse into the same summary repeated: README asks *what is this and how do

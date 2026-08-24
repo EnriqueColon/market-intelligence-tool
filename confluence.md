@@ -86,6 +86,30 @@ for finance), and fall back to the **GDELT DOC 2.0 API** when RSS yields fewer t
 actions carry near-duplicate fetching logic, so a parsing bug tends to need fixing in both — as
 happened with the CDATA regex.
 
+### Paywall classification
+
+`app/actions/news-access.ts` classifies every article URL **before** a summary is produced, so the
+tool never implies it read full content it could not reach. Imported by `fetch-news.ts`,
+`fetch-news-summary.ts`, `fetch-public-mentions.ts`, `fetch-investing-news.ts` and
+`fetch-open-backfill.ts`.
+
+| Status | Meaning | Effect on output |
+| --- | --- | --- |
+| `open` | Fetched the page and extracted substantial readable text | Full summary |
+| `partial` | Fetched, but extracted only a preview or snippet | Brief uses publicly available information only |
+| `paywalled` | Blocked by subscription, login or bot check, or extraction failed | Signal summary only; article content is not summarised |
+
+Classification fetches the HTML with **no cookies and no credentials** and combines several checks:
+known paywall domains, login and subscription markers, login-form detection, bot-challenge markers,
+and extracted text length. Tuning constants live at the top of the same file —
+`ACCESS_TEXT_MIN_CHARS` (1200) is the floor for "open", `ACCESS_TEXT_TINY_CHARS` (200) is the ceiling
+below which a page is treated as blocked, and `KNOWN_PAYWALL_DOMAINS` lists publishers that are
+paywalled by default (extraction is still attempted).
+
+**This system deliberately does not bypass paywalls** and uses no credentials. It exists to be
+transparent about what was actually accessible. Keep that property when changing it. The list view
+shows the status per article and the detail view carries a banner for anything not `open`.
+
 ## 4. The Industry Outlook / Key Signals pipeline
 
 The most complex and most failure-prone part of the system. It generates the memo whose Executive
@@ -383,9 +407,10 @@ Historical note: the project migrated OpenAI → Perplexity → Claude → OpenA
 `.env.local` but are **no longer read by any code**. `lib/claude.ts` no longer exists; comments
 elsewhere still mention Claude and are stale.
 
-`LEGISCAN_API_KEY` is listed in `DEPLOYMENT_CHECKLIST.md` but **is not read anywhere in the code**.
-The Legal tab is entirely OpenAI-generated, not LegiScan-sourced. Conversely, that checklist omits
-`APP_PASSWORD`, `COOKIE_SECRET`, `BLOB_READ_WRITE_TOKEN` and `DATA_ENVIRONMENT`; prefer this table.
+`LEGISCAN_API_KEY` **is not read anywhere in the code**, despite having been listed as required in
+the old `DEPLOYMENT_CHECKLIST.md` (deleted 2026-08-24). The Legal tab is entirely OpenAI-generated,
+not LegiScan-sourced. It can be removed from Vercel. That checklist also omitted `APP_PASSWORD`,
+`COOKIE_SECRET`, `BLOB_READ_WRITE_TOKEN` and `DATA_ENVIRONMENT`, which is why this table replaced it.
 
 ## 9. Build and tests
 
