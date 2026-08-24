@@ -16,6 +16,7 @@
     "test:metrics": "node --test --experimental-strip-types lib/format/metrics.test.ts",
     "test:opportunity-score": "node --test --experimental-strip-types lib/scoring/opportunity-score.test.ts",
     "test:institution-change": "node --test --experimental-strip-types lib/scoring/institution-change.test.ts",
+    "test:fdic-cre": "node --test --experimental-strip-types lib/fdic-cre.test.ts",
     "test:memo-evidence": "node --test --experimental-strip-types lib/memo-evidence.test.ts",
     "test:verified-metrics": "node --test --experimental-strip-types lib/verified-metrics.test.ts",
     "test:environment": "node --test --experimental-strip-types lib/environment.test.ts",

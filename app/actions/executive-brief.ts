@@ -26,6 +26,12 @@ export type BriefEvent = InstitutionChange & {
   cert: string
   name: string
   state?: string
+  /**
+   * Shown alongside the state because FDIC names are not unique — two distinct
+   * institutions are both "AMERICAN BANK NATIONAL ASSN" in Texas, and without
+   * the city two rows carrying different numbers look like a duplicate bug.
+   */
+  city?: string
 }
 
 export type ExecutiveBrief = {
@@ -128,20 +134,23 @@ async function computeBrief(scope: string): Promise<ExecutiveBrief> {
   if (error) return EMPTY(scope, error)
   if (!data.length) return EMPTY(scope)
 
-  const byCert = new Map<string, { name: string; state?: string; rows: typeof data }>()
+  const byCert = new Map<
+    string,
+    { name: string; state?: string; city?: string; rows: typeof data }
+  >()
   for (const row of data) {
     const cert = String(row.id ?? "")
     if (!cert) continue
     const existing = byCert.get(cert)
     if (existing) existing.rows.push(row)
-    else byCert.set(cert, { name: row.name, state: row.state, rows: [row] })
+    else byCert.set(cert, { name: row.name, state: row.state, city: row.city, rows: [row] })
   }
 
   const events: BriefEvent[] = []
   let movedCount = 0
   let latestQuarter = ""
 
-  for (const [cert, { name, state: bankState, rows }] of byCert) {
+  for (const [cert, { name, state: bankState, city, rows }] of byCert) {
     for (const r of rows) {
       const q = String(r.reportDate ?? "")
       if (q > latestQuarter) latestQuarter = q
@@ -151,7 +160,7 @@ async function computeBrief(scope: string): Promise<ExecutiveBrief> {
     if (changes.length === 0) continue
     movedCount++
     for (const change of changes) {
-      events.push({ ...change, cert, name, state: bankState })
+      events.push({ ...change, cert, name, state: bankState, city })
     }
   }
 

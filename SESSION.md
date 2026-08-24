@@ -8,7 +8,53 @@ is it in now, and what is still open.
 
 ---
 
-## 2026-08-24 (latest) — the Executive Brief
+## 2026-08-24 (latest) — CRE was overstated across the whole tool
+
+Asked whether the Executive Brief was showing accurate data, so ten of its claims were checked
+against the FDIC API by hand. Eight matched to the decimal — every noncurrent-loan figure and every
+construction-to-capital figure. The two that did not were both CRE-to-capital, and chasing them found
+the largest data defect the tool has had.
+
+**Two compounding errors in what counts as CRE.** The numerator summed construction, multifamily,
+non-residential *and* `LNREOTH`. That last field reads like a separate category and is not: FDIC's
+`LNRE` total equals construction + multifamily + non-residential + 1-4 family + farmland exactly on
+4,335 of 4,352 institutions, so adding `LNREOTH` counted the same loans twice. Separately, the
+non-residential figure used was `LNRENRES`, which includes owner-occupied property that the 2006
+guidance explicitly excludes — a business borrowing against its own premises is not a concentration
+exposure.
+
+**The scale of it.** Share of institutions above the 300% supervisory screen in 2026Q1: **63.5% as
+shipped, 29.0% once the double-count is removed, 9.6% correct.** The 63.5% figure is what should have
+given it away, and is worth remembering as a smell test — a screen designed to isolate concentrated
+outliers cannot be flagging two-thirds of the banking system. The double-count alone put 1,498
+institutions above the screen that were not close to it; Napoleon State Bank read 344% against a true
+113%. On the brief itself, United Texas Bank (really 240%) and Capital Community Bank (really 283%)
+were both presented as having crossed 300%.
+
+This reached everything downstream: the Opportunity Score, the stress map, the screening table and
+the export all consume `creLoans`.
+
+**The definition now lives in `lib/fdic-cre.ts`**, a module with no imports so it can be tested
+directly, with five tests including a regression fixture built from United Texas Bank's real figures.
+`lib/fdic-config.ts` now requests `LNRENROW` and `LNRENROT`, and carries a comment warning against
+adding `LNREOTH` back. The three live-data verification scripts were updated to the same definition,
+and the `def-term` entries users can click now state what is included and why `LNREOTH` is not.
+
+**Why this took a browser to find.** The build passed, the unit tests passed, and the live-data
+verification script passed — because the script reimplemented CRE the same wrong way the app did.
+That is the lesson worth carrying: a verification that shares an assumption with the thing it checks
+confirms the assumption rather than testing it. Reconciling against a *published total* from the
+source, as opposed to recomputing from parts, is what actually caught it.
+
+**Still open.** Nothing else was audited against FDIC by hand. Noncurrent, construction and reserve
+figures all reconciled exactly, but the remaining derived columns have not had the same treatment,
+and the same "field that sounds additive" trap could exist elsewhere. Worth a systematic pass:
+for each composite metric, check that the published FDIC total reconciles without the components
+being added.
+
+---
+
+## 2026-08-24 — the Executive Brief
 
 First of the four lenses in `docs/NEXT_VERSION_PLAN.md`, committed as `1162934` on `dev`. This is the
 first session where Phase 1 becomes visible: the change engine built last session had no view, and

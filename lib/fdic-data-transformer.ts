@@ -7,6 +7,7 @@
  */
 
 import { PORTFOLIO_METRICS } from './portfolio-constants'
+import { computeCreLoans } from './fdic-cre'
 import {
   normalizeCapitalRatioPercent,
   normalizePercent,
@@ -26,6 +27,10 @@ export interface BankFinancialData {
   multifamilyLoans: number
   nonResidentialLoans: number
   otherRealEstateLoans: number
+  /** Excluded from `creLoans` by the 2006 guidance definition. */
+  ownerOccupiedLoans: number
+  /** The portion of non-residential CRE that counts toward the 300% screen. */
+  nonOwnerOccupiedLoans: number
   residentialLoans: number
   totalUnusedCommitments: number
   creUnusedCommitments: number
@@ -161,7 +166,18 @@ export function transformFinancialData(rawData: any[]): BankFinancialData[] {
     const multifamilyLoans = formatCurrency(bank.LNREMULT || 0)
     const nonResidentialLoans = formatCurrency(bank.LNRENRES || 0)
     const otherRealEstateLoans = formatCurrency(bank.LNREOTH || 0)
-    const creLoans = constructionLoans + multifamilyLoans + nonResidentialLoans + otherRealEstateLoans
+    const ownerOccupiedLoans = formatCurrency(bank.LNRENROW || 0)
+    const nonOwnerOccupiedLoans = formatCurrency(bank.LNRENROT || 0)
+
+    // See lib/fdic-cre.ts for why LNREOTH is excluded and owner-occupied
+    // property is dropped. Both are load-bearing for the 300% screen.
+    const creLoans = computeCreLoans({
+      constructionLoans,
+      multifamilyLoans,
+      nonResidentialLoans,
+      ownerOccupiedLoans,
+      nonOwnerOccupiedLoans,
+    })
     const totalUnusedCommitments = formatCurrency(bank.UCLN || 0)
     const creUnusedCommitments = formatCurrency(bank.UCCOMRE || 0)
     const totalLoansThousands = Number(bank.LNLSNET || 0)
@@ -192,6 +208,8 @@ export function transformFinancialData(rawData: any[]): BankFinancialData[] {
       multifamilyLoans,
       nonResidentialLoans,
       otherRealEstateLoans,
+      ownerOccupiedLoans,
+      nonOwnerOccupiedLoans,
       residentialLoans: formatCurrency(bank.LNREDOM || 0),
       totalUnusedCommitments,
       creUnusedCommitments,

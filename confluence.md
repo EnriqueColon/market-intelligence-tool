@@ -188,8 +188,30 @@ against the live API rather than inferring from the field name:
 | --- | --- | --- |
 | Reserve Coverage | `LNATRES / LNLSNET` — the allowance over net loans | 1–2% |
 | Loans / Deposits | `LNLSDEPR` as reported | 60–100% |
-| CRE / (T1+T2) | CRE loans over `RBCT1J + RBCT2` | 1–6x |
+| CRE / (T1+T2) | `computeCreLoans()` over `RBCT1J + RBCT2` | 1–3x |
 | Past Due 30-89 / 90+ | `P3ASSET`, `P9ASSET` — dollar amounts in thousands, not ratios | — |
+
+**What counts as CRE is defined in one place, `lib/fdic-cre.ts`, and it is load-bearing.** The 2006
+guidance definition is construction and land development (`LNRECONS`) plus multifamily (`LNREMULT`)
+plus **non-owner-occupied** non-farm non-residential (`LNRENROT`). Two rules follow:
+
+- **Never add `LNREOTH`.** Despite reading like a separate category, it is already inside the named
+  components: `LNRE` equals construction + multifamily + non-residential + 1-4 family + farmland
+  exactly on 4,335 of 4,352 institutions. Adding it counts the same loans twice.
+- **Never use `LNRENRES` where `LNRENROT` belongs.** `LNRENRES` includes owner-occupied property,
+  which the guidance excludes because a business borrowing against its own premises is not a
+  concentration exposure. `LNRENROW + LNRENROT` reconstitutes `LNRENRES` on 4,341 of 4,352
+  institutions, so the split is dependable; `computeCreLoans` falls back to the undivided figure for
+  the rest.
+
+Both errors were live until 2026-08-24 and compounded. Share of institutions above the 300%
+supervisory screen, 2026Q1: **63.5% with both errors, 29.0% with the double-count alone, 9.6%
+correct.** The 63.5% figure is the tell — a screen meant to isolate concentrated outliers cannot flag
+two-thirds of the industry. The double-count alone put 1,498 institutions above the screen that were
+nowhere near it, Napoleon State Bank reading 344% against a true 113%.
+
+`npm run test:fdic-cre` pins this. **Sanity-check any change to the CRE definition by the share of
+the cohort above 300%**, which should stay near 10%.
 
 `LNLSDEPR` is **net loans-to-deposits**, not a reserve, despite the FDIC data dictionary phrasing
 that suggests otherwise; it equals `LNLSNET / DEP` to the decimal place on every institution. It was
@@ -585,7 +607,8 @@ npm run test:verified-metrics
 npm run test:allowlist
 npm run test:metrics
 npm run test:opportunity-score
-npm run test:institution-change    # change detection and brief ranking (13 tests)
+npm run test:institution-change    # change detection and brief ranking (14 tests)
+npm run test:fdic-cre              # the CRE definition and its two traps
 ```
 
 Two calibration scripts hit the live FDIC API rather than asserting, and exist to be read:

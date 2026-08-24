@@ -27,7 +27,7 @@ const filters =
 
 const params = new URLSearchParams({
   filters,
-  fields: "CERT,NAME,STNAME,REPDTE,LNRENRES,LNRECONS,LNREMULT,LNLSNET,LNATRES,NCLNLSR,RBCT1J,RBCT2,RBCT1CER",
+  fields: "CERT,NAME,STNAME,REPDTE,LNRENROT,LNRECONS,LNREMULT,LNLSNET,LNATRES,NCLNLSR,RBCT1J,RBCT2,RBCT1CER",
   limit: "10000",
   format: "json",
 })
@@ -50,7 +50,9 @@ let movedCount = 0
 for (const [cert, { name, state, rows }] of byCert) {
   const observations = rows.map((r) => {
     const capital = num(r.RBCT1J) + num(r.RBCT2)
-    const cre = num(r.LNRENRES) + num(r.LNRECONS) + num(r.LNREMULT)
+    // 2006 guidance definition: excludes owner-occupied, and never adds
+    // LNREOTH, which is already inside these components.
+    const cre = num(r.LNRENROT) + num(r.LNRECONS) + num(r.LNREMULT)
     const loans = num(r.LNLSNET)
     return {
       quarter: String(r.REPDTE),

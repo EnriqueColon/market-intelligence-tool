@@ -35,7 +35,7 @@ export const METRIC_DEFINITIONS: Record<string, MetricDef> = {
   },
   "CRE Concentration": {
     definition: "CRE loans as a share of total loans.",
-    howCalculated: "CRE loans ÷ total loans × 100.",
+    howCalculated: "CRE loans ÷ total loans × 100, where CRE is construction and land development, plus multifamily, plus non-owner-occupied non-residential — the 2006 interagency guidance definition.",
     whyValuable: "Flags banks with elevated commercial real estate exposure relative to loan book size.",
   },
   "NPL ($)": {
@@ -144,9 +144,9 @@ export const METRIC_DEFINITIONS: Record<string, MetricDef> = {
     whyValuable: "Shows how many times CRE exposure could be covered by regulatory capital.",
   },
   "CRE / (T1+T2)": {
-    definition: "Commercial real estate loans divided by Tier 1 + Tier 2 capital.",
-    howCalculated: "CRE loans ÷ (Tier 1 + Tier 2 capital). Capital from FDIC total RBC ratio when available; otherwise from leverage ratio.",
-    whyValuable: "Shows how many times CRE exposure could be covered by regulatory capital.",
+    definition: "Commercial real estate loans divided by Tier 1 + Tier 2 capital. This is the ratio the 300% supervisory screen is measured against.",
+    howCalculated: "CRE loans ÷ (Tier 1 + Tier 2 capital), where CRE follows the 2006 interagency guidance: construction and land development, plus multifamily, plus non-owner-occupied non-residential. Owner-occupied commercial property is excluded. Capital from FDIC total RBC ratio when available; otherwise from leverage ratio.",
+    whyValuable: "Shows how many times CRE exposure could be covered by regulatory capital, and whether an institution sits above the 300% level regulators screen on.",
   },
   "CRE / Equity": {
     definition: "Commercial real estate loans divided by total equity.",
@@ -281,12 +281,12 @@ export const METRIC_DEFINITIONS: Record<string, MetricDef> = {
   "Total Non-Residential": {
     definition: "Total nonfarm nonresidential real estate loans (dollars)—office, retail, industrial, etc.",
     howCalculated: "Sum of non-residential loans (FDIC LNRENRES) across institutions.",
-    whyValuable: "Non-residential CRE (office, retail, industrial) exposure. Total CRE = Construction + Multifamily + Non-Residential + Other.",
+    whyValuable: "Non-residential CRE (office, retail, industrial) exposure. Only the non-owner-occupied portion (FDIC LNRENROT) counts toward CRE concentration: a business borrowing against its own premises is not a concentration exposure, and the 2006 interagency guidance excludes it. Total CRE = Construction + Multifamily + Non-Owner-Occupied Non-Residential.",
   },
   "Total Other Real Estate": {
-    definition: "All other loans secured by real estate (FDIC LNREOTH / RCFD5371)—unclassified CRE and other real estate–secured loans.",
+    definition: "All other loans secured by real estate (FDIC LNREOTH).",
     howCalculated: "Sum of other real estate loans (FDIC LNREOTH) across institutions.",
-    whyValuable: "Captures unclassified commercial real estate and other real estate–secured loans not in construction, multifamily, or non-residential. Total CRE = Construction + Multifamily + Non-Residential + Other.",
+    whyValuable: "Shown for completeness and deliberately excluded from Total CRE. These loans are already counted inside construction, multifamily, non-residential, 1-4 family or farmland — FDIC's total real estate figure reconciles without them — so adding them would count the same loans twice. Doing so overstated CRE concentration across the tool until 2026-08-24.",
   },
   "Total Unused Commitments": {
     definition: "Unused loan commitments (Schedule RC-L).",

@@ -19,7 +19,7 @@ const window = `[${start.toISOString().slice(0, 7)}-01 TO *]`
 
 const params = new URLSearchParams({
   filters: `REPDTE:${window} AND STNAME:${state.toUpperCase()}`,
-  fields: "CERT,NAME,REPDTE,LNRENRES,LNRECONS,LNREMULT,LNLSNET,LNATRES,NCLNLSR,RBCT1J,RBCT2,RBCT1CER",
+  fields: "CERT,NAME,REPDTE,LNRENROT,LNRECONS,LNREMULT,LNLSNET,LNATRES,NCLNLSR,RBCT1J,RBCT2,RBCT1CER",
   limit: "10000",
   format: "json",
 })
@@ -44,7 +44,9 @@ const samples = []
 for (const [cert, { name, rows }] of byCert) {
   const observations = rows.map((r) => {
     const capital = num(r.RBCT1J) + num(r.RBCT2)
-    const cre = num(r.LNRENRES) + num(r.LNRECONS) + num(r.LNREMULT)
+    // 2006 guidance definition: excludes owner-occupied, and never adds
+  // LNREOTH, which is already inside these components.
+  const cre = num(r.LNRENROT) + num(r.LNRECONS) + num(r.LNREMULT)
     const loans = num(r.LNLSNET)
     return {
       quarter: String(r.REPDTE),

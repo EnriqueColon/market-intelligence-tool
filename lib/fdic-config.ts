@@ -42,8 +42,12 @@ export const FDIC_FIELDS = {
     'LNRE', // Total Real Estate Loans
     'LNRECONS', // Construction & Land Development Loans
     'LNREMULT', // Multifamily Real Estate Loans
-    'LNRENRES', // Non-Residential Real Estate Loans
-    'LNREOTH', // All other loans secured by real estate (RCFD5371; unclassified CRE)
+    'LNRENRES', // Non-Residential Real Estate Loans (owner- and non-owner-occupied)
+    'LNRENROW', // Non-Residential, OWNER-occupied — excluded from the 300% CRE screen
+    'LNRENROT', // Non-Residential, NON-owner-occupied — the CRE half of LNRENRES
+    // Reported for display only. Do NOT add to CRE: it is already inside the
+    // components above, so including it double-counts. See fdic-data-transformer.
+    'LNREOTH', // All other loans secured by real estate
     'LNREDOM', // 1-4 Family Residential Loans
     'UCLN', // Unused Loan Commitments (total)
     'UCCOMRE', // Unused Commitments: Commercial Real Estate, Construction & Land Development

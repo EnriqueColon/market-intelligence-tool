@@ -144,7 +144,12 @@ function EventGroup({
             <div className="min-w-0">
               <p className="text-sm font-medium text-slate-800">
                 {event.name}
-                {event.state ? <span className="font-normal text-slate-500"> · {event.state}</span> : null}
+                {event.city || event.state ? (
+                  <span className="font-normal text-slate-500">
+                    {" · "}
+                    {[event.city, event.state].filter(Boolean).join(", ")}
+                  </span>
+                ) : null}
               </p>
               <p className="text-xs text-slate-600">{event.description}</p>
             </div>

@@ -193,6 +193,7 @@ npm run test:environment      # environment detection
 npm run test:metrics          # number formatting and unit normalisation
 npm run test:opportunity-score # cohort scoring, including outlier compression
 npm run test:institution-change # threshold crossings, deterioration trends, brief ranking
+npm run test:fdic-cre         # what counts as CRE, and what must never be added to it
 npm run test:memo-evidence    # the evidence guard
 npm run test:verified-metrics
 npm run test:allowlist
@@ -277,6 +278,14 @@ loan-loss reserve and is actually net loans-to-deposits; it was displayed as "Re
 about thirty times too large, until 2026-08-23. A one-off `curl` against
 `banks.data.fdic.gov/api/financials` comparing a field against its supposed derivation takes a minute
 and would have caught it.
+
+**An FDIC field that reads like a separate category may already be counted elsewhere.** `LNREOTH`
+("all other loans secured by real estate") sounds additive and is not — FDIC's total real estate
+figure reconciles without it on 4,335 of 4,352 institutions. Adding it to CRE counted the same loans
+twice and, together with wrongly including owner-occupied property, reported 63.5% of the American
+banking system as above the 300% supervisory screen when the true figure is 9.6%. The CRE definition
+now lives in one tested place, `lib/fdic-cre.ts`. Before trusting a new component field, check that
+the published total still reconciles without it.
 
 **A capital ratio above 100% is real, and rescaling it inverts the answer.** Trust and wholesale
 banks hold capital far above their risk-weighted assets — 66 of 4,352 institutions reported CET1 over

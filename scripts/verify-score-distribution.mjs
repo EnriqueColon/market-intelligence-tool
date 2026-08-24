@@ -25,7 +25,7 @@ const window = `[${start.toISOString().slice(0, 7)}-01 TO *]`
 const filters = `REPDTE:${window}${state ? ` AND STNAME:${state.toUpperCase()}` : ""}`
 const params = new URLSearchParams({
   filters,
-  fields: "CERT,NAME,REPDTE,ASSET,LNRENRES,LNRECONS,LNREMULT,LNLSNET,LNATRES,NCLNLSR,RBCT1CER,RBC1AAJ",
+  fields: "CERT,NAME,REPDTE,ASSET,LNRENROT,LNRECONS,LNREMULT,LNLSNET,LNATRES,NCLNLSR,RBCT1CER,RBC1AAJ",
   limit: "10000",
   sort_by: "ASSET",
   sort_order: "DESC",
@@ -46,7 +46,9 @@ for (const r of raw) {
 
 const rows = [...latest.values()].map((r) => {
   const totalLoans = Number(r.LNLSNET || 0)
-  const creLoans = Number(r.LNRENRES || 0) + Number(r.LNRECONS || 0) + Number(r.LNREMULT || 0)
+  // 2006 guidance definition: excludes owner-occupied, and never adds
+  // LNREOTH, which is already inside these components.
+  const creLoans = Number(r.LNRENROT || 0) + Number(r.LNRECONS || 0) + Number(r.LNREMULT || 0)
   const allowance = Number(r.LNATRES || 0)
   return {
     name: r.NAME,
