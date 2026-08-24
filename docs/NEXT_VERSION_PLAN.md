@@ -123,9 +123,9 @@ to migrate — it is curated reference data, 45 named distressed-credit firms wi
 categories, used to match news and counterparties. It belongs in the repository as a file. Tracking
 FDIC institutions by CERT is a different thing and is what went into Postgres.
 
-`app/actions/watchlist.ts` is a landmine worth removing: it is orphaned, but if anything called it,
-it would overwrite that curated file with a flat array of strings and destroy the aliases and
-categories.
+`app/actions/watchlist.ts` was a landmine: orphaned, but if anything had called it, it would have
+overwritten that curated file with a flat array of strings and destroyed the aliases and categories.
+It has been deleted. The live loader is `app/lib/watchlist.ts`, which is read-only.
 
 Thresholds in the change engine were calibrated against live cohorts, not chosen by eye. Texas gives
 4.1% of institutions a supervisory crossing and 19.1% a trajectory. Calibration is also what showed
@@ -146,11 +146,25 @@ enormous — so trajectories now require an absolute materiality floor as well.
 
 ## Phase 2 — The four lenses
 
-**Status: not started.** Built from existing components. The current tabs are untouched.
+**Status: Executive Brief complete; three remaining.** Built from existing components. The current
+tabs are untouched.
 
-- **Executive Brief** — what moved, what is new, which direction. From the Market Pulse strip, KPI
-  tiles and score distribution chart, plus the change list and the existing analyst narrative
-  generator. Deliberately no thirty-column table.
+- **Executive Brief** — **done.** `components/lenses/executive-brief.tsx` over
+  `app/actions/executive-brief.ts`. Renders above the tabs when the selected department is
+  Executive, and replaces nothing: every tab stays reachable. Three ranked sections — supervisory
+  crossings, watch-level crossings, deterioration — capped at six each, because a brief that needs
+  scrolling is not a brief. Deliberately no thirty-column table.
+
+  Ranking is the part that took the thought. Crossings rank by how far past the level the
+  institution landed, not by the size of the quarterly step: ranking by step puts an institution
+  that jumped from near-zero at the top, and that is nearly always a reporting artifact. The
+  comparators live in `lib/scoring/institution-change.ts` (`rankBySeverity`, `rankByRun`,
+  `groupForBrief`) so `scripts/verify-executive-brief.mjs` exercises the shipped code rather than a
+  copy of it.
+
+  Nationally this sees ~1,138 institutions, not all ~4,400 — nine quarters against a 10,000-row FDIC
+  cap. The brief says so on its face rather than implying full coverage. Fixing it properly needs
+  pagination, which is still open.
 - **Underwriter Workbench** — institution-first; the drawer already carries peer comparison and
   eight-quarter trends. Adds a defined peer cohort (size band, geography, CRE mix), threshold flags,
   and a downside scenario on CRE marks.

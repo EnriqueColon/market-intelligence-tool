@@ -270,6 +270,32 @@ Calibrate with `scripts/verify-change-detection.mjs [STATE]` after changing any 
 length, or a materiality level. Texas currently gives 4.1% of institutions a supervisory crossing and
 19.1% a trajectory. Far above those and it is noise; near zero and the feature is dead.
 
+**Ranking lives here too**, in `rankBySeverity`, `rankByRun` and `groupForBrief`, rather than in the
+consuming server action. That placement is deliberate: it keeps the functions pure so verification
+scripts import the shipped comparators instead of reimplementing them.
+
+`rankBySeverity` orders crossings by how far past the threshold the institution landed —
+`|to − threshold| / threshold` — and **not** by the size of the quarterly step. Ranking by step
+promotes institutions whose metric jumped off a near-zero base, which is a reporting artifact far
+more often than it is news; a noncurrent ratio moving 0.00% → 4.33% posts an infinite relative move
+and would otherwise lead every quarter. `rankByRun` orders trajectories by run length, relative move
+breaking ties.
+
+### Lenses
+
+`components/lenses/`. A lens is an additive department-specific view: it renders **above** the tabs
+and removes nothing, so every existing tab stays reachable no matter which department is selected.
+Anything that replaces a tab is not a lens and does not belong here.
+
+Currently one exists. **Executive Brief** (`components/lenses/executive-brief.tsx` over
+`app/actions/executive-brief.ts`) shows when the department cookie is `executive`. It renders at most
+six supervisory crossings, six watch-level crossings and six trajectories, ranked as above.
+
+It queries at most 10,000 FDIC rows, matching the screening tab so both see the same cohort. At nine
+quarters per institution that caps national coverage near 1,138 institutions rather than the full
+~4,400, so the action returns `capped` and the card states the limitation rather than implying full
+coverage. Pagination would fix it properly and has not been done.
+
 ## 4a. Charts
 
 All Recharts instances share `lib/chart-theme.tsx` — palette, axis, grid, tooltip. Colours are
@@ -332,10 +358,14 @@ Generated content is expensive, so nearly everything is cached for a day.
   | `industry-outlook-shared-v12` | The generated memo |
   | `industry-outlook-verified-metrics-v1` | Fetched FRED/FDIC figures |
   | `market-analytics-report-data-v2` + scope | Full screening cohort with scores, for the PDF and Visual Analysis |
+  | `executive-brief-v1` + scope | Ranked change events for the Executive Brief |
 
   `market-analytics-report-data` is keyed by scope rather than by day and revalidates every six
   hours, since FDIC publishes quarterly. **Bump its version whenever the scoring changes**, or cached
   entries keep serving scores computed under the old method — v2 marks the move to percentile rank.
+  `executive-brief` follows the same rule on a six-hour window: **bump its version whenever a
+  change-detection threshold, the trajectory run length or a ranking function moves**, or the brief
+  keeps reporting events under the old rules until the window expires.
   A national payload can exceed the 2MB entry limit, in which case Next logs a warning, skips the
   write and only smaller scopes are cached.
 
@@ -467,6 +497,10 @@ Three consequences worth holding onto:
 chosen" is a real state and guessing would put someone in the wrong view without telling them.
 Middleware ignores this cookie entirely; it only ever reads and re-issues `auth_token`.
 
+Because the department is a stated preference rather than an authenticated claim, **it must never be
+used to gate access to anything**. Anyone can set the cookie from the console. It selects which lens
+renders, nothing more; `auth_token` remains the only access control.
+
 Additional token-protected endpoints, each authenticated by header:
 
 | Endpoint | Header |
@@ -530,6 +564,16 @@ npm run test:memo-evidence # evidence guard
 npm run test:verified-metrics
 npm run test:allowlist
 npm run test:metrics
+npm run test:opportunity-score
+npm run test:institution-change    # change detection and brief ranking (13 tests)
+```
+
+Two calibration scripts hit the live FDIC API rather than asserting, and exist to be read:
+
+```bash
+npm run verify:executive-brief [STATE]                      # brief volume and what leads each section
+node --experimental-strip-types scripts/verify-change-detection.mjs [STATE]
+node --experimental-strip-types scripts/verify-score-distribution.mjs
 ```
 
 Tests use Node's built-in runner with `--experimental-strip-types`, which requires importing local

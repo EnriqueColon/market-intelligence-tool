@@ -8,7 +8,62 @@ is it in now, and what is still open.
 
 ---
 
-## 2026-08-24 (latest) — a department, and a memory of what changed
+## 2026-08-24 (latest) — the Executive Brief
+
+First of the four lenses in `docs/NEXT_VERSION_PLAN.md`, committed as `1162934` on `dev`. This is the
+first session where Phase 1 becomes visible: the change engine built last session had no view, and
+now it has one.
+
+**What it is.** A card above the tabs, shown when the department selector is set to Executive,
+listing at most six supervisory crossings, six watch-level crossings and six deteriorating
+institutions. It replaces nothing — every tab remains exactly where it was, and an executive who
+wants the screening table scrolls past. That constraint was deliberate: the request was to build on
+what exists, not to take anything away.
+
+There is no table in it, and that is the point. The screening table already answers "show me the
+cohort" well. It answers "what needs me this quarter" badly, because that question wants six rows,
+not eleven hundred.
+
+**Ranking was the part worth thinking about.** The obvious approach — rank by the size of the
+quarterly movement — turned out to be wrong, and live data is what showed it. An institution whose
+noncurrent ratio goes from 0.00% to 4.33% posts an infinite relative move and would top the list
+every quarter, but a metric leaping off a zero base is nearly always a reporting artifact rather than
+news. Crossings therefore rank by how far *past* the threshold the institution landed, which is both
+unitless and meaningful: 31% past the 300% CRE screen is a bigger finding than grazing it by 2%.
+Trajectories rank by run length, since a longer adverse run is the stronger signal.
+
+Those comparators live in `lib/scoring/institution-change.ts`, not in the server action, specifically
+so `scripts/verify-executive-brief.mjs` exercises the shipped code. A verification script that tests
+a copy of the logic verifies nothing.
+
+**The national coverage gap is now stated on the card's face.** Nationally the brief sees ~1,138
+institutions rather than all ~4,400, because nine quarters per institution exhausts the 10,000-row
+FDIC cap. Rather than let "304 of 1,138 institutions" imply national coverage, the card says it
+covers the largest institutions and that a smaller one that moved will not appear. This is the same
+gap already labelled on the national screening tab; it is honest, not fixed.
+
+**Deleted `app/actions/watchlist.ts`**, flagged as a landmine last session. Nothing imported it, but
+it would have overwritten the curated 45-firm reference file with a flat array of strings, destroying
+the aliases and categories. The live loader is `app/lib/watchlist.ts` and is read-only.
+
+**Verification.** 13 unit tests pass, including four new ones covering the ranking and the near-zero
+artifact case. `npm run build` is clean. `npm run verify:executive-brief` against live national data
+gives 304 of 1,138 institutions moving (26.7%) across 365 events, and the top of each section reads
+as genuine news.
+
+**Still open.** The brief was not visually confirmed in a browser this session — the local dev server
+sits behind the password gate and the screenshot path was abandoned rather than route the password
+through a script. Build, tests and live-data output all pass, so the risk is confined to layout.
+**Someone should open it once and look at it.** Beyond that: three lenses remain (Underwriter
+Workbench, Origination Targeting, Exposure & Reporting), and the FDIC row cap still wants pagination
+rather than labelling.
+
+Note `executive-brief-v1` is a six-hour cache key. **Bump it when change-detection thresholds move**,
+or the brief keeps reporting events under the old rules until the window expires.
+
+---
+
+## 2026-08-24 — a department, and a memory of what changed
 
 Phase 1 of `docs/NEXT_VERSION_PLAN.md`, committed as `703bed6` on `dev`. Two capabilities the tool
 has never had. **Neither is surfaced in a view yet** — that is Phase 2, and someone reading this

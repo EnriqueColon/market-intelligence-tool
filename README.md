@@ -73,6 +73,19 @@ names imply something different from what they contain, and getting one wrong pu
 badly wrong number in front of a user. `confluence.md` §4 "FDIC screening metrics" lists the ones
 that have already caused incidents.
 
+### Lenses
+
+Alongside the tabs, `components/lenses/` holds department-specific views selected by the header
+department control. **A lens is additive**: it renders above the tabs and removes nothing, so every
+tab stays reachable whichever department is chosen. Anything that replaces a tab is not a lens.
+
+The department is a stated preference held in a non-httpOnly cookie, not an authenticated claim, so
+it selects a view and must never gate access to data.
+
+One exists today — the **Executive Brief**, which answers "what moved this quarter" in at most
+eighteen lines rather than eleven hundred rows. Three more are planned; see
+`docs/NEXT_VERSION_PLAN.md`.
+
 ---
 
 ## Tech stack
@@ -179,7 +192,7 @@ Each suite runs individually; there is no aggregate `npm test`.
 npm run test:environment      # environment detection
 npm run test:metrics          # number formatting and unit normalisation
 npm run test:opportunity-score # cohort scoring, including outlier compression
-npm run test:institution-change # threshold crossings and deterioration trends
+npm run test:institution-change # threshold crossings, deterioration trends, brief ranking
 npm run test:memo-evidence    # the evidence guard
 npm run test:verified-metrics
 npm run test:allowlist
@@ -198,6 +211,10 @@ Some checks need live data rather than fixtures, because they are calibrations r
 - `scripts/verify-change-detection.mjs [STATE]` — what share of institutions produce a change event.
   Run after changing any threshold, the trajectory run length, or a materiality level. Fire on
   everything and it is noise; fire on nothing and the feature is dead.
+- `npm run verify:executive-brief [STATE]` — what leads each section of the Executive Brief. Read the
+  sample, not only the counts: the failure mode is a section topped by reporting artifacts, which
+  costs trust faster than showing nothing. Imports the shipped ranking functions, so it tests real
+  behaviour rather than a copy.
 
 ---
 
@@ -214,7 +231,9 @@ components/
   ui/           shadcn/ui primitives
   charts/       Chart components, incl. charts/analytics/ shared by screen and PDF
   market-analytics/heatmap/   MapLibre stress map
+  lenses/       Additive department-specific views, rendered above the tabs
 lib/            Domain logic: FDIC client and transforms, auth, features, caching, formatting
+  scoring/      Pure, testable ranking: opportunity score, change detection, brief ranking
 docs/           Focused guides (start with DEV_ENVIRONMENT.md)
 data/           Local SQLite and JSON — development only
 scripts/        One-off and ingestion scripts (TypeScript and Python)
