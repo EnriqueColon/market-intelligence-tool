@@ -104,6 +104,7 @@ Not in production. Merge to `main` to ship.
 
 | Commit | Date | Summary |
 | --- | --- | --- |
+| `cfa6995` | 08-24 | docs: record Phase 1 and the calibration that shaped it |
 | `703bed6` | 08-24 | feat: give the tool a department and a memory of what changed |
 | `706b895` | 08-24 | docs: list the scoring docs commit in the rollback reference |
 | `0d6169b` | 08-24 | docs: record the scoring rework and the cohort gap it exposed |
