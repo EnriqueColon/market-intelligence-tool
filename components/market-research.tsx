@@ -113,13 +113,14 @@ function Sparkline({
   const step = width / (values.length - 1)
   const startLabel = formatDateLabel(points?.[0]?.date)
   const endLabel = formatDateLabel(points && points.length ? points[points.length - 1]?.date : undefined)
-  const line = values
-    .map((value, index) => {
-      const x = index * step
-      const y = height - ((value - min) / range) * height
-      return `${x},${y}`
-    })
-    .join(" ")
+  const coords = values.map((value, index) => ({
+    x: index * step,
+    y: height - ((value - min) / range) * height,
+  }))
+  const line = coords.map(({ x, y }) => `${x},${y}`).join(" ")
+  // Closing the path back along the baseline turns the line into a filled area,
+  // which reads as part of the same chart family as the Recharts sections.
+  const area = `0,${height} ${line} ${width},${height}`
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center gap-2 text-[10px] text-slate-600">
@@ -129,13 +130,17 @@ function Sparkline({
             <span>{formatValue(min, unit)}</span>
           </div>
         )}
-        <svg width={width} height={height} className="text-primary">
+        <svg width={width} height={height} className="text-primary overflow-visible">
+          <polygon points={area} fill="currentColor" fillOpacity={0.1} />
           <polyline
             fill="none"
             stroke="currentColor"
             strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
             points={line}
           />
+          <circle cx={coords[coords.length - 1].x} cy={coords[coords.length - 1].y} r="2.5" fill="currentColor" />
         </svg>
       </div>
       {showAxisLabels && (

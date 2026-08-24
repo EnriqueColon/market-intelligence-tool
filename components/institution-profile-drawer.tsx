@@ -18,6 +18,8 @@ import {
 } from "@/lib/format/metrics"
 import { getCreCapitalColor } from "@/lib/score-colors"
 import { DefTerm } from "@/components/def-term"
+import { ChartTooltipRow, ChartTooltipShell } from "@/components/charts/chart-tooltip"
+import { CHART_SERIES, categoryTick, gridProps, numericTick } from "@/lib/chart-theme"
 
 function formatDeltaPp(value: number | null | undefined, decimals = 2): string {
   if (value == null || !Number.isFinite(value)) return "—"
@@ -510,7 +512,7 @@ function PeerPositioningComparisonChart({
     return rows.map((row, idx) => ({
       key: `inst_${idx}`,
       label: `${row.name}${row.state ? ` (${row.state})` : ""}`,
-      color: ["#006D95", "#0ea5e9", "#334155", "#10b981", "#f59e0b", "#a855f7"][idx % 6],
+      color: CHART_SERIES[idx % CHART_SERIES.length],
       row,
     }))
   }, [rows])
@@ -542,9 +544,9 @@ function PeerPositioningComparisonChart({
   const renderChart = (height: number) => (
     <ResponsiveContainer width="100%" height={height} debounce={0}>
       <BarChart data={chartData} layout="vertical" margin={{ top: 8, right: 18, bottom: 8, left: 24 }} barCategoryGap={18}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-        <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 10, fill: "#64748b" }} tickLine={false} axisLine={false} />
-        <YAxis type="category" dataKey="metric" width={96} tick={{ fontSize: 11, fill: "#334155", fontWeight: 500 }} tickLine={false} axisLine={false} />
+        <CartesianGrid {...gridProps} />
+        <XAxis type="number" domain={[0, 100]} tick={numericTick} tickLine={false} axisLine={false} />
+        <YAxis type="category" dataKey="metric" width={96} tick={{ ...categoryTick, fontSize: 11 }} tickLine={false} axisLine={false} />
         <Legend
           verticalAlign="top"
           align="left"
@@ -552,17 +554,19 @@ function PeerPositioningComparisonChart({
           formatter={(value) => <span className="text-slate-700">{value}</span>}
         />
         <Tooltip
+          cursor={{ fill: "rgba(0,109,149,0.06)" }}
           content={({ active, payload, label }) => {
             if (!active || !payload?.length) return null
             return (
-              <div className="rounded-md border border-slate-200 bg-white px-3 py-2 shadow-sm text-sm">
-                <p className="font-medium text-slate-800">{String(label)}</p>
+              <ChartTooltipShell title={String(label)}>
                 {payload.map((item) => (
-                  <p key={item.dataKey as string} className="text-slate-600">
-                    {item.name}: {item.value == null ? "—" : `${item.value}th percentile`}
-                  </p>
+                  <ChartTooltipRow
+                    key={item.dataKey as string}
+                    label={String(item.name)}
+                    value={item.value == null ? "—" : `${item.value}th pct`}
+                  />
                 ))}
-              </div>
+              </ChartTooltipShell>
             )
           }}
         />

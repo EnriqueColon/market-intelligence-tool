@@ -12,5 +12,11 @@ export default function Page() {
     legal: isFeatureEnabled("legal"),
   }
 
-  return <MarketIntelligenceDashboard enabledTabs={enabledTabs} />
+  // Resolved here because isFeatureEnabled reads server-only env; the dashboard
+  // and everything under it are client components.
+  const features = {
+    bankStressMap: isFeatureEnabled("bank-stress-map"),
+  }
+
+  return <MarketIntelligenceDashboard enabledTabs={enabledTabs} features={features} />
 }

@@ -1,11 +1,10 @@
 "use server"
 
 import { transformFinancialData } from "@/lib/fdic-data-transformer"
-import { FDIC_CONFIG, FDIC_ENDPOINTS, FDIC_FIELDS } from "@/lib/fdic-config"
+import { FDIC_ENDPOINTS, FDIC_FIELDS } from "@/lib/fdic-config"
+import { fetchFDICData } from "@/lib/fdic-client"
 import { computeStressScores, type MapMetric } from "@/lib/map-stress-utils"
 import type { BankFinancialData } from "@/lib/fdic-data-transformer"
-
-const FDIC_BASE = FDIC_CONFIG.baseUrl
 
 /** Defensive parse: convert strings, commas, null to number. Reject NaN. */
 function parseNum(v: unknown): number | null {
@@ -61,40 +60,40 @@ function computeDebugStats(
   }
 }
 
-function buildFilterString(filters: Record<string, string>): string {
-  return Object.entries(filters)
-    .map(([k, v]) => `${k}:"${String(v).replace(/"/g, '\\"')}"`)
-    .join(" AND ")
+/**
+ * A "2026-Q1" label as the REPDTE the FDIC API actually matches.
+ *
+ * The date has to be YYYYMMDD. A hyphenated date is not rejected — it is
+ * accepted and matches zero rows, which is why every map endpoint returned an
+ * empty result rather than an error. Verified live: REPDTE:"20250930" returns
+ * 4,452 institutions, REPDTE:"2025-09-30" returns none.
+ */
+function quarterToRepdte(quarter: string): string {
+  const [year, q] = quarter.split("-")
+  // FDIC uses quarter-end dates: Q1=0331, Q2=0630, Q3=0930, Q4=1231
+  const day = q === "Q2" || q === "Q3" ? "30" : "31"
+  const month = q === "Q1" ? "03" : q === "Q2" ? "06" : q === "Q3" ? "09" : "12"
+  return `${year}${month}${day}`
 }
 
 async function fetchFDICFinancialsForQuarter(
   quarter: string,
   state?: string
 ): Promise<BankFinancialData[]> {
-  const [year, q] = quarter.split("-")
-  // FDIC uses quarter-end dates: Q1=03-31, Q2=06-30, Q3=09-30, Q4=12-31
-  const day = q === "Q2" || q === "Q3" ? "30" : "31"
-  const month = q === "Q1" ? "03" : q === "Q2" ? "06" : q === "Q3" ? "09" : "12"
-  const repdte = `${year}-${month}-${day}`
-  const filters: Record<string, string> = { REPDTE: repdte }
+  const filters: Record<string, string> = { REPDTE: quarterToRepdte(quarter) }
   if (state) filters.STNAME = state.toUpperCase()
 
-  const params = new URLSearchParams({
-    format: "json",
-    limit: "5000",
-    filters: buildFilterString(filters),
-    fields: FDIC_FIELDS.financials.join(","),
+  const { data, error } = await fetchFDICData<any>(FDIC_ENDPOINTS.financials, {
+    filters,
+    fields: FDIC_FIELDS.financials,
+    limit: 5000,
     sort_by: "ASSET",
     sort_order: "DESC",
   })
-
-  const res = await fetch(
-    `${FDIC_BASE}${FDIC_ENDPOINTS.financials}?${params}`,
-    { cache: "no-store" }
-  )
-  if (!res.ok) return []
-  const json = await res.json()
-  const data = (json.data || []).map((item: any) => item?.data ?? item)
+  if (error) {
+    console.error(`map-data: financials for ${quarter} failed: ${error}`)
+    return []
+  }
   return transformFinancialData(data)
 }
 
@@ -119,25 +118,17 @@ async function fetchLocations(state?: string, limit = 5000): Promise<
     filters.STALP = code.toUpperCase()
   }
 
-  const params = new URLSearchParams({
-    format: "json",
-    limit: String(limit),
-    fields:
-      "CERT,NAME,STALP,STNAME,CITY,CBSA_NO,CBSA,LATITUDE,LONGITUDE,MAINOFF",
+  const { data, error } = await fetchFDICData<any>(FDIC_ENDPOINTS.locations, {
+    filters,
+    fields: ["CERT", "NAME", "STALP", "STNAME", "CITY", "CBSA_NO", "CBSA", "LATITUDE", "LONGITUDE", "MAINOFF"],
+    limit,
     sort_by: "CERT",
     sort_order: "ASC",
   })
-  if (Object.keys(filters).length > 0) {
-    params.set("filters", buildFilterString(filters))
+  if (error) {
+    console.error(`map-data: locations failed: ${error}`)
+    return []
   }
-
-  const res = await fetch(
-    `${FDIC_BASE}${FDIC_ENDPOINTS.locations}?${params}`,
-    { cache: "no-store" }
-  )
-  if (!res.ok) return []
-  const json = await res.json()
-  const data = (json.data || []).map((item: any) => item?.data ?? item)
   return data.filter(
     (d: any) =>
       d.LATITUDE != null &&
@@ -211,18 +202,60 @@ function normalizeStateName(fdicState: string): string {
   return key ?? fdicState
 }
 
+/**
+ * Call reports are filed and published well after the quarter they cover, so
+ * the current quarter — and usually the one before it — hold no data at all.
+ */
+const PUBLICATION_LAG_QUARTERS = 2
+
+/** Candidate quarters, newest plausible first. */
 function getAvailableQuarters(): string[] {
-  const out: string[] = []
   const now = new Date()
-  for (let i = 0; i < 8; i++) {
-    const d = new Date(now)
-    d.setMonth(d.getMonth() - i * 3)
-    const y = d.getFullYear()
-    const m = d.getMonth() + 1
-    const q = m <= 3 ? "Q1" : m <= 6 ? "Q2" : m <= 9 ? "Q3" : "Q4"
-    out.push(`${y}-${q}`)
+  let year = now.getFullYear()
+  let quarter = Math.floor(now.getMonth() / 3) + 1
+
+  const stepBack = () => {
+    quarter -= 1
+    if (quarter < 1) {
+      quarter = 4
+      year -= 1
+    }
   }
-  return [...new Set(out)]
+
+  for (let i = 0; i < PUBLICATION_LAG_QUARTERS; i++) stepBack()
+
+  const out: string[] = []
+  for (let i = 0; i < 8; i++) {
+    out.push(`${year}-Q${quarter}`)
+    stepBack()
+  }
+  return out
+}
+
+/**
+ * Resolves the quarter actually used, and its rows.
+ *
+ * An explicitly requested quarter is honoured as-is: substituting a different
+ * period under a user who picked one would misattribute the figures. Only the
+ * default walks back until a quarter returns data, which absorbs the varying
+ * publication lag instead of pinning it to a constant that goes stale.
+ */
+async function fetchLatestAvailable(
+  quarter: string | undefined,
+  state?: string
+): Promise<{ quarter: string; banks: BankFinancialData[] }> {
+  const quarters = getAvailableQuarters()
+  if (quarter) {
+    return { quarter, banks: await fetchFDICFinancialsForQuarter(quarter, state) }
+  }
+
+  for (const candidate of quarters.slice(0, 4)) {
+    const banks = await fetchFDICFinancialsForQuarter(candidate, state)
+    if (banks.length > 0) return { quarter: candidate, banks }
+  }
+
+  console.warn("map-data: no FDIC quarter in the candidate window returned rows")
+  return { quarter: quarters[0], banks: [] }
 }
 
 /** Metric-specific high-stress check. CRE/Capital uses raw multiple (e.g. 4.0x); others use stress score 0–100. */
@@ -245,8 +278,7 @@ export async function getMapStatesData(
   debug = false
 ) {
   const quarters = getAvailableQuarters()
-  const q = quarter || quarters[0]
-  const banks = await fetchFDICFinancialsForQuarter(q)
+  const { quarter: q, banks } = await fetchLatestAvailable(quarter)
   const withStress = computeStressScores(banks, metric)
 
   const byState = new Map<
@@ -353,9 +385,7 @@ export async function getMapMetrosData(
   threshold = 70,
   debug = false
 ) {
-  const quarters = getAvailableQuarters()
-  const q = quarter || quarters[0]
-  const banks = await fetchFDICFinancialsForQuarter(q, state)
+  const { quarter: q, banks } = await fetchLatestAvailable(quarter, state)
   const locations = await fetchLocations(state, 3000)
 
   const certToLoc = new Map<string, (typeof locations)[0]>()
@@ -481,9 +511,7 @@ export async function getMapBanksData(
   quarter?: string,
   metric: MapMetric = "composite"
 ) {
-  const quarters = getAvailableQuarters()
-  const q = quarter || quarters[0]
-  const banks = await fetchFDICFinancialsForQuarter(q, state)
+  const { quarter: q, banks } = await fetchLatestAvailable(quarter, state)
   const locations = await fetchLocations(state, 5000)
 
   const certToLoc = new Map<string, (typeof locations)[0]>()

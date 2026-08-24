@@ -1,7 +1,9 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import dynamic from "next/dynamic"
 import { Card } from "@/components/ui/card"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   Table,
   TableBody,
@@ -33,6 +35,17 @@ import {
 import { getCreCapitalColor } from "@/lib/score-colors"
 import { getErrorMessage } from "@/lib/error-utils"
 import { InstitutionProfileDrawer } from "@/components/institution-profile-drawer"
+import { MarketAnalyticsVisuals } from "@/components/market-analytics-visuals"
+
+// MapLibre plus its stylesheet is a large dependency that touches `window` on
+// import, so the map is loaded on demand rather than bundled into every session.
+const BankStressHeatMap = dynamic(
+  () => import("@/components/market-analytics/heatmap/BankStressHeatMap").then((m) => m.BankStressHeatMap),
+  {
+    ssr: false,
+    loading: () => <Skeleton className="h-[600px] w-full rounded-lg" />,
+  }
+)
 
 const US_STATES_ALPHABETICAL = [
   "Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado", "Connecticut",
@@ -180,7 +193,17 @@ const PAGE_LEVEL_TO_REGION: Record<string, RegionKey> = {
   miami: "Florida",
 }
 
-export function MarketAnalytics({ level, reportMode, initialScope }: { level: "national" | "florida" | "miami"; reportMode?: boolean; initialScope?: string }) {
+export function MarketAnalytics({
+  level,
+  reportMode,
+  initialScope,
+  showBankStressMap = false,
+}: {
+  level: "national" | "florida" | "miami"
+  reportMode?: boolean
+  initialScope?: string
+  showBankStressMap?: boolean
+}) {
   const [filters, setFilters] = useState<Filters>(() => {
     if (reportMode && initialScope) {
       const s = initialScope.trim()
@@ -506,13 +529,19 @@ export function MarketAnalytics({ level, reportMode, initialScope }: { level: "n
   return (
     <div className="space-y-6" data-report-ready={!loading && !error} data-report-mode={reportMode}>
       {loading && (
-        <Card className="p-4 border-dashed border-slate-200/80 bg-slate-50/30">
-          <p className="text-sm font-medium text-slate-800">
-            Loading FDIC data for {regionDisplay}…
-          </p>
+        <Card className="p-6 surface-supporting">
+          <p className="text-sm font-medium text-slate-800">Loading FDIC data for {regionDisplay}…</p>
           <p className="text-xs text-slate-600 mt-1">
             Fetching bank financials from FDIC. This may take a few seconds.
           </p>
+          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="rounded-lg border border-slate-200 bg-white p-3">
+                <Skeleton className="h-2.5 w-24" />
+                <Skeleton className="mt-2 h-5 w-16" />
+              </div>
+            ))}
+          </div>
         </Card>
       )}
 
@@ -529,7 +558,7 @@ export function MarketAnalytics({ level, reportMode, initialScope }: { level: "n
       )}
 
       {!reportMode && (
-      <Card className="p-6 border-slate-200/80 bg-slate-50/30">
+      <Card className="p-6 surface-supporting">
         <div className="flex flex-wrap items-end gap-4">
           <div>
             <p className="text-xs font-semibold text-slate-600 uppercase">Controls</p>
@@ -587,7 +616,7 @@ export function MarketAnalytics({ level, reportMode, initialScope }: { level: "n
       )}
 
       {nplLoansSummary && (
-      <Card className="p-6 border-slate-200/80 bg-white border-2 border-slate-300 shadow-sm">
+      <Card className="p-6 surface-primary">
         <div>
           <h2 className="text-lg font-bold text-slate-800 mb-1">NPL & Loans</h2>
           <p className="text-sm text-slate-600 mb-4">
@@ -629,7 +658,7 @@ export function MarketAnalytics({ level, reportMode, initialScope }: { level: "n
       </Card>
       )}
 
-      <Card className="p-6 border-slate-200/80 bg-slate-50/30">
+      <Card className="p-6 surface-supporting">
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-base font-semibold text-slate-800 mb-1">Cohort Summary</h3>
@@ -684,11 +713,11 @@ export function MarketAnalytics({ level, reportMode, initialScope }: { level: "n
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
           {kpis.map((kpi) => (
-            <Card key={kpi.label} className="p-3 bg-white border-slate-200">
+            <Card key={kpi.label} className="p-3 bg-white border-slate-200 transition-shadow duration-200 hover:shadow-sm">
               <p className="text-xs font-medium text-slate-600">
                 <DefTerm term={kpi.label}>{kpi.label}</DefTerm>
               </p>
-              <p className="text-lg font-semibold text-slate-800">{loading ? "…" : kpi.value}</p>
+              <p className="text-lg font-semibold text-slate-800 tabular-nums">{loading ? "…" : kpi.value}</p>
             </Card>
           ))}
         </div>
@@ -697,7 +726,22 @@ export function MarketAnalytics({ level, reportMode, initialScope }: { level: "n
         </p>
       </Card>
 
-      <Card className="p-6 border-slate-200/80 bg-slate-50/30">
+      {!reportMode && <MarketAnalyticsVisuals scope={reportScope} asOfQuarter={asOfQuarter} />}
+
+      {!reportMode && showBankStressMap && (
+        <Card className="p-6 surface-primary">
+          <div className="mb-4">
+            <h3 className="text-base font-semibold text-slate-800">Bank Stress Map</h3>
+            <p className="mt-1 text-xs text-slate-600">
+              Geographic distribution of CRE stress across FDIC-insured institutions. Click a state to drill into its
+              metros; zoom in for individual banks.
+            </p>
+          </div>
+          <BankStressHeatMap />
+        </Card>
+      )}
+
+      <Card className="p-6 surface-primary">
         <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
           <div>
             <h3 className="text-base font-semibold text-slate-800 mb-1">Target Screening List</h3>

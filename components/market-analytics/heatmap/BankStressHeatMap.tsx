@@ -8,8 +8,28 @@ import { MapControls } from "./MapControls"
 import { StateTooltip, MetroTooltip, BankTooltip } from "./MapTooltip"
 import type { MapMetric } from "@/lib/map-stress-utils"
 
-const MAP_STYLE = "https://demotiles.maplibre.org/style.json"
+/**
+ * OpenFreeMap's Positron style: no API key, and deliberately desaturated so the
+ * choropleth on top carries the colour. The previous demotiles style is
+ * MapLibre's own demo basemap — country outlines only, with no state boundaries
+ * or place labels, which made a US state-level map unreadable.
+ */
+const MAP_STYLE = "https://tiles.openfreemap.org/styles/positron"
 const US_CENTER: [number, number] = [-95.7, 37.1]
+
+/**
+ * MapLibre is WebGL-only and throws on construction when no context is
+ * available — headless environments, older machines, and browsers where the
+ * user or an enterprise policy has disabled it.
+ */
+function isWebglAvailable(): boolean {
+  try {
+    const canvas = document.createElement("canvas")
+    return Boolean(canvas.getContext("webgl2") || canvas.getContext("webgl"))
+  } catch {
+    return false
+  }
+}
 
 const STATE_CENTROIDS: Record<string, [number, number]> = {
   Alabama: [-86.9, 32.3],
@@ -135,13 +155,19 @@ const STRESS_COLORS = ["#e2e8f0", "#fcd34d", "#fb923c", "#f87171", "#dc2626"]
 /** Data-driven: 5 buckets from quantiles q20,q40,q60,q80. Clamp upper to p97. */
 function computeQuantileScale(
   values: number[]
-): { quantiles: number[]; legendLabels: string[]; getColor: (v: number) => string } {
+): {
+  quantiles: number[]
+  legendLabels: string[]
+  getColor: (v: number) => string
+  hasVariation: boolean
+} {
   const valid = values.filter((v) => Number.isFinite(v))
   if (valid.length < 2) {
     return {
       quantiles: [0, 0.25, 0.5, 0.75, 1],
       legendLabels: ["—", "—", "—", "—", "—"],
       getColor: () => STRESS_COLORS[0],
+      hasVariation: false,
     }
   }
   const sorted = [...valid].sort((a, b) => a - b)
@@ -165,16 +191,29 @@ function computeQuantileScale(
     `≥ ${fmt(q80)}`,
   ]
 
+  /**
+   * Cut points that actually separate the data.
+   *
+   * When a metric is flat — high-stress share is zero in nearly every state,
+   * because few banks clear the threshold — all four quantiles land on the same
+   * number. Comparing against them with a chain of `<` then fell through to the
+   * final branch, so every state was painted the most severe red on the calmest
+   * possible data. Dropping cuts that cannot separate anything makes that case
+   * resolve to a neutral fill and report itself as flat instead.
+   */
+  const usableCuts = [...new Set(quantiles)].sort((a, b) => a - b).filter((c) => c > sorted[0])
+  const hasVariation = usableCuts.length > 0
+
   const getColor = (v: number) => {
-    if (!Number.isFinite(v)) return STRESS_COLORS[0]
+    if (!Number.isFinite(v) || !hasVariation) return STRESS_COLORS[0]
     const clampedV = Math.min(v, upperBound)
-    if (clampedV < q20) return STRESS_COLORS[0]
-    if (clampedV < q40) return STRESS_COLORS[1]
-    if (clampedV < q60) return STRESS_COLORS[2]
-    if (clampedV < q80) return STRESS_COLORS[3]
-    return STRESS_COLORS[4]
+    const bucket = usableCuts.reduce((n, cut) => (clampedV >= cut ? n + 1 : n), 0)
+    // Spread however many buckets survived across the full colour ramp, so a
+    // metric with only two distinct levels still reads as low versus high.
+    const index = Math.round((bucket / usableCuts.length) * (STRESS_COLORS.length - 1))
+    return STRESS_COLORS[index]
   }
-  return { quantiles, legendLabels, getColor }
+  return { quantiles, legendLabels, getColor, hasVariation }
 }
 
 export function BankStressHeatMap() {
@@ -184,7 +223,9 @@ export function BankStressHeatMap() {
   const [quarters, setQuarters] = useState<string[]>([])
   const [metric, setMetric] = useState<MapMetric>("composite")
   const [threshold, setThreshold] = useState(70)
-  const [colorBy, setColorBy] = useState<ColorByOption>("high_stress_share")
+  // Average stress, not high-stress share: at the default threshold almost no
+  // bank qualifies, so share opens on a uniform map that says nothing.
+  const [colorBy, setColorBy] = useState<ColorByOption>("stress_avg")
   const [statesData, setStatesData] = useState<StateData[]>([])
   const [metrosData, setMetrosData] = useState<MetroData[]>([])
   const [banksData, setBanksData] = useState<BankData[]>([])
@@ -197,6 +238,9 @@ export function BankStressHeatMap() {
   } | null>(null)
   const [loading, setLoading] = useState(true)
   const [zoom, setZoom] = useState(US_ZOOM)
+  /** Bumped on every map move so panning refetches, which a zoom-only check misses. */
+  const [viewportVersion, setViewportVersion] = useState(0)
+  const [mapError, setMapError] = useState<string | null>(null)
   const [legendLabels, setLegendLabels] = useState<string[]>([])
   const [noVariation, setNoVariation] = useState(false)
 
@@ -271,24 +315,82 @@ export function BankStressHeatMap() {
   useEffect(() => {
     if (!mapContainer.current) return
 
-    map.current = new maplibregl.Map({
-      container: mapContainer.current,
-      style: MAP_STYLE,
-      center: US_CENTER,
-      zoom: US_ZOOM,
+    if (!isWebglAvailable()) {
+      setMapError("This browser does not have WebGL enabled, which the map requires.")
+      return
+    }
+
+    try {
+      map.current = new maplibregl.Map({
+        container: mapContainer.current,
+        style: MAP_STYLE,
+        center: US_CENTER,
+        zoom: US_ZOOM,
+      })
+    } catch (err) {
+      // MapLibre throws synchronously when it cannot get a WebGL context, which
+      // without this would propagate out of the effect and unmount the whole
+      // Market Analytics tab rather than just the map.
+      console.error("BankStressHeatMap: map initialisation failed", err)
+      setMapError("The map could not be initialised in this browser.")
+      return
+    }
+
+    // Style and tile failures arrive asynchronously on this channel; they are
+    // worth logging but must never surface as an unhandled error.
+    map.current.on("error", (e) => {
+      console.error("BankStressHeatMap: maplibre error", e?.error ?? e)
     })
 
     map.current.addControl(new maplibregl.NavigationControl(), "top-right")
 
-    const onZoom = () => {
-      const z = map.current?.getZoom() ?? US_ZOOM
-      setZoom(z)
-      if (z >= BANK_ZOOM) fetchBanks()
-      else setBanksData([])
+    /**
+     * Only publishes the new viewport; the fetch itself is left to an effect.
+     *
+     * This handler is registered once and therefore captures the first render
+     * forever. It used to call fetchBanks() directly, so after the user changed
+     * state, quarter or metric, panning kept requesting the original three —
+     * the map showed data for a selection the controls no longer displayed.
+     *
+     * Only moveend is bound: MapLibre fires it for pans and zooms alike, so
+     * listening to zoomend as well would double every viewport change.
+     */
+    const handleViewportChange = () => {
+      const m = map.current
+      if (!m) return
+      setZoom(m.getZoom())
+      setViewportVersion((v) => v + 1)
     }
 
-    map.current.on("zoomend", onZoom)
-    map.current.on("moveend", onZoom)
+    map.current.on("moveend", handleViewportChange)
+
+    // Layer-delegated handlers, bound once. They were previously registered
+    // inside the layer-building callbacks, which re-run on every data or
+    // colour-scale change and added a duplicate listener each time, so a single
+    // click eventually fired several times.
+    map.current.on("click", "states-fill", (e) => {
+      const name = e.features?.[0]?.properties?.name as string
+      if (!name) return
+      setSelectedState(name)
+      const center = STATE_CENTROIDS[name]
+      if (center && map.current) {
+        map.current.flyTo({ center, zoom: 5, duration: 800 })
+      }
+    })
+
+    map.current.on("mouseenter", "states-fill", () => {
+      map.current!.getCanvas().style.cursor = "pointer"
+    })
+
+    map.current.on("mouseleave", "states-fill", () => {
+      map.current!.getCanvas().style.cursor = ""
+    })
+
+    map.current.on("click", "metros-circles", (e) => {
+      const props = e.features?.[0]?.properties as MetroData | undefined
+      if (!props) return
+      map.current?.flyTo({ center: [props.lon, props.lat], zoom: 8 })
+    })
 
     return () => {
       map.current?.remove()
@@ -296,11 +398,14 @@ export function BankStressHeatMap() {
     }
   }, [])
 
+  // fetchBanks already closes over selectedState, quarter and metric, so it is
+  // the only dependency needed for those; viewportVersion covers panning, which
+  // leaves the zoom level unchanged and so would not otherwise retrigger.
   useEffect(() => {
-    if (zoom >= BANK_ZOOM && map.current) {
-      fetchBanks()
-    }
-  }, [zoom, quarter, metric, selectedState, fetchBanks])
+    if (!map.current) return
+    if (zoom >= BANK_ZOOM) fetchBanks()
+    else setBanksData([])
+  }, [zoom, viewportVersion, fetchBanks])
 
   const loadGeoJSON = useCallback(() => {
     if (!map.current || statesData.length === 0) return
@@ -312,13 +417,11 @@ export function BankStressHeatMap() {
       return s.stressAvg
     }
     const colorValues = statesData.map(getColorValue).filter((v) => Number.isFinite(v))
-    const { getColor, legendLabels: labels } = computeQuantileScale(colorValues)
+    const { getColor, legendLabels: labels, hasVariation } = computeQuantileScale(colorValues)
     setLegendLabels(labels)
-    const min = Math.min(...colorValues, 0)
-    const max = Math.max(...colorValues, 0)
-    setNoVariation(
-      colorValues.length < 10 || Math.abs(max - min) < 1e-6
-    )
+    // Trust the scale's own verdict rather than a min/max epsilon: a single
+    // outlier state made the old check believe a flat metric had spread.
+    setNoVariation(colorValues.length < 10 || !hasVariation)
 
     fetch("/data/us-states.json")
       .then((r) => r.json())
@@ -356,23 +459,6 @@ export function BankStressHeatMap() {
           },
         })
 
-        map.current.on("click", "states-fill", (e) => {
-          const name = e.features?.[0]?.properties?.name as string
-          if (name) {
-            setSelectedState(name)
-            const center = STATE_CENTROIDS[name]
-            if (center && map.current) {
-              map.current.flyTo({ center, zoom: 5, duration: 800 })
-            }
-          }
-        })
-
-        map.current.on("mouseenter", "states-fill", () => {
-          map.current!.getCanvas().style.cursor = "pointer"
-        })
-        map.current.on("mouseleave", "states-fill", () => {
-          map.current!.getCanvas().style.cursor = ""
-        })
       })
       .catch((e) => console.error("Failed to load states GeoJSON:", e))
   }, [statesData, colorBy])
@@ -436,16 +522,6 @@ export function BankStressHeatMap() {
         "circle-stroke-width": 1,
         "circle-stroke-color": "#475569",
       },
-    })
-
-    map.current.on("click", "metros-circles", (e) => {
-      const props = e.features?.[0]?.properties as MetroData
-      if (props) {
-        map.current?.flyTo({
-          center: [props.lon, props.lat],
-          zoom: 8,
-        })
-      }
     })
   }, [metrosData, colorBy])
 
@@ -607,7 +683,15 @@ export function BankStressHeatMap() {
           className="w-full h-[420px]"
           style={{ minHeight: 420 }}
         />
-        {loading && (
+        {mapError && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-50 px-6 text-center">
+            <p className="text-sm font-medium text-slate-700">Map unavailable</p>
+            <p className="mt-1 max-w-md text-xs text-slate-500">
+              {mapError} The same figures are available in the screening table and the charts above.
+            </p>
+          </div>
+        )}
+        {loading && !mapError && (
           <div className="absolute inset-0 bg-white/70 flex items-center justify-center">
             <p className="text-sm text-slate-600">Loading map data…</p>
           </div>

@@ -462,3 +462,55 @@ table[data-sticky-headers] thead th {
 .market-intelligence-tool .text-gray-600:not([data-slot="tabs-trigger"]):not(a):not(h1):not(h2):not(h3):not(h4):not(th):not([role="columnheader"]) {
   color: #000000 !important;
 }
+
+/* Tabular numerals.
+   Proportional digits give every row a different width, so a column of figures
+   visibly jitters as you scan down it. Applied to every table in the app rather
+   than per cell, which also covers the plain tables in the printed report. */
+table td,
+table th,
+[data-slot="table-cell"],
+[data-slot="table-head"] {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* Elevation scale.
+   Every card previously used one flat recipe, so a headline figure and a
+   footnote sat on identical surfaces. Three levels: supporting content recedes,
+   primary content sits on white with a soft lift, raised is for anything the
+   user is meant to act on. */
+.surface-supporting {
+  background-color: rgba(248, 250, 252, 0.5);
+  border-color: rgb(226 232 240);
+  box-shadow: none;
+}
+
+.surface-primary {
+  background-color: #ffffff;
+  border-color: rgba(0, 109, 149, 0.16);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 6px 16px -8px rgba(15, 23, 42, 0.1);
+}
+
+.surface-raised {
+  background-color: #ffffff;
+  border-color: rgba(0, 109, 149, 0.22);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.05),
+    0 12px 28px -12px rgba(15, 23, 42, 0.18);
+}
+
+/* Motion is decoration here; anyone who has asked the OS to stop it gets the
+   finished state immediately rather than a faster animation. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

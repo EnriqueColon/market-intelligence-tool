@@ -1,29 +1,15 @@
 "use client"
 
-import { useMemo } from "react"
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ComposedChart,
-  LabelList,
-  ReferenceLine,
-  ResponsiveContainer,
-  Scatter,
-  ScatterChart,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts"
-import {
-  computeDispersionStats,
-  getHistogramData,
-} from "@/lib/opportunity-score-dispersion"
 import type { ReportData } from "@/app/actions/build-report-data"
 import { DefTerm } from "@/components/def-term"
 import { ReportInterpretationBlock } from "@/components/report-interpretation-block"
-import { getScoreColor, getCreCapitalColor, getVulnerabilityFillHex } from "@/lib/score-colors"
-import { formatCapitalMultiple, formatMultiple as formatMultipleMetric } from "@/lib/format/metrics"
+import { CapitalSensitivityMatrix } from "@/components/charts/analytics/capital-sensitivity-matrix"
+import { CrePortfolioComposition } from "@/components/charts/analytics/cre-portfolio-composition"
+import { CreToCapitalRanking } from "@/components/charts/analytics/cre-to-capital-ranking"
+import { OpportunityScoreHistogram } from "@/components/charts/analytics/opportunity-score-histogram"
+import { useAnalyticsChartData } from "@/components/charts/analytics/use-analytics-chart-data"
+import { getScoreColor, getCreCapitalColor } from "@/lib/score-colors"
+import { formatMultiple as formatMultipleMetric } from "@/lib/format/metrics"
 
 const REPORT_FONT = { fontFamily: "Georgia, 'Times New Roman', serif", fontSize: "11pt" }
 const SECTION_CLASS = "break-inside-avoid mb-10"
@@ -47,71 +33,7 @@ function formatRatio(value: number | null | undefined) {
 
 export function MarketAnalyticsReportView({ data }: { data: ReportData }) {
   const { scope, asOfQuarter, kpis, dispersionStats, dispersionNarrative, capitalKpis, rows, topByCreToCapital, topByOpportunityScore, summaryByState } = data
-  const scores = useMemo(() => rows.map((r) => r.opportunityScore), [rows])
-  const histogramData = useMemo(() => getHistogramData(scores), [scores])
-
-  const creToCapitalRanking = useMemo(() => {
-    return rows
-      .map((r) => {
-        const creToCap = r.capitalRatios?.creToTier1Tier2
-        const hasCap = r.capitalRatios?.coverage.hasTier1Tier2
-        const value = hasCap && creToCap != null && creToCap > 0 ? creToCap * 100 : (r.creConcentration ?? 0)
-        return { id: r.id, name: r.name, value }
-      })
-      .filter((r) => r.value > 0)
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 20)
-      .map((r, i) => ({ ...r, rank: i + 1 }))
-  }, [rows])
-
-  const exposureMixData = useMemo(() => {
-    const ranked = rows
-      .filter((r) => r.capitalRatios?.creToTier1Tier2 != null && r.capitalRatios!.creToTier1Tier2! > 0)
-      .sort((a, b) => (b.capitalRatios!.creToTier1Tier2 ?? 0) - (a.capitalRatios!.creToTier1Tier2 ?? 0))
-      .slice(0, 15)
-    return ranked.map((r) => {
-      const cre = r.creLoans ?? 0
-      const construction = cre > 0 ? ((r.constructionLoans ?? 0) / cre) * 100 : 0
-      const multifamily = cre > 0 ? ((r.multifamilyLoans ?? 0) / cre) * 100 : 0
-      const nonResidential = cre > 0 ? ((r.nonResidentialLoans ?? 0) / cre) * 100 : 0
-      const other = cre > 0 ? ((r.otherRealEstateLoans ?? 0) / cre) * 100 : 0
-      return { name: r.name, construction, multifamily, nonResidential, otherCre: other }
-    })
-  }, [rows])
-
-  const scatterData = useMemo(() => {
-    const withBoth = rows.filter((r) => {
-      const creToAssets = r.creConcentration ?? 0
-      const creToCap = r.capitalRatios?.creToTier1Tier2
-      const hasCap = r.capitalRatios?.coverage.hasTier1Tier2
-      return creToAssets > 0 && hasCap && creToCap != null && creToCap > 0
-    })
-    const creToAssetsArr = withBoth.map((r) => r.creConcentration ?? 0)
-    const creToCapArr = withBoth.map((r) => (r.capitalRatios!.creToTier1Tier2 ?? 0) * 100)
-    const medianCreToAssets = creToAssetsArr.length > 0
-      ? [...creToAssetsArr].sort((a, b) => a - b)[Math.floor(creToAssetsArr.length / 2)]
-      : 0
-    const medianCreToCap = creToCapArr.length > 0
-      ? [...creToCapArr].sort((a, b) => a - b)[Math.floor(creToCapArr.length / 2)]
-      : 0
-    const assetsArr = withBoth.map((r) => r.totalAssets).filter((a) => a > 0)
-    const minAssets = assetsArr.length > 0 ? Math.min(...assetsArr) : 1
-    const maxAssets = withBoth.length > 0 ? Math.max(...withBoth.map((r) => r.totalAssets), 1) : 1
-    const logMin = Math.log10(Math.max(1, minAssets))
-    const logMax = Math.log10(Math.max(1, maxAssets))
-    return {
-      points: withBoth.map((r) => ({
-        name: r.name,
-        creToAssets: r.creConcentration ?? 0,
-        creToCap: (r.capitalRatios?.creToTier1Tier2 ?? 0) * 100,
-        totalAssets: r.totalAssets,
-        bubbleSize: (Math.log10(Math.max(1, r.totalAssets)) - logMin) / (logMax - logMin || 1) * 12 + 4,
-        vulnerabilityScore: r.vulnerabilityScore ?? 0,
-      })),
-      medianCreToAssets,
-      medianCreToCap,
-    }
-  }, [rows])
+  const { histogram, creToCapitalRanking, exposureMix, scatter } = useAnalyticsChartData(rows)
 
   return (
     <div className="space-y-10 text-slate-800" style={REPORT_FONT}>
@@ -125,7 +47,7 @@ export function MarketAnalyticsReportView({ data }: { data: ReportData }) {
           {kpis.map((kpi) => (
             <div key={kpi.label} className="border-b border-slate-200 pb-2">
               <p className="text-xs font-medium text-slate-600 uppercase">{kpi.label}</p>
-              <p className="text-base font-semibold text-slate-900">{kpi.value}</p>
+              <p className="text-base font-semibold text-slate-900 tabular-nums">{kpi.value}</p>
             </div>
           ))}
         </div>
@@ -139,33 +61,13 @@ export function MarketAnalyticsReportView({ data }: { data: ReportData }) {
           <strong>Key insight:</strong> The histogram reveals where institutions cluster by structural CRE exposure and credit stress. Institutions in the upper score bands (70+) represent the primary screening cohort with elevated concentration and asset-quality sensitivity.
         </p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-          <div><p className="text-xs text-slate-600">Median</p><p className="font-semibold">{dispersionStats.p50.toFixed(1)}</p></div>
-          <div><p className="text-xs text-slate-600">P90</p><p className="font-semibold">{dispersionStats.p90.toFixed(1)}</p></div>
-          <div><p className="text-xs text-slate-600">IQR</p><p className="font-semibold">{dispersionStats.p25.toFixed(1)}–{dispersionStats.p75.toFixed(1)}</p></div>
-          <div><p className="text-xs text-slate-600">≥80</p><p className="font-semibold">{Math.round(dispersionStats.share_ge_80)}%</p></div>
+          <div><p className="text-xs text-slate-600">Median</p><p className="font-semibold tabular-nums">{dispersionStats.p50.toFixed(1)}</p></div>
+          <div><p className="text-xs text-slate-600">P90</p><p className="font-semibold tabular-nums">{dispersionStats.p90.toFixed(1)}</p></div>
+          <div><p className="text-xs text-slate-600">IQR</p><p className="font-semibold tabular-nums">{dispersionStats.p25.toFixed(1)}–{dispersionStats.p75.toFixed(1)}</p></div>
+          <div><p className="text-xs text-slate-600">≥80</p><p className="font-semibold tabular-nums">{Math.round(dispersionStats.share_ge_80)}%</p></div>
         </div>
-        <div className="h-[200px] min-h-[200px] w-full mb-4">
-          <ResponsiveContainer width="100%" height={200} debounce={0}>
-            <BarChart data={histogramData} margin={{ top: 8, right: 8, bottom: 24, left: 8 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-              <Tooltip
-                content={({ active, payload }) => {
-                  if (!active || !payload?.length) return null
-                  const item = payload[0].payload
-                  const count = item.count ?? 0
-                  return (
-                    <div className="rounded-md border border-slate-200 bg-white px-3 py-2 shadow-sm text-sm">
-                      <p className="font-medium text-slate-800">Score range {item.bin}</p>
-                      <p className="text-slate-600">{count} {count === 1 ? "institution" : "institutions"}</p>
-                    </div>
-                  )
-                }}
-              />
-              <XAxis dataKey="bin" tick={{ fontSize: 10, fill: "#64748b" }} axisLine={{ stroke: "#94a3b8" }} tickLine={false} />
-              <YAxis tick={{ fontSize: 10, fill: "#64748b" }} axisLine={false} tickLine={false} />
-              <Bar dataKey="count" fill="#334155" radius={[2, 2, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+        <div className="mb-4">
+          <OpportunityScoreHistogram data={histogram} height={200} />
         </div>
         <p className="text-slate-700 leading-relaxed">{dispersionNarrative.interpretation}</p>
         <ReportInterpretationBlock vizType="Opportunity Score Distribution" scope={scope} asOfQuarter={asOfQuarter} stats={{ n: dispersionStats.n, median: dispersionStats.p50, p90: dispersionStats.p90, iqr: dispersionStats.iqr, share_ge_80: dispersionStats.share_ge_80, dominant_bin: dispersionStats.dominant_bin }} enabled />
@@ -175,9 +77,9 @@ export function MarketAnalyticsReportView({ data }: { data: ReportData }) {
       <section className={SECTION_CLASS}>
         <h2 className="text-lg font-bold text-slate-900 mb-4">Capital Concentration (FDIC)</h2>
         <div className="grid grid-cols-3 gap-4 mb-4">
-          <div><p className="text-xs text-slate-600">Avg CRE / (T1+T2)</p><p className="font-semibold">{capitalKpis.avgCreToTier1Tier2 != null ? formatRatio(capitalKpis.avgCreToTier1Tier2) : "—"}</p></div>
-          <div><p className="text-xs text-slate-600">Avg CRE / Equity</p><p className="font-semibold">{capitalKpis.avgCreToEquity != null ? formatRatio(capitalKpis.avgCreToEquity) : "—"}</p></div>
-          <div><p className="text-xs text-slate-600">Coverage %</p><p className="font-semibold">{capitalKpis.coveragePct.toFixed(1)}%</p></div>
+          <div><p className="text-xs text-slate-600">Avg CRE / (T1+T2)</p><p className="font-semibold tabular-nums">{capitalKpis.avgCreToTier1Tier2 != null ? formatRatio(capitalKpis.avgCreToTier1Tier2) : "—"}</p></div>
+          <div><p className="text-xs text-slate-600">Avg CRE / Equity</p><p className="font-semibold tabular-nums">{capitalKpis.avgCreToEquity != null ? formatRatio(capitalKpis.avgCreToEquity) : "—"}</p></div>
+          <div><p className="text-xs text-slate-600">Coverage %</p><p className="font-semibold tabular-nums">{capitalKpis.coveragePct.toFixed(1)}%</p></div>
         </div>
       </section>
 
@@ -188,47 +90,9 @@ export function MarketAnalyticsReportView({ data }: { data: ReportData }) {
         <p className="text-slate-600 text-sm mb-4 italic">
           <strong>Key insight:</strong> Institutions at the top of this ladder have CRE exposure materially in excess of regulatory capital buffers, indicating elevated sensitivity to asset quality deterioration and potential capital stress under adverse scenarios.
         </p>
-        {creToCapitalRanking.length > 0 ? (
-          <div className="h-[320px] min-h-[320px] w-full mb-4">
-            <ResponsiveContainer width="100%" height={320} debounce={0}>
-              <BarChart data={creToCapitalRanking} layout="vertical" margin={{ top: 8, right: 48, bottom: 24, left: 140 }} barCategoryGap={4}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal />
-                <XAxis type="number" tick={{ fontSize: 10, fill: "#64748b" }} axisLine={{ stroke: "#94a3b8" }} tickLine={false} />
-                <YAxis
-                  type="category"
-                  dataKey="name"
-                  width={130}
-                  tick={{ fontSize: 10, fill: "#334155", fontWeight: 500 }}
-                  axisLine={false}
-                  tickLine={false}
-                  tickFormatter={(name, index) => {
-                    const rank = index + 1
-                    const n = String(name)
-                    const truncated = n.length > 24 ? `${n.slice(0, 22)}…` : n
-                    return `${rank}. ${truncated}`
-                  }}
-                />
-                <Tooltip
-                  content={({ active, payload }) => {
-                    if (!active || !payload?.[0]) return null
-                    const p = payload[0].payload
-                    return (
-                      <div className="rounded-md border border-slate-200 bg-white px-3 py-2 shadow-sm text-sm">
-                        <p className="font-medium text-slate-800">{p.name}</p>
-                        <p className="text-slate-600">CRE / (T1+T2): {p.value.toFixed(1)}%</p>
-                      </div>
-                    )
-                  }}
-                />
-                <Bar dataKey="value" fill="#334155" radius={[0, 2, 2, 0]} maxBarSize={14}>
-                  <LabelList dataKey="value" position="right" formatter={(v: number) => `${v.toFixed(1)}%`} style={{ fontSize: 9, fill: "#475569" }} />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        ) : (
-          <p className="text-slate-600 mb-4">No institutions with CRE or capital data available.</p>
-        )}
+        <div className="mb-4">
+          <CreToCapitalRanking data={creToCapitalRanking} height={320} />
+        </div>
         <ReportInterpretationBlock vizType="CRE-to-Capital Ranking" scope={scope} asOfQuarter={asOfQuarter} stats={{ institutionCount: rows.length, avgCreToT1T2: capitalKpis.avgCreToTier1Tier2, avgCreToEquity: capitalKpis.avgCreToEquity }} enabled />
       </section>
 
@@ -239,78 +103,10 @@ export function MarketAnalyticsReportView({ data }: { data: ReportData }) {
         <p className="text-slate-600 text-sm mb-4 italic">
           <strong>Key insight:</strong> Institutions in the upper-right quadrant (above median CRE/Assets and CRE/Capital) with red/orange bubbles represent the highest-priority screening cohort—elevated balance sheet concentration combined with capital sensitivity and structural vulnerability.
         </p>
-        {scatterData.points.length > 0 ? (
-          <div className="h-[320px] min-h-[320px] w-full mb-4">
-            <ResponsiveContainer width="100%" height={320} debounce={0}>
-              <ScatterChart margin={{ top: 16, right: 24, bottom: 24, left: 24 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis
-                  type="number"
-                  dataKey="creToAssets"
-                  name="CRE / Assets (%)"
-                  tick={{ fontSize: 10, fill: "#64748b" }}
-                  axisLine={{ stroke: "#94a3b8" }}
-                  tickLine={false}
-                  label={{ value: "CRE / Assets (%)", position: "bottom", fontSize: 10, fill: "#64748b" }}
-                />
-                <YAxis
-                  type="number"
-                  dataKey="creToCap"
-                  name="CRE / (Tier1 + Tier2) (%)"
-                  tick={{ fontSize: 10, fill: "#64748b" }}
-                  axisLine={{ stroke: "#94a3b8" }}
-                  tickLine={false}
-                  label={{ value: "CRE / (Tier1 + Tier2) (%)", angle: -90, position: "insideLeft", fontSize: 10, fill: "#64748b" }}
-                />
-                <ReferenceLine x={scatterData.medianCreToAssets} stroke="#94a3b8" strokeDasharray="4 4" />
-                <ReferenceLine y={scatterData.medianCreToCap} stroke="#94a3b8" strokeDasharray="4 4" />
-                <Scatter
-                  data={scatterData.points}
-                  fillOpacity={0.75}
-                  shape={(props) => {
-                    const { cx, cy, payload } = props
-                    const r = payload.bubbleSize ?? 6
-                    const fill = getVulnerabilityFillHex(payload.vulnerabilityScore ?? 0)
-                    return <circle cx={cx} cy={cy} r={r} fill={fill} fillOpacity={0.75} stroke="#475569" strokeWidth={1} />
-                  }}
-                />
-                <Tooltip
-                  content={({ active, payload }) => {
-                    if (!active || !payload?.[0]) return null
-                    const p = payload[0].payload
-                    return (
-                      <div className="rounded border border-slate-200 bg-white px-3 py-2 text-xs shadow-sm">
-                        <p className="font-medium text-slate-800">{p.name}</p>
-                        <p>CRE/Assets: {p.creToAssets.toFixed(1)}%</p>
-                        <p>CRE/Capital: {formatCapitalMultiple(p.creToCap / 100)}</p>
-                        <p>Vulnerability: {p.vulnerabilityScore?.toFixed(1) ?? "—"}</p>
-                        <p>Assets: {formatCurrency(p.totalAssets)}</p>
-                      </div>
-                    )
-                  }}
-                />
-              </ScatterChart>
-            </ResponsiveContainer>
-          </div>
-        ) : (
-          <p className="text-slate-600 mb-4">No institutions with CRE and capital data available.</p>
-        )}
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-slate-500 mt-2">
-          {[
-            { range: "0–30", fill: "#e2e8f0" },
-            { range: "30–50", fill: "#fcd34d" },
-            { range: "50–70", fill: "#fb923c" },
-            { range: "70–85", fill: "#f87171" },
-            { range: "85–100", fill: "#dc2626" },
-          ].map(({ range, fill }) => (
-            <span key={range} className="flex items-center gap-1">
-              <span className="inline-block h-2.5 w-2.5 rounded-full border border-slate-300" style={{ backgroundColor: fill }} />
-              {range}
-            </span>
-          ))}
-          <span>· Bubble size = Total assets · Dashed lines = Medians</span>
+        <div className="mb-4">
+          <CapitalSensitivityMatrix data={scatter} height={320} />
         </div>
-        <ReportInterpretationBlock vizType="Capital Sensitivity Matrix" scope={scope} asOfQuarter={asOfQuarter} stats={{ institutionCount: scatterData.points.length, medianCreToAssets: scatterData.medianCreToAssets, medianCreToCap: scatterData.medianCreToCap }} enabled />
+        <ReportInterpretationBlock vizType="Capital Sensitivity Matrix" scope={scope} asOfQuarter={asOfQuarter} stats={{ institutionCount: scatter.points.length, medianCreToAssets: scatter.medianCreToAssets, medianCreToCap: scatter.medianCreToCap }} enabled />
       </section>
 
       {/* CRE Portfolio Composition */}
@@ -320,22 +116,10 @@ export function MarketAnalyticsReportView({ data }: { data: ReportData }) {
         <p className="text-slate-600 text-sm mb-4 italic">
           <strong>Key insight:</strong> Construction and multifamily exposures are the primary concentration drivers within the highest capital-sensitive institutions. A heavy construction mix indicates greater development-cycle risk; multifamily offers more stable cash flows.
         </p>
-        {exposureMixData.length > 0 ? (
-          <div className="h-[320px] min-h-[320px] w-full mb-4">
-            <ResponsiveContainer width="100%" height={320} debounce={0}>
-              <ComposedChart data={exposureMixData} layout="vertical" margin={{ top: 8, right: 24, bottom: 24, left: 100 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
-                <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 10, fill: "#64748b" }} axisLine={{ stroke: "#94a3b8" }} tickLine={false} tickFormatter={(v) => `${v}%`} />
-                <YAxis type="category" dataKey="name" width={95} tick={{ fontSize: 9, fill: "#475569" }} axisLine={false} tickLine={false} />
-                <Bar dataKey="construction" stackId="a" fill="#64748b" />
-                <Bar dataKey="multifamily" stackId="a" fill="#475569" />
-                <Bar dataKey="nonResidential" stackId="a" fill="#334155" />
-                <Bar dataKey="otherCre" stackId="a" fill="#94a3b8" />
-              </ComposedChart>
-            </ResponsiveContainer>
-          </div>
-        ) : null}
-        <ReportInterpretationBlock vizType="CRE Portfolio Composition" scope={scope} asOfQuarter={asOfQuarter} stats={{ institutionCount: exposureMixData.length }} enabled />
+        <div className="mb-4">
+          <CrePortfolioComposition data={exposureMix} height={320} />
+        </div>
+        <ReportInterpretationBlock vizType="CRE Portfolio Composition" scope={scope} asOfQuarter={asOfQuarter} stats={{ institutionCount: exposureMix.length }} enabled />
       </section>
 
       {/* State Overview (National only) */}

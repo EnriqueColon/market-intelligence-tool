@@ -12,6 +12,7 @@ import { InvestingBusinessMentions } from "@/components/investing-business-menti
 import { ArticleDigest } from "@/components/article-digest"
 import { IndustryOutlook } from "@/components/industry-outlook"
 import { MarketResearchFeed } from "@/components/market-research-feed"
+import { MarketPulseStrip } from "@/components/market-pulse-strip"
 
 type TabValue = "news" | "analytics" | "market-research" | "legal"
 
@@ -22,22 +23,50 @@ export type EnabledTabs = {
   legal: boolean
 }
 
+/** Flags for content inside a tab, as opposed to the tabs themselves. */
+export type DashboardFeatures = {
+  bankStressMap: boolean
+}
+
+/** Tab order is fixed here so the bar and the content below cannot fall out of step. */
+const TAB_DEFS = [
+  { value: "news", flag: "news", label: "News", Icon: Newspaper },
+  { value: "analytics", flag: "marketAnalytics", label: "Market Analytics", Icon: LineChart },
+  { value: "market-research", flag: "marketResearch", label: "Market Research", Icon: FileText },
+  { value: "legal", flag: "legal", label: "Legal Landscape", Icon: Scale },
+] as const satisfies ReadonlyArray<{ value: TabValue; flag: keyof EnabledTabs; label: string; Icon: typeof Newspaper }>
+
+/**
+ * Column counts are spelled out because Tailwind only ships classes it can see
+ * in the source; `grid-cols-${n}` would compile to nothing. Production runs
+ * three tabs, and the previously hardcoded four-column grid left a dead cell
+ * where the disabled tab used to be.
+ */
+const TAB_GRID_COLS: Record<number, string> = {
+  1: "grid-cols-1",
+  2: "grid-cols-2",
+  3: "grid-cols-3",
+  4: "grid-cols-4",
+}
+
+const TAB_TRIGGER_CLASS =
+  "gap-2 px-4 py-3 text-base font-medium min-h-[52px] h-auto items-center data-[state=active]:bg-[#006D95] data-[state=active]:text-white data-[state=active]:shadow-sm data-[state=inactive]:text-[#006D95] data-[state=inactive]:hover:bg-[#006D95]/5 rounded-md transition-all duration-200 border-0"
+
+/** Switching tabs crossfades rather than snapping. Short enough not to feel like a wait. */
+const TAB_CONTENT_CLASS = "animate-in fade-in duration-300"
+
 export function MarketIntelligenceDashboard({
   enabledTabs,
+  features = { bankStressMap: false },
 }: {
   enabledTabs: EnabledTabs
+  features?: DashboardFeatures
 }) {
   const router = useRouter()
   const [loggingOut, setLoggingOut] = useState(false)
 
-  const availableTabs = useMemo(() => {
-    const tabs: TabValue[] = []
-    if (enabledTabs.news) tabs.push("news")
-    if (enabledTabs.marketAnalytics) tabs.push("analytics")
-    if (enabledTabs.marketResearch) tabs.push("market-research")
-    if (enabledTabs.legal) tabs.push("legal")
-    return tabs
-  }, [enabledTabs])
+  const visibleTabs = useMemo(() => TAB_DEFS.filter((tab) => enabledTabs[tab.flag]), [enabledTabs])
+  const availableTabs = useMemo(() => visibleTabs.map((tab) => tab.value as TabValue), [visibleTabs])
 
   const [activeTab, setActiveTab] = useState<TabValue | "">(availableTabs[0] ?? "")
 
@@ -88,50 +117,24 @@ export function MarketIntelligenceDashboard({
         </div>
       </header>
 
+      <MarketPulseStrip />
+
       {availableTabs.length > 0 && (
         <main className="mx-auto w-full max-w-[1100px] px-5 py-12 md:px-[20px]">
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabValue)} className="flex flex-col gap-[60px]">
-            <TabsList className="grid w-full max-w-5xl grid-cols-4 gap-x-0 border border-[#006D95]/20 bg-white p-1.5 shadow-sm rounded-lg h-auto min-h-[56px]">
-              {enabledTabs.news && (
-                <TabsTrigger
-                  value="news"
-                  className="gap-2 px-4 py-3 text-base font-medium min-h-[52px] h-auto items-center data-[state=active]:bg-[#006D95] data-[state=active]:text-white data-[state=active]:shadow-sm data-[state=inactive]:text-[#006D95] data-[state=inactive]:hover:bg-[#006D95]/5 rounded-md transition-colors border-0"
-                >
-                  <Newspaper className="h-4 w-4 shrink-0" />
-                  <span>News</span>
+            <TabsList
+              className={`grid w-full max-w-5xl ${TAB_GRID_COLS[visibleTabs.length] ?? "grid-cols-4"} gap-x-0 border border-[#006D95]/20 bg-white p-1.5 shadow-sm rounded-lg h-auto min-h-[56px]`}
+            >
+              {visibleTabs.map(({ value, label, Icon }) => (
+                <TabsTrigger key={value} value={value} className={TAB_TRIGGER_CLASS}>
+                  <Icon className="h-4 w-4 shrink-0" />
+                  <span>{label}</span>
                 </TabsTrigger>
-              )}
-              {enabledTabs.marketAnalytics && (
-                <TabsTrigger
-                  value="analytics"
-                  className="gap-2 px-4 py-3 text-base font-medium min-h-[52px] h-auto items-center data-[state=active]:bg-[#006D95] data-[state=active]:text-white data-[state=active]:shadow-sm data-[state=inactive]:text-[#006D95] data-[state=inactive]:hover:bg-[#006D95]/5 rounded-md transition-colors border-0"
-                >
-                  <LineChart className="h-4 w-4 shrink-0" />
-                  <span>Market Analytics</span>
-                </TabsTrigger>
-              )}
-              {enabledTabs.marketResearch && (
-                <TabsTrigger
-                  value="market-research"
-                  className="gap-2 px-4 py-3 text-base font-medium min-h-[52px] h-auto items-center data-[state=active]:bg-[#006D95] data-[state=active]:text-white data-[state=active]:shadow-sm data-[state=inactive]:text-[#006D95] data-[state=inactive]:hover:bg-[#006D95]/5 rounded-md transition-colors border-0"
-                >
-                  <FileText className="h-4 w-4 shrink-0" />
-                  <span>Market Research</span>
-                </TabsTrigger>
-              )}
-              {enabledTabs.legal && (
-                <TabsTrigger
-                  value="legal"
-                  className="gap-2 px-4 py-3 text-base font-medium min-h-[52px] h-auto items-center data-[state=active]:bg-[#006D95] data-[state=active]:text-white data-[state=active]:shadow-sm data-[state=inactive]:text-[#006D95] data-[state=inactive]:hover:bg-[#006D95]/5 rounded-md transition-colors border-0"
-                >
-                  <Scale className="h-4 w-4 shrink-0" />
-                  <span>Legal Landscape</span>
-                </TabsTrigger>
-              )}
+              ))}
             </TabsList>
 
             {enabledTabs.news && (
-              <TabsContent value="news">
+              <TabsContent value="news" className={TAB_CONTENT_CLASS}>
                 <IndustryOutlook />
                 <div>
                   <PublicMentions />
@@ -146,7 +149,7 @@ export function MarketIntelligenceDashboard({
             )}
 
             {enabledTabs.marketResearch && (
-              <TabsContent value="market-research" className="flex flex-col gap-[60px]">
+              <TabsContent value="market-research" className={`flex flex-col gap-[60px] ${TAB_CONTENT_CLASS}`}>
                 <div className="rounded-lg border border-[#006D95]/25 bg-white p-6 shadow-sm">
                   <div className="flex items-center gap-2 mb-2">
                     <FileText className="h-5 w-5 text-[#006D95]" />
@@ -161,7 +164,7 @@ export function MarketIntelligenceDashboard({
             )}
 
             {enabledTabs.marketAnalytics && (
-              <TabsContent value="analytics" className="flex flex-col gap-[60px]">
+              <TabsContent value="analytics" className={`flex flex-col gap-[60px] ${TAB_CONTENT_CLASS}`}>
                 <div className="rounded-lg border border-[#006D95]/25 bg-white p-6 shadow-sm">
                   <div className="flex items-center gap-2 mb-2">
                     <LineChart className="h-5 w-5 text-[#006D95]" />
@@ -174,12 +177,12 @@ export function MarketIntelligenceDashboard({
                     FDIC data is quarterly and lagged by 1–2 quarters. Filter by United States or any state.
                   </p>
                 </div>
-                <MarketAnalytics level="national" />
+                <MarketAnalytics level="national" showBankStressMap={features.bankStressMap} />
               </TabsContent>
             )}
 
             {enabledTabs.legal && (
-              <TabsContent value="legal" className="flex flex-col gap-[60px]">
+              <TabsContent value="legal" className={`flex flex-col gap-[60px] ${TAB_CONTENT_CLASS}`}>
                 <LegalUpdates />
               </TabsContent>
             )}
