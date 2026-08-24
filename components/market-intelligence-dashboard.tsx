@@ -13,6 +13,8 @@ import { ArticleDigest } from "@/components/article-digest"
 import { IndustryOutlook } from "@/components/industry-outlook"
 import { MarketResearchFeed } from "@/components/market-research-feed"
 import { MarketPulseStrip } from "@/components/market-pulse-strip"
+import { DepartmentSelector } from "@/components/department-selector"
+import type { Department } from "@/lib/department"
 
 type TabValue = "news" | "analytics" | "market-research" | "legal"
 
@@ -58,9 +60,12 @@ const TAB_CONTENT_CLASS = "animate-in fade-in duration-300"
 export function MarketIntelligenceDashboard({
   enabledTabs,
   features = { bankStressMap: false },
+  initialDepartment = null,
 }: {
   enabledTabs: EnabledTabs
   features?: DashboardFeatures
+  /** Resolved server-side from the cookie so the first paint is already correct. */
+  initialDepartment?: Department | null
 }) {
   const router = useRouter()
   const [loggingOut, setLoggingOut] = useState(false)
@@ -101,6 +106,7 @@ export function MarketIntelligenceDashboard({
               <p className="font-body text-base text-[#006D95]/90 mt-1">News and analytics</p>
             </div>
             <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center">
+              <DepartmentSelector initial={initialDepartment} />
               <Button
                 type="button"
                 variant="outline"
