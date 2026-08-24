@@ -1,7 +1,7 @@
 # Rollback Reference
 
 Every commit that has reached production or `dev`, with the procedures for reverting. Update at the
-end of every session, alongside `SESSION.md` and `confluence.md`.
+end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 
 ## Current state
 

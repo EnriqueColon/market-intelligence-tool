@@ -3,19 +3,29 @@ description: Required end-of-session documentation and branch discipline for thi
 alwaysApply: true
 ---
 
-# End of every session, update three files
+# End of every session, update four files
 
 Do this before ending a session in which anything was committed. Do not wait to be asked.
 
-1. **`SESSION.md`** — add a new dated entry at the top. Cover what changed and *why*, the resulting
-   state, and what is still open. Write it for someone who was not present. Carry forward any open
-   item that is still open; delete ones that were resolved.
-2. **`ROLLBACK.md`** — add every new commit to the `dev` or production table with its short SHA,
-   date and summary. Update the "Current state" table. If a commit is a sensible rollback target or
-   a known-bad point, note it under "Known-good checkpoints".
-3. **`confluence.md`** — only where behaviour actually changed. Update the affected section, plus
-   the env var table, cache-key table, or data-source table if those moved. It is a maintenance
-   reference, not a changelog: describe how the system works now, not what changed.
+Each file answers a different question, so write to that question rather than repeating the same
+summary four times.
+
+1. **`SESSION.md`** — *what changed and why?* Add a new dated entry at the top. Cover what changed
+   and *why*, the resulting state, and what is still open. Write it for someone who was not present.
+   Carry forward any open item that is still open; delete ones that were resolved.
+2. **`ROLLBACK.md`** — *what do I go back to?* Add every new commit to the `dev` or production table
+   with its short SHA, date and summary. Update the "Current state" table. If a commit is a sensible
+   rollback target or a known-bad point, note it under "Known-good checkpoints".
+3. **`confluence.md`** — *how does it behave now?* Only where behaviour actually changed. Update the
+   affected section, plus the env var table, cache-key table, or data-source table if those moved.
+   It is a maintenance reference, not a changelog: describe how the system works now, not what
+   changed.
+4. **`README.md`** — *what is this and how do I work on it?* The entry point for someone new to the
+   repository. Update it only when the tech stack, external connectivity, setup steps, repository
+   layout or development workflow actually changed — or when a new trap is worth warning people
+   about in "Maintenance notes". Most sessions will not touch it, and that is correct; it is
+   orientation, not a changelog. Keep detail in `confluence.md` and link to it rather than
+   duplicating, so the two cannot drift.
 
 Verify SHAs with `git log --format='%h|%ci|%s'` rather than writing them from memory.
 
@@ -25,7 +35,12 @@ Verify SHAs with `git log --format='%h|%ci|%s'` rather than writing them from me
 - Development happens on `dev`, which deploys as an isolated Vercel preview.
 - Never push feature work directly to `main`. Ship with `git checkout main && git merge dev`.
 - Do not commit unrelated files. This repo usually carries uncommitted churn in
-  `data/*.sqlite*`, `scripts/import_aom_to_sqlite.py` and `.DS_Store` — leave it alone.
+  `data/*.sqlite*`, `scripts/import_aom_to_sqlite.py`, `data/README-aom-import.md` and `.DS_Store` —
+  leave it alone.
+- Four files carry CRLF line endings (`lib/map-stress-utils.ts`, `app/actions/cre-deterioration.ts`,
+  `app/actions/export-market-analytics-report.ts`, `lib/noncurrent-debug.ts`). Editing them with a
+  script in text mode rewrites every line and buries the real change. Check `git show --stat` before
+  pushing.
 
 # Environment detection
 

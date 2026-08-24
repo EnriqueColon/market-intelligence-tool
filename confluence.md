@@ -1,8 +1,11 @@
 # Market Intelligence Tool — Technical Reference
 
 Maintenance handover for developers who did not build this. Describes how the system works *now*.
-Keep it current at the end of every session; `SESSION.md` records history, this file records
-behaviour.
+Keep it current at the end of every session.
+
+One of four maintained documents: `README.md` orients a newcomer and covers setup and workflow, this
+file records behaviour in detail, `SESSION.md` records history, and `ROLLBACK.md` records recovery.
+Start at the README if you are new to the repository.
 
 Verified against `dev` @ `908d083` / `main` @ `eabf088` on 2026-08-18.
 

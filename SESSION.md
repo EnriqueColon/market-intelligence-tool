@@ -1,10 +1,50 @@
 # Session Log
 
 Running record of work sessions, most recent first. Update at the end of every session, alongside
-`ROLLBACK.md` and `confluence.md`.
+`README.md`, `ROLLBACK.md` and `confluence.md`.
 
 Each entry should let someone who was not present answer three questions: what changed, what state
 is it in now, and what is still open.
+
+---
+
+## 2026-08-24 — a README, and a fourth maintained document
+
+The repository had no root `README.md`. Someone cloning it met ten top-level markdown files, most of
+them unmaintained, with no entry point saying what the tool is or how to run it.
+
+`README.md` now covers what the tool is and does, the stack, external connectivity, local setup,
+repository layout, the development workflow, and maintenance notes. It is deliberately **orientation,
+not a second technical reference** — depth stays in `confluence.md` and the README links to it, so
+the two cannot drift into disagreeing.
+
+The connectivity section is the part worth keeping accurate. It lists every external service with its
+auth model and its failure behaviour, which makes visible something that is otherwise folklore: most
+of the data sources are keyless — FDIC, FRED, GDELT, Google News RSS, OpenFreeMap — which is why the
+tool runs on a preview deployment with almost no configuration. Only `APP_PASSWORD` and
+`COOKIE_SECRET` are needed for a working local instance, plus `OPENAI_API_KEY` for AI features.
+
+It also names the unmaintained older files (`APP_TABS_AND_DATA_SOURCES.md`, `TOOL_OVERVIEW_SIMPLE.md`,
+`DEPLOYMENT_CHECKLIST.md`, `NEWS_ACCESS_STATUS.md`, `CBRE_FILTERS_REPORT.md`) and states that
+`confluence.md` wins where they disagree. They were left in place rather than deleted, but a reader
+is now told not to trust them.
+
+`.cursor/rules/session-docs.mdc` was updated from three files to four, with a question attached to
+each so the four do not collapse into the same summary repeated: README asks *what is this and how do
+I work on it*, confluence *how does it behave now*, SESSION *what changed and why*, ROLLBACK *what do
+I go back to*. The rule notes that most sessions should not need to touch the README. The CRLF trap
+and `data/README-aom-import.md` were added to the branch-discipline section, since both cost time
+this week.
+
+Every path cited in the README was checked to exist, and the claims were taken from `confluence.md`
+rather than written from memory.
+
+### Still open
+
+Unchanged from the entry below — the Opportunity Score's poor discrimination, the tab-versus-export
+divergence, zeroed live-tab scores, the 30-column table, and the missing cache on `buildReportData`.
+Nothing has shipped to production; `main` is still at `e8bf8ad` and still serves the wrong Reserve
+Coverage.
 
 ---
 
