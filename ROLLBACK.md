@@ -8,7 +8,7 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
 | `main` | `e8bf8ad` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `2b3cbd6` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `dev` | `b87506a` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 A SHA here can never name the commit that writes it, so the true head is usually one documentation
 commit further on. Only behavioural commits matter as rollback targets; on `dev` the newest is
@@ -102,6 +102,8 @@ Not in production. Merge to `main` to ship.
 
 | Commit | Date | Summary |
 | --- | --- | --- |
+| `b87506a` | 08-24 | docs: delete five superseded top-level documents |
+| `ac9a4ac` | 08-24 | docs: list the README commit in the rollback reference |
 | `2b3cbd6` | 08-24 | docs: add a README and make it the fourth maintained document |
 | `75c10ae` | 08-24 | docs: explain the one-commit lag in the current state table |
 | `1a5c06a` | 08-24 | docs: list the fragility docs commit in the rollback reference |
