@@ -8,7 +8,7 @@ end of every session, alongside `SESSION.md` and `confluence.md`.
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
 | `main` | `e8bf8ad` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `dcfa28d` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `dev` | `d439a95` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 Production deploys automatically on every push to `main`. `dev` deploys as a Vercel preview on every
 push. Crons run only against production, and the post-deploy warm-cache GitHub Action triggers only
@@ -98,6 +98,7 @@ Not in production. Merge to `main` to ship.
 
 | Commit | Date | Summary |
 | --- | --- | --- |
+| `d439a95` | 08-24 | docs: correct the dev head and record newly verified fragilities |
 | `dcfa28d` | 08-23 | docs: list the metric correction docs commit in the rollback reference |
 | `c74c8e2` | 08-23 | docs: record the reserve coverage and capital corrections |
 | `7286e71` | 08-23 | fix: report the real reserve coverage and capital base |
