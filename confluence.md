@@ -151,6 +151,34 @@ same series through `app/actions/fetch-market-pulse.ts`, so its tiles and the Ke
 by construction. Values are cached with `unstable_cache`; the strip degrades to nothing rather than
 showing a placeholder if FRED is unreachable.
 
+### FDIC screening metrics
+
+Fields are requested in `lib/fdic-config.ts` and turned into `BankFinancialData` in
+`lib/fdic-data-transformer.ts`. These four are the ones whose names invite a wrong reading, so verify
+against the live API rather than inferring from the field name:
+
+| Displayed as | Derivation | Typical range |
+| --- | --- | --- |
+| Reserve Coverage | `LNATRES / LNLSNET` — the allowance over net loans | 1–2% |
+| Loans / Deposits | `LNLSDEPR` as reported | 60–100% |
+| CRE / (T1+T2) | CRE loans over `RBCT1J + RBCT2` | 1–6x |
+| Past Due 30-89 / 90+ | `P3ASSET`, `P9ASSET` — dollar amounts in thousands, not ratios | — |
+
+`LNLSDEPR` is **net loans-to-deposits**, not a reserve, despite the FDIC data dictionary phrasing
+that suggests otherwise; it equals `LNLSNET / DEP` to the decimal place on every institution. It was
+read as Reserve Coverage until 2026-08-23 and displayed roughly thirty times too large.
+
+`RBCT1J + RBCT2` over `RWAJ` reproduces FDIC's published `RBCRWAJ` exactly, which is the check to run
+if the capital figures ever look wrong. `RWA_TO_ASSETS_PROXY` in `lib/fdic-ratio-helpers.ts` remains
+only as a fallback for institutions that do not report `RWAJ`; `CapitalRatios.basis` records whether
+a row used reported dollars (`"reported"`) or the proxy (`"derived"`). `EQCAP` is requested but the
+API returns null for it, so CRE / Equity falls back to Tier 1.
+
+The Opportunity Score normalises each input against the **cohort's own min and max**
+(`metricRange` in `app/actions/export-market-analytics-report.ts`), not fixed thresholds, so
+correcting a field's scale does not require retuning weights. It does change the ranking, because the
+inputs then measure something different.
+
 ## 4a. Charts
 
 All Recharts instances share `lib/chart-theme.tsx` — palette, axis, grid, tooltip. Colours are
@@ -407,21 +435,8 @@ changing code, check that *your* files are clean rather than expecting a clean o
   than refresh it; the hazard is a future session wiring it up without noticing the dates. The
   hardcoded `CENSUS_YEAR = 2022` is separate and does run, but the Miami ACS metrics it produces are
   written to `section.miamiDade`, which the UI never reads.
-- **Two FDIC metrics in Market Analytics are wrong.** Both verified against the live API on
-  2026-08-21 and both still present:
-  - `LNLSDEPR` is commented as `Loan Loss Reserve / Total Loans` in `lib/fdic-config.ts` (L60) and
-    rendered as **Reserve Coverage**, but it is the **net loans-to-deposits ratio** — it matches
-    `LNLSNET / DEP` exactly. Real reserve coverage is `LNATRES / LNLSNET`, roughly 53× smaller, and
-    means the opposite thing. The export's Opportunity Score weights this field 15% inverted, so that
-    score is affected too. `LNATRES` is not currently among the requested fields.
-  - `CRE / (T1+T2)` derives capital via `RBCRWAJ × (RWA_TO_ASSETS_PROXY × assets)` in
-    `lib/fdic-ratio-helpers.ts`, with Tier 2 never populated (L85). The 0.75 proxy overstates
-    risk-weighted assets, so the ratio is **understated** — 394% against a true 443% on a sample
-    Florida bank. `RBCT1J`, `RBCT2` and `RWAJ` are available and reconcile exactly to FDIC's own
-    published `RBCRWAJ`.
-
-  For contrast, the `P3ASSET`/`P9ASSET` past-due columns *are* correct despite comments suggesting
-  they are ratios; the fields really are dollar amounts in thousands. Fix the comments, not the code.
+- The `P3ASSET`/`P9ASSET` past-due columns are correct despite comments suggesting they are ratios;
+  the fields really are dollar amounts in thousands. Fix the comments, not the code.
 - **Live-tab scores are always zero.** `opportunityScore`, `earningsScore` and `vulnerabilityScore`
   are hardcoded to `0` in `market-analytics.tsx`, so the institution drawer shows zeros. The real
   computation exists only on the export path, which also paginates the full FDIC result set while the

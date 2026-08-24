@@ -8,6 +8,82 @@ is it in now, and what is still open.
 
 ---
 
+## 2026-08-23 (later) — two wrong numbers corrected
+
+A question about what else could be optimised. Reviewing the tool for that turned up the two data
+faults recorded on 2026-08-21 as still open; both were fixed and verified rather than catalogued
+again. The tool had been showing a materially wrong number in a prominent place.
+
+### Reserve Coverage was the loans-to-deposits ratio
+
+`LNLSDEPR` was requested as "Loan Loss Reserve / Total Loans" and rendered as **Reserve Coverage**.
+It is the **net loans-to-deposits ratio**. Re-verified against the live API before touching anything:
+for JPMorgan, Bank of America and Citibank the field matched `LNLSNET / DEP` to the decimal place,
+while true reserve coverage (`LNATRES / LNLSNET`) was 1.72%, 1.10% and 2.47%.
+
+The tool was therefore telling a reader that the average institution held an **82.4%** cushion
+against loan losses when the real figure is **1.3%** — off by a factor of roughly thirty and, worse,
+carrying the opposite meaning. It appeared in the Cohort Summary KPI, the screening table, the
+institution drawer, the map tooltip, the PDF report and its appendix, and it was quoted into the
+AI-written narrative.
+
+- `lib/fdic-config.ts` now requests `LNATRES`; the `LNLSDEPR` comment is corrected.
+- `loanLossReserve` in `lib/fdic-data-transformer.ts` is now `LNATRES / LNLSNET`. The field name
+  always described the right thing — the source was wrong — so every display site became correct
+  without being touched.
+- `loansToDeposits` is new, carrying `LNLSDEPR` under its real name, surfaced in the institution
+  drawer so a legitimate liquidity metric was not simply deleted.
+- `lib/noncurrent-debug.ts` computed the same ratio from the same wrong field and is corrected too;
+  the drawer prefers that snapshot over the row, so leaving it would have reintroduced the bug in the
+  one place built to audit it.
+
+**The score did not need retuning.** `metricRange` normalises against the cohort's own min and max,
+so a ~30× change of scale is absorbed automatically, and `invert` stays correct because a thin
+allowance still means more distress. Every consumer was checked for hardcoded thresholds; there are
+none.
+
+### CRE / (T1+T2) was understated
+
+Capital was inferred as `RBCRWAJ × (0.75 × assets)` with Tier 2 never populated. `RBCT1J + RBCT2`
+over `RWAJ` reproduces FDIC's published `RBCRWAJ` to twelve decimal places, so the reported fields
+are now used directly and the 0.75 proxy is a fallback only. `CapitalRatios.basis` records which was
+used. Tier 2 is tested for presence rather than positivity, since it is legitimately zero at many
+small banks and testing `> 0` would have quietly sent them back to the proxy.
+
+### Verified end to end
+
+Against Florida Q1 2026, comparing what the browser rendered with figures computed straight from the
+FDIC API:
+
+| Institution | Reserve, shown / FDIC | CRE/(T1+T2), shown / FDIC |
+| --- | --- | --- |
+| SouthState | 1.2% / 1.19% | 5.19x / 519.0% |
+| BankUnited | 0.9% / 0.87% | 4.37x / 437.2% |
+| EverBank | 0.8% / 0.82% | 3.31x / 331.0% |
+| City NB of Florida | 1.1% / 1.11% | 4.24x / 423.9% |
+| Raymond James | — | 3.87x / 386.8% |
+
+Checked on all four surfaces: screening table, Cohort Summary KPI (1.3%), institution drawer
+(including Loans / Deposits at 88.1% against FDIC's 88.05%) and the `/report/market-analytics` route
+that the PDF renders from. No page errors.
+
+### Still open
+
+- **The Opportunity Score barely discriminates.** For Florida the median is 51.6 with an interquartile
+  range of 47.4–56.5 and nothing at all above 80. `metricRange` uses raw min and max, so one outlier
+  stretches the scale and compresses everyone else; percentile ranking would separate the cohort far
+  better. Worth revisiting now that a corrected input feeds it.
+- **The tab and the export still disagree.** The live tab caps at 5,000 rows sorted by assets
+  descending while the export paginates the full set, so counts and averages differ for the same
+  scope, and small banks — the ones with concentrated CRE — are the ones dropped.
+- **Live-tab scores are still hardcoded to zero**, so the drawer shows zeros.
+- **The screening table renders up to 30 columns with no frozen first column**, so scrolling right
+  loses the institution name.
+- **`buildReportData` has no `unstable_cache`**, unlike nearly every other action, which is why
+  Visual Analysis takes about eleven seconds on National scope.
+
+---
+
 ## 2026-08-23
 
 A request for "a visual component" and a more modern interface. Both were addressed, and pursuing
