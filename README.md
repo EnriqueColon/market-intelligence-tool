@@ -83,8 +83,10 @@ The department is a stated preference held in a non-httpOnly cookie, not an auth
 it selects a view and must never gate access to data.
 
 One exists today — the **Executive Brief**, which answers "what moved this quarter" in at most
-eighteen lines rather than eleven hundred rows. Three more are planned; see
-`docs/NEXT_VERSION_PLAN.md`.
+eighteen lines rather than eleven hundred rows, and whose entries open the institution profile drawer
+owned by the Market Analytics tab. A lens hands an institution to whichever view already owns the
+detail rather than rendering its own copy; `confluence.md` explains why that indirection is
+deliberate. Three more lenses are planned; see `docs/NEXT_VERSION_PLAN.md`.
 
 ---
 
@@ -298,6 +300,13 @@ heuristic is a bug waiting for the one bank where it is.
 **Never substitute one capital measure for another across a time series.** Falling back to the
 leverage ratio when CET1 is missing for a quarter compares two different measures and invents a
 change that never happened.
+
+**"Latest" per institution is not the same as the latest quarter.** Not every bank files every
+quarter, so an institution's most recent row can be a quarter behind the cohort's. Reporting its
+newest movement under a heading that names the current quarter dates that movement forward, which is
+how the Executive Brief came to list a Q4 2025 crossing as Q1 2026 for 102 of 1,215 institutions. Any
+view headed "this quarter" must require a row *in* that quarter, and say how many institutions it
+therefore excluded — a silently smaller cohort reads exactly like a calmer market.
 
 **FDIC report dates must be `YYYYMMDD`.** A hyphenated `2025-09-30` is not rejected — it matches zero
 rows. This silently emptied every map endpoint for the entire life of the feature, and it presents as

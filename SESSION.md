@@ -8,7 +8,45 @@ is it in now, and what is still open.
 
 ---
 
-## 2026-08-24 (latest) — CRE was overstated across the whole tool
+## 2026-08-24 (latest) — the brief became clickable, and admitted what it was hiding
+
+Asked that an executive be able to click an institution in "what moved this quarter" and see its
+statistics. The entries are now buttons that switch to the Market Analytics tab and open the profile
+drawer already built there.
+
+**Why the handoff rather than a second drawer.** The drawer's peer-positioning percentiles are
+cohort-relative, so a drawer rendered inside the brief would need its own cohort, and the moment
+there are two cohorts the same institution reads at two different percentiles. Handing the CERT to
+the tab keeps the statistics and the cohort computed in exactly one place. The dashboard routes
+`focusCert` down and the tab resolves it once its data has loaded, so clicking while the tab is
+still fetching works rather than silently doing nothing.
+
+**Wiring it up exposed a defect in the brief.** The first institution clicked could not be opened,
+and the reason was not the plumbing: the brief reported each institution's most recent movement
+regardless of *when* it happened. American Bank National Association's last call report was Q4 2025,
+so its construction-to-capital crossing was real but a quarter old — and it was listed under a
+heading reading "Q1 2026". 102 of the 1,215 institutions were in that position. Institutions that
+did not file for the latest quarter are now excluded, and the count is stated in the header instead
+of being folded in silently, because "nothing moved" and "we did not look" read identically to an
+executive.
+
+Fixing the labelling fixed the handoff as a side effect: the brief and the screening tab now agree
+on the same 1,113 institutions, verified by matching counts in the running app.
+
+**State.** Committed as `bb78bd8` on `dev`. Verified end to end in a browser — clicking the first
+entry opens the drawer showing CRE/Capital of 3.34x for American Bank of Commerce, matching the 334%
+the brief itself claims. The brief cache key moved to `executive-brief-v3`; the old entry would have
+served the mislabelled list for six hours otherwise.
+
+**Still open.** The row cap still bounds the brief to the largest ~1,100 institutions, so a smaller
+bank that moved is invisible; the header says so, and Phase 1's cached data layer is where that gets
+fixed rather than papered over. An institution that stops filing is arguably itself a signal, and it
+is now dropped rather than surfaced — a "no longer reporting" section would be the honest place for
+it. And the audit noted below is still not done.
+
+---
+
+## 2026-08-24 — CRE was overstated across the whole tool
 
 Asked whether the Executive Brief was showing accurate data, so ten of its claims were checked
 against the FDIC API by hand. Eight matched to the decimal — every noncurrent-loan figure and every

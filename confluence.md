@@ -336,6 +336,31 @@ quarters per institution that caps national coverage near 1,138 institutions rat
 ~4,400, so the action returns `capped` and the card states the limitation rather than implying full
 coverage. Pagination would fix it properly and has not been done.
 
+**An institution that did not file for the latest quarter is excluded**, and counted in `staleCount`
+so the card can say so. This is load-bearing rather than tidiness. The card is headed "what moved
+this quarter" and names a quarter; an institution whose newest call report is a quarter old still has
+a most-recent movement, and reporting it dates that movement forward. Nationally this affects around
+100 of 1,215 institutions. `institutionCount` is therefore the number of institutions that *did*
+file, not the number in the response.
+
+That rule is also what makes the profile handoff work, since the screening tab drops the same
+institutions — see below.
+
+**Clicking an entry opens the institution profile drawer.** The brief does not own a drawer. It calls
+`onSelectInstitution(cert)`, `market-intelligence-dashboard.tsx` stores the CERT as `focusCert` and
+switches to the analytics tab, and `MarketAnalytics` resolves it against its own `screeningTable`
+once loading finishes. The indirection exists because the drawer's peer-positioning figures are
+percentiles against a cohort: a drawer rendered inside the brief would need a second cohort, and the
+same institution would then read at two different percentiles depending on where it was opened.
+
+The handoff therefore depends on the two cohorts agreeing, which they do because both query
+`fetchFDICFinancials(state, 10000, false)` and both require a row in the newest quarter. **If either
+side's cohort rule changes, the handoff starts failing for whatever the two no longer share.** It
+fails visibly rather than silently: `onFocusResolved(false)` makes the card explain that the
+institution is outside the analytics cohort. Rows are `<button>` elements so the list stays usable by
+keyboard; when the analytics tab is disabled, `onSelectInstitution` is omitted and rows render as
+plain text rather than as buttons that cannot work.
+
 ## 4a. Charts
 
 All Recharts instances share `lib/chart-theme.tsx` — palette, axis, grid, tooltip. Colours are
@@ -398,14 +423,16 @@ Generated content is expensive, so nearly everything is cached for a day.
   | `industry-outlook-shared-v12` | The generated memo |
   | `industry-outlook-verified-metrics-v1` | Fetched FRED/FDIC figures |
   | `market-analytics-report-data-v2` + scope | Full screening cohort with scores, for the PDF and Visual Analysis |
-  | `executive-brief-v1` + scope | Ranked change events for the Executive Brief |
+  | `executive-brief-v3` + scope | Ranked change events for the Executive Brief |
 
   `market-analytics-report-data` is keyed by scope rather than by day and revalidates every six
   hours, since FDIC publishes quarterly. **Bump its version whenever the scoring changes**, or cached
   entries keep serving scores computed under the old method — v2 marks the move to percentile rank.
   `executive-brief` follows the same rule on a six-hour window: **bump its version whenever a
-  change-detection threshold, the trajectory run length, a ranking function or the observation
-  mapping moves**, or the brief keeps reporting events under the old rules until the window expires.
+  change-detection threshold, the trajectory run length, a ranking function, the observation mapping
+  or the cohort rule moves**, or the brief keeps reporting events under the old rules until the
+  window expires. v2 marks the capital-ratio fix; v3 marks excluding institutions that did not file
+  for the latest quarter.
   Locally, deleting `.next/cache` does not clear it — the dev server holds it in memory too, so
   restart the server as well.
   A national payload can exceed the 2MB entry limit, in which case Next logs a warning, skips the

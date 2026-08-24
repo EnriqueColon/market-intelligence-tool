@@ -162,9 +162,18 @@ tabs are untouched.
   `groupForBrief`) so `scripts/verify-executive-brief.mjs` exercises the shipped code rather than a
   copy of it.
 
-  Nationally this sees ~1,138 institutions, not all ~4,400 — nine quarters against a 10,000-row FDIC
-  cap. The brief says so on its face rather than implying full coverage. Fixing it properly needs
-  pagination, which is still open.
+  Nationally this sees ~1,113 institutions, not all ~4,400 — nine quarters against a 10,000-row FDIC
+  cap, less the ~100 that did not file for the latest quarter and are excluded rather than having a
+  stale movement dated forward. The brief says so on its face rather than implying full coverage.
+  Fixing it properly needs pagination, which is still open.
+
+  Entries are clickable and open the institution profile drawer owned by the Market Analytics tab,
+  via a `focusCert` handed down through the dashboard. The lens does not render its own drawer: the
+  drawer's figures are percentiles against a cohort, and a second cohort would make one institution
+  read at two different percentiles. This is the pattern the remaining three lenses should follow —
+  hand off to the view that already owns the detail. It works because both sides select the same
+  cohort, so a change to either side's cohort rule breaks it; the failure is surfaced in the card
+  rather than swallowed.
 - **Underwriter Workbench** — institution-first; the drawer already carries peer comparison and
   eight-quarter trends. Adds a defined peer cohort (size band, geography, CRE mix), threshold flags,
   and a downside scenario on CRE marks.
