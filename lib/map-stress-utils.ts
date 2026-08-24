@@ -74,6 +74,9 @@ export function computeStressScores(
         totalRbcRatio: b.totalRbcRatio,
         cet1Ratio: b.cet1Ratio,
         totalEquityDollars: b.totalEquityDollars,
+        tier1Dollars: b.tier1Dollars,
+        tier2Dollars: b.tier2Dollars,
+        riskWeightedAssets: b.riskWeightedAssets,
       })
       return cr?.creToTier1Tier2 != null ? cr.creToTier1Tier2 * 100 : 0
     })
@@ -94,6 +97,9 @@ export function computeStressScores(
         totalRbcRatio: bank.totalRbcRatio,
         cet1Ratio: bank.cet1Ratio,
         totalEquityDollars: bank.totalEquityDollars,
+        tier1Dollars: bank.tier1Dollars,
+        tier2Dollars: bank.tier2Dollars,
+        riskWeightedAssets: bank.riskWeightedAssets,
       })?.creToTier1Tier2 ?? 0
     const capitalScore = normalize(
       capitalVal * 100,

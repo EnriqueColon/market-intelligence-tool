@@ -136,6 +136,9 @@ export async function fetchTop5CREDeterioration(): Promise<CREDeteriorationResul
         totalRbcRatio: r.totalRbcRatio,
         cet1Ratio: r.cet1Ratio,
         totalEquityDollars: r.totalEquityDollars,
+        tier1Dollars: r.tier1Dollars,
+        tier2Dollars: r.tier2Dollars,
+        riskWeightedAssets: r.riskWeightedAssets,
       })
       const creCap = capitalRatios.creToTier1Tier2 ?? NaN
       if (!Number.isFinite(creCap) || creCap <= 0) return null

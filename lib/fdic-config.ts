@@ -53,16 +53,23 @@ export const FDIC_FIELDS = {
     'NALNLS', // Nonaccrual Loans & Leases
     'NCLNLSR', // Noncurrent Loans to Loans (past due 90+ + nonaccrual as % of gross loans)
     'NCLNLS', // Noncurrent Loans to Assets (past due 90+ + nonaccrual as % of total assets)
+    'LNATRES', // Allowance for Loan and Lease Losses (dollars, thousands) — the real reserve
     'ROA', // Return on Assets
     'ROE', // Return on Equity
     'EEFFR', // Efficiency Ratio
     'NIMR', // Net Interest Income Ratio
-    'LNLSDEPR', // Loan Loss Reserve / Total Loans
+    'LNLSDEPR', // Net loans and leases to deposits (%). Not a reserve — see LNATRES
     'NETINC', // Net Income
     'RBCT1CER', // Common Equity Tier 1 Ratio
     'RBC1AAJ', // Leverage Ratio (PCA)
     'RBC1RWAJ', // Tier 1 Risk-Based Capital Ratio (PCA)
     'RBCRWAJ', // Total Risk-Based Capital Ratio (PCA)
+    // Reported capital and risk-weighted assets in dollars. (RBCT1J + RBCT2) / RWAJ
+    // reproduces FDIC's own RBCRWAJ exactly, so these give a true denominator
+    // for CRE-to-capital rather than a ratio times an assumed risk weighting.
+    'RBCT1J', // Tier 1 Capital (thousands)
+    'RBCT2', // Tier 2 Capital (thousands)
+    'RWAJ', // Risk-Weighted Assets (thousands)
     'EQCAP', // Total Equity Capital (thousands) - if available
     'STNAME', // State Name
     'CITY', // City

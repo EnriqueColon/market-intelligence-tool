@@ -171,6 +171,9 @@ export async function buildExportData(scope: string): Promise<ExportData> {
       totalRbcRatio: latest.totalRbcRatio,
       cet1Ratio: latest.cet1Ratio,
       totalEquityDollars: latest.totalEquityDollars,
+      tier1Dollars: latest.tier1Dollars,
+      tier2Dollars: latest.tier2Dollars,
+      riskWeightedAssets: latest.riskWeightedAssets,
     })
     rows.push({
       id: latest.id,

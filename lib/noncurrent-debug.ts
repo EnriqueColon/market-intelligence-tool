@@ -7,7 +7,8 @@
  * - NPL Ratio: NALNLS / LNLSNET * 100. NALNLS=nonaccrual loans (thousands), LNLSNET=net loans (thousands)
  * - Noncurrent/Loans: FDIC NCLNLSR. Denominator: gross loans (LNLSNET)
  * - Noncurrent/Assets: FDIC NCLNLS. Denominator: ASSET. Fallback: NCLNLSR * (LNLSNET/ASSET)
- * - Reserve Coverage: FDIC LNLSDEPR. Numerator: ALLL, Denominator: Total Loans (LNLSNET)
+ * - Reserve Coverage: LNATRES / LNLSNET. Numerator: ALLL, Denominator: net loans.
+ *   (LNLSDEPR was used here previously; it is loans-to-deposits, not a reserve.)
  * - Gross Loans: LNLSNET (thousands; *1000 for dollars)
  * - Total Assets: ASSET (thousands; *1000 for dollars)
  */
@@ -52,6 +53,7 @@ export interface NoncurrentDebugSnapshot {
     NCLNLS?: number
     NCLNLSR?: number
     LNLSDEPR?: number
+    LNATRES?: number
     P9ASSET?: number
     /** Noncurrent loan amount derived: NCLNLS% * ASSET or NCLNLSR% * LNLSNET */
     noncurrent_loan_amount_derived?: number
@@ -90,6 +92,7 @@ export function buildNoncurrentDebugSnapshot(raw: Record<string, unknown>): Nonc
   const nclnlsRaw = Number(raw.NCLNLS ?? 0)
   const nclnlsrRaw = Number(raw.NCLNLSR ?? 0)
   const lnlsdeprRaw = Number(raw.LNLSDEPR ?? 0)
+  const lnatresRaw = Number(raw.LNATRES ?? 0)
 
   const totalAssets = formatCurrency(assetRaw)
   const totalLoans = lnlsnetRaw * 1000 // LNLSNET is in thousands
@@ -110,8 +113,9 @@ export function buildNoncurrentDebugSnapshot(raw: Record<string, unknown>): Nonc
     noncurrentToAssetsDecimal = ntl * (lnlsnetRaw / assetRaw)
   }
 
-  // Reserve coverage: LNLSDEPR. Stored as decimal.
-  const reserveCoverageDecimal = normalizePercentToDecimal(lnlsdeprRaw, "LNLSDEPR") ?? 0
+  // Reserve coverage: the allowance over net loans, both in thousands.
+  // LNLSDEPR was used here previously; it is loans-to-deposits, not a reserve.
+  const reserveCoverageDecimal = lnlsnetRaw > 0 ? lnatresRaw / lnlsnetRaw : 0
 
   // Display values (decimal * 100 -> percent string)
   const nplDisplay = nplRatioDecimal != null && Number.isFinite(nplRatioDecimal)
@@ -137,7 +141,7 @@ export function buildNoncurrentDebugSnapshot(raw: Record<string, unknown>): Nonc
       npl_ratio: "NALNLS / LNLSNET * 100. FDIC: NALNLS (nonaccrual, thousands), LNLSNET (net loans, thousands)",
       noncurrent_to_loans: "FDIC NCLNLSR. Denominator: gross loans (LNLSNET).",
       noncurrent_to_assets: "FDIC NCLNLS. Denominator: ASSET. Fallback: NCLNLSR * (LNLSNET/ASSET).",
-      reserve_coverage: "FDIC LNLSDEPR. Numerator: ALLL, Denominator: Total Loans (LNLSNET).",
+      reserve_coverage: "FDIC LNATRES / LNLSNET. Numerator: ALLL, Denominator: net loans.",
       gross_loans: "LNLSNET (thousands; *1000 for dollars). Denominator for NCLNLSR.",
       total_assets: "ASSET (thousands; *1000 for dollars). Denominator for NCLNLS.",
     },
@@ -151,6 +155,7 @@ export function buildNoncurrentDebugSnapshot(raw: Record<string, unknown>): Nonc
       NCLNLS: nclnlsRaw,
       NCLNLSR: nclnlsrRaw,
       LNLSDEPR: lnlsdeprRaw,
+      LNATRES: lnatresRaw,
       P9ASSET: raw.P9ASSET != null ? Number(raw.P9ASSET) : undefined,
       noncurrent_loan_amount_derived:
         assetRaw > 0 && nclnlsRaw !== 0
@@ -172,7 +177,7 @@ export function buildNoncurrentDebugSnapshot(raw: Record<string, unknown>): Nonc
       reserve_coverage: {
         value: reserveCoverageDecimal,
         storage: "decimal",
-        numerator_note: "ALLL (Allowance for Loan and Lease Losses). FDIC provides LNLSDEPR = ALLL / Total Loans.",
+        numerator_note: "ALLL (Allowance for Loan and Lease Losses), FDIC LNATRES, over net loans LNLSNET.",
         denominator_note: "LNLSNET (Net Loans & Leases, thousands).",
       },
       gross_loans_dollars: totalLoans,

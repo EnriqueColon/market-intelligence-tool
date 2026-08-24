@@ -4,7 +4,14 @@
  * Capital dollar amounts are derived from regulatory ratios when not directly available.
  */
 
-/** RWA as fraction of total assets (typical commercial bank proxy) */
+/**
+ * RWA as fraction of total assets, used only when FDIC does not report RWAJ.
+ *
+ * This proxy overstates risk-weighted assets for most banks, which inflates the
+ * derived capital base and so understates CRE-to-capital — 394% against a true
+ * 443% on a sample Florida bank. Reported RBCT1J, RBCT2 and RWAJ are preferred
+ * wherever present; they reconcile to FDIC's published RBCRWAJ exactly.
+ */
 const RWA_TO_ASSETS_PROXY = 0.75
 
 export type CapitalCoverage = {
@@ -24,6 +31,8 @@ export type CapitalRatios = {
   constructionToTier1Tier2: number | null
   multifamilyToTier1Tier2: number | null
   coverage: CapitalCoverage
+  /** Whether the capital base is FDIC-reported or inferred from ratios. */
+  basis: CapitalBasis
 }
 
 type FinancialInput = {
@@ -37,7 +46,19 @@ type FinancialInput = {
   cet1Ratio?: number
   /** Total equity capital in dollars (if available from API) */
   totalEquityDollars?: number | null
+  /** Reported Tier 1 capital in dollars (FDIC RBCT1J) */
+  tier1Dollars?: number | null
+  /** Reported Tier 2 capital in dollars (FDIC RBCT2) */
+  tier2Dollars?: number | null
+  /** Reported risk-weighted assets in dollars (FDIC RWAJ) */
+  riskWeightedAssets?: number | null
 }
+
+/** True when the capital base came from reported dollars rather than a proxy. */
+export type CapitalBasis = "reported" | "derived" | "none"
+
+const positive = (v: number | null | undefined): v is number =>
+  v != null && Number.isFinite(v) && v > 0
 
 /**
  * Derive Tier 1 capital from leverage ratio.
@@ -50,13 +71,22 @@ function deriveTier1Capital(leverageRatio: number, totalAssets: number): number 
 }
 
 /**
- * Derive Tier 1 + Tier 2 capital from total RBC ratio.
- * Total RBC = (Tier1 + Tier2) / RWA. So (Tier1+Tier2) = totalRbcRatio * RWA.
- * RWA approximated as RWA_TO_ASSETS_PROXY * totalAssets.
+ * Derive Tier 1 + Tier 2 capital from the total RBC ratio.
+ * Total RBC = (Tier1 + Tier2) / RWA, so (Tier1+Tier2) = totalRbcRatio * RWA.
+ * Uses reported RWA when available and only then falls back to the proxy.
  */
-function deriveTier1PlusTier2(totalRbcRatio: number, totalAssets: number): number {
-  if (!Number.isFinite(totalRbcRatio) || !Number.isFinite(totalAssets) || totalAssets <= 0) return 0
-  const rwa = RWA_TO_ASSETS_PROXY * totalAssets
+function deriveTier1PlusTier2(
+  totalRbcRatio: number,
+  totalAssets: number,
+  riskWeightedAssets?: number | null
+): number {
+  if (!Number.isFinite(totalRbcRatio)) return 0
+  const rwa = positive(riskWeightedAssets)
+    ? riskWeightedAssets
+    : Number.isFinite(totalAssets) && totalAssets > 0
+      ? RWA_TO_ASSETS_PROXY * totalAssets
+      : 0
+  if (rwa <= 0) return 0
   return (totalRbcRatio / 100) * rwa
 }
 
@@ -75,19 +105,39 @@ export function computeCapitalRatios(input: FinancialInput): CapitalRatios {
     totalRbcRatio,
     cet1Ratio,
     totalEquityDollars,
+    tier1Dollars,
+    tier2Dollars,
+    riskWeightedAssets,
   } = input
 
-  const tier1Capital =
-    leverageRatio != null && Number.isFinite(leverageRatio)
+  const tier1Capital = positive(tier1Dollars)
+    ? tier1Dollars
+    : leverageRatio != null && Number.isFinite(leverageRatio)
       ? deriveTier1Capital(leverageRatio, totalAssets)
       : null
 
-  const tier2Capital: number | null = null
+  // Tier 2 is legitimately zero at many small banks, so presence is tested
+  // rather than positivity — otherwise their capital base silently falls back
+  // to the proxy.
+  const tier2Capital: number | null =
+    tier2Dollars != null && Number.isFinite(tier2Dollars) ? tier2Dollars : null
+
+  const reportedTotalCapital =
+    positive(tier1Dollars) && tier2Capital != null ? tier1Dollars + tier2Capital : null
+
+  const capitalBasis: CapitalBasis = reportedTotalCapital
+    ? "reported"
+    : totalRbcRatio != null && Number.isFinite(totalRbcRatio)
+      ? "derived"
+      : tier1Capital != null
+        ? "derived"
+        : "none"
 
   const tier1PlusTier2Capital =
-    totalRbcRatio != null && Number.isFinite(totalRbcRatio)
-      ? deriveTier1PlusTier2(totalRbcRatio, totalAssets)
-      : tier1Capital
+    reportedTotalCapital ??
+    (totalRbcRatio != null && Number.isFinite(totalRbcRatio)
+      ? deriveTier1PlusTier2(totalRbcRatio, totalAssets, riskWeightedAssets)
+      : tier1Capital)
 
   const totalEquity =
     totalEquityDollars != null && Number.isFinite(totalEquityDollars) && totalEquityDollars > 0
@@ -121,6 +171,7 @@ export function computeCapitalRatios(input: FinancialInput): CapitalRatios {
     constructionToTier1Tier2,
     multifamilyToTier1Tier2,
     coverage: { hasTier1, hasTier2, hasTier1Tier2, hasEquity },
+    basis: capitalBasis,
   }
 }
 

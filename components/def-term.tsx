@@ -114,9 +114,14 @@ export const METRIC_DEFINITIONS: Record<string, MetricDef> = {
     whyValuable: "Context metric for noncurrent exposure relative to balance sheet size. Complements Noncurrent / Loans.",
   },
   "Reserve Coverage": {
-    definition: "Loan loss allowance as a share of total loans.",
-    howCalculated: "Allowance for loan and lease losses ÷ total loans × 100 (FDIC LNLSDEPR).",
+    definition: "Loan loss allowance as a share of net loans. Typically 1–2%.",
+    howCalculated: "Allowance for loan and lease losses ÷ net loans and leases × 100 (FDIC LNATRES ÷ LNLSNET).",
     whyValuable: "Indicates cushion for future losses; thin reserves relative to NPLs signal vulnerability.",
+  },
+  "Loans / Deposits": {
+    definition: "Net loans and leases as a share of deposits.",
+    howCalculated: "Net loans and leases ÷ total deposits × 100 (FDIC LNLSDEPR).",
+    whyValuable: "Funding and liquidity gauge. A high ratio means lending is outpacing the deposit base, leaving less room to absorb withdrawals or fund new originations.",
   },
   CET1: {
     definition: "Common Equity Tier 1 capital ratio.",

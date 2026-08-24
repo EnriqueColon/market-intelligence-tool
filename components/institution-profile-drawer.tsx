@@ -78,6 +78,7 @@ export type InstitutionProfileRow = {
   noncurrent_to_loans_ratio?: number
   noncurrent_to_assets_ratio?: number
   loanLossReserve?: number
+  loansToDeposits?: number
   cet1Ratio?: number
   leverageRatio?: number
   capitalRatios?: {
@@ -660,6 +661,7 @@ function ScreeningListSection({
     { label: "Past Due 30-89 / Assets", value: formatDecimalPercent(row.pastDue3090) },
     { label: "Past Due 90+ / Assets", value: formatDecimalPercent(row.pastDue90Plus) },
     { label: "Reserve Coverage", value: formatDecimalPercent(row.loanLossReserve) },
+    { label: "Loans / Deposits", value: formatDecimalPercent(row.loansToDeposits) },
     { label: "CET1", value: row.cet1Ratio != null ? formatPercentMetric(row.cet1Ratio, 1) : "—" },
     { label: "Leverage", value: row.leverageRatio != null ? formatPercentMetric(row.leverageRatio, 1) : "—" },
     { label: "CRE / (T1+T2)", value: formatRatio(row.capitalRatios?.creToTier1Tier2 ?? undefined), className: getCreCapitalColor(row.capitalRatios?.creToTier1Tier2 ?? undefined) },
@@ -746,6 +748,7 @@ function ComparisonTable({
     { key: "Past Due 30-89 / Assets", fn: (r) => formatDecimalPercent(r.pastDue3090) },
     { key: "Past Due 90+ / Assets", fn: (r) => formatDecimalPercent(r.pastDue90Plus) },
     { key: "Reserve Coverage", fn: (r) => formatDecimalPercent(r.loanLossReserve) },
+    { key: "Loans / Deposits", fn: (r) => formatDecimalPercent(r.loansToDeposits) },
     { key: "CET1", fn: (r) => r.cet1Ratio != null ? formatPercentMetric(r.cet1Ratio, 1) : "—" },
     { key: "Leverage", fn: (r) => r.leverageRatio != null ? formatPercentMetric(r.leverageRatio, 1) : "—" },
     { key: "Total UC", fn: (r) => formatMoney(r.totalUnusedCommitments) },

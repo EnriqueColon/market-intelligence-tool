@@ -98,6 +98,11 @@ type Financial = {
   totalRbcRatio?: number
   reportDate?: string
   totalEquityDollars?: number | null
+  tier1Dollars?: number | null
+  tier2Dollars?: number | null
+  riskWeightedAssets?: number | null
+  /** Net loans to deposits, decimal. Previously mislabelled as reserve coverage. */
+  loansToDeposits?: number
 }
 
 type ScreeningRow = Financial & {
@@ -408,6 +413,9 @@ export function MarketAnalytics({
         totalRbcRatio: latest.totalRbcRatio,
         cet1Ratio: latest.cet1Ratio,
         totalEquityDollars: latest.totalEquityDollars,
+        tier1Dollars: latest.tier1Dollars,
+        tier2Dollars: latest.tier2Dollars,
+        riskWeightedAssets: latest.riskWeightedAssets,
       })
 
       const q0 = lastQuarterDates[0]

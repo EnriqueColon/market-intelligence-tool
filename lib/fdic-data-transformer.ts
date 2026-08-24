@@ -38,7 +38,18 @@ export interface BankFinancialData {
   roa: number
   roe: number
   efficiencyRatio: number
+  /**
+   * Allowance for loan and lease losses over net loans, decimal. FDIC
+   * LNATRES / LNLSNET.
+   *
+   * This was previously read from LNLSDEPR, which is the net loans-to-deposits
+   * ratio, not a reserve at all — the two agree to the decimal place on every
+   * institution. It was displayed as "Reserve Coverage" throughout, roughly
+   * thirty times too large and meaning the opposite thing.
+   */
   loanLossReserve: number
+  /** Net loans and leases to deposits, decimal. FDIC LNLSDEPR. */
+  loansToDeposits: number
   netInterestMargin: number
   cet1Ratio: number
   leverageRatio: number
@@ -48,6 +59,12 @@ export interface BankFinancialData {
   reportDate?: string
   /** Total equity capital in dollars (from EQCAP if available) */
   totalEquityDollars?: number | null
+  /** Tier 1 capital in dollars. FDIC RBCT1J. */
+  tier1Dollars?: number | null
+  /** Tier 2 capital in dollars. FDIC RBCT2. */
+  tier2Dollars?: number | null
+  /** Risk-weighted assets in dollars. FDIC RWAJ. */
+  riskWeightedAssets?: number | null
 }
 
 export interface BankInstitutionData {
@@ -220,8 +237,16 @@ export function transformFinancialData(rawData: any[]): BankFinancialData[] {
       roa,
       roe: normalizePercent(Number(bank.ROE || 0)) ?? 0,
       efficiencyRatio: Number(bank.EEFFR || 0),
-      // LNLSDEPR: FDIC Loan Loss Reserve / Total Loans (%). Stored as decimal.
-      loanLossReserve: normalizePercentToDecimal(Number(bank.LNLSDEPR || 0), "LNLSDEPR") ?? 0,
+      // Reserve coverage from the allowance itself. Both fields are reported in
+      // thousands, so the ratio needs no unit conversion.
+      loanLossReserve: (() => {
+        const allowance = Number(bank.LNATRES || 0)
+        const netLoans = Number(bank.LNLSNET || 0)
+        if (!Number.isFinite(allowance) || !Number.isFinite(netLoans) || netLoans <= 0) return 0
+        return Math.min(1, Math.max(0, allowance / netLoans))
+      })(),
+      // LNLSDEPR: FDIC net loans and leases to deposits (%). Stored as decimal.
+      loansToDeposits: normalizePercentToDecimal(Number(bank.LNLSDEPR || 0), "LNLSDEPR") ?? 0,
       netInterestMargin,
       cet1Ratio: normalizePercent(Number(bank.RBCT1CER || 0)) ?? 0,
       leverageRatio: normalizePercent(Number(bank.RBC1AAJ || 0)) ?? 0,
@@ -230,6 +255,11 @@ export function transformFinancialData(rawData: any[]): BankFinancialData[] {
       netIncome: formatCurrency(bank.NETINC || 0),
       reportDate: bank.REPDTE,
       totalEquityDollars: bank.EQCAP != null ? formatCurrency(bank.EQCAP) : undefined,
+      // Reported capital, so CRE-to-capital no longer has to infer a denominator
+      // from a ratio and an assumed risk weighting.
+      tier1Dollars: bank.RBCT1J != null ? formatCurrency(Number(bank.RBCT1J)) : undefined,
+      tier2Dollars: bank.RBCT2 != null ? formatCurrency(Number(bank.RBCT2)) : undefined,
+      riskWeightedAssets: bank.RWAJ != null ? formatCurrency(Number(bank.RWAJ)) : undefined,
     }
   })
 }
