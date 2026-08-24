@@ -8,11 +8,11 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
 | `main` | `e8bf8ad` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `b87506a` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `dev` | `1a21230` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 A SHA here can never name the commit that writes it, so the true head is usually one documentation
 commit further on. Only behavioural commits matter as rollback targets; on `dev` the newest is
-**`7286e71`**, and everything above it is documentation.
+**`1a21230`**.
 
 Production deploys automatically on every push to `main`. `dev` deploys as a Vercel preview on every
 push. Crons run only against production, and the post-deploy warm-cache GitHub Action triggers only
@@ -70,7 +70,8 @@ git push --force-with-lease origin dev
 
 | Commit | Date | Why it is a safe target |
 | --- | --- | --- |
-| `7286e71` | 2026-08-23 | Newest behavioural commit on `dev`; everything above it is documentation. Reserve Coverage and CRE/(T1+T2) verified figure-by-figure against the live FDIC API. Prefer this over `bb5e5f8`, which renders a Reserve Coverage roughly 30x too large. |
+| `1a21230` | 2026-08-24 | Newest behavioural commit on `dev`. Opportunity Score ranks by percentile rather than min-max, verified on live FDIC data for Florida and national scope; fixes the map's inverted CRE/Capital colouring and the permanently-null Net Income YoY. **Every score changes at this commit** — rolling back past it restores rankings where 55% of the national cohort sits in one 10-point band. |
+| `7286e71` | 2026-08-23 | Last commit before the scoring rework, so scores here are the compressed min-max ones. Reserve Coverage and CRE/(T1+T2) verified figure-by-figure against the live FDIC API. Prefer this over `bb5e5f8`, which renders a Reserve Coverage roughly 30x too large. |
 | `bb5e5f8` | 2026-08-23 | Builds clean; charts, pulse strip and map verified against a running server. Roll back to `016d162` to remove the visual layer entirely. **Serves a wrong Reserve Coverage** — avoid unless isolating the visual layer. |
 | `e8bf8ad` | 2026-08-21 | Current production. Documentation only on top of `74807d8`, so identical in behaviour. |
 | `74807d8` | 2026-08-21 | Last behavioural commit. Sessions last a year and renew on use. |
@@ -102,6 +103,8 @@ Not in production. Merge to `main` to ship.
 
 | Commit | Date | Summary |
 | --- | --- | --- |
+| `1a21230` | 08-24 | fix: rank institutions by percentile so the Opportunity Score discriminates |
+| `eb3d684` | 08-24 | docs: list the document cleanup commit in the rollback reference |
 | `b87506a` | 08-24 | docs: delete five superseded top-level documents |
 | `ac9a4ac` | 08-24 | docs: list the README commit in the rollback reference |
 | `2b3cbd6` | 08-24 | docs: add a README and make it the fourth maintained document |

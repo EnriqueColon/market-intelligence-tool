@@ -8,6 +8,63 @@ is it in now, and what is still open.
 
 ---
 
+## 2026-08-24 (latest) — the Opportunity Score now actually ranks
+
+Start of a larger piece of work. The brief was to make the tool useful to four groups —
+underwriting, investor relations / business development, accounting / finance, and senior executives
+— additively, without removing anything. That plan is written up in `docs/NEXT_VERSION_PLAN.md`;
+this session delivered Phase 0 of it, which is entirely foundational and adds no new screens.
+
+**Why foundations first.** Three of the four planned surfaces exist to rank opportunity, and the
+ranking did not work. Nationally, exactly one institution out of 1,215 scored 70 or above and 55% of
+the cohort sat inside a single 10-point band. `metricRange` normalised each input against the
+cohort's raw minimum and maximum, so one extreme institution stretched the scale and flattened
+everyone else. Building an opportunities view on that would have produced a ranked list that wasn't
+ranked.
+
+Percentile rank replaces min-max. It is immune to outliers and spreads the cohort by construction.
+The same national cohort now puts 108 institutions above 70, widens the IQR from 8.1 to 20.8 points
+and cuts the most crowded band to 25%. Weights are untouched — they were never the problem.
+Verified on live FDIC data for both Florida and national scope via
+`scripts/verify-score-distribution.mjs`, which was kept for reuse.
+
+**Consolidating three copies of the scoring logic exposed a real bug.** The map's capital input is
+CRE-to-capital, where a higher multiple means more stress, but it had inherited the screening table's
+inversion, which is correct only for CET1. Colouring the map by CRE/Capital was therefore showing the
+*least* concentrated banks as the most stressed, and "top banks" listed the safest ones. The same
+function also rebuilt the entire cohort's earnings ranges once per bank, making it quadratic; that is
+hoisted out.
+
+**Two further defects surfaced while measuring rather than reading.** Net Income YoY could never be
+calculated: it compares quarters 4–7 against 0–3, but the 18-month query window returns only five
+quarters, so the field was permanently null and its 20% weight in the Earnings Resilience Score
+silently redistributed. The window is now 27 months, giving nine. Separately, the live tab passed
+literal zeros for all three scores, so the institution drawer displayed zeros; it now scores from the
+shared module.
+
+**State now.** Committed as `1a21230` on `dev`. Build passes; seven unit tests cover the scorer,
+including the outlier case that caused the original compression. The only TypeScript error in the
+touched files is the pre-existing `ScreeningRow` / `InstitutionProfileRow` mismatch on the compare
+handler, which predates this work.
+
+**Still open.**
+
+- **The tab and the export rank against different cohorts.** Measured against the live API: the tab's
+  capped page covers the largest ~1,100 institutions nationally, all above roughly $1.07bn in assets,
+  while the export covers all ~4,450. Community banks below $1bn — the CRE-concentrated cohort the
+  tool exists to find — are invisible on the national screen. This matters more now that scores are
+  relative, because a national score means "percentile among banks over $1bn". Full pagination is not
+  a fix by itself: ~40k rows takes about 20 seconds and exceeds the 2MB data-cache ceiling. Deferred
+  by agreement to Phase 1, which builds the cached data layer; for now the table states its cohort
+  rather than implying a complete screen.
+- `buildReportData` is cached, but a national payload may exceed the 2MB entry limit, in which case
+  Next skips the write. Not yet measured which scopes actually land.
+- Phases 1 through 3 of `docs/NEXT_VERSION_PLAN.md` are untouched. Identity is settled as a
+  department selector rather than user accounts, with watchlists shared within a department.
+- A `phase0-wip` stash remains from a `git stash pop` that hit a conflict on the binary SQLite WAL.
+  Its contents are fully present in the working tree and now committed, so it is redundant and can be
+  dropped.
+
 ## 2026-08-24 (later) — five stale documents removed
 
 Writing the README surfaced ten top-level markdown files, most unmaintained. Five were deleted after

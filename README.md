@@ -32,8 +32,11 @@ what you need rather than starting at the top.
 | `ROLLBACK.md` | Which commit do I go back to, and how? | Recovery |
 
 `docs/` holds narrower guides, of which `docs/DEV_ENVIRONMENT.md` is the one most worth reading
-early. `EXEC_SUMMARY_WITH_KEYWORDS.md` is an older file recording the search keyword criteria behind
-the news feeds; the code in `app/actions/` is the source of truth if the two disagree.
+early. `docs/NEXT_VERSION_PLAN.md` describes where the tool is going — serving underwriting, investor
+relations, finance and executives from one data layer — and is the place to check before starting
+anything substantial, since it records which decisions are already settled.
+`EXEC_SUMMARY_WITH_KEYWORDS.md` is an older file recording the search keyword criteria behind the
+news feeds; the code in `app/actions/` is the source of truth if the two disagree.
 
 Five superseded documents were deleted on 2026-08-24 — they described Perplexity as the outlook
 engine, listed tabs that no longer exist, and named environment variables no code reads. Git history
@@ -175,6 +178,7 @@ Each suite runs individually; there is no aggregate `npm test`.
 ```bash
 npm run test:environment      # environment detection
 npm run test:metrics          # number formatting and unit normalisation
+npm run test:opportunity-score # cohort scoring, including outlier compression
 npm run test:memo-evidence    # the evidence guard
 npm run test:verified-metrics
 npm run test:allowlist
@@ -183,6 +187,11 @@ npm run build                 # next build
 
 Tests use Node's built-in runner with `--experimental-strip-types`, which requires importing local
 modules **with the `.ts` extension**. TypeScript flags that as an error; it is expected and harmless.
+
+Some checks need live data rather than fixtures. `scripts/verify-score-distribution.mjs [STATE]`
+reports how Opportunity Scores spread across a real FDIC cohort — run it after changing any scoring
+input or weight, and watch the IQR and the most crowded band. A score that puts most of the cohort in
+one 10-point band has stopped ranking.
 
 ---
 

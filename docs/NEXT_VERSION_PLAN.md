@@ -83,7 +83,13 @@ accordingly. This avoids user management entirely.
 
 ## Phase 0 — Make the ranking real
 
-**Status: in progress.** No new UI. Everything after this inherits it.
+**Status: done, `1a21230`, 2026-08-24.** No new UI. Everything after this inherits it.
+
+Outcome, measured on live FDIC data: nationally the cohort above 70 went from 1 institution out of
+1,215 to 108, the IQR widened from 8.1 to 20.8 points, and the most crowded 10-point band fell from
+55% to 25%. Two defects surfaced while measuring — the map's inverted CRE/Capital colouring, and a
+Net Income YoY input that could never be computed — both fixed. The tab/export cohort gap was
+measured rather than fixed and is carried into Phase 1; see `SESSION.md` for the numbers.
 
 The tool is about to grow surfaces whose entire job is ranking opportunity. The ranking does not
 currently work.

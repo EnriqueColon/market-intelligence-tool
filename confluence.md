@@ -195,16 +195,51 @@ against the live API rather than inferring from the field name:
 that suggests otherwise; it equals `LNLSNET / DEP` to the decimal place on every institution. It was
 read as Reserve Coverage until 2026-08-23 and displayed roughly thirty times too large.
 
+**The reporting window is 27 months** (`recentQuartersFilter` in `app/actions/fetch-fdic-data.ts`),
+which yields nine quarters. Eight is the real requirement: the year-over-year net income comparison
+reads quarters 4–7 against 0–3, and `roaDelta4Q` reads quarter 3. The window was 18 months until
+2026-08-24, returning only five quarters, so Net Income YoY was structurally impossible to compute —
+permanently null, with its 20% weight in the Earnings Resilience Score silently redistributed across
+the other three inputs. Shortening this window again will reintroduce that failure silently, since
+the code degrades to null rather than erroring.
+
 `RBCT1J + RBCT2` over `RWAJ` reproduces FDIC's published `RBCRWAJ` exactly, which is the check to run
 if the capital figures ever look wrong. `RWA_TO_ASSETS_PROXY` in `lib/fdic-ratio-helpers.ts` remains
 only as a fallback for institutions that do not report `RWAJ`; `CapitalRatios.basis` records whether
 a row used reported dollars (`"reported"`) or the proxy (`"derived"`). `EQCAP` is requested but the
 API returns null for it, so CRE / Equity falls back to Tier 1.
 
-The Opportunity Score normalises each input against the **cohort's own min and max**
-(`metricRange` in `app/actions/export-market-analytics-report.ts`), not fixed thresholds, so
-correcting a field's scale does not require retuning weights. It does change the ranking, because the
-inputs then measure something different.
+### Opportunity Score
+
+`lib/scoring/opportunity-score.ts`, used by the screening table, the export and the stress map.
+Weights are CRE concentration 35%, noncurrent-to-loans 35%, reserve coverage 15%, capital 15%.
+
+Each input is scored by **percentile rank within the cohort in view**, not against fixed thresholds
+and not against the cohort's raw min and max. Two consequences follow, and both matter:
+
+- **Scores are relative.** The same institution scores differently under a national screen than a
+  state one, and a score reads directly as a ranking — 90 means the top tenth of whatever is on
+  screen. Any surface showing a score must therefore say what cohort it ranked against. The screening
+  table does this in `scopeCoverageNote`.
+- **Correcting a field's scale does not require retuning weights**, since only order matters.
+
+Percentile rank replaced min-max normalisation on 2026-08-24. Min-max let a single extreme
+institution stretch the scale and compress everyone else: nationally, one institution out of 1,215
+scored 70 or above and 55% of the cohort sat in one 10-point band. The same cohort now puts 108
+institutions above 70 with a 20.8-point IQR.
+
+Ties use the midrank convention, because these metrics tie heavily — many institutions report exactly
+zero noncurrent loans, and bottoming all of them out would be an artefact of the tie rather than a
+real difference. An empty or flat cohort returns the midpoint rather than inventing a spread.
+
+Run `scripts/verify-score-distribution.mjs [STATE]` after any change to the inputs or weights. If one
+10-point band holds most of the cohort, the score has stopped ranking. Bump the cache key version in
+`build-report-data.ts` at the same time, or cached entries keep serving the old scores.
+
+**The map's capital input differs and must not be unified.** The table's capital slot holds CET1,
+where a *smaller* value means more stress, so it inverts. The map's holds CRE-to-(Tier 1 + Tier 2),
+where a *larger* multiple does, so it must not. While the logic existed as three copies the map
+inherited the table's inversion and coloured the least concentrated banks as the most stressed.
 
 ## 4a. Charts
 
@@ -218,9 +253,11 @@ were previously inline in `market-analytics-report-view.tsx` and reachable only 
 report.
 
 `market-analytics-visuals.tsx` deliberately calls `buildReportData` — the same server action the PDF
-uses — rather than reading the dashboard's `screeningTable`, whose opportunity scores are zeroed.
-Charts drawn from that table would be silently wrong. The trade is a few seconds of loading, covered
-by skeletons.
+uses — rather than reading the dashboard's `screeningTable`. Both now carry real scores, but the two
+cohorts differ: the table takes a single capped page while `buildReportData` paginates fully, so
+nationally they rank against different populations. `buildReportData` is cached for six hours under a
+versioned key, which removed most of that loading delay; national payloads may exceed the 2MB
+data-cache entry limit, in which case Next skips the write and only smaller scopes benefit.
 
 `singleLineTick` exists because Recharts wraps long category labels onto a second line that overlaps
 the row beneath, which makes a twenty-row ranking unreadable.
@@ -265,6 +302,13 @@ Generated content is expensive, so nearly everything is cached for a day.
   | --- | --- |
   | `industry-outlook-shared-v12` | The generated memo |
   | `industry-outlook-verified-metrics-v1` | Fetched FRED/FDIC figures |
+  | `market-analytics-report-data-v2` + scope | Full screening cohort with scores, for the PDF and Visual Analysis |
+
+  `market-analytics-report-data` is keyed by scope rather than by day and revalidates every six
+  hours, since FDIC publishes quarterly. **Bump its version whenever the scoring changes**, or cached
+  entries keep serving scores computed under the old method — v2 marks the move to percentile rank.
+  A national payload can exceed the 2MB entry limit, in which case Next logs a warning, skips the
+  write and only smaller scopes are cached.
 
 - **Client:** `sessionStorage`, with its own version constants — `industry-outlook:v8`,
   `public_mentions:v4`, `investing_news:v2`. Bump these when the shape of cached data changes, or
@@ -465,23 +509,16 @@ changing code, check that *your* files are clean rather than expecting a clean o
   written to `section.miamiDade`, which the UI never reads.
 - The `P3ASSET`/`P9ASSET` past-due columns are correct despite comments suggesting they are ratios;
   the fields really are dollar amounts in thousands. Fix the comments, not the code.
-- **Live-tab scores are always zero.** `opportunityScore`, `earningsScore` and `vulnerabilityScore`
-  are hardcoded to `0` in `market-analytics.tsx`, so the institution drawer shows zeros. The real
-  computation exists only on the export path, which also paginates the full FDIC result set while the
-  live tab caps at 5,000 rows sorted by assets descending. The same scope can therefore show
-  different institution counts and averages in the tab versus the export, and the live tab
-  under-represents smaller institutions. The Visual Analysis charts sidestep this by calling
-  `buildReportData` instead of reading the table — anything else new that needs a score must do the
-  same, or it will plot zeros.
-- **The Opportunity Score barely separates the cohort.** `metricRange` normalises against the raw
-  minimum and maximum, so one extreme institution stretches the scale and compresses everyone else.
-  Florida Q1 2026 gives a median of 51.6, an interquartile range of 47.4–56.5 and nothing at all
-  above 80, which makes the "70+" screening language in the report narrative describe an almost empty
-  set. Percentile ranking, or winsorising the tails, would separate it far better. The weights are not
-  the problem.
-- **`buildReportData` has no `unstable_cache`**, unlike nearly every other action, so the Visual
-  Analysis section refetches the full FDIC set on every scope change — roughly eleven seconds on
-  National. It is the one obvious caching gap left.
+- **The live tab and the export rank against different cohorts.** The tab takes a single capped page
+  of 10,000 rows sorted by assets descending, while the export paginates everything. Nationally that
+  is the largest ~1,100 institutions against all ~4,450, so counts and averages differ between the
+  two — and because scores are percentile ranks, a national score on the tab means "percentile among
+  banks over roughly $1bn", not among all banks. The table states this in `scopeCoverageNote` rather
+  than implying a complete screen. Full pagination is not a fix on its own: ~40k national rows takes
+  around 20 seconds and exceeds the 2MB data-cache ceiling. A cached server-side data layer is the
+  real answer and is Phase 1 of `docs/NEXT_VERSION_PLAN.md`.
+- **Scores are cohort-relative, so any new surface must state its cohort.** A bare score is not
+  meaningful on its own. This is a permanent property of percentile ranking, not a defect.
 - **The screening table renders up to 30 columns** — 16 always, plus 4 capital and 7 earnings behind
   the Columns popover — with no frozen first column, so scrolling right loses the institution name.
 - **Dead code:** `app/actions/fetch-industry-outlook.ts` (superseded by `getCachedOutlook.ts`, still
