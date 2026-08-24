@@ -44,10 +44,25 @@ for (const r of raw) {
 
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0)
 
+// Mirrors app/actions/executive-brief.ts: an institution that did not file for
+// the latest quarter is excluded rather than having an older move dated forward.
+const latestQuarter = raw.reduce(
+  (max, r) => (String(r.REPDTE) > max ? String(r.REPDTE) : max),
+  ""
+)
+
 const events = []
 let movedCount = 0
+let reportingCount = 0
+let staleCount = 0
 
 for (const [cert, { name, state, rows }] of byCert) {
+  if (!rows.some((r) => String(r.REPDTE) === latestQuarter)) {
+    staleCount++
+    continue
+  }
+  reportingCount++
+
   const observations = rows.map((r) => {
     const capital = num(r.RBCT1J) + num(r.RBCT2)
     // 2006 guidance definition: excludes owner-occupied, and never adds
@@ -74,11 +89,12 @@ for (const [cert, { name, state, rows }] of byCert) {
 }
 
 const groups = groupForBrief(events, 6)
-const total = byCert.size
+const total = reportingCount
 
 console.log(
   `Scope: ${scope}   institutions: ${total}   quarters: ${new Set(raw.map((r) => r.REPDTE)).size}`
 )
+console.log(`latest quarter: ${latestQuarter}   excluded as stale: ${staleCount}`)
 console.log(`moved: ${movedCount} (${((movedCount / total) * 100).toFixed(1)}%)`)
 console.log(`events: ${events.length}\n`)
 

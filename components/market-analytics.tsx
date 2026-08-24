@@ -222,11 +222,21 @@ export function MarketAnalytics({
   reportMode,
   initialScope,
   showBankStressMap = false,
+  focusCert,
+  onFocusResolved,
 }: {
   level: "national" | "florida" | "miami"
   reportMode?: boolean
   initialScope?: string
   showBankStressMap?: boolean
+  /**
+   * FDIC CERT to open the profile drawer for, set when another view hands an
+   * institution over. Honoured once the cohort has loaded, so it survives being
+   * set while this tab is still fetching.
+   */
+  focusCert?: string | null
+  /** Reports whether the institution was found, so the caller can stop asking. */
+  onFocusResolved?: (found: boolean) => void
 }) {
   const [filters, setFilters] = useState<Filters>(() => {
     if (reportMode && initialScope) {
@@ -524,6 +534,18 @@ export function MarketAnalytics({
       }
     })
   }, [filteredFinancials, lastQuarterDates])
+
+  // Opening the drawer for an institution handed over from another view. This
+  // waits for the cohort rather than resolving against a half-loaded one,
+  // because the drawer's percentiles are cohort-relative and would otherwise be
+  // computed against whatever had arrived so far.
+  useEffect(() => {
+    if (!focusCert || reportMode) return
+    if (loading) return
+    const match = screeningTable.find((r) => r.id === focusCert)
+    if (match) setSelectedInstitution(match)
+    onFocusResolved?.(Boolean(match))
+  }, [focusCert, loading, screeningTable, reportMode, onFocusResolved])
 
   const sortedScreeningTable = useMemo(() => {
     return [...screeningTable].sort((a, b) => {

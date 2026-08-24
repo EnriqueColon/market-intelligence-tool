@@ -15,7 +15,21 @@ import { getExecutiveBrief, type BriefEvent, type ExecutiveBrief as Brief } from
  * Deliberately has no table. The question here is "what needs me", and a
  * thirty-column grid answers a different one.
  */
-export function ExecutiveBrief({ scope = "National" }: { scope?: string }) {
+export function ExecutiveBrief({
+  scope = "National",
+  onSelectInstitution,
+  notFoundCert,
+}: {
+  scope?: string
+  /**
+   * Hands an institution to the Market Analytics tab, which owns the profile
+   * drawer and the cohort its percentiles are measured against. Omitted when
+   * that tab is disabled, in which case rows are not clickable.
+   */
+  onSelectInstitution?: (cert: string, name: string) => void
+  /** Set when a handed-over institution was not in the tab's cohort. */
+  notFoundCert?: string | null
+}) {
   const [brief, setBrief] = useState<Brief | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -71,7 +85,18 @@ export function ExecutiveBrief({ scope = "National" }: { scope?: string }) {
         {brief.capped
           ? ` This covers the largest ${brief.institutionCount.toLocaleString()} institutions rather than every one, so a smaller institution that moved will not appear here.`
           : ""}
+        {brief.staleCount > 0
+          ? ` A further ${brief.staleCount.toLocaleString()} did not file for this quarter and are excluded rather than dated forward.`
+          : ""}
+        {onSelectInstitution ? " Select any institution to open its full statistics." : ""}
       </p>
+
+      {notFoundCert ? (
+        <p className="mb-4 rounded-md border border-amber-200 bg-amber-50/60 px-3 py-2 text-xs text-amber-900">
+          That institution is not in the Market Analytics cohort, so its profile cannot be opened
+          from here. This happens when it falls below the row cap that view is subject to.
+        </p>
+      ) : null}
 
       {nothingMoved ? (
         <p className="text-sm text-slate-600">
@@ -85,18 +110,21 @@ export function ExecutiveBrief({ scope = "National" }: { scope?: string }) {
             hint="Passed a level regulators screen on. Most urgent."
             tone="urgent"
             events={brief.supervisoryCrossings}
+            onSelect={onSelectInstitution}
           />
           <EventGroup
             title="Crossed a watch level"
             hint="Passed a conventional threshold this quarter."
             tone="watch"
             events={brief.otherCrossings}
+            onSelect={onSelectInstitution}
           />
           <EventGroup
             title="Deteriorating"
             hint="Nothing crossed yet, but moving the wrong way consistently."
             tone="trend"
             events={brief.trajectories}
+            onSelect={onSelectInstitution}
           />
         </div>
       )}
@@ -119,11 +147,13 @@ function EventGroup({
   hint,
   tone,
   events,
+  onSelect,
 }: {
   title: string
   hint: string
   tone: keyof typeof TONE
   events: BriefEvent[]
+  onSelect?: (cert: string, name: string) => void
 }) {
   if (events.length === 0) return null
   const { Icon, className, border } = TONE[tone]
@@ -135,26 +165,42 @@ function EventGroup({
         <span className="text-xs text-slate-500">{hint}</span>
       </div>
       <ul className="mt-2 space-y-1.5">
-        {events.map((event) => (
-          <li
-            key={`${event.cert}-${event.metric}-${event.kind}`}
-            className={`flex items-start gap-2.5 rounded-md border px-3 py-2 ${border}`}
-          >
-            <Icon className={`h-4 w-4 mt-0.5 shrink-0 ${className}`} aria-hidden="true" />
-            <div className="min-w-0">
-              <p className="text-sm font-medium text-slate-800">
-                {event.name}
-                {event.city || event.state ? (
-                  <span className="font-normal text-slate-500">
-                    {" · "}
-                    {[event.city, event.state].filter(Boolean).join(", ")}
-                  </span>
-                ) : null}
-              </p>
-              <p className="text-xs text-slate-600">{event.description}</p>
-            </div>
-          </li>
-        ))}
+        {events.map((event) => {
+          const place = [event.city, event.state].filter(Boolean).join(", ")
+          const body = (
+            <>
+              <Icon className={`h-4 w-4 mt-0.5 shrink-0 ${className}`} aria-hidden="true" />
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-slate-800">
+                  {event.name}
+                  {place ? <span className="font-normal text-slate-500">{` · ${place}`}</span> : null}
+                </p>
+                <p className="text-xs text-slate-600">{event.description}</p>
+              </div>
+            </>
+          )
+
+          return (
+            <li key={`${event.cert}-${event.metric}-${event.kind}`}>
+              {onSelect ? (
+                // A real button rather than a click handler on the row, so it is
+                // reachable by keyboard and announced as actionable.
+                <button
+                  type="button"
+                  onClick={() => onSelect(event.cert, event.name)}
+                  aria-label={`Open statistics for ${event.name}${place ? `, ${place}` : ""}`}
+                  className={`flex w-full items-start gap-2.5 rounded-md border px-3 py-2 text-left transition-colors hover:brightness-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#006D95] focus-visible:ring-offset-1 ${border}`}
+                >
+                  {body}
+                </button>
+              ) : (
+                <div className={`flex items-start gap-2.5 rounded-md border px-3 py-2 ${border}`}>
+                  {body}
+                </div>
+              )}
+            </li>
+          )
+        })}
       </ul>
     </section>
   )

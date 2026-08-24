@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { FileText, LineChart, LogOut, Newspaper, Scale } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -76,6 +76,30 @@ export function MarketIntelligenceDashboard({
 
   const [activeTab, setActiveTab] = useState<TabValue | "">(availableTabs[0] ?? "")
 
+  // Institution handed from a lens to the Market Analytics tab, which owns the
+  // profile drawer. Routed through here rather than duplicating the drawer into
+  // the lens, so the statistics and their cohort-relative percentiles stay
+  // computed in exactly one place.
+  const [focusCert, setFocusCert] = useState<string | null>(null)
+  const [focusMissedCert, setFocusMissedCert] = useState<string | null>(null)
+  const analyticsAvailable = availableTabs.includes("analytics")
+
+  const handleSelectInstitution = useCallback(
+    (cert: string) => {
+      setFocusMissedCert(null)
+      setFocusCert(cert)
+      setActiveTab("analytics")
+    },
+    []
+  )
+
+  const handleFocusResolved = useCallback((found: boolean) => {
+    setFocusCert((cert) => {
+      if (!found && cert) setFocusMissedCert(cert)
+      return null
+    })
+  }, [])
+
   useEffect(() => {
     if (!availableTabs.length) {
       setActiveTab("")
@@ -132,7 +156,10 @@ export function MarketIntelligenceDashboard({
       */}
       {initialDepartment === "executive" && (
         <div className="mx-auto w-full max-w-[1100px] px-5 pt-10 md:px-[20px]">
-          <ExecutiveBrief />
+          <ExecutiveBrief
+            onSelectInstitution={analyticsAvailable ? handleSelectInstitution : undefined}
+            notFoundCert={focusMissedCert}
+          />
         </div>
       )}
 
@@ -194,7 +221,12 @@ export function MarketIntelligenceDashboard({
                     FDIC data is quarterly and lagged by 1–2 quarters. Filter by United States or any state.
                   </p>
                 </div>
-                <MarketAnalytics level="national" showBankStressMap={features.bankStressMap} />
+                <MarketAnalytics
+                  level="national"
+                  showBankStressMap={features.bankStressMap}
+                  focusCert={focusCert}
+                  onFocusResolved={handleFocusResolved}
+                />
               </TabsContent>
             )}
 
