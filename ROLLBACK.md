@@ -97,6 +97,7 @@ Not in production. Merge to `main` to ship.
 
 | Commit | Date | Summary |
 | --- | --- | --- |
+| `58b748d` | 08-23 | docs: record the visual layer and the map faults it uncovered |
 | `bb5e5f8` | 08-23 | feat: put the analytics visuals on screen and revive the bank stress map |
 | `016d162` | 08-21 | docs: list the dev docs commit in the rollback reference |
 | `5bb9074` | 08-21 | docs: record verified Market Analytics data faults and correct the reference |
