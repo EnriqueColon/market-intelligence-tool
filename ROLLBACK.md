@@ -103,6 +103,7 @@ Not in production. Merge to `main` to ship.
 
 | Commit | Date | Summary |
 | --- | --- | --- |
+| `0d6169b` | 08-24 | docs: record the scoring rework and the cohort gap it exposed |
 | `1a21230` | 08-24 | fix: rank institutions by percentile so the Opportunity Score discriminates |
 | `eb3d684` | 08-24 | docs: list the document cleanup commit in the rollback reference |
 | `b87506a` | 08-24 | docs: delete five superseded top-level documents |
