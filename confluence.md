@@ -56,10 +56,17 @@ Tabs are gated server-side in `app/page.tsx` via `isFeatureEnabled()` (`lib/feat
 the `ENABLED_TABS` comma-separated list. **Outside production every feature is on**, which is how a
 tab is developed on `dev` before being exposed in production.
 
+The same list also gates content *inside* a tab. `app/page.tsx` resolves those into a `features`
+object passed down to the dashboard, because `isFeatureEnabled()` reads server-only env and
+everything below it is a client component. `bank-stress-map` is the current entry.
+
+The tab bar derives its column count from the number of enabled tabs. It was previously hardcoded to
+`grid-cols-4`, so production — which runs three — rendered an empty fourth cell.
+
 | Tab | Feature key | What it shows |
 | --- | --- | --- |
 | News | `news` | Industry Outlook / Key Signals memo (`industry-outlook.tsx`), Industry-Specific News (`public-mentions.tsx`), General Finance News (`investing-business-mentions.tsx`), and an on-demand Article Digest (`article-digest.tsx`) |
-| Market Analytics | `market-analytics` | FDIC bank financials with state filter, institution drawer and export (`market-analytics.tsx`), plus a nested FRED/Census indicator panel (`market-research.tsx`) |
+| Market Analytics | `market-analytics` | FDIC bank financials with state filter, institution drawer and export (`market-analytics.tsx`); a Visual Analysis chart section (`market-analytics-visuals.tsx`); a Bank Stress Map behind `bank-stress-map`; plus a nested FRED/Census indicator panel (`market-research.tsx`) |
 | Market Research | `market-research` | Live publisher-by-publisher research feed with Postgres-backed archive (`market-research-feed.tsx`) and memo generation (`research-memo-modal.tsx`) |
 | Legal Landscape | `legal` | Three AI-generated sections — Regulatory Watch, Legislative Tracker, Enforcement & Litigation (`legal-updates.tsx`). Despite the name, no LegiScan data is involved |
 
@@ -138,6 +145,58 @@ section is empty of data — treat as a regression.** Last verified: 5.
 `lib/fred-constants.ts` once named `CABOREA` for CRE charge-offs. **That is not a real series id** and
 returns an error page; `CORCREXFACBS` is correct. Verify any new series id against the live endpoint
 before trusting it.
+
+The Market Pulse strip under the header (`components/market-pulse-strip.tsx`) draws five of these
+same series through `app/actions/fetch-market-pulse.ts`, so its tiles and the Key Signals text agree
+by construction. Values are cached with `unstable_cache`; the strip degrades to nothing rather than
+showing a placeholder if FRED is unreachable.
+
+## 4a. Charts
+
+All Recharts instances share `lib/chart-theme.tsx` — palette, axis, grid, tooltip. Colours are
+literals rather than `var(--chart-N)` because Recharts writes SVG fills directly and the headless
+Playwright pass that renders the PDF cannot resolve CSS variables.
+
+The four analytics charts live once, in `components/charts/analytics/`, and are rendered by both the
+on-screen Visual Analysis section and the PDF report view. Keeping a single copy is the point: they
+were previously inline in `market-analytics-report-view.tsx` and reachable only by downloading the
+report.
+
+`market-analytics-visuals.tsx` deliberately calls `buildReportData` — the same server action the PDF
+uses — rather than reading the dashboard's `screeningTable`, whose opportunity scores are zeroed.
+Charts drawn from that table would be silently wrong. The trade is a few seconds of loading, covered
+by skeletons.
+
+`singleLineTick` exists because Recharts wraps long category labels onto a second line that overlaps
+the row beneath, which makes a twenty-row ranking unreadable.
+
+## 4b. Bank stress map
+
+`components/market-analytics/heatmap/BankStressHeatMap.tsx`, MapLibre GL, fed by `/api/map/states`,
+`/api/map/metros` and `/api/map/banks` over `app/actions/map-data.ts`. Gated by `bank-stress-map`.
+
+**FDIC report dates must be `YYYYMMDD`.** A hyphenated `2025-09-30` is not rejected — it is accepted
+and matches zero rows. This silently emptied every map endpoint for as long as the feature existed,
+and it presents as missing data rather than as an error.
+
+**The current quarter is never published.** Call reports lag by roughly two quarters. When no quarter
+is requested, `map-data.ts` walks back through candidates until one returns rows; an explicitly
+selected quarter is used as given, so nothing is misattributed to a period the user did not pick.
+
+**The colour scale must tolerate a flat metric.** High-stress share is near zero in almost every
+state at the default threshold. When quantile cuts collapse onto one value, cuts that cannot separate
+anything are dropped, and a genuinely flat metric returns a neutral fill and sets `hasVariation`
+false. Without that the old `<` comparison chain fell through to the most severe colour and painted
+the entire country red.
+
+MapLibre throws synchronously when it cannot get a WebGL context, which will unmount the whole tab
+unless caught — construction is wrapped and falls back to a message panel.
+
+Layer event handlers are bound once in the init effect. Registering them inside the layer-building
+callbacks, which re-run on every data or colour change, accumulates duplicates.
+
+Basemap is OpenFreeMap Positron (`tiles.openfreemap.org`), keyless and desaturated so the choropleth
+carries the colour. The former `demotiles.maplibre.org` style has no state boundaries or place names.
 
 ## 5. Caching and scheduled work
 
@@ -279,7 +338,7 @@ Every variable referenced in code. Scope matters: `POSTGRES_URL` and `BLOB_READ_
 | `INGESTION_TOKEN` | Ingestion endpoint unavailable |
 | `ELEMENTIX_API_KEY` | Participants-intel API returns null (feeds orphaned UI — see §10) |
 | `CENSUS_API_KEY`, `FFIEC_USER_ID`, `FFIEC_TOKEN` | Corresponding analytics sections report `configured: false` |
-| `NEXT_PUBLIC_FDIC_API_KEY`, `FDIC_API_URL`, `FDIC_API_KEY` | All optional; anonymous FDIC access works today |
+| `NEXT_PUBLIC_FDIC_API_KEY`, `FDIC_API_URL`, `FDIC_API_KEY` | All optional; anonymous FDIC access works today. Read by `lib/fdic-client.ts`, the single hardened path to the API (fallback host, timeout, 4xx short-circuit) shared by the analytics actions and the map |
 | `FRED_API_KEY` | **Not needed by the outlook**, which uses FRED's keyless CSV endpoint. Still read by `fetch-kpi-data.ts` and `fetch-cre-data.ts`, whose FRED paths return null without it (KPI then falls back to an AI-written narrative) |
 | `APP_URL`, `NEXT_PUBLIC_APP_URL` | Fallback base URL for server-side PDF rendering |
 | `OPENAI_FAST_MODEL`, `OPENAI_SMART_MODEL`, `OPENAI_SUMMARY_MODEL`, `OPENAI_SUMMARY_PDF_MODEL`, `OPENAI_SEARCH_FILTER_MODEL` | Model overrides; defaults apply if unset |
@@ -364,11 +423,13 @@ changing code, check that *your* files are clean rather than expecting a clean o
   For contrast, the `P3ASSET`/`P9ASSET` past-due columns *are* correct despite comments suggesting
   they are ratios; the fields really are dollar amounts in thousands. Fix the comments, not the code.
 - **Live-tab scores are always zero.** `opportunityScore`, `earningsScore` and `vulnerabilityScore`
-  are hardcoded to `0` in `market-analytics.tsx` (L427–429), so the institution drawer shows zeros.
-  The real computation exists only on the export path, which also paginates the full FDIC result set
-  while the live tab caps at 5,000 rows sorted by assets descending. The same scope can therefore
-  show different institution counts and averages in the tab versus the export, and the live tab
-  under-represents smaller institutions.
+  are hardcoded to `0` in `market-analytics.tsx`, so the institution drawer shows zeros. The real
+  computation exists only on the export path, which also paginates the full FDIC result set while the
+  live tab caps at 5,000 rows sorted by assets descending. The same scope can therefore show
+  different institution counts and averages in the tab versus the export, and the live tab
+  under-represents smaller institutions. The Visual Analysis charts sidestep this by calling
+  `buildReportData` instead of reading the table — anything else new that needs a score must do the
+  same, or it will plot zeros.
 - **Dead code:** `app/actions/fetch-industry-outlook.ts` (superseded by `getCachedOutlook.ts`, still
   writes local SQLite/JSON), `app/actions/fetch-public-mention-summary.ts` (no importers), and
   `fetchMiamiIndustrialReport()` (no callers).

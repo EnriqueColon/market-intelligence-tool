@@ -8,7 +8,7 @@ end of every session, alongside `SESSION.md` and `confluence.md`.
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
 | `main` | `e8bf8ad` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `5bb9074` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `dev` | `bb5e5f8` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 Production deploys automatically on every push to `main`. `dev` deploys as a Vercel preview on every
 push. Crons run only against production, and the post-deploy warm-cache GitHub Action triggers only
@@ -66,6 +66,7 @@ git push --force-with-lease origin dev
 
 | Commit | Date | Why it is a safe target |
 | --- | --- | --- |
+| `bb5e5f8` | 2026-08-23 | Current `dev`. Builds clean; charts, pulse strip and map verified against a running server. Roll back to `016d162` to remove the visual layer entirely. |
 | `e8bf8ad` | 2026-08-21 | Current production. Documentation only on top of `74807d8`, so identical in behaviour. |
 | `74807d8` | 2026-08-21 | Last behavioural commit. Sessions last a year and renew on use. |
 | `eabf088` | 2026-08-17 | Last commit before the isolated dev environment and the year-long session reached production. Roll back here to restore the seven-day login expiry. |
@@ -92,15 +93,21 @@ the Market Participants tab.
 
 Not in production. Merge to `main` to ship.
 
-Documentation only, safe to merge or to leave. `main` sits at `e8bf8ad`; everything that was
-previously listed here shipped in that merge and now appears under Production commits.
+`main` sits at `e8bf8ad`. Everything above it on `dev` is listed here.
 
 | Commit | Date | Summary |
 | --- | --- | --- |
+| `bb5e5f8` | 08-23 | feat: put the analytics visuals on screen and revive the bank stress map |
+| `016d162` | 08-21 | docs: list the dev docs commit in the rollback reference |
 | `5bb9074` | 08-21 | docs: record verified Market Analytics data faults and correct the reference |
 
 Plus the immediately following commit, which only adds this row — its SHA cannot be written into the
 commit that contains it.
+
+`bb5e5f8` is the only behavioural commit of the three. Merging it ships the on-screen charts, the
+Market Pulse strip and the interface changes. It does **not** ship the bank stress map, which stays
+dark in production until `bank-stress-map` is added to `ENABLED_TABS`; that makes the map a separate,
+reversible decision from the rest of the work.
 
 ---
 

@@ -8,6 +8,113 @@ is it in now, and what is still open.
 
 ---
 
+## 2026-08-23
+
+A request for "a visual component" and a more modern interface. Both were addressed, and pursuing
+the second uncovered that the bank stress map had never worked at all.
+
+### The charts existed, but only inside the PDF
+
+**Trigger.** Someone asked for visuals. The tool already had four charts — they were only reachable
+by downloading the report.
+
+`components/market-analytics-report-view.tsx` held the histogram, the CRE-to-capital ranking, the
+capital sensitivity scatter and the portfolio composition bars as inline Recharts markup, rendered
+by the headless Playwright pass that produces the PDF. Nothing on screen used them. The Market
+Analytics tab was tables and prose.
+
+- **`components/charts/analytics/`** (new) — the four charts extracted as components, plus
+  `use-analytics-chart-data.ts`, with the derivation logic in `lib/analytics-chart-data.ts`. The
+  report page and the new on-screen section render the same components, so the two cannot drift.
+- **`components/market-analytics-visuals.tsx`** (new) — the "Visual Analysis" section, above the
+  screening table, following the selected scope.
+- It calls `buildReportData`, the same server action the PDF uses, rather than reading the
+  dashboard's `screeningTable`. That table carries zeroed opportunity scores, so charts drawn from
+  it would have been quietly wrong. The cost is a few seconds' load, covered by skeletons.
+- **`lib/chart-theme.tsx`** (new) — one palette, axis, grid and tooltip definition, applied to the
+  four charts, the peer chart in the profile drawer and the Market Research sparklines. Colours are
+  literals rather than CSS variables because Recharts writes SVG fills that the PDF renderer cannot
+  resolve.
+- `singleLineTick` in that file exists because Recharts wraps long category labels by default; on
+  the twenty-row ranking the second line collided with the row beneath and the names were
+  unreadable.
+
+### Market Pulse strip
+
+`app/actions/fetch-market-pulse.ts` and `components/market-pulse-strip.tsx` add five tiles under the
+header — CRE delinquency, CRE charge-offs, the 10-year, the 30-year mortgage and the high-yield
+spread — each with a value, a direction and a sparkline, drawn from the same FRED series the News
+tab already cites. Verified on a running server: the strip read 1.56%, 0.17%, 4.69%, 6.65% and
+2.75%, matching the Key Signals text below it.
+
+### Interface
+
+Tabular numerals across tables and KPI tiles; an elevation scale (`surface-supporting`,
+`surface-primary`, `surface-raised`) so panels read as a hierarchy; entrance motion on tab content,
+disabled under `prefers-reduced-motion`; skeletons in place of "Loading…" text.
+
+The tab bar was hardcoded to `grid-cols-4` while the number of tabs is driven by `ENABLED_TABS`. In
+production, where three are enabled, it rendered an empty fourth cell. It is now derived.
+
+Removed as superseded: `capital-analytics-viz.tsx`, `executive-report-preview.tsx` and the unused
+shadcn `components/ui/chart.tsx` scaffold.
+
+### The map had never worked
+
+`app/actions/map-data.ts` filtered FDIC call reports on `REPDTE:"2025-09-30"`. The API only matches
+`"20250930"`. The hyphenated form is not rejected — it is accepted and matches nothing, so all three
+map endpoints returned empty successful responses and the failure looked like absent data. Confirmed
+directly against the API: `20250930` returns 4,452 institutions, `2025-09-30` returns none.
+
+Fixing the format was not enough. The quarter list started at the current quarter, which is never
+published — in August 2026 the most recent quarter with data is Q1. The default now walks back
+through candidate quarters until one returns rows, which absorbs the varying publication lag; an
+explicitly chosen quarter is still honoured exactly, since substituting a different period under
+someone who picked one would misattribute the figures.
+
+Three more faults surfaced once data reached the screen:
+
+- **The whole country was painted red.** With high-stress share near zero in almost every state, all
+  four quantile cuts landed on the same number and the chain of `<` comparisons fell through to the
+  final branch — maximum alarm on the calmest possible data. Cuts that cannot separate anything are
+  now dropped, a flat metric resolves to a neutral fill and reports itself as flat, and the default
+  colouring is average stress, which actually varies.
+- **A missing WebGL context took down the tab.** MapLibre throws synchronously from its constructor,
+  and the error propagated out of the effect and unmounted all of Market Analytics. Now guarded,
+  with a fallback panel.
+- **Handlers accumulated and went stale.** Layer click handlers were registered inside callbacks
+  that re-run whenever data or the colour scale changes, so one click eventually fired several
+  times. Separately the zoom handler was bound once and captured the first render forever, so after
+  changing state, quarter or metric, panning kept refetching the original selection. Handlers are
+  now bound once and the viewport is published as state.
+
+Also swapped the basemap. It was MapLibre's demo style: country outlines, no state boundaries, no
+place names, which is unusable for a US state map. Now OpenFreeMap Positron — no API key, and
+deliberately desaturated so the choropleth carries the colour.
+
+`lib/fdic-client.ts` (new) holds the hardened FDIC fetch — fallback host, API key, timeout, 4xx
+short-circuit — that previously sat private inside `app/actions/fetch-fdic-data.ts`. The map used
+bare `fetch` and had none of it. Both now share the one implementation.
+
+**Verified on a running server rather than by reading code.** All three endpoints return data
+(56 states, 17 Florida metros, 79 banks in a Florida bounding box, all at Q1 2026). A scripted
+browser pass through the real UI confirmed the pulse strip values, eight chart surfaces on the
+Market Analytics tab, no console errors, and the map drawing a genuine choropleth with a real
+quantile legend.
+
+The map is behind the `bank-stress-map` flag, so it is live on the dev preview and off in
+production until someone has used it there.
+
+Commit: `bb5e5f8`, on `dev` and not yet merged.
+
+**Open.** The map has only been exercised through a scripted browser and software WebGL; it wants a
+real look on the preview, particularly the metro and bank drill-downs, before `bank-stress-map` is
+added to production's `ENABLED_TABS`. Visual Analysis takes a few seconds to appear on the National
+scope because `buildReportData` re-fetches the full FDIC set per scope change; caching it is the
+obvious next step if that proves annoying.
+
+---
+
 ## 2026-08-21
 
 One change, plus the decision to finally ship the dev-environment work that had been sitting on
