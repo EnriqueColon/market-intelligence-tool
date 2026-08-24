@@ -14,6 +14,7 @@ import { IndustryOutlook } from "@/components/industry-outlook"
 import { MarketResearchFeed } from "@/components/market-research-feed"
 import { MarketPulseStrip } from "@/components/market-pulse-strip"
 import { DepartmentSelector } from "@/components/department-selector"
+import { ExecutiveBrief } from "@/components/lenses/executive-brief"
 import type { Department } from "@/lib/department"
 
 type TabValue = "news" | "analytics" | "market-research" | "legal"
@@ -124,6 +125,16 @@ export function MarketIntelligenceDashboard({
       </header>
 
       <MarketPulseStrip />
+
+      {/*
+        A lens sits above the tabs and replaces nothing, so choosing a department
+        adds a view rather than taking one away. Everything below stays reachable.
+      */}
+      {initialDepartment === "executive" && (
+        <div className="mx-auto w-full max-w-[1100px] px-5 pt-10 md:px-[20px]">
+          <ExecutiveBrief />
+        </div>
+      )}
 
       {availableTabs.length > 0 && (
         <main className="mx-auto w-full max-w-[1100px] px-5 py-12 md:px-[20px]">

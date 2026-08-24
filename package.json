@@ -18,7 +18,8 @@
     "test:institution-change": "node --test --experimental-strip-types lib/scoring/institution-change.test.ts",
     "test:memo-evidence": "node --test --experimental-strip-types lib/memo-evidence.test.ts",
     "test:verified-metrics": "node --test --experimental-strip-types lib/verified-metrics.test.ts",
-    "test:environment": "node --test --experimental-strip-types lib/environment.test.ts"
+    "test:environment": "node --test --experimental-strip-types lib/environment.test.ts",
+    "verify:executive-brief": "node --experimental-strip-types scripts/verify-executive-brief.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

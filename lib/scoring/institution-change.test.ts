@@ -1,6 +1,13 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
-import { detectChanges, type QuarterObservation } from "./institution-change.ts"
+import {
+  detectChanges,
+  groupForBrief,
+  rankByRun,
+  rankBySeverity,
+  type InstitutionChange,
+  type QuarterObservation,
+} from "./institution-change.ts"
 
 const q = (quarter: string, fields: Partial<QuarterObservation>): QuarterObservation => ({
   quarter,
@@ -96,4 +103,52 @@ test("handles unordered input and missing metrics without inventing zeros", () =
 
 test("returns nothing for a single quarter", () => {
   assert.deepEqual(detectChanges([q("20251231", { creToCapital: 5 })]), [])
+})
+
+const crossing = (over: number, from: number): InstitutionChange => ({
+  kind: "crossing",
+  metric: "creToCapital",
+  metricLabel: "CRE to capital",
+  description: "",
+  from,
+  to: 3 * over,
+  quarters: 1,
+  supervisory: true,
+  threshold: 3,
+})
+
+test("ranks a crossing that landed further past the level first", () => {
+  const grazed = crossing(1.02, 2.9)
+  const clear = crossing(1.4, 2.9)
+  assert.deepEqual([grazed, clear].sort(rankBySeverity), [clear, grazed])
+})
+
+test("does not let a jump from near-zero outrank a larger breach", () => {
+  // A leap from a near-zero base is usually a reporting artifact, so severity
+  // must depend on where the institution landed, not the size of the step.
+  const fromNearZero = crossing(1.05, 0.01)
+  const deeperBreach = crossing(1.5, 2.9)
+  assert.deepEqual([fromNearZero, deeperBreach].sort(rankBySeverity), [
+    deeperBreach,
+    fromNearZero,
+  ])
+})
+
+test("groupForBrief separates the three kinds and caps each section", () => {
+  const events: InstitutionChange[] = [
+    ...Array.from({ length: 4 }, () => crossing(1.2, 2.9)),
+    { ...crossing(1.2, 2.9), supervisory: false },
+    { kind: "trajectory", metric: "creToCapital", metricLabel: "CRE to capital", description: "", from: 1, to: 2, quarters: 5 },
+  ]
+
+  const groups = groupForBrief(events, 2)
+  assert.equal(groups.supervisoryCrossings.length, 2, "supervisory section is capped")
+  assert.equal(groups.otherCrossings.length, 1)
+  assert.equal(groups.trajectories.length, 1)
+})
+
+test("ranks a longer adverse run ahead of a shorter one", () => {
+  const short = { kind: "trajectory" as const, metric: "creToCapital" as const, metricLabel: "", description: "", from: 1, to: 3, quarters: 3 }
+  const long = { ...short, to: 1.5, quarters: 7 }
+  assert.deepEqual([short, long].sort(rankByRun), [long, short])
 })

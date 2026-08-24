@@ -125,6 +125,8 @@ export type InstitutionChange = {
   quarters: number
   /** Set on crossings: whether the level breached is a supervisory one. */
   supervisory?: boolean
+  /** Set on crossings: the level breached, so callers can rank by overshoot. */
+  threshold?: number
 }
 
 /** Minimum consecutive adverse quarters before a trend is worth reporting. */
@@ -187,6 +189,7 @@ export function detectChanges(observations: QuarterObservation[]): InstitutionCh
         to: latest.value,
         quarters: 1,
         supervisory: threshold.supervisory,
+        threshold: threshold.value,
       })
     }
 
@@ -222,4 +225,44 @@ export function detectChanges(observations: QuarterObservation[]): InstitutionCh
     if (a.kind === "crossing" && a.supervisory !== b.supervisory) return a.supervisory ? -1 : 1
     return b.quarters - a.quarters
   })
+}
+
+/**
+ * Metrics are in different units, so rank on a unitless quantity.
+ *
+ * Crossings rank by how far past the level the institution landed: one well
+ * over a threshold is a bigger finding than one that grazed it. Ranking by the
+ * size of the quarterly step instead would put an institution that jumped from
+ * near-zero at the top, which is usually a reporting artifact rather than news.
+ */
+export function rankBySeverity<T extends InstitutionChange>(a: T, b: T): number {
+  const past = (e: T) => (e.threshold ? Math.abs((e.to - e.threshold) / e.threshold) : 0)
+  return past(b) - past(a)
+}
+
+/** A longer adverse run is the stronger signal; relative move breaks ties. */
+export function rankByRun<T extends InstitutionChange>(a: T, b: T): number {
+  const move = (e: T) => (e.from === 0 ? 0 : Math.abs((e.to - e.from) / e.from))
+  return b.quarters - a.quarters || move(b) - move(a)
+}
+
+/**
+ * Split events into the three groups a brief shows, each capped at `perSection`.
+ * Pure, so verification scripts can exercise the real ranking.
+ */
+export function groupForBrief<T extends InstitutionChange>(events: T[], perSection: number) {
+  return {
+    supervisoryCrossings: events
+      .filter((e) => e.kind === "crossing" && e.supervisory)
+      .sort(rankBySeverity)
+      .slice(0, perSection),
+    otherCrossings: events
+      .filter((e) => e.kind === "crossing" && !e.supervisory)
+      .sort(rankBySeverity)
+      .slice(0, perSection),
+    trajectories: events
+      .filter((e) => e.kind === "trajectory")
+      .sort(rankByRun)
+      .slice(0, perSection),
+  }
 }
