@@ -67,6 +67,22 @@ Checked on all four surfaces: screening table, Cohort Summary KPI (1.3%), instit
 (including Loans / Deposits at 88.1% against FDIC's 88.05%) and the `/report/market-analytics` route
 that the PDF renders from. No page errors.
 
+### State
+
+`dev` is at `dcfa28d`; the fix itself is `7286e71`. Nothing has shipped — `main` remains at `e8bf8ad`
+and still serves the wrong Reserve Coverage. **`bb5e5f8` must not be merged to `main` without
+`7286e71`**, or the visual layer ships the wrong number to production more prominently than before.
+
+### A trap worth knowing about
+
+Four of the edited files (`map-stress-utils.ts`, `cre-deterioration.ts`,
+`export-market-analytics-report.ts`, `noncurrent-debug.ts`) are stored with **CRLF** line endings.
+Editing them through a Python script in text mode silently rewrote every line, turning a 22-line
+change into a 2,000-line diff that buried the actual edit. The endings were restored and folded back
+into the commit before pushing, but the repo has mixed endings and there is no `.gitattributes` to
+normalise them, so the next session will hit this too. Check `git show --stat` before pushing;
+whole-file rewrites in files you barely touched are the tell.
+
 ### Still open
 
 - **The Opportunity Score barely discriminates.** For Florida the median is 51.6 with an interquartile

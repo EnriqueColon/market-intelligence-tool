@@ -8,7 +8,7 @@ end of every session, alongside `SESSION.md` and `confluence.md`.
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
 | `main` | `e8bf8ad` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `7286e71` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `dev` | `dcfa28d` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 Production deploys automatically on every push to `main`. `dev` deploys as a Vercel preview on every
 push. Crons run only against production, and the post-deploy warm-cache GitHub Action triggers only
@@ -66,7 +66,7 @@ git push --force-with-lease origin dev
 
 | Commit | Date | Why it is a safe target |
 | --- | --- | --- |
-| `7286e71` | 2026-08-23 | Current `dev`. Reserve Coverage and CRE/(T1+T2) verified figure-by-figure against the live FDIC API. Prefer this over `bb5e5f8`, which renders a Reserve Coverage roughly 30x too large. |
+| `7286e71` | 2026-08-23 | Newest behavioural commit on `dev`; everything above it is documentation. Reserve Coverage and CRE/(T1+T2) verified figure-by-figure against the live FDIC API. Prefer this over `bb5e5f8`, which renders a Reserve Coverage roughly 30x too large. |
 | `bb5e5f8` | 2026-08-23 | Builds clean; charts, pulse strip and map verified against a running server. Roll back to `016d162` to remove the visual layer entirely. **Serves a wrong Reserve Coverage** — avoid unless isolating the visual layer. |
 | `e8bf8ad` | 2026-08-21 | Current production. Documentation only on top of `74807d8`, so identical in behaviour. |
 | `74807d8` | 2026-08-21 | Last behavioural commit. Sessions last a year and renew on use. |
@@ -98,6 +98,7 @@ Not in production. Merge to `main` to ship.
 
 | Commit | Date | Summary |
 | --- | --- | --- |
+| `dcfa28d` | 08-23 | docs: list the metric correction docs commit in the rollback reference |
 | `c74c8e2` | 08-23 | docs: record the reserve coverage and capital corrections |
 | `7286e71` | 08-23 | fix: report the real reserve coverage and capital base |
 | `9636101` | 08-23 | docs: list the visual layer docs commit in the rollback reference |
@@ -109,10 +110,15 @@ Not in production. Merge to `main` to ship.
 Plus the immediately following commit, which only adds this row — its SHA cannot be written into the
 commit that contains it.
 
-`bb5e5f8` is the only behavioural commit of the three. Merging it ships the on-screen charts, the
-Market Pulse strip and the interface changes. It does **not** ship the bank stress map, which stays
-dark in production until `bank-stress-map` is added to `ENABLED_TABS`; that makes the map a separate,
-reversible decision from the rest of the work.
+Only `bb5e5f8` and `7286e71` change behaviour; the rest are documentation.
+
+`bb5e5f8` ships the on-screen charts, the Market Pulse strip and the interface changes. It does
+**not** ship the bank stress map, which stays dark in production until `bank-stress-map` is added to
+`ENABLED_TABS`; that makes the map a separate, reversible decision from the rest of the work.
+
+`7286e71` corrects Reserve Coverage and CRE / (T1+T2). **Do not merge `bb5e5f8` to `main` without
+it** — on its own it puts a Reserve Coverage roughly 30x too large in front of users, in the KPI
+tile, the screening table, the drawer and the PDF.
 
 ---
 

@@ -445,6 +445,17 @@ changing code, check that *your* files are clean rather than expecting a clean o
   under-represents smaller institutions. The Visual Analysis charts sidestep this by calling
   `buildReportData` instead of reading the table — anything else new that needs a score must do the
   same, or it will plot zeros.
+- **The Opportunity Score barely separates the cohort.** `metricRange` normalises against the raw
+  minimum and maximum, so one extreme institution stretches the scale and compresses everyone else.
+  Florida Q1 2026 gives a median of 51.6, an interquartile range of 47.4–56.5 and nothing at all
+  above 80, which makes the "70+" screening language in the report narrative describe an almost empty
+  set. Percentile ranking, or winsorising the tails, would separate it far better. The weights are not
+  the problem.
+- **`buildReportData` has no `unstable_cache`**, unlike nearly every other action, so the Visual
+  Analysis section refetches the full FDIC set on every scope change — roughly eleven seconds on
+  National. It is the one obvious caching gap left.
+- **The screening table renders up to 30 columns** — 16 always, plus 4 capital and 7 earnings behind
+  the Columns popover — with no frozen first column, so scrolling right loses the institution name.
 - **Dead code:** `app/actions/fetch-industry-outlook.ts` (superseded by `getCachedOutlook.ts`, still
   writes local SQLite/JSON), `app/actions/fetch-public-mention-summary.ts` (no importers), and
   `fetchMiamiIndustrialReport()` (no callers).
