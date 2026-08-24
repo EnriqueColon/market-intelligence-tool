@@ -40,6 +40,11 @@ export type QuarterObservation = {
 
 export type MetricKey = keyof Omit<QuarterObservation, "quarter">
 
+/**
+ * `label` is inserted straight after "rose above" / "fell below", so it carries
+ * its own article. "2% of loans" reads correctly bare; "the 300% supervisory
+ * screen" does not.
+ */
 type Threshold = { value: number; label: string; supervisory: boolean }
 
 type MetricSpec = {
@@ -72,7 +77,7 @@ export const METRIC_SPECS: Record<MetricKey, MetricSpec> = {
     // 2006 Interagency Guidance on CRE Concentrations: total CRE at or above
     // 300% of total risk-based capital is one of two screening criteria for
     // heightened supervisory scrutiny.
-    thresholds: [{ value: 3, label: "300% supervisory screen", supervisory: true }],
+    thresholds: [{ value: 3, label: "the 300% supervisory screen", supervisory: true }],
     format: asMultiple,
     // Below 100% of capital, CRE is not a concentration story.
     material: { atLeast: 1 },
@@ -81,7 +86,7 @@ export const METRIC_SPECS: Record<MetricKey, MetricSpec> = {
     label: "Construction to capital",
     adverse: "rising",
     // The same guidance's other criterion, at 100%.
-    thresholds: [{ value: 1, label: "100% supervisory screen", supervisory: true }],
+    thresholds: [{ value: 1, label: "the 100% supervisory screen", supervisory: true }],
     format: asMultiple,
     // A quarter of the way to the supervisory screen.
     material: { atLeast: 0.25 },
@@ -107,7 +112,7 @@ export const METRIC_SPECS: Record<MetricKey, MetricSpec> = {
   capitalRatio: {
     label: "Capital ratio",
     adverse: "falling",
-    thresholds: [{ value: 8, label: "8% adequately capitalised", supervisory: false }],
+    thresholds: [{ value: 8, label: "the 8% adequately-capitalised floor", supervisory: false }],
     format: asPoints,
     material: { atMost: 15 },
   },
@@ -184,7 +189,7 @@ export function detectChanges(observations: QuarterObservation[]): InstitutionCh
         kind: "crossing",
         metric: key,
         metricLabel: spec.label,
-        description: `${spec.label} ${direction} the ${threshold.label}, at ${spec.format(latest.value)} from ${spec.format(previous.value)}.`,
+        description: `${spec.label} ${direction} ${threshold.label}, at ${spec.format(latest.value)} from ${spec.format(previous.value)}.`,
         from: previous.value,
         to: latest.value,
         quarters: 1,
@@ -207,12 +212,14 @@ export function detectChanges(observations: QuarterObservation[]): InstitutionCh
 
     if (run >= MIN_TRAJECTORY_RUN && material) {
       const start = series[series.length - 1 - run]
-      const verb = spec.adverse === "rising" ? "risen" : "fallen"
+      // Colon rather than "has risen": labels are a mix of singular and plural
+      // ("Capital ratio", "Noncurrent loans"), so no single verb agrees with all.
+      const verb = spec.adverse === "rising" ? "rising" : "falling"
       changes.push({
         kind: "trajectory",
         metric: key,
         metricLabel: spec.label,
-        description: `${spec.label} has ${verb} for ${run} consecutive quarters, from ${spec.format(start.value)} to ${spec.format(latest.value)}.`,
+        description: `${spec.label}: ${verb} for ${run} consecutive quarters, from ${spec.format(start.value)} to ${spec.format(latest.value)}.`,
         from: start.value,
         to: latest.value,
         quarters: run,

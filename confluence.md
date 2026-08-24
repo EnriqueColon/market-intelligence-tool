@@ -203,6 +203,24 @@ permanently null, with its 20% weight in the Earnings Resilience Score silently 
 the other three inputs. Shortening this window again will reintroduce that failure silently, since
 the code degrades to null rather than erroring.
 
+**A regulatory capital ratio above 100% is normal and must not be rescaled.** Trust and wholesale
+banks hold capital far above their risk-weighted assets: in 2026Q1, 66 of 4,352 institutions reported
+CET1 over 100%, JPMorgan Chase Bank Dearborn at 506.72%. `normalizePercent` treats anything above 100
+as basis points and divides by 100, which is right for ROA and NIM and catastrophic here — it
+rendered all 66 at roughly a hundredth of their true value, so the best-capitalised institutions in
+the country appeared critically undercapitalised and any screen on a capital floor selected exactly
+the wrong banks. This was live until 2026-08-24.
+
+`RBCT1CER`, `RBC1AAJ`, `RBC1RWAJ` and `RBCRWAJ` therefore go through
+**`normalizeCapitalRatioPercent`**, which trusts FDIC's percent units unchanged. It also declines to
+multiply values at or below 1, which `normalizePercent` does; that direction is worse still, since it
+would show a failing bank at 0.85% as a healthy 85%. Do not "simplify" these back to
+`normalizePercent`.
+
+Related: never substitute one capital measure for another across a time series. Falling back to the
+leverage ratio for a quarter missing CET1 compares two different things and manufactures a swing —
+it produced a fictional "fell from 31.39% to 1.14%" event in the Executive Brief.
+
 `RBCT1J + RBCT2` over `RWAJ` reproduces FDIC's published `RBCRWAJ` exactly, which is the check to run
 if the capital figures ever look wrong. `RWA_TO_ASSETS_PROXY` in `lib/fdic-ratio-helpers.ts` remains
 only as a fallback for institutions that do not report `RWAJ`; `CapitalRatios.basis` records whether
@@ -364,8 +382,10 @@ Generated content is expensive, so nearly everything is cached for a day.
   hours, since FDIC publishes quarterly. **Bump its version whenever the scoring changes**, or cached
   entries keep serving scores computed under the old method — v2 marks the move to percentile rank.
   `executive-brief` follows the same rule on a six-hour window: **bump its version whenever a
-  change-detection threshold, the trajectory run length or a ranking function moves**, or the brief
-  keeps reporting events under the old rules until the window expires.
+  change-detection threshold, the trajectory run length, a ranking function or the observation
+  mapping moves**, or the brief keeps reporting events under the old rules until the window expires.
+  Locally, deleting `.next/cache` does not clear it — the dev server holds it in memory too, so
+  restart the server as well.
   A national payload can exceed the 2MB entry limit, in which case Next logs a warning, skips the
   write and only smaller scopes are cached.
 

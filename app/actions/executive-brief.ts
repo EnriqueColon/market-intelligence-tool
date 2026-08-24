@@ -64,6 +64,18 @@ const EMPTY = (scope: string, error?: string): ExecutiveBrief => ({
   error,
 })
 
+/**
+ * Treats an exact zero as not reported.
+ *
+ * For capital and reserve coverage a true zero does not describe a going
+ * concern — an institution with no capital is closed, not flagged — so a zero
+ * here is a gap in the call report. Reading it as fact produces a dramatic and
+ * entirely fictional collapse, which is worse than reporting nothing.
+ */
+function reported(value: number | null | undefined): number | null {
+  return value ? value : null
+}
+
 function toObservation(bank: {
   reportDate?: string
   totalAssets: number
@@ -101,8 +113,12 @@ function toObservation(bank: {
     creToCapital: ratios?.creToTier1Tier2 ?? null,
     constructionToCapital: ratios?.constructionToTier1Tier2 ?? null,
     noncurrentRatio: bank.noncurrent_to_loans_ratio ?? null,
-    reserveCoverage: bank.loanLossReserve ?? null,
-    capitalRatio: bank.cet1Ratio || bank.leverageRatio || null,
+    reserveCoverage: reported(bank.loanLossReserve),
+    // CET1 only, never falling back to the leverage ratio. Substituting a
+    // different ratio for a quarter that did not report one compares two
+    // different measures and invents a swing: it produced a "capital ratio fell
+    // from 31.39% to 1.14%" finding for a healthy bank.
+    capitalRatio: reported(bank.cet1Ratio),
   }
 }
 
@@ -157,7 +173,7 @@ async function computeBrief(scope: string): Promise<ExecutiveBrief> {
 export async function getExecutiveBrief(scope: string): Promise<ExecutiveBrief> {
   const cached = unstable_cache(
     () => computeBrief(scope),
-    ["executive-brief-v1", scope],
+    ["executive-brief-v2", scope],
     { revalidate: 60 * 60 * 6 }
   )
   return cached()

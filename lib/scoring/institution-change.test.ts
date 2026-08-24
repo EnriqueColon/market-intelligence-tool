@@ -41,7 +41,7 @@ test("treats a falling metric as crossing when it drops below the level", () => 
   ])
   const crossing = changes.find((c) => c.kind === "crossing")
   assert.ok(crossing)
-  assert.match(crossing.description, /fell below the 1% of loans/)
+  assert.match(crossing.description, /fell below 1% of loans/)
 })
 
 test("reports a trajectory after three consecutive adverse quarters", () => {
@@ -54,7 +54,7 @@ test("reports a trajectory after three consecutive adverse quarters", () => {
   const trend = changes.find((c) => c.kind === "trajectory")
   assert.ok(trend, "expected a trajectory")
   assert.equal(trend.quarters, 3)
-  assert.match(trend.description, /risen for 3 consecutive quarters/)
+  assert.match(trend.description, /rising for 3 consecutive quarters/)
 })
 
 test("does not report a trajectory when the run is broken", () => {
@@ -145,6 +145,24 @@ test("groupForBrief separates the three kinds and caps each section", () => {
   assert.equal(groups.supervisoryCrossings.length, 2, "supervisory section is capped")
   assert.equal(groups.otherCrossings.length, 1)
   assert.equal(groups.trajectories.length, 1)
+})
+
+test("reads threshold crossings as sentences that agree grammatically", () => {
+  const plural = detectChanges([
+    q("20250930", { noncurrentRatio: 0.015 }),
+    q("20251231", { noncurrentRatio: 0.031 }),
+  ])
+  // "rose above the 2% of loans" and "Noncurrent loans has risen" both read wrong.
+  assert.match(plural[0].description, /Noncurrent loans rose above 2% of loans, at 3\.10%/)
+
+  const trend = detectChanges([
+    q("20250331", { noncurrentRatio: 0.011 }),
+    q("20250630", { noncurrentRatio: 0.02 }),
+    q("20250930", { noncurrentRatio: 0.03 }),
+    q("20251231", { noncurrentRatio: 0.041 }),
+  ]).find((c) => c.kind === "trajectory")
+  assert.ok(trend)
+  assert.match(trend.description, /^Noncurrent loans: rising for 3 consecutive quarters/)
 })
 
 test("ranks a longer adverse run ahead of a shorter one", () => {

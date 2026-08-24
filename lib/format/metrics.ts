@@ -51,6 +51,30 @@ export function normalizePercent(value: number | null | undefined): number | nul
 }
 
 /**
+ * Normalize an FDIC regulatory capital ratio (RBCT1CER, RBC1AAJ, RBC1RWAJ,
+ * RBCRWAJ) to percent units.
+ *
+ * **Do not route these through `normalizePercent`.** Its "above 100 means basis
+ * points" rule is wrong here, because a capital ratio above 100% is ordinary
+ * for a trust or wholesale bank whose risk-weighted assets are tiny next to its
+ * capital. In 2026Q1, 66 of 4,352 institutions reported CET1 above 100% —
+ * JPMorgan Chase Bank Dearborn at 506.72% — and dividing by 100 rendered every
+ * one of them as around 1%, inverting the meaning completely: the best
+ * capitalised banks in the country appeared critically undercapitalised, and
+ * anything screening on a capital floor selected exactly the wrong institutions.
+ *
+ * FDIC reports these fields in percent units already, so the correct handling is
+ * to trust them. A ratio at or below 1 is a genuine 0.x% and must not be scaled
+ * up either: that direction hides a failing bank, which is the worse error.
+ */
+export function normalizeCapitalRatioPercent(
+  value: number | null | undefined
+): number | null {
+  if (value === null || value === undefined || !Number.isFinite(value)) return null
+  return value
+}
+
+/**
  * Format a value in percent units to display string (e.g. 1.25 → "1.25%").
  */
 export function formatPercent(valuePercentUnits: number | null | undefined, decimals = 2): string {

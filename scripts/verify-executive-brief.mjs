@@ -57,7 +57,10 @@ for (const [cert, { name, state, rows }] of byCert) {
       creToCapital: capital > 0 ? cre / capital : null,
       constructionToCapital: capital > 0 ? num(r.LNRECONS) / capital : null,
       noncurrentRatio: num(r.NCLNLSR) / 100,
-      reserveCoverage: loans > 0 ? num(r.LNATRES) / loans : null,
+      // An exact zero is a gap in the call report, not a bank with no reserves
+      // or no capital; reading it as fact invents a collapse. Mirrors the
+      // `reported()` helper in app/actions/executive-brief.ts.
+      reserveCoverage: loans > 0 ? num(r.LNATRES) / loans || null : null,
       capitalRatio: num(r.RBCT1CER) || null,
     }
   })

@@ -278,6 +278,18 @@ about thirty times too large, until 2026-08-23. A one-off `curl` against
 `banks.data.fdic.gov/api/financials` comparing a field against its supposed derivation takes a minute
 and would have caught it.
 
+**A capital ratio above 100% is real, and rescaling it inverts the answer.** Trust and wholesale
+banks hold capital far above their risk-weighted assets — 66 of 4,352 institutions reported CET1 over
+100% in 2026Q1, one at 506.72%. A shared helper divided anything above 100 by 100 on the assumption
+it was basis points, which rendered every one of them near 1% and made the country's best-capitalised
+banks look like its worst. Capital ratios now use `normalizeCapitalRatioPercent`; do not route them
+back through `normalizePercent`. The general lesson is that a "surely no value is ever this large"
+heuristic is a bug waiting for the one bank where it is.
+
+**Never substitute one capital measure for another across a time series.** Falling back to the
+leverage ratio when CET1 is missing for a quarter compares two different measures and invents a
+change that never happened.
+
 **FDIC report dates must be `YYYYMMDD`.** A hyphenated `2025-09-30` is not rejected — it matches zero
 rows. This silently emptied every map endpoint for the entire life of the feature, and it presents as
 missing data rather than as an error.

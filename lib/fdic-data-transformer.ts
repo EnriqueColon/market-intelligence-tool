@@ -7,7 +7,12 @@
  */
 
 import { PORTFOLIO_METRICS } from './portfolio-constants'
-import { normalizePercent, normalizePercentToDecimal, warnIfUnrealisticPercent } from './format/metrics'
+import {
+  normalizeCapitalRatioPercent,
+  normalizePercent,
+  normalizePercentToDecimal,
+  warnIfUnrealisticPercent,
+} from './format/metrics'
 
 export interface BankFinancialData {
   id: string
@@ -248,10 +253,10 @@ export function transformFinancialData(rawData: any[]): BankFinancialData[] {
       // LNLSDEPR: FDIC net loans and leases to deposits (%). Stored as decimal.
       loansToDeposits: normalizePercentToDecimal(Number(bank.LNLSDEPR || 0), "LNLSDEPR") ?? 0,
       netInterestMargin,
-      cet1Ratio: normalizePercent(Number(bank.RBCT1CER || 0)) ?? 0,
-      leverageRatio: normalizePercent(Number(bank.RBC1AAJ || 0)) ?? 0,
-      tier1RbcRatio: normalizePercent(Number(bank.RBC1RWAJ || 0)) ?? 0,
-      totalRbcRatio: normalizePercent(Number(bank.RBCRWAJ || 0)) ?? 0,
+      cet1Ratio: normalizeCapitalRatioPercent(Number(bank.RBCT1CER || 0)) ?? 0,
+      leverageRatio: normalizeCapitalRatioPercent(Number(bank.RBC1AAJ || 0)) ?? 0,
+      tier1RbcRatio: normalizeCapitalRatioPercent(Number(bank.RBC1RWAJ || 0)) ?? 0,
+      totalRbcRatio: normalizeCapitalRatioPercent(Number(bank.RBCRWAJ || 0)) ?? 0,
       netIncome: formatCurrency(bank.NETINC || 0),
       reportDate: bank.REPDTE,
       totalEquityDollars: bank.EQCAP != null ? formatCurrency(bank.EQCAP) : undefined,

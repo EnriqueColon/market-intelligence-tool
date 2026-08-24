@@ -46,20 +46,53 @@ gap already labelled on the national screening tab; it is honest, not fixed.
 it would have overwritten the curated 45-firm reference file with a flat array of strings, destroying
 the aliases and categories. The live loader is `app/lib/watchlist.ts` and is read-only.
 
-**Verification.** 13 unit tests pass, including four new ones covering the ranking and the near-zero
-artifact case. `npm run build` is clean. `npm run verify:executive-brief` against live national data
-gives 304 of 1,138 institutions moving (26.7%) across 365 events, and the top of each section reads
-as genuine news.
+### Looking at it on screen found a real bug in a core metric
 
-**Still open.** The brief was not visually confirmed in a browser this session — the local dev server
-sits behind the password gate and the screenshot path was abandoned rather than route the password
-through a script. Build, tests and live-data output all pass, so the risk is confined to layout.
-**Someone should open it once and look at it.** Beyond that: three lenses remain (Underwriter
-Workbench, Origination Targeting, Exposure & Reporting), and the FDIC row cap still wants pagination
-rather than labelling.
+Worth recording as an argument for actually rendering things: the brief was correct in build output,
+correct in unit tests, and correct against live data in the verification script. Opening it in a
+browser showed **"MIZUHO BANK USA — capital ratio fell below the 8% adequately-capitalised floor, at
+1.14% from 31.39%"**, which is not a plausible thing for a functioning bank to do.
 
-Note `executive-brief-v1` is a six-hour cache key. **Bump it when change-detection thresholds move**,
-or the brief keeps reporting events under the old rules until the window expires.
+It was not the brief's bug. `normalizePercent` in `lib/format/metrics.ts` treats any percentage above
+100 as basis points and divides by 100. That is reasonable for ROA and NIM, and **wrong for
+regulatory capital ratios**, which routinely exceed 100% at trust and wholesale banks whose
+risk-weighted assets are tiny relative to capital. Mizuho's real CET1 is 113.99%.
+
+This was not confined to one bank or to the brief. In 2026Q1, **66 of 4,352 institutions** report
+CET1 above 100%, and every one was rendered at roughly a hundredth of its true value throughout
+Market Analytics — JPMorgan Chase Bank Dearborn at 506.72% displayed as 5.07%. The failure inverts
+meaning rather than blurring it: the best-capitalised institutions in the country appeared to be the
+worst, and any screen on a capital floor selected precisely the wrong banks.
+
+Capital ratios now use `normalizeCapitalRatioPercent`, which trusts FDIC's percent units. It also
+refuses to scale values at or below 1 upward, which `normalizePercent` does — that direction is the
+more dangerous one, since it would render a genuinely failing bank at 0.85% as a comfortable 85%.
+ROA, NIM and ROE are untouched. Four tests pin the behaviour, including the JPMorgan figure.
+
+A second, smaller artifact came from my own code: `toObservation` fell back to the leverage ratio
+when CET1 was absent for a quarter, which silently compares two different measures across a series
+and manufactures a swing. It now uses CET1 only, and treats an exact zero in capital or reserve
+coverage as "not reported" rather than as fact.
+
+**Verification.** 30 unit tests pass across the three suites, including new coverage for the capital
+ratio normalisation, the ranking, and sentence agreement. `npm run build` is clean.
+`npm run verify:executive-brief` gives 304 of 1,138 institutions moving (26.7%) across 365 events.
+The brief was confirmed on screen after the fixes, with the false Mizuho alert gone.
+
+**Still open.**
+
+- **Cold load is about 50 seconds.** Cached it is under a second, and the cache lasts six hours, but
+  the first viewer in each window waits on a skeleton. The existing post-deploy warm-cache action
+  could prime it; it does not yet.
+- The FDIC row cap still wants pagination rather than labelling.
+- Three lenses remain: Underwriter Workbench, Origination Targeting, Exposure & Reporting.
+- Worth checking whether anything else screens on capital ratios in a way the old normalisation
+  distorted — the export path and any capital-based filter are the places to look.
+
+Note `executive-brief-v2` is a six-hour cache key. **Bump it when change-detection thresholds, the
+ranking or the observation mapping move**, or the brief keeps reporting events under the old rules
+until the window expires. Locally, clearing `.next/cache` is not enough — the dev server also holds
+it in memory and needs a restart.
 
 ---
 

@@ -9,7 +9,37 @@
 
 import { describe, it } from "node:test"
 import assert from "node:assert"
-import { normalizePercentToDecimal, formatDecimalAsPercent } from "./metrics.ts"
+import {
+  normalizeCapitalRatioPercent,
+  normalizePercent,
+  normalizePercentToDecimal,
+  formatDecimalAsPercent,
+} from "./metrics.ts"
+
+describe("normalizeCapitalRatioPercent", () => {
+  it("trusts a ratio above 100%, which normalizePercent would wreck", () => {
+    // JPMorgan Chase Bank Dearborn, 2026Q1. Trust and wholesale banks hold
+    // capital far above their risk-weighted assets, so this is ordinary.
+    assert.strictEqual(normalizeCapitalRatioPercent(506.72), 506.72)
+    // The bug this replaces: rendering the best-capitalised bank as 5.07%.
+    assert.ok(Math.abs((normalizePercent(506.72) ?? 0) - 5.0672) < 1e-9)
+  })
+
+  it("does not inflate a genuinely thin ratio", () => {
+    // The dangerous direction: scaling 0.85% up to 85% hides a failing bank.
+    assert.strictEqual(normalizeCapitalRatioPercent(0.85), 0.85)
+  })
+
+  it("passes ordinary ratios through unchanged", () => {
+    assert.strictEqual(normalizeCapitalRatioPercent(12.4), 12.4)
+  })
+
+  it("returns null for missing or non-finite input", () => {
+    assert.strictEqual(normalizeCapitalRatioPercent(null), null)
+    assert.strictEqual(normalizeCapitalRatioPercent(undefined), null)
+    assert.strictEqual(normalizeCapitalRatioPercent(Number.NaN), null)
+  })
+})
 
 describe("normalizePercentToDecimal", () => {
   it("NCLNLSR raw 0.795 -> decimal 0.00795 -> display 0.8%", () => {
