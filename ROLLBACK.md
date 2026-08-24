@@ -98,6 +98,7 @@ Not in production. Merge to `main` to ship.
 
 | Commit | Date | Summary |
 | --- | --- | --- |
+| `c74c8e2` | 08-23 | docs: record the reserve coverage and capital corrections |
 | `7286e71` | 08-23 | fix: report the real reserve coverage and capital base |
 | `9636101` | 08-23 | docs: list the visual layer docs commit in the rollback reference |
 | `58b748d` | 08-23 | docs: record the visual layer and the map faults it uncovered |
