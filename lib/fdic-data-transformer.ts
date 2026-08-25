@@ -2,15 +2,28 @@
  * FDIC Data Transformation Utilities
  * Converts raw FDIC API responses to dashboard-ready formats.
  *
- * FDIC semantics: Fields marked "(% )" (NCLNLS, NCLNLSR, LNLSDEPR) are percent points.
+ * FDIC semantics: Fields genuinely marked "(% )" (NCLNLSR, LNLSDEPR) are percent points.
  * All ratios stored internally as DECIMALS (0.008 = 0.8%). Display: decimal * 100 -> "%".
+ *
+ * A field name is not evidence of its units. NCLNLS reads like a ratio and holds
+ * dollars; LNREDOM reads like a residential figure and holds every real estate
+ * loan; LNREOTH reads like a commercial residual and holds closed-end
+ * mortgages. Each derived column below is reconciled against a published FDIC
+ * total by `scripts/audit-fdic-columns.mjs`; run it after changing any of them.
  */
 
 import { PORTFOLIO_METRICS } from './portfolio-constants'
 import { computeCreLoans } from './fdic-cre'
 import {
+  computeNonaccrualRatio,
+  computeNoncurrentToAssets,
+  computePastDueToAssets,
+  computeReserveCoverage,
+  resolveGrossLoans,
+} from './fdic-loan-quality'
+import {
   normalizeCapitalRatioPercent,
-  normalizePercent,
+  normalizeFdicPercent,
   normalizePercentToDecimal,
   warnIfUnrealisticPercent,
 } from './format/metrics'
@@ -26,31 +39,59 @@ export interface BankFinancialData {
   constructionLoans: number
   multifamilyLoans: number
   nonResidentialLoans: number
+  /**
+   * FDIC LNREOTH, dollars. Closed-end 1-4 family residential, not a commercial
+   * category: `LNRERES - LNRELOC = LNREOTH` exactly on all 4,352 institutions.
+   * It is neither part of `creLoans` nor a share of it, so do not divide it by
+   * `creLoans` to build a CRE mix.
+   */
   otherRealEstateLoans: number
   /** Excluded from `creLoans` by the 2006 guidance definition. */
   ownerOccupiedLoans: number
   /** The portion of non-residential CRE that counts toward the 300% screen. */
   nonOwnerOccupiedLoans: number
+  /**
+   * 1-4 family residential, dollars. FDIC LNRERES.
+   *
+   * Previously read from LNREDOM, which is every real estate loan in domestic
+   * offices and equals LNRE on 4,335 of 4,352 institutions — 2.09x the true
+   * residential book industry-wide.
+   */
   residentialLoans: number
   totalUnusedCommitments: number
   creUnusedCommitments: number
   /** Total loans and leases (net), dollars. FDIC LNLSNET. */
   totalLoans: number
+  /** Gross loans and leases, dollars. FDIC LNLSGR. Denominator for the loan-quality ratios. */
+  grossLoans: number
   /** Nonaccrual loans and leases, dollars. FDIC NALNLS. */
   nonaccrualLoans: number
+  /** Nonaccrual over gross loans, decimal. Gross to match FDIC's own NCLNLSR. */
   nplRatio: number
+  /** Assets past due 30-89 days over total assets, decimal. FDIC P3ASSET / ASSET. */
   pastDue3090: number
+  /** Assets past due 90+ days over total assets, decimal. FDIC P9ASSET / ASSET. */
   pastDue90Plus: number
   /** Noncurrent loans to gross loans, decimal (FDIC NCLNLSR). Past due 90+ plus nonaccrual. Used for nplScore. */
   noncurrent_to_loans_ratio: number
-  /** Noncurrent loans to total assets, decimal (FDIC NCLNLS). Display only, not used in scoring. */
+  /**
+   * Noncurrent loans to total assets, decimal. Display only, not used in scoring.
+   *
+   * Computed from FDIC NCLNLS over ASSET. NCLNLS is a dollar amount — it equals
+   * P9LNLS + NALNLS exactly on every institution — so reading it as percent
+   * points and clamping pinned 3,398 of 4,352 institutions at exactly 100%.
+   */
   noncurrent_to_assets_ratio: number
   roa: number
   roe: number
   efficiencyRatio: number
   /**
-   * Allowance for loan and lease losses over net loans, decimal. FDIC
-   * LNATRES / LNLSNET.
+   * Allowance for loan and lease losses over gross loans, decimal. FDIC
+   * LNATRES / LNLSGR, which reproduces FDIC's published LNATRESR exactly.
+   *
+   * Gross, not net: net loans are gross loans minus this very allowance, so a
+   * net denominator puts the allowance inside itself and overstates coverage by
+   * up to 2.80 percentage points at reserve-heavy card lenders.
    *
    * This was previously read from LNLSDEPR, which is the net loans-to-deposits
    * ratio, not a reserve at all — the two agree to the decimal place on every
@@ -67,7 +108,15 @@ export interface BankFinancialData {
   totalRbcRatio: number
   netIncome: number
   reportDate?: string
-  /** Total equity capital in dollars (from EQCAP if available) */
+  /**
+   * Total equity capital in dollars. FDIC EQTOT, which equals `ASSET - LIAB`
+   * on all 4,352 institutions.
+   *
+   * Read from EQCAP until 2026-08-24, which this endpoint does not serve, so it
+   * was undefined on every institution and CRE/Equity silently fell back to
+   * Tier 1 capital. Not EQ, which is bank-only equity excluding noncontrolling
+   * interests and so does not close the balance sheet on 93 institutions.
+   */
   totalEquityDollars?: number | null
   /** Tier 1 capital in dollars. FDIC RBCT1J. */
   tier1Dollars?: number | null
@@ -180,18 +229,32 @@ export function transformFinancialData(rawData: any[]): BankFinancialData[] {
     })
     const totalUnusedCommitments = formatCurrency(bank.UCLN || 0)
     const creUnusedCommitments = formatCurrency(bank.UCCOMRE || 0)
-    const totalLoansThousands = Number(bank.LNLSNET || 0)
+    const netLoansThousands = Number(bank.LNLSNET || 0)
+    const allowanceThousands = Number(bank.LNATRES || 0)
+    const assetsThousands = Number(bank.ASSET || 0)
+    // The denominator FDIC uses for its own loan-quality ratios. LNLSGR is
+    // preferred; net plus the allowance reproduces it on every institution.
+    const grossLoansThousands = resolveGrossLoans({
+      grossLoans: bank.LNLSGR != null ? Number(bank.LNLSGR) : null,
+      netLoans: netLoansThousands,
+      allowance: allowanceThousands,
+    })
     const nonAccrualLoansThousands = Number(bank.NALNLS || 0)
     const totalLoans = formatCurrency(bank.LNLSNET || 0)
+    const grossLoans = formatCurrency(grossLoansThousands)
     const nonaccrualLoans = formatCurrency(bank.NALNLS || 0)
     const creConcentration = totalLoans > 0 ? (creLoans / totalLoans) * 100 : 0
-    // NPL Ratio: NALNLS/LNLSNET, stored as decimal (0.008 = 0.8%)
-    const nplRatio = totalLoansThousands > 0 ? nonAccrualLoansThousands / totalLoansThousands : 0
+    const nplRatio = computeNonaccrualRatio({
+      nonaccrualLoans: nonAccrualLoansThousands,
+      grossLoans: grossLoansThousands,
+    })
 
     const rawRoa = Number(bank.ROA || 0)
     const rawNim = Number(bank.NIMR || 0)
-    const roa = normalizePercent(rawRoa) ?? 0
-    const netInterestMargin = normalizePercent(rawNim) ?? 0
+    // FDIC reports ROA, ROE and NIMR in percent units on every institution, so
+    // these are trusted rather than rescaled. See normalizeFdicPercent.
+    const roa = normalizeFdicPercent(rawRoa) ?? 0
+    const netInterestMargin = normalizeFdicPercent(rawNim) ?? 0
 
     if (roa > 0) warnIfUnrealisticPercent('ROA', roa, bank.NAME || 'Unknown', rawRoa)
     if (netInterestMargin > 0) warnIfUnrealisticPercent('NIM', netInterestMargin, bank.NAME || 'Unknown', rawNim)
@@ -210,27 +273,22 @@ export function transformFinancialData(rawData: any[]): BankFinancialData[] {
       otherRealEstateLoans,
       ownerOccupiedLoans,
       nonOwnerOccupiedLoans,
-      residentialLoans: formatCurrency(bank.LNREDOM || 0),
+      residentialLoans: formatCurrency(bank.LNRERES || 0),
       totalUnusedCommitments,
       creUnusedCommitments,
       totalLoans,
+      grossLoans,
       nonaccrualLoans,
       nplRatio: Number(nplRatio.toFixed(4)),
-      // P3ASSET, P9ASSET: Past due amounts in thousands (not ratios). Compute ratio = amount/ASSET.
-      pastDue3090: (() => {
-        const p3 = Number(bank.P3ASSET || 0)
-        const asset = Number(bank.ASSET || 0)
-        if (asset <= 0 || !Number.isFinite(p3)) return 0
-        const ratio = p3 / asset
-        return Math.min(1, Math.max(0, ratio))
-      })(),
-      pastDue90Plus: (() => {
-        const p9 = Number(bank.P9ASSET || 0)
-        const asset = Number(bank.ASSET || 0)
-        if (asset <= 0 || !Number.isFinite(p9)) return 0
-        const ratio = p9 / asset
-        return Math.min(1, Math.max(0, ratio))
-      })(),
+      // P3ASSET, P9ASSET: past due amounts in thousands, not ratios.
+      pastDue3090: computePastDueToAssets({
+        pastDueAssets: Number(bank.P3ASSET || 0),
+        totalAssets: assetsThousands,
+      }),
+      pastDue90Plus: computePastDueToAssets({
+        pastDueAssets: Number(bank.P9ASSET || 0),
+        totalAssets: assetsThousands,
+      }),
       // NCLNLSR: FDIC Noncurrent Loans to Loans (%). Stored as decimal. Cap at 1.0 (100%).
       noncurrent_to_loans_ratio: (() => {
         const raw = Number(bank.NCLNLSR || 0)
@@ -240,34 +298,32 @@ export function transformFinancialData(rawData: any[]): BankFinancialData[] {
         }
         return Math.min(1, Math.max(0, decimal))
       })(),
-      // NCLNLS: FDIC Noncurrent Loans to Assets (%). Stored as decimal. Fallback only when NCLNLS missing.
-      // Cap at 1.0 (100%) — noncurrent loans cannot exceed total assets; FDIC outliers can corrupt averages.
+      // NCLNLS is a dollar amount, not a percentage. Falls back to the reported
+      // noncurrent-to-loans ratio rescaled onto assets when it is missing.
       noncurrent_to_assets_ratio: (() => {
-        const raw = Number(bank.NCLNLS || 0)
-        let decimal = 0
-        if (Number.isFinite(raw) && raw !== 0) {
-          decimal = normalizePercentToDecimal(raw, "NCLNLS") ?? 0
-        } else {
-          const assetsThousands = Number(bank.ASSET || 0)
-          const loansThousands = Number(bank.LNLSNET || 0)
-          if (assetsThousands > 0 && loansThousands > 0) {
-            const ntl = normalizePercentToDecimal(Number(bank.NCLNLSR || 0), "NCLNLSR") ?? 0
-            decimal = ntl * (loansThousands / assetsThousands)
-          }
+        const noncurrentThousands = Number(bank.NCLNLS || 0)
+        if (Number.isFinite(noncurrentThousands) && noncurrentThousands !== 0) {
+          return computeNoncurrentToAssets({
+            noncurrentLoans: noncurrentThousands,
+            totalAssets: assetsThousands,
+          })
         }
-        return Math.min(1, Math.max(0, decimal))
+        if (assetsThousands > 0 && grossLoansThousands > 0) {
+          const ntl = normalizePercentToDecimal(Number(bank.NCLNLSR || 0), "NCLNLSR") ?? 0
+          return Math.min(1, Math.max(0, ntl * (grossLoansThousands / assetsThousands)))
+        }
+        return 0
       })(),
       roa,
-      roe: normalizePercent(Number(bank.ROE || 0)) ?? 0,
+      roe: normalizeFdicPercent(Number(bank.ROE || 0)) ?? 0,
       efficiencyRatio: Number(bank.EEFFR || 0),
-      // Reserve coverage from the allowance itself. Both fields are reported in
-      // thousands, so the ratio needs no unit conversion.
-      loanLossReserve: (() => {
-        const allowance = Number(bank.LNATRES || 0)
-        const netLoans = Number(bank.LNLSNET || 0)
-        if (!Number.isFinite(allowance) || !Number.isFinite(netLoans) || netLoans <= 0) return 0
-        return Math.min(1, Math.max(0, allowance / netLoans))
-      })(),
+      // Reserve coverage from the allowance itself, over gross loans so it
+      // reproduces FDIC's own LNATRESR. Both fields are reported in thousands,
+      // so the ratio needs no unit conversion.
+      loanLossReserve: computeReserveCoverage({
+        allowance: allowanceThousands,
+        grossLoans: grossLoansThousands,
+      }),
       // LNLSDEPR: FDIC net loans and leases to deposits (%). Stored as decimal.
       loansToDeposits: normalizePercentToDecimal(Number(bank.LNLSDEPR || 0), "LNLSDEPR") ?? 0,
       netInterestMargin,
@@ -277,7 +333,7 @@ export function transformFinancialData(rawData: any[]): BankFinancialData[] {
       totalRbcRatio: normalizeCapitalRatioPercent(Number(bank.RBCRWAJ || 0)) ?? 0,
       netIncome: formatCurrency(bank.NETINC || 0),
       reportDate: bank.REPDTE,
-      totalEquityDollars: bank.EQCAP != null ? formatCurrency(bank.EQCAP) : undefined,
+      totalEquityDollars: bank.EQTOT != null ? formatCurrency(Number(bank.EQTOT)) : undefined,
       // Reported capital, so CRE-to-capital no longer has to infer a denominator
       // from a ratio and an assumed risk weighting.
       tier1Dollars: bank.RBCT1J != null ? formatCurrency(Number(bank.RBCT1J)) : undefined,
@@ -301,8 +357,10 @@ export function transformInstitutionData(rawData: any[]): BankInstitutionData[] 
     totalAssets: formatCurrency(bank.ASSET || 0),
     totalDeposits: formatCurrency(bank.DEP || 0),
     netIncome: formatCurrency(bank.NETINC || 0),
-    roa: formatPercentage(bank.ROA || 0),
-    roe: formatPercentage(bank.ROE || 0),
+    // Percent units on this endpoint too, so multiplying by 100 overstated every
+    // institution a hundredfold. Ergo Bank reports ROA 0.3648, meaning 0.36%.
+    roa: normalizeFdicPercent(Number(bank.ROA ?? 0)) ?? 0,
+    roe: normalizeFdicPercent(Number(bank.ROE ?? 0)) ?? 0,
     lastUpdate: bank.DATEUPDT || '',
     active: bank.ACTIVE === 1 || bank.ACTIVE === true,
   }))

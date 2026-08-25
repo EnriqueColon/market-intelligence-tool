@@ -44,8 +44,8 @@ export const METRIC_DEFINITIONS: Record<string, MetricDef> = {
     whyValuable: "Absolute dollar exposure to nonperforming loans; complements NPL ratio for sizing credit stress.",
   },
   "NPL Ratio": {
-    definition: "Nonaccrual loans and leases as a share of total loans and leases.",
-    howCalculated: "Nonaccrual loans ÷ total loans × 100. FDIC NPL metric.",
+    definition: "Nonaccrual loans and leases as a share of gross loans and leases.",
+    howCalculated: "Nonaccrual loans ÷ gross loans × 100 (FDIC NALNLS ÷ LNLSGR). Gross, matching the denominator FDIC uses for its own noncurrent ratio.",
     whyValuable: "Measures current credit stress; rising NPL suggests deteriorating loan quality.",
   },
   "CRE Loans": {
@@ -105,17 +105,17 @@ export const METRIC_DEFINITIONS: Record<string, MetricDef> = {
   },
   "Noncurrent ($)": {
     definition: "Dollar amount of noncurrent loans and leases (past due 90+ plus nonaccrual).",
-    howCalculated: "Derived: Noncurrent / Loans ratio × Total loans (NCLNLSR × LNLSNET).",
+    howCalculated: "FDIC NCLNLS, which is reported directly in dollars (past due 90+ plus nonaccrual).",
     whyValuable: "Absolute dollar exposure; complements NPL ($) which is nonaccrual only.",
   },
   "Noncurrent / Assets": {
-    definition: "Noncurrent loans and leases as a percent of total assets (FDIC NCLNLS). Past due 90+ plus nonaccrual.",
-    howCalculated: "Past due 90+ days plus nonaccrual ÷ total assets × 100. Display only; not used in scoring.",
+    definition: "Noncurrent loans and leases as a percent of total assets. Past due 90+ plus nonaccrual.",
+    howCalculated: "FDIC NCLNLS ÷ ASSET × 100. NCLNLS is a dollar amount, not a ratio. Display only; not used in scoring.",
     whyValuable: "Context metric for noncurrent exposure relative to balance sheet size. Complements Noncurrent / Loans.",
   },
   "Reserve Coverage": {
-    definition: "Loan loss allowance as a share of net loans. Typically 1–2%.",
-    howCalculated: "Allowance for loan and lease losses ÷ net loans and leases × 100 (FDIC LNATRES ÷ LNLSNET).",
+    definition: "Loan loss allowance as a share of gross loans. Typically 1–2%.",
+    howCalculated: "Allowance for loan and lease losses ÷ gross loans and leases × 100 (FDIC LNATRES ÷ LNLSGR), which reproduces FDIC's published LNATRESR.",
     whyValuable: "Indicates cushion for future losses; thin reserves relative to NPLs signal vulnerability.",
   },
   "Loans / Deposits": {
@@ -150,7 +150,7 @@ export const METRIC_DEFINITIONS: Record<string, MetricDef> = {
   },
   "CRE / Equity": {
     definition: "Commercial real estate loans divided by total equity.",
-    howCalculated: "CRE loans ÷ total equity (EQCAP when available; otherwise derived from capital ratios).",
+    howCalculated: "CRE loans ÷ total equity capital (FDIC EQTOT when available; otherwise derived from capital ratios).",
     whyValuable: "Measures CRE exposure relative to book equity cushion.",
   },
   "Const / (T1+T2)": {
@@ -233,11 +233,11 @@ export const METRIC_DEFINITIONS: Record<string, MetricDef> = {
   "Scenario (CRE Stress Watch)": "Fixed scenario emphasizing CRE concentration and rising credit stress (capital/reserves may be inverted depending on the component).",
   "Institutions Screened": "Count of unique banks with a latest-quarter record in the selected region.",
   "Institutions in Top 10": "Count of institutions in the top 10 by opportunity score.",
-  "Avg NPL Ratio": "Average of nonaccrual loans & leases divided by total loans & leases.",
+  "Avg NPL Ratio": "Average of nonaccrual loans & leases divided by gross loans & leases.",
   "Avg Noncurrent Loan Ratio": "Average noncurrent loans (past due 90+ plus nonaccrual) as a share of gross loans.",
   "Avg Noncurrent / Loans": "Average noncurrent loans (past due 90+ plus nonaccrual) as a share of gross loans (FDIC NCLNLSR).",
-  "Avg Noncurrent / Assets": "Average noncurrent loans (past due 90+ plus nonaccrual) as a share of total assets (FDIC NCLNLS).",
-  "Avg Reserve Coverage": "Average loan loss reserve ratio (allowance relative to loans).",
+  "Avg Noncurrent / Assets": "Average noncurrent loans (past due 90+ plus nonaccrual) as a share of total assets (FDIC NCLNLS ÷ ASSET).",
+  "Avg Reserve Coverage": "Average loan loss reserve ratio (allowance relative to gross loans).",
   "Avg CRE Concentration": "Average CRE loans divided by total loans.",
   "Tier 1 Capital": "Core capital—common equity, retained earnings, qualifying preferred stock. Highest-quality capital that absorbs losses first. FDIC derives from leverage ratio when direct values unavailable.",
   "Tier 2 Capital": "Supplementary capital—subordinated debt, loan loss reserves, hybrid instruments. Secondary capital providing additional loss absorption. FDIC derives Tier 1 + Tier 2 from total risk-based capital ratio.",
@@ -284,9 +284,9 @@ export const METRIC_DEFINITIONS: Record<string, MetricDef> = {
     whyValuable: "Non-residential CRE (office, retail, industrial) exposure. Only the non-owner-occupied portion (FDIC LNRENROT) counts toward CRE concentration: a business borrowing against its own premises is not a concentration exposure, and the 2006 interagency guidance excludes it. Total CRE = Construction + Multifamily + Non-Owner-Occupied Non-Residential.",
   },
   "Total Other Real Estate": {
-    definition: "All other loans secured by real estate (FDIC LNREOTH).",
-    howCalculated: "Sum of other real estate loans (FDIC LNREOTH) across institutions.",
-    whyValuable: "Shown for completeness and deliberately excluded from Total CRE. These loans are already counted inside construction, multifamily, non-residential, 1-4 family or farmland — FDIC's total real estate figure reconciles without them — so adding them would count the same loans twice. Doing so overstated CRE concentration across the tool until 2026-08-24.",
+    definition: "Closed-end 1-4 family residential mortgages (FDIC LNREOTH), despite the field's \"all other loans secured by real estate\" gloss.",
+    howCalculated: "Sum of FDIC LNREOTH across institutions. It is the closed-end half of the 1-4 family book: LNRERES − LNRELOC = LNREOTH exactly on all 4,352 institutions.",
+    whyValuable: "Shown for completeness and deliberately excluded from Total CRE. It is residential lending, and it is already counted inside 1-4 family, so adding it to CRE both miscategorises it and counts the same loans twice. Doing so overstated CRE concentration across the tool until 2026-08-24.",
   },
   "Total Unused Commitments": {
     definition: "Unused loan commitments (Schedule RC-L).",

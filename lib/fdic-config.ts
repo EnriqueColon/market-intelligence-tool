@@ -45,18 +45,31 @@ export const FDIC_FIELDS = {
     'LNRENRES', // Non-Residential Real Estate Loans (owner- and non-owner-occupied)
     'LNRENROW', // Non-Residential, OWNER-occupied — excluded from the 300% CRE screen
     'LNRENROT', // Non-Residential, NON-owner-occupied — the CRE half of LNRENRES
-    // Reported for display only. Do NOT add to CRE: it is already inside the
-    // components above, so including it double-counts. See fdic-data-transformer.
-    'LNREOTH', // All other loans secured by real estate
-    'LNREDOM', // 1-4 Family Residential Loans
+    // Closed-end 1-4 family residential, despite FDIC glossing it as "all other
+    // loans secured by real estate". LNRERES - LNRELOC = LNREOTH exactly on all
+    // 4,352 institutions, so it is residential lending sitting inside LNRERES,
+    // not a commercial category. Do NOT add to CRE: it double-counts, and it is
+    // not CRE in the first place. See fdic-cre.ts.
+    'LNREOTH',
+    // LNREDOM is every real estate loan in domestic offices, equal to LNRE on
+    // 4,335 of 4,352 institutions. It is not the 1-4 family figure; LNRERES is.
+    'LNREDOM',
+    'LNRERES', // 1-4 Family Residential Loans (revolving LNRELOC + closed-end LNREOTH)
     'UCLN', // Unused Loan Commitments (total)
     'UCCOMRE', // Unused Commitments: Commercial Real Estate, Construction & Land Development
-    'LNLSNET', // Net Loans & Leases
-    'P3ASSET', // Past Due 30-89 Days / Total Assets
-    'P9ASSET', // Past Due 90+ Days / Total Assets
+    'LNLSNET', // Net Loans & Leases (gross minus the allowance)
+    // Gross loans and leases: the denominator FDIC uses for every one of its own
+    // loan-quality ratios. LNLSNET + LNATRES = LNLSGR on all 4,352 institutions.
+    'LNLSGR',
+    // Dollar amounts in thousands, not ratios, despite the suffix. They cover all
+    // past-due assets, so they are >= the loan-only P3LNLS/P9LNLS everywhere.
+    'P3ASSET', // Assets Past Due 30-89 Days (thousands)
+    'P9ASSET', // Assets Past Due 90+ Days (thousands)
     'NALNLS', // Nonaccrual Loans & Leases
     'NCLNLSR', // Noncurrent Loans to Loans (past due 90+ + nonaccrual as % of gross loans)
-    'NCLNLS', // Noncurrent Loans to Assets (past due 90+ + nonaccrual as % of total assets)
+    // Dollars, not a percentage: NCLNLS = P9LNLS + NALNLS exactly on all 4,352
+    // institutions. JPMorgan Chase reports 12,861,000, meaning $12.9bn.
+    'NCLNLS', // Noncurrent Loans & Leases (thousands)
     'LNATRES', // Allowance for Loan and Lease Losses (dollars, thousands) — the real reserve
     'ROA', // Return on Assets
     'ROE', // Return on Equity
@@ -74,7 +87,11 @@ export const FDIC_FIELDS = {
     'RBCT1J', // Tier 1 Capital (thousands)
     'RBCT2', // Tier 2 Capital (thousands)
     'RWAJ', // Risk-Weighted Assets (thousands)
-    'EQCAP', // Total Equity Capital (thousands) - if available
+    // EQTOT, not EQCAP: EQCAP is not a field this endpoint serves and returned
+    // nothing on every request, so CRE/Equity silently fell back to Tier 1.
+    // EQTOT = ASSET - LIAB on all 4,352 institutions. (EQ is bank-only equity,
+    // excluding noncontrolling interests, and misses the identity on 93 of them.)
+    'EQTOT', // Total Equity Capital (thousands)
     'STNAME', // State Name
     'CITY', // City
   ],

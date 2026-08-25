@@ -69,6 +69,9 @@ for (const [cert, { name, state, rows }] of byCert) {
     // LNREOTH, which is already inside these components.
     const cre = num(r.LNRENROT) + num(r.LNRECONS) + num(r.LNREMULT)
     const loans = num(r.LNLSNET)
+    // Gross loans, matching the denominator FDIC uses for LNATRESR. The
+    // identity LNLSNET + LNATRES = LNLSGR holds on every institution.
+    const grossLoans = loans + num(r.LNATRES)
     return {
       quarter: String(r.REPDTE),
       creToCapital: capital > 0 ? cre / capital : null,
@@ -77,7 +80,7 @@ for (const [cert, { name, state, rows }] of byCert) {
       // An exact zero is a gap in the call report, not a bank with no reserves
       // or no capital; reading it as fact invents a collapse. Mirrors the
       // `reported()` helper in app/actions/executive-brief.ts.
-      reserveCoverage: loans > 0 ? num(r.LNATRES) / loans || null : null,
+      reserveCoverage: grossLoans > 0 ? num(r.LNATRES) / grossLoans || null : null,
       capitalRatio: num(r.RBCT1CER) || null,
     }
   })

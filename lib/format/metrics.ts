@@ -33,46 +33,47 @@ export function normalizePercentToDecimal(
 }
 
 /**
- * Normalize a raw percent value to percent units (1.25 = 1.25%).
- * FDIC API may return decimal (0.0125), percent units (1.25), or basis points (125).
- * Used for ROA, NIM, capital ratios (displayed as percent, not stored as decimal).
+ * Normalize an FDIC percent-unit field to percent units.
  *
- * Heuristics:
- * - value > 100: likely basis points or double-scaled → divide by 100
- * - 0 < value <= 1: likely decimal ratio (0.0125 = 1.25%) → multiply by 100
- * - 1 < value <= 100: assume already percent units
- * - value <= 0: return as-is (negative ROA/NIM possible)
+ * Use this for ROA, ROE, NIMR and the four regulatory capital ratios. FDIC
+ * reports all of them in percent units already, so the only correct handling
+ * is to trust the value and reject non-numbers.
+ *
+ * **There used to be a `normalizePercent` here that guessed at the scale, and
+ * both of its guesses were wrong.**
+ *
+ * It divided anything above 100 on the assumption that no real value is ever
+ * that large. Capital ratios routinely are: 66 of 4,352 institutions reported
+ * CET1 above 100% in 2026Q1, JPMorgan Chase Bank Dearborn at 506.72%, and all
+ * of them rendered near 1%, so the best capitalised banks in the country
+ * appeared to be the worst. Nine institutions had ROE above 100% and one had
+ * ROA above 100%, distorted the same way.
+ *
+ * It also multiplied anything at or below 1, on the assumption that such a
+ * value must be a decimal fraction. That is the more damaging half, because a
+ * bank earning less than one percent on assets is the ordinary case, not an
+ * edge case: 1,441 of 4,352 institutions — a third of the industry — reported
+ * ROA between 0 and 1 percent, and every one was shown a hundred times too
+ * high. NBH Bank's 1.00% ROA displayed as 99.98%.
+ *
+ * The units are not in doubt and do not need to be inferred. FDIC's ROA equals
+ * `NETINC * 4 / ASSET5 * 100` on all 4,352 institutions, and its ROE equals
+ * `NETINC * 4 / EQ5 * 100` on all 4,334 that report equity, both to six
+ * significant figures. Percent units, always.
  */
-export function normalizePercent(value: number | null | undefined): number | null {
+export function normalizeFdicPercent(value: number | null | undefined): number | null {
   if (value === null || value === undefined || !Number.isFinite(value)) return null
-  if (value > 100) return value / 100
-  if (value > 0 && value <= 1) return value * 100
   return value
 }
 
 /**
- * Normalize an FDIC regulatory capital ratio (RBCT1CER, RBC1AAJ, RBC1RWAJ,
- * RBCRWAJ) to percent units.
+ * The four PCA capital ratios (RBCT1CER, RBC1AAJ, RBC1RWAJ, RBCRWAJ).
  *
- * **Do not route these through `normalizePercent`.** Its "above 100 means basis
- * points" rule is wrong here, because a capital ratio above 100% is ordinary
- * for a trust or wholesale bank whose risk-weighted assets are tiny next to its
- * capital. In 2026Q1, 66 of 4,352 institutions reported CET1 above 100% —
- * JPMorgan Chase Bank Dearborn at 506.72% — and dividing by 100 rendered every
- * one of them as around 1%, inverting the meaning completely: the best
- * capitalised banks in the country appeared critically undercapitalised, and
- * anything screening on a capital floor selected exactly the wrong institutions.
- *
- * FDIC reports these fields in percent units already, so the correct handling is
- * to trust them. A ratio at or below 1 is a genuine 0.x% and must not be scaled
- * up either: that direction hides a failing bank, which is the worse error.
+ * Same handling as every other FDIC percent field; kept under its own name
+ * because a capital ratio above 100% is the case most likely to tempt someone
+ * into reintroducing a rescaling heuristic.
  */
-export function normalizeCapitalRatioPercent(
-  value: number | null | undefined
-): number | null {
-  if (value === null || value === undefined || !Number.isFinite(value)) return null
-  return value
-}
+export const normalizeCapitalRatioPercent = normalizeFdicPercent
 
 /**
  * Format a value in percent units to display string (e.g. 1.25 → "1.25%").

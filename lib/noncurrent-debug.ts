@@ -4,16 +4,19 @@
  * Only active when NEXT_PUBLIC_NONCURRENT_DEBUG=true.
  *
  * Field sources (FDIC API /api/financials):
- * - NPL Ratio: NALNLS / LNLSNET * 100. NALNLS=nonaccrual loans (thousands), LNLSNET=net loans (thousands)
- * - Noncurrent/Loans: FDIC NCLNLSR. Denominator: gross loans (LNLSNET)
- * - Noncurrent/Assets: FDIC NCLNLS. Denominator: ASSET. Fallback: NCLNLSR * (LNLSNET/ASSET)
- * - Reserve Coverage: LNATRES / LNLSNET. Numerator: ALLL, Denominator: net loans.
+ * - NPL Ratio: NALNLS / LNLSGR * 100. NALNLS=nonaccrual loans (thousands)
+ * - Noncurrent/Loans: FDIC NCLNLSR. Denominator: gross loans (LNLSGR)
+ * - Noncurrent/Assets: NCLNLS / ASSET. NCLNLS is a dollar amount, not a percentage.
+ * - Reserve Coverage: LNATRES / LNLSGR, which reproduces FDIC's own LNATRESR.
  *   (LNLSDEPR was used here previously; it is loans-to-deposits, not a reserve.)
- * - Gross Loans: LNLSNET (thousands; *1000 for dollars)
+ * - Gross Loans: LNLSGR, or LNLSNET + LNATRES where LNLSGR was not requested
  * - Total Assets: ASSET (thousands; *1000 for dollars)
+ *
+ * Mirrors lib/fdic-data-transformer.ts. Keep the two in step, or this snapshot
+ * reports a mismatch that is its own.
  */
 
-import { normalizePercent, normalizePercentToDecimal } from "./format/metrics"
+import { normalizePercentToDecimal } from "./format/metrics"
 
 function formatCurrency(value: number | null | undefined): number {
   if (value === null || value === undefined || isNaN(value)) return 0
@@ -21,8 +24,10 @@ function formatCurrency(value: number | null | undefined): number {
 }
 
 /**
- * Unit detection for NCLNLS and NCLNLSR.
+ * Unit detection for NCLNLSR, which is a genuine percent field.
  * value<=1 => decimal | 1<value<=100 => percent | >100 => invalid
+ *
+ * Not applicable to NCLNLS, which holds thousands of dollars.
  */
 function detectUnit(value: number): "decimal" | "percent" | "invalid" {
   if (!Number.isFinite(value)) return "invalid"
@@ -55,7 +60,7 @@ export interface NoncurrentDebugSnapshot {
     LNLSDEPR?: number
     LNATRES?: number
     P9ASSET?: number
-    /** Noncurrent loan amount derived: NCLNLS% * ASSET or NCLNLSR% * LNLSNET */
+    /** Noncurrent loan dollars: NCLNLS directly, or NCLNLSR% * gross loans. */
     noncurrent_loan_amount_derived?: number
   }
   internal: {
@@ -73,7 +78,7 @@ export interface NoncurrentDebugSnapshot {
     reserve_coverage_pct: string
   }
   unit_detection: {
-    NCLNLS: { raw: number; branch: "decimal" | "percent" | "invalid" }
+    NCLNLS: { raw: number; units: "thousands_of_dollars" }
     NCLNLSR: { raw: number; branch: "decimal" | "percent" | "invalid" }
   }
 }
@@ -95,27 +100,31 @@ export function buildNoncurrentDebugSnapshot(raw: Record<string, unknown>): Nonc
   const lnatresRaw = Number(raw.LNATRES ?? 0)
 
   const totalAssets = formatCurrency(assetRaw)
-  const totalLoans = lnlsnetRaw * 1000 // LNLSNET is in thousands
+  // LNLSGR where available, else net plus the allowance, which reproduces it.
+  const grossLoansThousands = Number(raw.LNLSGR ?? 0) > 0 ? Number(raw.LNLSGR) : lnlsnetRaw + lnatresRaw
+  const grossLoans = grossLoansThousands * 1000
   const nonAccrualLoans = nalnlsRaw * 1000
 
-  // NPL Ratio: NALNLS / LNLSNET, stored as decimal (0.008 = 0.8%)
-  const nplRatioDecimal = totalLoans > 0 ? nonAccrualLoans / totalLoans : 0
+  // NPL Ratio: NALNLS / gross loans, stored as decimal (0.008 = 0.8%)
+  const nplRatioDecimal = grossLoans > 0 ? nonAccrualLoans / grossLoans : 0
 
   // Noncurrent to loans: NCLNLSR. FDIC (% ) = percent points. Stored as decimal.
   const noncurrentToLoansDecimal = normalizePercentToDecimal(nclnlsrRaw, "NCLNLSR") ?? 0
 
-  // Noncurrent to assets: NCLNLS or fallback ntl * (loans/assets) when NCLNLS missing
+  // Noncurrent to assets: NCLNLS is dollars, so this is a plain dollar ratio.
+  // Falls back to the reported ratio rescaled onto assets when NCLNLS is absent.
   let noncurrentToAssetsDecimal = 0
-  if (Number.isFinite(nclnlsRaw) && nclnlsRaw !== 0) {
-    noncurrentToAssetsDecimal = normalizePercentToDecimal(nclnlsRaw, "NCLNLS") ?? 0
-  } else if (assetRaw > 0 && lnlsnetRaw > 0) {
+  if (Number.isFinite(nclnlsRaw) && nclnlsRaw !== 0 && assetRaw > 0) {
+    noncurrentToAssetsDecimal = nclnlsRaw / assetRaw
+  } else if (assetRaw > 0 && grossLoansThousands > 0) {
     const ntl = normalizePercentToDecimal(nclnlsrRaw, "NCLNLSR") ?? 0
-    noncurrentToAssetsDecimal = ntl * (lnlsnetRaw / assetRaw)
+    noncurrentToAssetsDecimal = ntl * (grossLoansThousands / assetRaw)
   }
+  noncurrentToAssetsDecimal = Math.min(1, Math.max(0, noncurrentToAssetsDecimal))
 
-  // Reserve coverage: the allowance over net loans, both in thousands.
+  // Reserve coverage: the allowance over gross loans, both in thousands.
   // LNLSDEPR was used here previously; it is loans-to-deposits, not a reserve.
-  const reserveCoverageDecimal = lnlsnetRaw > 0 ? lnatresRaw / lnlsnetRaw : 0
+  const reserveCoverageDecimal = grossLoansThousands > 0 ? lnatresRaw / grossLoansThousands : 0
 
   // Display values (decimal * 100 -> percent string)
   const nplDisplay = nplRatioDecimal != null && Number.isFinite(nplRatioDecimal)
@@ -138,11 +147,11 @@ export function buildNoncurrentDebugSnapshot(raw: Record<string, unknown>): Nonc
     bank: { cert, name, rssd: raw.RSSD != null ? String(raw.RSSD) : undefined },
     quarter: repdte,
     field_sources: {
-      npl_ratio: "NALNLS / LNLSNET * 100. FDIC: NALNLS (nonaccrual, thousands), LNLSNET (net loans, thousands)",
-      noncurrent_to_loans: "FDIC NCLNLSR. Denominator: gross loans (LNLSNET).",
-      noncurrent_to_assets: "FDIC NCLNLS. Denominator: ASSET. Fallback: NCLNLSR * (LNLSNET/ASSET).",
-      reserve_coverage: "FDIC LNATRES / LNLSNET. Numerator: ALLL, Denominator: net loans.",
-      gross_loans: "LNLSNET (thousands; *1000 for dollars). Denominator for NCLNLSR.",
+      npl_ratio: "NALNLS / LNLSGR * 100. FDIC: NALNLS (nonaccrual, thousands), LNLSGR (gross loans, thousands)",
+      noncurrent_to_loans: "FDIC NCLNLSR. Denominator: gross loans (LNLSGR).",
+      noncurrent_to_assets: "NCLNLS / ASSET. NCLNLS is dollars (= P9LNLS + NALNLS), not a percentage.",
+      reserve_coverage: "FDIC LNATRES / LNLSGR. Numerator: ALLL, Denominator: gross loans. Reproduces LNATRESR.",
+      gross_loans: "LNLSGR, else LNLSNET + LNATRES (thousands; *1000 for dollars). Denominator for NCLNLSR.",
       total_assets: "ASSET (thousands; *1000 for dollars). Denominator for NCLNLS.",
     },
     raw: {
@@ -158,10 +167,10 @@ export function buildNoncurrentDebugSnapshot(raw: Record<string, unknown>): Nonc
       LNATRES: lnatresRaw,
       P9ASSET: raw.P9ASSET != null ? Number(raw.P9ASSET) : undefined,
       noncurrent_loan_amount_derived:
-        assetRaw > 0 && nclnlsRaw !== 0
-          ? (normalizePercentToDecimal(nclnlsRaw) ?? 0) * assetRaw * 1000
-          : lnlsnetRaw > 0 && nclnlsrRaw !== 0
-            ? (normalizePercentToDecimal(nclnlsrRaw) ?? 0) * lnlsnetRaw * 1000
+        nclnlsRaw !== 0
+          ? nclnlsRaw * 1000
+          : grossLoansThousands > 0 && nclnlsrRaw !== 0
+            ? (normalizePercentToDecimal(nclnlsrRaw) ?? 0) * grossLoansThousands * 1000
             : undefined,
     },
     internal: {
@@ -177,10 +186,10 @@ export function buildNoncurrentDebugSnapshot(raw: Record<string, unknown>): Nonc
       reserve_coverage: {
         value: reserveCoverageDecimal,
         storage: "decimal",
-        numerator_note: "ALLL (Allowance for Loan and Lease Losses), FDIC LNATRES, over net loans LNLSNET.",
-        denominator_note: "LNLSNET (Net Loans & Leases, thousands).",
+        numerator_note: "ALLL (Allowance for Loan and Lease Losses), FDIC LNATRES, over gross loans LNLSGR.",
+        denominator_note: "LNLSGR (Gross Loans & Leases, thousands).",
       },
-      gross_loans_dollars: totalLoans,
+      gross_loans_dollars: grossLoans,
       total_assets_dollars: totalAssets,
     },
     display: {
@@ -190,7 +199,7 @@ export function buildNoncurrentDebugSnapshot(raw: Record<string, unknown>): Nonc
       reserve_coverage_pct: reserveDisplay,
     },
     unit_detection: {
-      NCLNLS: { raw: nclnlsRaw, branch: detectUnit(nclnlsRaw) },
+      NCLNLS: { raw: nclnlsRaw, units: "thousands_of_dollars" },
       NCLNLSR: { raw: nclnlsrRaw, branch: detectUnit(nclnlsrRaw) },
     },
   }

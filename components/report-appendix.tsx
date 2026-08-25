@@ -33,7 +33,7 @@ export function ReportAppendix() {
         {
           name: "Reserve Coverage Ratio",
           definition: "Allowance for loan losses as a percentage of net loans. Typically 1–2%.",
-          calculation: "Allowance for loan losses ÷ Net loans × 100 (FDIC LNATRES ÷ LNLSNET)",
+          calculation: "Allowance for loan losses ÷ Gross loans × 100 (FDIC LNATRES ÷ LNLSGR)",
           interpretation: "High values provide cushion for future losses. Low values may indicate under-reserving.",
           whyMatters: "Adequate reserves absorb credit losses before capital is impaired.",
         },

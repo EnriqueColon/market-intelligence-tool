@@ -50,11 +50,13 @@ const rows = [...latest.values()].map((r) => {
   // LNREOTH, which is already inside these components.
   const creLoans = Number(r.LNRENROT || 0) + Number(r.LNRECONS || 0) + Number(r.LNREMULT || 0)
   const allowance = Number(r.LNATRES || 0)
+  // Gross loans, matching the denominator FDIC uses for LNATRESR.
+  const grossLoans = totalLoans + allowance
   return {
     name: r.NAME,
     creConcentration: totalLoans > 0 ? (creLoans / totalLoans) * 100 : 0,
     noncurrentToLoansRatio: Number(r.NCLNLSR || 0) / 100,
-    loanLossReserve: totalLoans > 0 ? allowance / totalLoans : 0,
+    loanLossReserve: grossLoans > 0 ? allowance / grossLoans : 0,
     cet1Ratio: Number(r.RBCT1CER || 0),
     leverageRatio: Number(r.RBC1AAJ || 0),
   }

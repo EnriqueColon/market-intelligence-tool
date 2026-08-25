@@ -48,12 +48,14 @@ for (const [cert, { name, rows }] of byCert) {
   // LNREOTH, which is already inside these components.
   const cre = num(r.LNRENROT) + num(r.LNRECONS) + num(r.LNREMULT)
     const loans = num(r.LNLSNET)
+    // Gross loans, matching the denominator FDIC uses for LNATRESR.
+    const grossLoans = loans + num(r.LNATRES)
     return {
       quarter: String(r.REPDTE),
       creToCapital: capital > 0 ? cre / capital : null,
       constructionToCapital: capital > 0 ? num(r.LNRECONS) / capital : null,
       noncurrentRatio: num(r.NCLNLSR) / 100,
-      reserveCoverage: loans > 0 ? num(r.LNATRES) / loans : null,
+      reserveCoverage: grossLoans > 0 ? num(r.LNATRES) / grossLoans : null,
       capitalRatio: num(r.RBCT1CER) || null,
     }
   })
