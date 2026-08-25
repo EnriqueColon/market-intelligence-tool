@@ -11,6 +11,8 @@ import { fetchResearchFeed } from "@/app/actions/fetch-research-feed"
 import { fetchKpiData } from "@/app/actions/fetch-kpi-data"
 import { fetchMarketInsights } from "@/app/actions/fetch-insights"
 import { fetchPriceIndexData, fetchTransactionVolumeData } from "@/app/actions/fetch-cre-data"
+import { getExecutiveBrief } from "@/app/actions/executive-brief"
+import { getWorkbenchUniverse } from "@/app/actions/underwriter-workbench"
 
 export const runtime = "nodejs"
 // 5 minutes — all tasks run concurrently so wall time is the slowest single task
@@ -78,6 +80,18 @@ export async function GET(request: Request) {
     warmWithLabel("txVolume:national", () => fetchTransactionVolumeData("national"), results),
     warmWithLabel("txVolume:florida", () => fetchTransactionVolumeData("florida"), results),
     warmWithLabel("txVolume:miami", () => fetchTransactionVolumeData("miami"), results),
+
+    // Department lenses. Each pulls nine quarters for every institution the
+    // FDIC row cap allows, which is roughly fifty seconds cold — long enough
+    // that the first person to pick a department after a deploy would otherwise
+    // sit in front of a skeleton. Both are cached for six hours, so warming
+    // once per deploy plus the daily cron covers the working day.
+    //
+    // Only "National" is warmed because that is the only scope either lens is
+    // mounted with. If a scope selector is added, every scope it can produce
+    // has to be added here or the tool quietly regains a fifty-second cold load.
+    warmWithLabel("executiveBrief:national", () => getExecutiveBrief("National"), results),
+    warmWithLabel("workbench:national", () => getWorkbenchUniverse("National"), results),
   ])
 
   const failed = Object.entries(results).filter(([, v]) => v !== "ok")

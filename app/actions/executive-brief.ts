@@ -242,15 +242,24 @@ async function computeBrief(scope: string): Promise<ExecutiveBrief> {
 }
 
 /**
- * Cached for six hours under a versioned key, matching the report data.
+ * Cached for 23 hours under a versioned key.
+ *
  * **Bump the version when change-detection thresholds move**, or the brief will
  * keep reporting events under the old rules until the window expires.
+ *
+ * 23 rather than 24 is deliberate. `/api/cron/warm-cache` runs daily and this
+ * is expensive cold — the better part of a minute against the FDIC API — so the
+ * entry has to be *expired* when the cron arrives. `unstable_cache` does not
+ * refresh a still-fresh entry, so a 24-hour window means the warm run finds it
+ * valid, returns early, and leaves it to lapse in front of a user later that
+ * day. An hour of slack guarantees the cron is the one that pays. Call reports
+ * change quarterly, so a day-long window costs nothing in freshness.
  */
 export async function getExecutiveBrief(scope: string): Promise<ExecutiveBrief> {
   const cached = unstable_cache(
     () => computeBrief(scope),
     ["executive-brief-v4", scope],
-    { revalidate: 60 * 60 * 6 }
+    { revalidate: 60 * 60 * 23 }
   )
   return cached()
 }
