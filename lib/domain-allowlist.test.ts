@@ -1,5 +1,6 @@
 /**
- * Unit tests for domain allowlist filter logic.
+ * Unit tests for the publisher allowlist: both the result filter and the query builder that
+ * are meant to fail closed on the same input.
  * Run: npx tsx lib/domain-allowlist.test.ts
  */
 
@@ -10,7 +11,12 @@ import {
   isHostnameAllowed,
   filterByAllowlist,
 } from "./domain-allowlist.ts"
-import { getDomainsForEntity, type EntityId } from "./entity-sources.ts"
+import {
+  getDomainsForEntity,
+  ENTITY_DROPDOWN_OPTIONS,
+  type EntityId,
+} from "./entity-sources.ts"
+import { buildSearchQuery } from "./google-query-builder.ts"
 
 describe("extractHostname", () => {
   it("extracts hostname from https URL", () => {
@@ -86,10 +92,44 @@ describe("filterByAllowlist", () => {
 
   it("drops everything for an id that is no longer in the registry", () => {
     // Fails closed on an unknown id rather than passing results through unfiltered.
-    // Note that buildSearchQuery does the opposite for the same input: an empty
-    // domain list there becomes an unrestricted Google query.
+    // buildSearchQuery fails closed on the same input, below. Both halves have to,
+    // independently: neither may be relaxed because the other is thought to catch it.
     const filtered = filterByAllowlist(items, "watchlist" as EntityId)
     assert.strictEqual(filtered.length, 0)
+  })
+})
+
+describe("buildSearchQuery", () => {
+  it("restricts a known entity to its own domains", () => {
+    const query = buildSearchQuery("cbre", "office outlook", false)
+    assert.ok(query !== null)
+    assert.ok(query.includes("site:cbre.com"))
+    assert.ok(query.includes("site:cbre.us"))
+    assert.ok(query.includes("office outlook"))
+  })
+
+  it("restricts all to a site: clause rather than searching the open web", () => {
+    const query = buildSearchQuery("all", "multifamily", false)
+    assert.ok(query !== null)
+    assert.ok(query.startsWith("("))
+    assert.ok(query.includes("site:federalreserve.gov"))
+    assert.ok(!query.includes("site:mba.org"))
+  })
+
+  it("returns null for an id that is no longer in the registry", () => {
+    // The other half of the invariant asserted in filterByAllowlist above. An empty
+    // domain list must never become a bare keyword, which would be an unrestricted
+    // Google search across the open web.
+    assert.strictEqual(buildSearchQuery("watchlist" as EntityId, "office", false), null)
+    assert.strictEqual(buildSearchQuery("watchlist" as EntityId, "office", true), null)
+  })
+
+  it("never returns a query without a site: restriction", () => {
+    for (const opt of ENTITY_DROPDOWN_OPTIONS) {
+      const query = buildSearchQuery(opt.value, "outlook", false)
+      assert.ok(query !== null, `${opt.value} produced no query`)
+      assert.ok(query.includes("site:"), `${opt.value} produced an unrestricted query`)
+    }
   })
 })
 

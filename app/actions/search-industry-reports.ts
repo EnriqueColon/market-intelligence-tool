@@ -147,6 +147,13 @@ export async function searchIndustryReports(
   }
 
   const searchQuery = buildSearchQuery(entityId, trimmed, preferPdf)
+  if (searchQuery === null) {
+    return {
+      ok: false,
+      error: "That source is not a recognised report publisher. Pick a source from the list.",
+    }
+  }
+
   const params = new URLSearchParams({
     key: apiKey,
     cx: cseId,
