@@ -12,7 +12,7 @@
     "start": "next start",
     "refresh-reports": "tsx scripts/refresh-report-summaries.ts",
     "cbre-automate": "tsx scripts/cbre-automate.ts",
-    "test:allowlist": "node --test --experimental-strip-types lib/domain-allowlist.test.ts",
+    "test:allowlist": "tsx lib/domain-allowlist.test.ts",
     "test:metrics": "node --test --experimental-strip-types lib/format/metrics.test.ts",
     "test:opportunity-score": "node --test --experimental-strip-types lib/scoring/opportunity-score.test.ts",
     "test:institution-change": "node --test --experimental-strip-types lib/scoring/institution-change.test.ts",
