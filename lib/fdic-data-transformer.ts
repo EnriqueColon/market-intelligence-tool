@@ -102,10 +102,19 @@ export interface BankFinancialData {
   /** Net loans and leases to deposits, decimal. FDIC LNLSDEPR. */
   loansToDeposits: number
   netInterestMargin: number
-  cet1Ratio: number
-  leverageRatio: number
-  tier1RbcRatio: number
-  totalRbcRatio: number
+  /**
+   * The four PCA capital ratios, in percent points, or null when the
+   * institution does not report one.
+   *
+   * Null rather than zero, and not optional: a CBLR filer reports a literal 0
+   * for RBCRWAJ and omits RBCT1CER and RBC1RWAJ, and zero regulatory capital
+   * means the opposite of what a CBLR election implies. Consumers must fall
+   * back — `cet1Ratio ?? leverageRatio` — rather than treat zero as a figure.
+   */
+  cet1Ratio: number | null
+  leverageRatio: number | null
+  tier1RbcRatio: number | null
+  totalRbcRatio: number | null
   netIncome: number
   reportDate?: string
   /**
@@ -193,6 +202,19 @@ export interface BenchmarkComparison {
 export function formatCurrency(value: number | null | undefined): number {
   if (value === null || value === undefined || isNaN(value)) return 0
   return value * 1000 // Convert from thousands to actual dollars
+}
+
+/**
+ * A reported dollar figure in thousands, or undefined when it is absent.
+ *
+ * Zero counts as absent for the capital-stack fields this guards, because FDIC
+ * reports RWAJ as 0 for CBLR filers rather than omitting it, and a zero
+ * denominator produces Infinity instead of a value a caller can test for.
+ */
+function positiveDollars(value: number | string | null | undefined): number | undefined {
+  if (value === null || value === undefined || value === "") return undefined
+  const n = Number(value)
+  return Number.isFinite(n) && n > 0 ? formatCurrency(n) : undefined
 }
 
 /**
@@ -327,18 +349,24 @@ export function transformFinancialData(rawData: any[]): BankFinancialData[] {
       // LNLSDEPR: FDIC net loans and leases to deposits (%). Stored as decimal.
       loansToDeposits: normalizePercentToDecimal(Number(bank.LNLSDEPR || 0), "LNLSDEPR") ?? 0,
       netInterestMargin,
-      cet1Ratio: normalizeCapitalRatioPercent(Number(bank.RBCT1CER || 0)) ?? 0,
-      leverageRatio: normalizeCapitalRatioPercent(Number(bank.RBC1AAJ || 0)) ?? 0,
-      tier1RbcRatio: normalizeCapitalRatioPercent(Number(bank.RBC1RWAJ || 0)) ?? 0,
-      totalRbcRatio: normalizeCapitalRatioPercent(Number(bank.RBCRWAJ || 0)) ?? 0,
+      // Null, not zero, when a ratio is absent — see normalizeCapitalRatioPercent.
+      // CBLR filers report RBCRWAJ as 0 and omit the other two.
+      cet1Ratio: normalizeCapitalRatioPercent(bank.RBCT1CER),
+      leverageRatio: normalizeCapitalRatioPercent(bank.RBC1AAJ),
+      tier1RbcRatio: normalizeCapitalRatioPercent(bank.RBC1RWAJ),
+      totalRbcRatio: normalizeCapitalRatioPercent(bank.RBCRWAJ),
       netIncome: formatCurrency(bank.NETINC || 0),
       reportDate: bank.REPDTE,
       totalEquityDollars: bank.EQTOT != null ? formatCurrency(Number(bank.EQTOT)) : undefined,
       // Reported capital, so CRE-to-capital no longer has to infer a denominator
       // from a ratio and an assumed risk weighting.
-      tier1Dollars: bank.RBCT1J != null ? formatCurrency(Number(bank.RBCT1J)) : undefined,
+      // Positivity, not presence. A CBLR filer reports RWAJ as 0 (1,748 of
+      // 4,352), and a zero reaching a denominator yields Infinity rather than a
+      // caught absence. Tier 2 keeps its zero, which is a real figure at small
+      // banks that hold no subordinated debt.
+      tier1Dollars: positiveDollars(bank.RBCT1J),
       tier2Dollars: bank.RBCT2 != null ? formatCurrency(Number(bank.RBCT2)) : undefined,
-      riskWeightedAssets: bank.RWAJ != null ? formatCurrency(Number(bank.RWAJ)) : undefined,
+      riskWeightedAssets: positiveDollars(bank.RWAJ),
     }
   })
 }

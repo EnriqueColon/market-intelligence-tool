@@ -24,6 +24,7 @@ import { DefTerm } from "@/components/def-term"
 import { fetchFDICFinancials } from "@/app/actions/fetch-fdic-data"
 import { MarketResearch } from "@/components/market-research"
 import { computeCapitalRatios, type CapitalRatios } from "@/lib/fdic-ratio-helpers"
+import { computeCreMix } from "@/lib/fdic-cre"
 import {
   computeOpportunityDistributions,
   computeOpportunityScore,
@@ -88,6 +89,9 @@ type Financial = {
   constructionLoans?: number
   multifamilyLoans?: number
   nonResidentialLoans?: number
+  ownerOccupiedLoans?: number
+  nonOwnerOccupiedLoans?: number
+  /** LNREOTH — 1-4 family residential, not CRE. Never a share of creLoans. */
   otherRealEstateLoans?: number
   totalUnusedCommitments?: number
   creUnusedCommitments?: number
@@ -98,10 +102,11 @@ type Financial = {
   pastDue90Plus?: number
   loanLossReserve?: number
   netInterestMargin?: number
-  cet1Ratio?: number
-  leverageRatio?: number
-  tier1RbcRatio?: number
-  totalRbcRatio?: number
+  /** Null when the institution reports no such ratio, as CBLR filers do not. */
+  cet1Ratio?: number | null
+  leverageRatio?: number | null
+  tier1RbcRatio?: number | null
+  totalRbcRatio?: number | null
   reportDate?: string
   totalEquityDollars?: number | null
   tier1Dollars?: number | null
@@ -196,8 +201,10 @@ function formatCurrency(value: number | undefined) {
   return currencyFormatter.format(value)
 }
 
-function formatPercent(value: number | undefined) {
-  if (value === undefined || Number.isNaN(value)) return "—"
+// Null is an absent capital ratio, not zero — see normalizeCapitalRatioPercent.
+// Without the null branch it formats as 0.00%, which is the bug this guards.
+function formatPercent(value: number | null | undefined) {
+  if (value === undefined || value === null || Number.isNaN(value)) return "—"
   return percentFormatter.format(value / 100)
 }
 
@@ -209,6 +216,43 @@ function formatNumber(value: number | undefined) {
 function formatRatio(value: number | null | undefined) {
   if (value === undefined || value === null || Number.isNaN(value)) return "—"
   return formatMultipleMetric(value)
+}
+
+/**
+ * What an institution's CRE book is made of.
+ *
+ * Three parts, because those are the three `computeCreLoans` adds up, so they
+ * total 100%. A fourth line divided LNREOTH — 1-4 family residential — by a CRE
+ * denominator it is not part of, which took the column past 100% on 99.2% of
+ * institutions and to a median of 255.8%.
+ */
+function CreMixCell({
+  item,
+}: {
+  item: {
+    constructionLoans?: number
+    multifamilyLoans?: number
+    nonResidentialLoans?: number
+    ownerOccupiedLoans?: number
+    nonOwnerOccupiedLoans?: number
+  }
+}) {
+  const mix = computeCreMix({
+    constructionLoans: item.constructionLoans ?? 0,
+    multifamilyLoans: item.multifamilyLoans ?? 0,
+    nonResidentialLoans: item.nonResidentialLoans ?? 0,
+    ownerOccupiedLoans: item.ownerOccupiedLoans ?? 0,
+    nonOwnerOccupiedLoans: item.nonOwnerOccupiedLoans ?? 0,
+  })
+  if (!mix) return <span className="text-xs text-muted-foreground">—</span>
+
+  return (
+    <div className="space-y-1 text-xs text-muted-foreground">
+      <div>Construction: {formatPercent(mix.construction)}</div>
+      <div>Multifamily: {formatPercent(mix.multifamily)}</div>
+      <div>Non-owner-occ: {formatPercent(mix.nonResidential)}</div>
+    </div>
+  )
 }
 
 const PAGE_LEVEL_TO_REGION: Record<string, RegionKey> = {
@@ -993,7 +1037,7 @@ export function MarketAnalytics({
                 <TableCell>{formatPercent(item.cet1Ratio)}</TableCell>
                 <TableCell>{formatPercent(item.leverageRatio)}</TableCell>
                 <TableCell className="text-xs text-muted-foreground">
-                  {item.cet1Ratio !== undefined && item.cet1Ratio !== 0 ? "CET1" : "Leverage"}
+                  {item.cet1Ratio != null ? "CET1" : "Leverage"}
                 </TableCell>
                 {showCapitalColumns && (
                   <TableCell className={getCreCapitalColor(item.capitalRatios?.creToTier1Tier2 ?? undefined)}>{formatRatio(item.capitalRatios?.creToTier1Tier2)}</TableCell>
@@ -1035,32 +1079,7 @@ export function MarketAnalytics({
                 <TableCell>{formatCurrency(item.totalUnusedCommitments)}</TableCell>
                 <TableCell>{formatCurrency(item.creUnusedCommitments)}</TableCell>
                 <TableCell>
-                  <div className="space-y-1 text-xs text-muted-foreground">
-                    <div>
-                      Construction:{" "}
-                      {formatPercent(
-                        item.creLoans ? ((item.constructionLoans || 0) / item.creLoans) * 100 : undefined
-                      )}
-                    </div>
-                    <div>
-                      Multifamily:{" "}
-                      {formatPercent(
-                        item.creLoans ? ((item.multifamilyLoans || 0) / item.creLoans) * 100 : undefined
-                      )}
-                    </div>
-                    <div>
-                      Non-Res:{" "}
-                      {formatPercent(
-                        item.creLoans ? ((item.nonResidentialLoans || 0) / item.creLoans) * 100 : undefined
-                      )}
-                    </div>
-                    <div>
-                      Other:{" "}
-                      {formatPercent(
-                        item.creLoans ? ((item.otherRealEstateLoans || 0) / item.creLoans) * 100 : undefined
-                      )}
-                    </div>
-                  </div>
+                  <CreMixCell item={item} />
                 </TableCell>
                 <TableCell>
                   <div className="space-y-1 text-xs text-muted-foreground">

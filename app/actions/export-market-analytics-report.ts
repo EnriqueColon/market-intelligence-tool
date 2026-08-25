@@ -20,8 +20,8 @@ function toOpportunityInput(r: {
   creConcentration?: number
   noncurrent_to_loans_ratio?: number
   loanLossReserve?: number
-  cet1Ratio?: number
-  leverageRatio?: number
+  cet1Ratio?: number | null
+  leverageRatio?: number | null
 }): OpportunityInput {
   return {
     creConcentration: r.creConcentration,
@@ -42,6 +42,9 @@ export type ExportRow = {
   constructionLoans: number
   multifamilyLoans: number
   nonResidentialLoans?: number
+  /** Carried so the CRE mix can split non-residential the way creLoans does. */
+  ownerOccupiedLoans?: number
+  nonOwnerOccupiedLoans?: number
   otherRealEstateLoans?: number
   totalUnusedCommitments?: number
   creUnusedCommitments?: number
@@ -54,8 +57,8 @@ export type ExportRow = {
   /** Previous min-max score, shown alongside during the transition. */
   opportunityScoreLegacy?: number
   capitalRatios?: CapitalRatios
-  cet1Ratio?: number
-  leverageRatio?: number
+  cet1Ratio?: number | null
+  leverageRatio?: number | null
   /** For earnings score: ROA latest quarter */
   roa?: number
   /** For earnings score: ROA change vs 4Q ago (pp) */
@@ -208,6 +211,8 @@ export async function buildExportData(scope: string): Promise<ExportData> {
       constructionLoans: latest.constructionLoans ?? 0,
       multifamilyLoans: latest.multifamilyLoans ?? 0,
       nonResidentialLoans: latest.nonResidentialLoans ?? 0,
+      ownerOccupiedLoans: latest.ownerOccupiedLoans ?? 0,
+      nonOwnerOccupiedLoans: latest.nonOwnerOccupiedLoans ?? 0,
       otherRealEstateLoans: latest.otherRealEstateLoans ?? 0,
       totalUnusedCommitments: latest.totalUnusedCommitments ?? 0,
       creUnusedCommitments: latest.creUnusedCommitments ?? 0,

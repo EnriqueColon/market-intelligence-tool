@@ -1,6 +1,6 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
-import { computeCreLoans, type CreComponents } from "./fdic-cre.ts"
+import { computeCreLoans, computeCreMix, type CreComponents } from "./fdic-cre.ts"
 
 const components = (over: Partial<CreComponents> = {}): CreComponents => ({
   constructionLoans: 0,
@@ -69,4 +69,61 @@ test("regression: the guidance figure is far below the double-counted one", () =
   assert.ok(corrected < oldWay, "the double-count must inflate the ratio")
   assert.ok(oldWay >= 3, "the old derivation crossed the supervisory screen")
   assert.ok(corrected < 3, "the corrected derivation does not")
+})
+
+test("the mix sums to 100%, because its parts are the ones creLoans adds", () => {
+  const mix = computeCreMix(
+    components({
+      constructionLoans: 100,
+      multifamilyLoans: 50,
+      nonResidentialLoans: 449,
+      ownerOccupiedLoans: 288,
+      nonOwnerOccupiedLoans: 161,
+    })
+  )!
+  assert.ok(Math.abs(mix.construction + mix.multifamily + mix.nonResidential - 100) < 1e-9)
+})
+
+test("the mix excludes owner-occupied, matching the CRE denominator", () => {
+  const c = components({
+    constructionLoans: 100,
+    multifamilyLoans: 50,
+    nonResidentialLoans: 449,
+    ownerOccupiedLoans: 288,
+    nonOwnerOccupiedLoans: 161,
+  })
+  const mix = computeCreMix(c)!
+
+  // 161 of 311, not 449 of 311. The old cell divided the undivided LNRENRES
+  // by a total that had already dropped the owner-occupied half.
+  assert.ok(Math.abs(mix.nonResidential - (161 / 311) * 100) < 1e-9)
+  assert.ok(mix.nonResidential < 100, "a single part cannot exceed the whole")
+  assert.ok((449 / computeCreLoans(c)) * 100 > 100, "which the old derivation did")
+})
+
+test("regression: LNREOTH is not a slice of the CRE book", () => {
+  // Liberty Savings Bank FSB, 2026Q1, in thousands: a thrift with a large
+  // closed-end 1-4 family book and almost no CRE. Drawing LNREOTH as a fourth
+  // band against a CRE denominator took its stacked bar to 681,607% of an
+  // axis that stops at 100. LNREOTH is residential: LNRERES - LNRELOC.
+  const c = components({ constructionLoans: 0, multifamilyLoans: 116, nonResidentialLoans: 116, ownerOccupiedLoans: 0, nonOwnerOccupiedLoans: 116 })
+  const lnreoth = 789_000
+  const mix = computeCreMix(c)!
+
+  const bands = mix.construction + mix.multifamily + mix.nonResidential
+  assert.ok(Math.abs(bands - 100) < 1e-9)
+
+  const oldBands = bands + (lnreoth / computeCreLoans(c)) * 100
+  assert.ok(oldBands > 100_000, "the old fourth band dwarfed the chart")
+})
+
+test("a bank holding no CRE has no mix, rather than a row of zeroes", () => {
+  assert.equal(computeCreMix(components()), null)
+})
+
+test("the mix uses the same fallback as the total when the split fails", () => {
+  const c = components({ constructionLoans: 10, nonResidentialLoans: 400 })
+  const mix = computeCreMix(c)!
+  assert.ok(Math.abs(mix.nonResidential - (400 / 410) * 100) < 1e-9)
+  assert.ok(Math.abs(mix.construction + mix.multifamily + mix.nonResidential - 100) < 1e-9)
 })

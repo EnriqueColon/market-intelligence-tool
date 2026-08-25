@@ -135,7 +135,7 @@ export const METRIC_DEFINITIONS: Record<string, MetricDef> = {
   },
   "Capital Used": {
     definition: "The capital ratio used by the score: CET1 when available; otherwise Leverage.",
-    howCalculated: "CET1 if reported; else Leverage ratio.",
+    howCalculated: "CET1 if reported; else Leverage ratio. Institutions on the Community Bank Leverage Ratio framework — about 40% of US banks — report no CET1 and no risk-weighted assets, so they are measured on Leverage and show \"—\" under CET1. A dash means not reported, not zero.",
     whyValuable: "Ensures consistent capital comparison across institutions with different reporting.",
   },
   "CRE / Capital": {
@@ -214,8 +214,8 @@ export const METRIC_DEFINITIONS: Record<string, MetricDef> = {
     whyValuable: "Prioritizes banks where high CRE/credit risk is not offset by earnings—the most vulnerable combination.",
   },
   "CRE Mix": {
-    definition: "Construction, multifamily, and non-residential loans shown as a share of total CRE.",
-    howCalculated: "Each segment ÷ total CRE loans × 100.",
+    definition: "The three parts of the CRE book — construction, multifamily and non-owner-occupied non-residential — each as a share of it. They sum to 100%.",
+    howCalculated: "Each segment ÷ total CRE loans × 100, using the same three components that make up total CRE. A fourth slice was shown until 2026-08-24 for LNREOTH, which is 1-4 family residential and not part of that denominator; with it the shares summed to a median of 255%.",
     whyValuable: "Reveals portfolio composition; construction-heavy mix is typically riskier than multifamily.",
   },
   "CRE Concentration (4Q)": {

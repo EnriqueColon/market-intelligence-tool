@@ -13,23 +13,21 @@
  * Convert FDIC percent-point field to decimal for internal storage.
  * FDIC "(% )" fields are percent points: 0.795 => 0.795% => decimal 0.00795.
  *
- * - null/undefined => null
- * - raw <= 1: 0.795 => decimal 0.00795
- * - 1 < raw <= 100: 79.5 => decimal 0.795
- * - raw > 100: divide by 100, log warning (possible basis points)
+ * Divides by 100 whatever the magnitude: 0.795 => 0.00795, 79.5 => 0.795,
+ * 102.5 => 1.025. There is no threshold and no inference.
+ *
+ * This used to warn "treating as basis points" above 100, which described a
+ * rescaling it never performed and fired about thirty times per page load on
+ * LNLSDEPR — a bank lending more than it takes in deposits is ordinary. A
+ * warning that cries wolf on a normal value is worse than none, because it is
+ * the noise a real signal has to be spotted in.
  */
 export function normalizePercentToDecimal(
   rawValue: number | null | undefined,
   _fieldName?: string
 ): number | null {
   if (rawValue === null || rawValue === undefined || !Number.isFinite(rawValue)) return null
-  const decimal = rawValue / 100
-  if (rawValue > 100 && process.env.NODE_ENV === "development") {
-    console.warn(
-      `[metrics] FDIC percent field raw=${rawValue} > 100; treating as basis points. decimal=${decimal}`
-    )
-  }
-  return decimal
+  return rawValue / 100
 }
 
 /**
@@ -69,11 +67,29 @@ export function normalizeFdicPercent(value: number | null | undefined): number |
 /**
  * The four PCA capital ratios (RBCT1CER, RBC1AAJ, RBC1RWAJ, RBCRWAJ).
  *
- * Same handling as every other FDIC percent field; kept under its own name
- * because a capital ratio above 100% is the case most likely to tempt someone
- * into reintroducing a rescaling heuristic.
+ * No rescaling, for the reason above — a capital ratio above 100% is the case
+ * most likely to tempt someone into reintroducing a heuristic.
+ *
+ * Zero returns null, because no operating bank has zero regulatory capital and
+ * FDIC uses zero to mean "did not compute this ratio". Institutions on the
+ * Community Bank Leverage Ratio framework report RBCRWAJ as a literal 0 and
+ * omit RBCT1CER and RBC1RWAJ entirely — 1,765 of 4,352 as of 2026-03-31, 40.6%
+ * of the industry — because electing CBLR excuses them from risk-weighting.
+ * Passing that zero through rendered them at 0.00% total risk-based capital,
+ * indistinguishable from a failed bank, when their median leverage ratio is
+ * 11.80% and CBLR election requires at least 9%. The other 17 are branches of
+ * foreign banks, which hold capital at the parent and file no US ratio at all.
+ * Only 2 institutions genuinely report total risk-based capital below 8%.
+ *
+ * Returning null rather than zero is what lets `cet1Ratio ?? leverageRatio`
+ * reach the leverage ratio, which is the figure a CBLR filer actually reports.
  */
-export const normalizeCapitalRatioPercent = normalizeFdicPercent
+export function normalizeCapitalRatioPercent(value: number | string | null | undefined): number | null {
+  if (value === null || value === undefined || value === "") return null
+  const n = Number(value)
+  if (!Number.isFinite(n) || n === 0) return null
+  return n
+}
 
 /**
  * Format a value in percent units to display string (e.g. 1.25 → "1.25%").

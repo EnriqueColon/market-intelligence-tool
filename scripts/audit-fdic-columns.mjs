@@ -220,6 +220,23 @@ const CHECKS = [
     tolerateFraction: 0.01,
   }),
   identity({
+    name: "a zero total risk-based capital ratio always has a leverage ratio to fall back to",
+    column: "cet1Ratio / totalRbcRatio",
+    // CBLR filers report RBCRWAJ as a literal 0 and omit RBCT1CER and RBC1RWAJ,
+    // so the screening table must show their leverage ratio instead. If FDIC
+    // ever stops populating RBC1AAJ for them the fallback silently yields
+    // nothing, and this is the check that would say so.
+    //
+    // Requires RBCT1J so the 17 branches of foreign banks are out of scope:
+    // they hold capital at the parent and file no US ratio of any kind, so
+    // there is nothing for them to fall back to and "—" is the right answer.
+    applies: (r) => num(r, "RBCRWAJ") === 0 && has(r, "RBCT1J"),
+    left: (r) => (num(r, "RBC1AAJ") > 0 ? 1 : 0),
+    right: () => 1,
+    epsilon: 0.01,
+    tolerateFraction: 0,
+  }),
+  identity({
     name: "EQTOT is total equity capital: it closes the balance sheet",
     column: "totalEquityDollars",
     applies: (r) => has(r, "EQTOT") && has(r, "LIAB"),
@@ -267,6 +284,33 @@ const CHECKS = [
 function auditFieldAvailability(rows, fields) {
   const dead = fields.filter((f) => !rows.some((r) => r[f] != null))
   return dead
+}
+
+/**
+ * Fields where FDIC uses a literal zero to mean "not reported".
+ *
+ * The counterpart to the dead-field audit above: a field that is absent is
+ * obvious, and a field that is present but means nothing is not. Every zero
+ * listed here reaches the UI as a real figure unless the transformer converts
+ * it to null, and for a capital ratio zero reads as total failure.
+ *
+ * A field whose zero count is a large, round share of the industry is the
+ * signature to look for — it means a reporting regime, not a bad quarter.
+ */
+function auditZeroAsAbsent(rows) {
+  const fields = [
+    ["RBCT1CER", "cet1Ratio"],
+    ["RBC1AAJ", "leverageRatio"],
+    ["RBC1RWAJ", "tier1RbcRatio"],
+    ["RBCRWAJ", "totalRbcRatio"],
+    ["RWAJ", "riskWeightedAssets"],
+    ["RBCT1J", "tier1Dollars"],
+  ]
+  return fields.map(([field, column]) => {
+    const nulls = rows.filter((r) => r[field] == null).length
+    const zeros = rows.filter((r) => r[field] != null && Number(r[field]) === 0).length
+    return { field, column, nulls, zeros, absent: nulls + zeros, total: rows.length }
+  })
 }
 
 /** Where a "surely no value is ever this large/small" heuristic would misfire. */
@@ -331,6 +375,19 @@ async function main() {
       (dead.length ? ` — dead: ${dead.join(", ")}\n` : "\n")
   )
   if (dead.length) failed++
+
+  process.stdout.write("\nCapital fields — zero versus absent (both must reach the UI as \"—\"):\n")
+  for (const s of auditZeroAsAbsent(rows)) {
+    const pctAbsent = ((s.absent / s.total) * 100).toFixed(1)
+    process.stdout.write(
+      `  ${pad(s.field, 10)} null=${pad(s.nulls, 6)} zero=${pad(s.zeros, 6)}` +
+        ` not reported: ${pad(`${s.absent}/${s.total}`, 12)} ${pad(`${pctAbsent}%`, 7)} -> ${s.column}\n`
+    )
+  }
+  process.stdout.write(
+    "  A zero here is FDIC declining to compute the ratio, not a bank without\n" +
+      "  capital. CBLR filers are the bulk of it. See normalizeCapitalRatioPercent.\n"
+  )
 
   process.stdout.write("\nPercent-unit fields — where a rescaling heuristic would misfire:\n")
   for (const s of auditPercentRanges(rows)) {

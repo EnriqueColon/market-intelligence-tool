@@ -40,10 +40,10 @@ type FinancialInput = {
   creLoans: number
   constructionLoans: number
   multifamilyLoans: number
-  leverageRatio?: number
-  tier1RbcRatio?: number
-  totalRbcRatio?: number
-  cet1Ratio?: number
+  leverageRatio?: number | null
+  tier1RbcRatio?: number | null
+  totalRbcRatio?: number | null
+  cet1Ratio?: number | null
   /** Total equity capital in dollars (if available from API) */
   totalEquityDollars?: number | null
   /** Reported Tier 1 capital in dollars (FDIC RBCT1J) */

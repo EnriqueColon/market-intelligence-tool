@@ -8,8 +8,7 @@ import type { ExposureMixBar } from "@/lib/analytics-chart-data"
 const BANDS = [
   { key: "construction", label: "Construction", fill: CHART_SERIES[0] },
   { key: "multifamily", label: "Multifamily", fill: CHART_SERIES[1] },
-  { key: "nonResidential", label: "Non-residential", fill: CHART_SERIES[2] },
-  { key: "otherCre", label: "Other CRE", fill: CHART_SERIES[3] },
+  { key: "nonResidential", label: "Non-owner-occupied", fill: CHART_SERIES[2] },
 ] as const
 
 /**
@@ -17,6 +16,10 @@ const BANDS = [
  *
  * Previously drawn in four shades of slate with no key, which made the bands
  * indistinguishable; the brand ramp plus a legend is what makes it readable.
+ *
+ * Three bands, not four. The fourth was LNREOTH under the label "Other CRE",
+ * which is 1-4 family residential and not part of the CRE denominator; with it
+ * the stack ran to a median 255% against an axis that stops at 100.
  */
 export function CrePortfolioComposition({ data, height = 340 }: { data: ExposureMixBar[]; height?: number }) {
   if (data.length === 0) {

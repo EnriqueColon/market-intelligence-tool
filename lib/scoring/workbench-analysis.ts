@@ -133,8 +133,8 @@ type TransformedRow = {
   tier1Dollars?: number | null
   tier2Dollars?: number | null
   riskWeightedAssets?: number | null
-  totalRbcRatio?: number
-  leverageRatio?: number
+  totalRbcRatio?: number | null
+  leverageRatio?: number | null
   noncurrent_to_loans_ratio?: number
   loanLossReserve?: number
 }

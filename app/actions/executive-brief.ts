@@ -118,10 +118,10 @@ function toObservation(bank: {
   creLoans?: number
   constructionLoans?: number
   multifamilyLoans?: number
-  leverageRatio: number
-  tier1RbcRatio: number
-  totalRbcRatio: number
-  cet1Ratio: number
+  leverageRatio: number | null
+  tier1RbcRatio: number | null
+  totalRbcRatio: number | null
+  cet1Ratio: number | null
   totalEquityDollars?: number | null
   tier1Dollars?: number | null
   tier2Dollars?: number | null

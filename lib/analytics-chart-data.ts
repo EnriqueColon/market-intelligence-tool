@@ -12,6 +12,8 @@
  * different pipelines and only overlap on these fields.
  */
 
+import { computeCreMix } from "./fdic-cre"
+
 export type AnalyticsChartRow = {
   id: string
   name: string
@@ -23,7 +25,8 @@ export type AnalyticsChartRow = {
   constructionLoans?: number
   multifamilyLoans?: number
   nonResidentialLoans?: number
-  otherRealEstateLoans?: number
+  ownerOccupiedLoans?: number
+  nonOwnerOccupiedLoans?: number
   capitalRatios?: {
     creToTier1Tier2: number | null
     coverage: { hasTier1Tier2: boolean }
@@ -42,7 +45,6 @@ export type ExposureMixBar = {
   construction: number
   multifamily: number
   nonResidential: number
-  otherCre: number
 }
 
 export type CapitalScatterPoint = {
@@ -80,24 +82,32 @@ export function buildCreToCapitalRanking(rows: AnalyticsChartRow[]): CreToCapita
     .map((r, i) => ({ ...r, rank: i + 1 }))
 }
 
-/** CRE mix, as percentages of each institution's own CRE book, for the 15 most capital-exposed. */
+/**
+ * CRE mix, as percentages of each institution's own CRE book, for the 15 most
+ * capital-exposed.
+ *
+ * Derived by `computeCreMix` rather than divided here, so the bands sum to 100%
+ * by construction. Institutions holding no CRE are dropped instead of drawn as
+ * a row of zeroes.
+ */
 export function buildExposureMix(rows: AnalyticsChartRow[]): ExposureMixBar[] {
   const ranked = rows
     .filter((r) => r.capitalRatios?.creToTier1Tier2 != null && r.capitalRatios!.creToTier1Tier2! > 0)
     .sort((a, b) => (b.capitalRatios!.creToTier1Tier2 ?? 0) - (a.capitalRatios!.creToTier1Tier2 ?? 0))
     .slice(0, 15)
 
-  return ranked.map((r) => {
-    const cre = r.creLoans ?? 0
-    const pct = (part: number | undefined) => (cre > 0 ? ((part ?? 0) / cre) * 100 : 0)
-    return {
-      name: r.name,
-      construction: pct(r.constructionLoans),
-      multifamily: pct(r.multifamilyLoans),
-      nonResidential: pct(r.nonResidentialLoans),
-      otherCre: pct(r.otherRealEstateLoans),
-    }
-  })
+  const bars: ExposureMixBar[] = []
+  for (const r of ranked) {
+    const mix = computeCreMix({
+      constructionLoans: r.constructionLoans ?? 0,
+      multifamilyLoans: r.multifamilyLoans ?? 0,
+      nonResidentialLoans: r.nonResidentialLoans ?? 0,
+      ownerOccupiedLoans: r.ownerOccupiedLoans ?? 0,
+      nonOwnerOccupiedLoans: r.nonOwnerOccupiedLoans ?? 0,
+    })
+    if (mix) bars.push({ name: r.name, ...mix })
+  }
+  return bars
 }
 
 /**

@@ -17,6 +17,7 @@ import {
   formatMultiple as formatMultipleMetric,
 } from "@/lib/format/metrics"
 import { getCreCapitalColor } from "@/lib/score-colors"
+import { computeCreMix } from "@/lib/fdic-cre"
 import { DefTerm } from "@/components/def-term"
 import { ChartTooltipRow, ChartTooltipShell } from "@/components/charts/chart-tooltip"
 import { CHART_SERIES, categoryTick, gridProps, numericTick } from "@/lib/chart-theme"
@@ -79,8 +80,8 @@ export type InstitutionProfileRow = {
   noncurrent_to_assets_ratio?: number
   loanLossReserve?: number
   loansToDeposits?: number
-  cet1Ratio?: number
-  leverageRatio?: number
+  cet1Ratio?: number | null
+  leverageRatio?: number | null
   capitalRatios?: {
     creToTier1Tier2: number | null
     creToEquity: number | null
@@ -109,7 +110,8 @@ export type InstitutionProfileRow = {
   constructionLoans?: number
   multifamilyLoans?: number
   nonResidentialLoans?: number
-  otherRealEstateLoans?: number
+  ownerOccupiedLoans?: number
+  nonOwnerOccupiedLoans?: number
   trend?: Array<{
     reportDate: string
     creConcentration?: number
@@ -640,14 +642,16 @@ function ScreeningListSection({
   formatRatio: (v: number | null | undefined) => string
   getCreCapitalColor: (v: number | undefined) => string
 }) {
-  const creMix = row.creLoans
-    ? {
-        construction: ((row.constructionLoans ?? 0) / row.creLoans) * 100,
-        multifamily: ((row.multifamilyLoans ?? 0) / row.creLoans) * 100,
-        nonRes: ((row.nonResidentialLoans ?? 0) / row.creLoans) * 100,
-        other: ((row.otherRealEstateLoans ?? 0) / row.creLoans) * 100,
-      }
-    : null
+  // The three components of creLoans, so the shares total 100%. A fourth line
+  // divided LNREOTH by creLoans; LNREOTH is 1-4 family residential and is not
+  // in that denominator, so the four together ran to a median of 255.8%.
+  const creMix = computeCreMix({
+    constructionLoans: row.constructionLoans ?? 0,
+    multifamilyLoans: row.multifamilyLoans ?? 0,
+    nonResidentialLoans: row.nonResidentialLoans ?? 0,
+    ownerOccupiedLoans: row.ownerOccupiedLoans ?? 0,
+    nonOwnerOccupiedLoans: row.nonOwnerOccupiedLoans ?? 0,
+  })
   const metrics: Array<{ label: string; term?: string; value: string; className?: string }> = [
     { label: "Report", value: formatQuarter(row.reportDate) },
     { label: "Total Assets", value: formatAssets(row.totalAssets) },
@@ -682,8 +686,7 @@ function ScreeningListSection({
     metrics.push(
       { label: "CRE Mix: Construction", term: "CRE Mix", value: creMix.construction.toFixed(1) + "%" },
       { label: "CRE Mix: Multifamily", term: "CRE Mix", value: creMix.multifamily.toFixed(1) + "%" },
-      { label: "CRE Mix: Non-Res", term: "CRE Mix", value: creMix.nonRes.toFixed(1) + "%" },
-      { label: "CRE Mix: Other", term: "CRE Mix", value: creMix.other.toFixed(1) + "%" }
+      { label: "CRE Mix: Non-owner-occupied", term: "CRE Mix", value: creMix.nonResidential.toFixed(1) + "%" }
     )
   }
   if (row.trend?.length) {

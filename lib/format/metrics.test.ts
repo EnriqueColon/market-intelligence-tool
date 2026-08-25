@@ -44,6 +44,26 @@ describe("normalizeCapitalRatioPercent", () => {
     assert.strictEqual(normalizeCapitalRatioPercent(undefined), null)
     assert.strictEqual(normalizeCapitalRatioPercent(Number.NaN), null)
   })
+
+  it("treats a reported zero as absent, because CBLR filers report zero", () => {
+    // FDIC returns RBCRWAJ=0 for the 1,765 institutions on the Community Bank
+    // Leverage Ratio framework rather than omitting it. Passing that through
+    // rendered 40.6% of the industry at 0.00% total risk-based capital,
+    // indistinguishable from the 2 banks genuinely below 8%.
+    assert.strictEqual(normalizeCapitalRatioPercent(0), null)
+  })
+
+  it("lets a CBLR filer fall through to its leverage ratio", () => {
+    // Citizens Bank of Chatsworth-shaped: RBCT1CER absent, RBCRWAJ zero,
+    // RBC1AAJ the ratio it actually reports. `??` only reaches the fallback
+    // when the first operand is nullish, so zero here would pin it at 0%.
+    const cet1 = normalizeCapitalRatioPercent(null)
+    const leverage = normalizeCapitalRatioPercent(11.8)
+    assert.strictEqual(cet1 ?? leverage ?? 0, 11.8)
+
+    const asZero = 0
+    assert.strictEqual(asZero ?? leverage ?? 0, 0)
+  })
 })
 
 describe("normalizePercentToDecimal", () => {
@@ -113,7 +133,10 @@ describe("normalizeFdicPercent", () => {
     assert.strictEqual(normalizeFdicPercent(Number.POSITIVE_INFINITY), null)
   })
 
-  it("is the same function the capital ratios use", () => {
-    assert.strictEqual(normalizeCapitalRatioPercent, normalizeFdicPercent)
+  it("keeps a zero, unlike the capital ratios", () => {
+    // A bank really can earn nothing. Zero regulatory capital, by contrast, is
+    // FDIC's way of saying the ratio was not computed.
+    assert.strictEqual(normalizeFdicPercent(0), 0)
+    assert.strictEqual(normalizeCapitalRatioPercent(0), null)
   })
 })
