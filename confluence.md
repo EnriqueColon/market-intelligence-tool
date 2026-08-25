@@ -181,15 +181,47 @@ showing a placeholder if FRED is unreachable.
 ### FDIC screening metrics
 
 Fields are requested in `lib/fdic-config.ts` and turned into `BankFinancialData` in
-`lib/fdic-data-transformer.ts`. These four are the ones whose names invite a wrong reading, so verify
-against the live API rather than inferring from the field name:
+`lib/fdic-data-transformer.ts`. These are the columns whose FDIC field names invite a wrong reading,
+so verify against the live API rather than inferring from the field name:
 
-| Displayed as | Derivation | Typical range |
+| Displayed as | Derivation | Median, 2026Q1 |
 | --- | --- | --- |
-| Reserve Coverage | `LNATRES / LNLSNET` — the allowance over net loans | 1–2% |
-| Loans / Deposits | `LNLSDEPR` as reported | 60–100% |
+| Reserve Coverage | `LNATRES / LNLSGR` — the allowance over **gross** loans | 1.18% |
+| NPL Ratio | `NALNLS / LNLSGR` — nonaccrual over **gross** loans | 0.34% |
+| Noncurrent / Loans | `NCLNLSR` as reported | 0.44% |
+| Noncurrent / Assets | `NCLNLS / ASSET` — `NCLNLS` is **dollars**, not a percentage | 0.29% |
+| Loans / Deposits | `LNLSDEPR` as reported | 79% |
 | CRE / (T1+T2) | `computeCreLoans()` over `RBCT1J + RBCT2` | 1–3x |
-| Past Due 30-89 / 90+ | `P3ASSET`, `P9ASSET` — dollar amounts in thousands, not ratios | — |
+| CRE / Equity | `computeCreLoans()` over `EQTOT` | — |
+| Past Due 30-89 / 90+ | `P3ASSET`, `P9ASSET` over `ASSET` — dollar amounts in thousands, not ratios | 0.28% / 0.00% |
+| ROA, ROE, NIM | `ROA`, `ROE`, `NIMR` as reported, in percent units | 1.19% / 11.20% / 3.54% |
+| 1-4 Family Residential | `LNRERES`, **not** `LNREDOM` | — |
+
+**Gross, not net, for anything struck against the loan book.** FDIC uses gross loans for every one
+of its own loan-quality ratios: `LNATRES / LNLSGR` reproduces its published `LNATRESR` exactly on all
+4,258 institutions that report it, and `(P9LNLS + NALNLS) / LNLSGR` reproduces `NCLNLSR` on the same
+set. Net loans are gross loans minus the allowance, so using them for reserve coverage puts the
+allowance inside its own denominator — up to 2.80 percentage points too high at reserve-heavy card
+lenders. `LNLSNET + LNATRES` equals `LNLSGR` on all 4,352 institutions, which is the fallback in
+`resolveGrossLoans`.
+
+**`NCLNLS` holds dollars despite sitting beside `NCLNLSR` and being glossed "Noncurrent Loans to
+Assets".** It equals `P9LNLS + NALNLS` exactly on all 4,352 institutions; JPMorgan Chase reports
+12,861,000, meaning $12.9bn. Reading it as percent points and clamping the result rendered 3,398 of
+4,352 institutions — 78% of the industry, and every large bank — as exactly 100.00% noncurrent
+against a median true figure of 0.435%. Live until 2026-08-24.
+
+**`LNREDOM` is every real estate loan in domestic offices, not the 1-4 family figure.** It equals
+`LNRE` on 4,335 of 4,352 institutions. It was read as residential lending until 2026-08-24,
+overstating the industry residential book 2.09x. `LNRERES` is the 1-4 family total, and it splits
+into revolving home equity (`LNRELOC`) plus closed-end (`LNREOTH`).
+
+**Run `npm run audit:fdic-columns` after changing any field mapping.** It reconciles every derived
+column against a total FDIC publishes independently and fails the process on a mismatch. That is a
+different exercise from recomputing a metric from the parts the app already uses, which only
+confirms the app's own assumption — a verification script did exactly that and blessed the CRE
+double-count it existed to catch. It also flags any requested field the API never populates, which
+is how `EQCAP` went unnoticed.
 
 **What counts as CRE is defined in one place, `lib/fdic-cre.ts`, and it is load-bearing.** The 2006
 guidance definition is construction and land development (`LNRECONS`) plus multifamily (`LNREMULT`)
@@ -225,19 +257,29 @@ permanently null, with its 20% weight in the Earnings Resilience Score silently 
 the other three inputs. Shortening this window again will reintroduce that failure silently, since
 the code degrades to null rather than erroring.
 
-**A regulatory capital ratio above 100% is normal and must not be rescaled.** Trust and wholesale
-banks hold capital far above their risk-weighted assets: in 2026Q1, 66 of 4,352 institutions reported
-CET1 over 100%, JPMorgan Chase Bank Dearborn at 506.72%. `normalizePercent` treats anything above 100
-as basis points and divides by 100, which is right for ROA and NIM and catastrophic here — it
-rendered all 66 at roughly a hundredth of their true value, so the best-capitalised institutions in
-the country appeared critically undercapitalised and any screen on a capital floor selected exactly
-the wrong banks. This was live until 2026-08-24.
+**FDIC reports every percent-type field in percent units, and no scale-guessing is needed or safe.**
+`ROA`, `ROE`, `NIMR` and the four PCA capital ratios all go through **`normalizeFdicPercent`** in
+`lib/format/metrics.ts`, which trusts the reported value and only rejects non-numbers.
+`normalizeCapitalRatioPercent` is the same function under its capital-specific name.
 
-`RBCT1CER`, `RBC1AAJ`, `RBC1RWAJ` and `RBCRWAJ` therefore go through
-**`normalizeCapitalRatioPercent`**, which trusts FDIC's percent units unchanged. It also declines to
-multiply values at or below 1, which `normalizePercent` does; that direction is worse still, since it
-would show a failing bank at 0.85% as a healthy 85%. Do not "simplify" these back to
-`normalizePercent`.
+The `normalizePercent` heuristic this replaced guessed at the scale in two directions and was wrong
+in both. It divided anything above 100 as though it were basis points: in 2026Q1, 66 of 4,352
+institutions reported CET1 above 100% — JPMorgan Chase Bank Dearborn at 506.72% — plus 9 with ROE
+above 100% and 1 with ROA above 100%, and all of them rendered near a hundredth of their true value,
+so the best-capitalised institutions in the country appeared critically undercapitalised and any
+screen on a capital floor selected exactly the wrong banks.
+
+It also multiplied anything at or below 1, assuming a decimal fraction. That half did more damage,
+because a bank earning under one percent on assets is the ordinary case rather than an edge case:
+**1,441 of 4,352 institutions — a third of the industry — had ROA between 0 and 1 percent and were
+shown a hundred times too high**, NBH Bank's 1.00% appearing as 99.98%. 65 institutions had ROE in
+that band and 23 had NIM, including State Street at 0.95% shown as 95.29%. The capital-ratio half was
+fixed on 2026-08-24; ROA, ROE and NIM were fixed later the same day and `normalizePercent` was
+removed so it cannot be reintroduced.
+
+The units were never actually in doubt: FDIC's `ROA` equals `NETINC * n / ASSET5 * 100` on all 4,352
+institutions and `ROE` equals `NETINC * n / EQ5 * 100` on all 4,334 that report equity, where `n`
+annualizes year-to-date income for the quarter. `npm run audit:fdic-columns` asserts both.
 
 Related: never substitute one capital measure for another across a time series. Falling back to the
 leverage ratio for a quarter missing CET1 compares two different things and manufactures a swing —
@@ -246,8 +288,12 @@ it produced a fictional "fell from 31.39% to 1.14%" event in the Executive Brief
 `RBCT1J + RBCT2` over `RWAJ` reproduces FDIC's published `RBCRWAJ` exactly, which is the check to run
 if the capital figures ever look wrong. `RWA_TO_ASSETS_PROXY` in `lib/fdic-ratio-helpers.ts` remains
 only as a fallback for institutions that do not report `RWAJ`; `CapitalRatios.basis` records whether
-a row used reported dollars (`"reported"`) or the proxy (`"derived"`). `EQCAP` is requested but the
-API returns null for it, so CRE / Equity falls back to Tier 1.
+a row used reported dollars (`"reported"`) or the proxy (`"derived"`).
+
+Total equity comes from **`EQTOT`**, which equals `ASSET - LIAB` on all 4,352 institutions. `EQCAP`
+was requested until 2026-08-24 and is not a field this endpoint serves, so it returned null on every
+institution and CRE / Equity silently fell back to Tier 1 capital. `EQ` is bank-only equity excluding
+noncontrolling interests and does not close the balance sheet on 93 institutions, so it is not used.
 
 ### Opportunity Score
 

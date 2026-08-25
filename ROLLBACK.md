@@ -8,11 +8,11 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
 | `main` | `e8bf8ad` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `22e7a2e` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `dev` | `30bb802` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 A SHA here can never name the commit that writes it, so the true head is usually one documentation
 commit further on. Only behavioural commits matter as rollback targets; on `dev` the newest is
-**`bb78bd8`**.
+**`30bb802`**.
 
 Production deploys automatically on every push to `main`. `dev` deploys as a Vercel preview on every
 push. Crons run only against production, and the post-deploy warm-cache GitHub Action triggers only
@@ -70,8 +70,9 @@ git push --force-with-lease origin dev
 
 | Commit | Date | Why it is a safe target |
 | --- | --- | --- |
-| `bb78bd8` | 2026-08-24 | Newest behavioural commit on `dev` and the one to prefer. Makes Executive Brief entries open the institution profile drawer, and stops the brief listing institutions that did not file for the quarter it is headed with — 102 of 1,215 nationally, whose movements were real but a quarter old. **The brief's contents change at this commit**: it now covers the same 1,113 institutions as the screening tab. Rolling back past it restores crossings dated forward a quarter, so prefer fixing forward. Bumps the brief cache key to `executive-brief-v3`; a rollback should bump it again or the corrected list will be served under the old rules. |
-| `dcc064e` | 2026-08-24 | Prior behavioural commit. Corrects what counts as CRE: drops the `LNREOTH` double-count and excludes owner-occupied property, taking the share of institutions above the 300% supervisory screen from 63.5% to 9.6%. **Every CRE concentration figure, Opportunity Score, map colour and export value changes at this commit and is correct afterwards.** Rolling back past it restores a headline metric that is wrong by a wide margin, so prefer fixing forward. |
+| `30bb802` | 2026-08-24 | Newest behavioural commit on `dev` and the one to prefer. Corrects five Market Analytics columns that were reading the wrong FDIC field or the wrong units. **Most of the screening table changes at this commit and is correct afterwards**, so rolling back past it restores numbers that are wrong by two orders of magnitude in places: ROA, ROE and NIM revert to being shown a hundred times too high on 1,441 of 4,352 institutions; Noncurrent / Assets reverts to reading exactly 100.00% on 3,398 of them; the residential loan figure reverts to 2.09x its true value; CRE / Equity reverts to silently using Tier 1 capital; and reserve coverage and the NPL ratio revert to a net-loan denominator. Prefer fixing forward. Run `npm run audit:fdic-columns` after any change in this area — it fails the process on a mismatch against FDIC's published totals. |
+| `bb78bd8` | 2026-08-24 | Prior behavioural commit. Makes Executive Brief entries open the institution profile drawer, and stops the brief listing institutions that did not file for the quarter it is headed with — 102 of 1,215 nationally, whose movements were real but a quarter old. **The brief's contents change at this commit**: it now covers the same 1,113 institutions as the screening tab. Rolling back past it restores crossings dated forward a quarter, so prefer fixing forward. Bumps the brief cache key to `executive-brief-v3`; a rollback should bump it again or the corrected list will be served under the old rules. |
+| `dcc064e` | 2026-08-24 | Corrects what counts as CRE: drops the `LNREOTH` double-count and excludes owner-occupied property, taking the share of institutions above the 300% supervisory screen from 63.5% to 9.6%. **Every CRE concentration figure, Opportunity Score, map colour and export value changes at this commit and is correct afterwards.** Rolling back past it restores a headline metric that is wrong by a wide margin, so prefer fixing forward. |
 | `36dd5c1` | 2026-08-24 | Stops rescaling regulatory capital ratios above 100%, which had been rendering 66 of 4,352 institutions at roughly a hundredth of their true capital. **Rolling back past this restores a wrong number in the main screening table**, not merely a missing feature: the best-capitalised banks appear critically undercapitalised. Capital figures change for those 66 institutions at this commit and are correct afterwards. |
 | `1162934` | 2026-08-24 | Adds the Executive Brief, which renders only when the department selector is set to Executive and replaces no existing view — so rolling it back removes a card and changes nothing else. Also deletes the orphaned `app/actions/watchlist.ts`; **if you roll back past this, delete that file again rather than leaving it callable**, since it would overwrite the curated `data/watchlist.json`. Not visually confirmed in a browser: build, unit tests and live-data output all pass, so any defect should be layout-only. |
 | `703bed6` | 2026-08-24 | Adds the department selector, the department watchlist table and the change-detection engine. Low risk to roll back: the only user-visible addition is the header selector, and nothing else yet reads what it produces. Creates `department_watchlist` on first use, which a rollback leaves behind harmlessly. |
@@ -108,6 +109,9 @@ Not in production. Merge to `main` to ship.
 
 | Commit | Date | Summary |
 | --- | --- | --- |
+| `30bb802` | 08-24 | fix: correct five Market Analytics columns misread from FDIC fields |
+| `c7e0264` | 08-24 | docs: list the clickable-brief docs commit in the rollback reference |
+| `22e7a2e` | 08-24 | docs: record the clickable brief and the stale-quarter trap it exposed |
 | `bb78bd8` | 08-24 | feat: open the institution profile from the Executive Brief |
 | `cd7f258` | 08-24 | docs: list the CRE definition fix in the rollback reference |
 | `dcc064e` | 08-24 | fix: correct the CRE definition behind the 300% supervisory screen |

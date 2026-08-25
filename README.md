@@ -196,6 +196,7 @@ npm run test:metrics          # number formatting and unit normalisation
 npm run test:opportunity-score # cohort scoring, including outlier compression
 npm run test:institution-change # threshold crossings, deterioration trends, brief ranking
 npm run test:fdic-cre         # what counts as CRE, and what must never be added to it
+npm run test:fdic-loan-quality # NPL, noncurrent, reserve and past-due denominators and units
 npm run test:memo-evidence    # the evidence guard
 npm run test:verified-metrics
 npm run test:allowlist
@@ -214,6 +215,10 @@ Some checks need live data rather than fixtures, because they are calibrations r
 - `scripts/verify-change-detection.mjs [STATE]` — what share of institutions produce a change event.
   Run after changing any threshold, the trajectory run length, or a materiality level. Fire on
   everything and it is noise; fire on nothing and the feature is dead.
+- `npm run audit:fdic-columns [-- --quarter=YYYYMMDD]` — reconciles every derived Market Analytics
+  column against a total FDIC publishes independently, and exits non-zero on a mismatch. Run after
+  changing anything in `lib/fdic-config.ts` or `lib/fdic-data-transformer.ts`. It also reports any
+  requested field the API never populates, which is how a dead field goes unnoticed for months.
 - `npm run verify:executive-brief [STATE]` — what leads each section of the Executive Brief. Read the
   sample, not only the counts: the failure mode is a section topped by reporting artifacts, which
   costs trust faster than showing nothing. Imports the shipped ranking functions, so it tests real
@@ -289,13 +294,31 @@ banking system as above the 300% supervisory screen when the true figure is 9.6%
 now lives in one tested place, `lib/fdic-cre.ts`. Before trusting a new component field, check that
 the published total still reconciles without it.
 
-**A capital ratio above 100% is real, and rescaling it inverts the answer.** Trust and wholesale
-banks hold capital far above their risk-weighted assets — 66 of 4,352 institutions reported CET1 over
-100% in 2026Q1, one at 506.72%. A shared helper divided anything above 100 by 100 on the assumption
-it was basis points, which rendered every one of them near 1% and made the country's best-capitalised
-banks look like its worst. Capital ratios now use `normalizeCapitalRatioPercent`; do not route them
-back through `normalizePercent`. The general lesson is that a "surely no value is ever this large"
-heuristic is a bug waiting for the one bank where it is.
+**Never guess a number's scale from its magnitude.** A shared `normalizePercent` helper divided
+anything above 100 as basis points and multiplied anything at or below 1 as a decimal fraction. Both
+guesses were wrong. Above: 66 of 4,352 institutions reported CET1 over 100% in 2026Q1, one at
+506.72%, and all were rendered near 1%, making the country's best-capitalised banks look like its
+worst. Below, and worse, because it hits the common case rather than the rare one: a third of the
+industry earns under one percent on assets, so **1,441 institutions had their ROA shown a hundred
+times too high**, a 1.00% ROA appearing as 99.98%. FDIC reports all of these in percent units and
+says so arithmetically — its `ROA` equals `NETINC * n / ASSET5 * 100` on every institution — so
+nothing needed inferring. `normalizePercent` has been deleted; use `normalizeFdicPercent`, which
+trusts the reported value.
+
+**A field name is not evidence of its units.** `NCLNLS` sits beside `NCLNLSR`, is glossed
+"Noncurrent Loans to Assets", and holds dollars: it equals `P9LNLS + NALNLS` exactly on all 4,352
+institutions. Read as percent points it made 78% of the industry show exactly 100.00% noncurrent.
+`LNREDOM` reads residential and is every real estate loan in domestic offices. `LNREOTH` reads like a
+commercial residual and is closed-end 1-4 family mortgages. Reconcile a field against a published
+FDIC total before trusting what it is called — `npm run audit:fdic-columns` does this for every
+column at once.
+
+**Reconcile against a published total; do not recompute from your own parts.** Recomputing a metric
+from the same fields the app already uses confirms your assumption rather than testing it. A
+verification script did exactly that and validated the CRE double-count it existed to catch. What
+found that bug was checking that FDIC's own `LNRE` total still balanced *without* `LNREOTH`. Also
+sanity-check magnitudes against outside knowledge: 63.5% of banks above a supervisory screen, or a
+column reading 100.00% on most rows, is self-evidently wrong before any arithmetic.
 
 **Never substitute one capital measure for another across a time series.** Falling back to the
 leverage ratio when CET1 is missing for a quarter compares two different measures and invents a

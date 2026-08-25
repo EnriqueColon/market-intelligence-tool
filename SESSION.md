@@ -8,7 +8,79 @@ is it in now, and what is still open.
 
 ---
 
-## 2026-08-24 (latest) — the brief became clickable, and admitted what it was hiding
+## 2026-08-24 (latest) — five more columns were reading the wrong FDIC field
+
+Three data defects were found earlier today by hand, each in a column nobody had reason to doubt. The
+obvious question was how many others were like that, so every derived column in
+`transformFinancialData` was audited against the live FDIC API. **Five were wrong.**
+
+**The method, because it is the part worth reusing.** Recomputing a metric from the same parts the
+app already uses and comparing the two confirms the app's own assumption rather than testing it — an
+earlier verification script did exactly that and validated the CRE double-count it was written to
+catch. Every check here instead reconciles a column against a total FDIC publishes independently:
+`NCLNLS == P9LNLS + NALNLS` proves NCLNLS holds dollars; `LNREDOM == LNRE` proves LNREDOM is not the
+residential figure; `ROA == NETINC * 4 / ASSET5 * 100` proves ROA is already in percent units. A wrong
+assumption about what a field *means* shows up as a mismatch, which is exactly what recomputation
+cannot do.
+
+**What was wrong, worst first.**
+
+1. **ROA, ROE and NIM went through `normalizePercent`**, whose second branch multiplied anything at
+   or below 1 on the assumption it was a decimal fraction. A bank earning under one percent on assets
+   is the ordinary case, not an edge case: **1,441 of 4,352 institutions, a third of the industry,
+   were shown a hundred times too high** — NBH Bank's 1.00% ROA as 99.98%. The same function's other
+   branch divided the 9 institutions with ROE above 100% and the 1 with ROA above 100%. This is the
+   same helper whose capital-ratio misuse was fixed earlier today; the fix then was to route capital
+   ratios around it. It should have been to delete it, which is what happened now.
+2. **`noncurrent_to_assets_ratio` read `NCLNLS` as percent points.** It is dollars — equal to
+   `P9LNLS + NALNLS` exactly on all 4,352 institutions, with JPMorgan Chase reporting 12,861,000,
+   meaning $12.9bn. Dividing by 100 and clamping to 100% rendered **3,398 institutions — 78% of the
+   industry, and every large bank — as exactly 100.00% noncurrent**, against a median true figure of
+   0.435%. A column reading 100.00% on most of the table is the kind of thing that should be caught
+   by looking, and was not.
+3. **`residentialLoans` read `LNREDOM`**, which is every real estate loan in domestic offices and
+   equals `LNRE` on 4,335 of 4,352 institutions. The industry residential book was overstated 2.09x.
+   The 1-4 family field is `LNRERES`.
+4. **`totalEquityDollars` read `EQCAP`**, which this endpoint does not serve. It was undefined on
+   every institution, so CRE / Equity silently fell back to Tier 1 capital and nothing looked broken.
+   Now `EQTOT`, which equals `ASSET - LIAB` on all 4,352.
+5. **Reserve coverage and the NPL ratio were struck against net loans.** FDIC uses gross for its own
+   versions — `LNATRES / LNLSGR` reproduces its published `LNATRESR` exactly — and net loans are gross
+   minus the allowance, so reserve coverage had the allowance inside its own denominator, up to
+   2.80pp too high. The NPL ratio was overstated on 3,555 institutions, by more than 0.10pp on 57.
+
+**What was checked and found correct**, so it does not need doing again: CRE loans and concentration,
+the construction / multifamily / owner-occupied splits, unused commitments (`UCCOMRE` is a subset of
+`UCLN` on every institution), total and gross loans, nonaccrual dollars, both past-due buckets
+(`P3ASSET` and `P9ASSET` are dollar amounts and are correctly measured against assets),
+`noncurrent_to_loans_ratio`, loans-to-deposits, the efficiency ratio, net income, and the four
+regulatory capital ratios.
+
+**One defect was found and deliberately not fixed here.** `LNREOTH` is closed-end 1-4 family
+residential — `LNRERES - LNRELOC = LNREOTH` exactly on all 4,352 institutions — but it is displayed
+as an "other CRE" slice divided by `creLoans` in `lib/analytics-chart-data.ts`,
+`components/market-analytics.tsx` and `components/institution-profile-drawer.tsx`. It is not CRE and
+is not in that denominator, so the CRE mix chart carries a slice that does not belong to it. The
+transformer and the glossary now say plainly what the field is; the display fix belongs in files a
+concurrent worker was editing and was left alone rather than risk a conflict.
+
+**State.** Committed as `30bb802` on `dev`. `npm run build` is clean and every suite passes except
+`test:allowlist`, which fails on `main` too: `lib/domain-allowlist.ts` imports `./entity-sources`
+without a `.ts` extension, which the strip-types loader cannot resolve. Verified end to end by
+running the real transformer over all 4,352 institutions: median ROA 1.19%, ROE 11.20%, NIM 3.54%,
+CET1 11.77%, reserve coverage 1.18%, loans-to-deposits 79% — all where industry knowledge says they
+should be — and industry totals of $26.4tn assets against $2.64tn equity, matching FDIC's published
+aggregates. Nothing is pinned at 100% any more and equity is present on 4,335 of 4,352 rows.
+
+**Still open.** The "other CRE" display defect above. `creConcentration` is CRE over *net* loans
+while every loan-quality ratio now uses gross; the inconsistency is about 1% relative and was left
+alone rather than silently shift a number the whole tool reads, but the two should agree eventually.
+`test:allowlist` has been red for longer than this session and nobody owns it. And
+`npm run audit:fdic-columns` is not wired into CI, so it only runs when someone remembers.
+
+---
+
+## 2026-08-24 — the brief became clickable, and admitted what it was hiding
 
 Asked that an executive be able to click an institution in "what moved this quarter" and see its
 statistics. The entries are now buttons that switch to the Market Analytics tab and open the profile
@@ -42,7 +114,7 @@ served the mislabelled list for six hours otherwise.
 bank that moved is invisible; the header says so, and Phase 1's cached data layer is where that gets
 fixed rather than papered over. An institution that stops filing is arguably itself a signal, and it
 is now dropped rather than surfaced — a "no longer reporting" section would be the honest place for
-it. And the audit noted below is still not done.
+it. The column audit called for below was done in the session above.
 
 ---
 
