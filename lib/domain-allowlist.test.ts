@@ -10,7 +10,7 @@ import {
   isHostnameAllowed,
   filterByAllowlist,
 } from "./domain-allowlist.ts"
-import { getDomainsForEntity } from "./entity-sources.ts"
+import { getDomainsForEntity, type EntityId } from "./entity-sources.ts"
 
 describe("extractHostname", () => {
   it("extracts hostname from https URL", () => {
@@ -84,24 +84,40 @@ describe("filterByAllowlist", () => {
     assert.ok(!filtered.some((r) => r.title === "Evil"))
   })
 
-  it("filters for watchlist (cbre + jll)", () => {
-    const filtered = filterByAllowlist(items, "watchlist")
-    assert.strictEqual(filtered.length, 3)
-    assert.ok(!filtered.some((r) => r.title === "Evil"))
+  it("drops everything for an id that is no longer in the registry", () => {
+    // Fails closed on an unknown id rather than passing results through unfiltered.
+    // Note that buildSearchQuery does the opposite for the same input: an empty
+    // domain list there becomes an unrestricted Google query.
+    const filtered = filterByAllowlist(items, "watchlist" as EntityId)
+    assert.strictEqual(filtered.length, 0)
   })
 })
 
 describe("getDomainsForEntity", () => {
-  it("returns all domains for all", () => {
-    const domains = getDomainsForEntity("all")
-    assert.ok(domains.includes("cbre.com"))
-    assert.ok(domains.includes("jll.com"))
-    assert.ok(domains.includes("mba.org"))
+  it("returns exactly the eight primary entities for all", () => {
+    // Spelled out rather than derived from PRIMARY_V1_ENTITY_IDS, so widening "all"
+    // has to be a deliberate edit here too. "all" is the default in the dropdown and
+    // becomes a site: restriction, so this list is what an unqualified search covers.
+    assert.deepStrictEqual(getDomainsForEntity("all"), [
+      "federalreserve.gov",
+      "fdic.gov",
+      "cbre.com",
+      "cbre.us",
+      "jll.com",
+      "cushmanwakefield.com",
+      "colliers.com",
+      "naiop.org",
+      "uli.org",
+    ])
   })
-  it("returns cbre + jll for watchlist", () => {
-    const domains = getDomainsForEntity("watchlist")
-    assert.ok(domains.includes("cbre.com"))
-    assert.ok(domains.includes("jll.com"))
+  it("excludes the non-primary entities from all", () => {
+    const domains = getDomainsForEntity("all")
     assert.ok(!domains.includes("mba.org"))
+    assert.ok(!domains.includes("multihousingnews.com"))
+    assert.ok(!domains.includes("commercialsearch.com"))
+  })
+  it("returns an entity's own domains when it is named directly", () => {
+    assert.deepStrictEqual(getDomainsForEntity("mba"), ["mba.org"])
+    assert.deepStrictEqual(getDomainsForEntity("cbre"), ["cbre.com", "cbre.us"])
   })
 })

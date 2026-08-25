@@ -99,6 +99,7 @@ export const ENTITY_SOURCES: EntityRecord[] = [
   },
 ]
 
+/** The primary Search Industry Reports publishers. Also what "all" resolves to. */
 const PRIMARY_V1_ENTITY_IDS: EntityId[] = [
   "federalreserve",
   "fdic",
@@ -110,7 +111,12 @@ const PRIMARY_V1_ENTITY_IDS: EntityId[] = [
   "uli",
 ]
 
-/** Get domains for entityId. For "all" returns all domains. */
+/**
+ * Get domains for entityId. "all" means the primary Search Industry Reports sources, not every
+ * approved domain: it resolves to PRIMARY_V1_ENTITY_IDS, so `mba`, `mhn` and `commercialsearch`
+ * stay allowlisted for URLs that reach us but are kept out of an unqualified search. They are also
+ * absent from ENTITY_DROPDOWN_OPTIONS, so widening one without the other is inconsistent.
+ */
 export function getDomainsForEntity(entityId: EntityId): string[] {
   return getLandingDomainsForEntity(entityId)
 }
