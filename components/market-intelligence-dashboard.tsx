@@ -15,6 +15,7 @@ import { MarketResearchFeed } from "@/components/market-research-feed"
 import { MarketPulseStrip } from "@/components/market-pulse-strip"
 import { DepartmentSelector } from "@/components/department-selector"
 import { ExecutiveBrief } from "@/components/lenses/executive-brief"
+import { UnderwriterWorkbench } from "@/components/lenses/underwriter-workbench"
 import type { Department } from "@/lib/department"
 
 type TabValue = "news" | "analytics" | "market-research" | "legal"
@@ -157,6 +158,15 @@ export function MarketIntelligenceDashboard({
       {initialDepartment === "executive" && (
         <div className="mx-auto w-full max-w-[1100px] px-5 pt-10 md:px-[20px]">
           <ExecutiveBrief
+            onSelectInstitution={analyticsAvailable ? handleSelectInstitution : undefined}
+            notFoundCert={focusMissedCert}
+          />
+        </div>
+      )}
+
+      {initialDepartment === "underwriting" && (
+        <div className="mx-auto w-full max-w-[1100px] px-5 pt-10 md:px-[20px]">
+          <UnderwriterWorkbench
             onSelectInstitution={analyticsAvailable ? handleSelectInstitution : undefined}
             notFoundCert={focusMissedCert}
           />

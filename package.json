@@ -19,10 +19,13 @@
     "test:fdic-cre": "node --test --experimental-strip-types lib/fdic-cre.test.ts",
     "test:fdic-loan-quality": "node --test --experimental-strip-types lib/fdic-loan-quality.test.ts",
     "audit:fdic-columns": "node scripts/audit-fdic-columns.mjs",
+    "test:quarter": "node --test --experimental-strip-types lib/scoring/quarter.test.ts",
     "test:memo-evidence": "node --test --experimental-strip-types lib/memo-evidence.test.ts",
     "test:verified-metrics": "node --test --experimental-strip-types lib/verified-metrics.test.ts",
     "test:environment": "node --test --experimental-strip-types lib/environment.test.ts",
-    "verify:executive-brief": "node --experimental-strip-types scripts/verify-executive-brief.mjs"
+    "verify:executive-brief": "node --experimental-strip-types scripts/verify-executive-brief.mjs",
+    "verify:workbench": "tsx scripts/verify-workbench.ts",
+    "verify:lenses": "node scripts/verify-lenses-visually.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
