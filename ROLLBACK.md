@@ -8,11 +8,11 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
 | `main` | `e8bf8ad` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `08b7127` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `dev` | `397a03e` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 A SHA here can never name the commit that writes it, so the true head is usually one documentation
 commit further on. Only behavioural commits matter as rollback targets; on `dev` the newest is
-**`bfded4f`**.
+**`397a03e`**.
 
 Production deploys automatically on every push to `main`. `dev` deploys as a Vercel preview on every
 push. Crons run only against production, and the post-deploy warm-cache GitHub Action triggers only
@@ -70,7 +70,8 @@ git push --force-with-lease origin dev
 
 | Commit | Date | Why it is a safe target |
 | --- | --- | --- |
-| `bfded4f` | 2026-08-24 | Newest behavioural commit on `dev` and the one to prefer. Warms both department lenses from the post-deploy `warm-cache` route and lengthens their cache windows from 6 hours to 23. Purely a latency change — no figure moves — so it is safe in both directions. If you roll back past it, expect the first person to select a department after a deploy to wait about fifty seconds, and note that the GitHub Action's curl timeout reverts to 120s, which is shorter than the route now takes. |
+| `397a03e` | 2026-08-24 | Newest behavioural commit on `dev` and the one to prefer. Stops reading a reported zero as a capital ratio, and stops drawing 1-4 family residential as a slice of the CRE book. **Opportunity Scores and their ranking change at this commit and are correct afterwards** — 30 of the top-100 most-distressed institutions were Community Bank Leverage Ratio filers scored as though they held no capital, and the median institution moves 120 rank places. Rolling back past it returns 1,765 of 4,352 institutions to showing 0.00% total risk-based capital, indistinguishable from a failed bank, and returns the CRE Portfolio Composition chart to stacked bands summing to a median 255% on a 0–100 axis. Prefer fixing forward. CRE-to-capital, the stress map and the workbench are untouched either way; they read reported capital dollars rather than the ratios. Note the four capital ratios became `number \| null` here, so a rollback also reverts a type change several files depend on. Run `npm run audit:fdic-columns` after any change in this area. |
+| `bfded4f` | 2026-08-24 | Warms both department lenses from the post-deploy `warm-cache` route and lengthens their cache windows from 6 hours to 23. Purely a latency change — no figure moves — so it is safe in both directions. If you roll back past it, expect the first person to select a department after a deploy to wait about fifty seconds, and note that the GitHub Action's curl timeout reverts to 120s, which is shorter than the route now takes. |
 | `be75853` | 2026-08-24 | Adds the Underwriter Workbench lens. Renders only when the department selector is set to Underwriting and replaces no existing view, so rolling it back removes a card and changes nothing else — no shared metric, cohort or export is touched. Worth knowing before reinstating any earlier version of it: the CRE downside scenario measures leverage filers against the **4% PCA adequately-capitalised** level, not the 9% CBLR trigger. An earlier iteration used 9% and made every community-bank-leverage filer appear to have the thinnest capital cushion in the state, which was an artifact of comparing an election trigger to a capital floor. Run `npm run verify:workbench` after any change here; it fails on a mismatch against FDIC's published `RBCRWAJ` and `RBC1AAJ`. |
 | `94a663c` | 2026-08-24 | Adds a "no longer reporting" section to the Executive Brief, listing the institutions it already excluded from the movement sections and previously only counted — 102 of 1,215 nationally. Additive within a card that only Executive sees; rolling back returns those institutions to being a number in the header. No movement figure changes. |
 | `30bb802` | 2026-08-24 | Corrects five Market Analytics columns. Corrects five Market Analytics columns that were reading the wrong FDIC field or the wrong units. **Most of the screening table changes at this commit and is correct afterwards**, so rolling back past it restores numbers that are wrong by two orders of magnitude in places: ROA, ROE and NIM revert to being shown a hundred times too high on 1,441 of 4,352 institutions; Noncurrent / Assets reverts to reading exactly 100.00% on 3,398 of them; the residential loan figure reverts to 2.09x its true value; CRE / Equity reverts to silently using Tier 1 capital; and reserve coverage and the NPL ratio revert to a net-loan denominator. Prefer fixing forward. Run `npm run audit:fdic-columns` after any change in this area — it fails the process on a mismatch against FDIC's published totals. |
@@ -112,6 +113,8 @@ Not in production. Merge to `main` to ship.
 
 | Commit | Date | Summary |
 | --- | --- | --- |
+| `397a03e` | 08-24 | fix: read absent capital ratios as absent, and stop drawing residential as CRE |
+| `bec51b8` | 08-24 | docs: record the workbench lens and the regulatory-level trap it exposed |
 | `08b7127` | 08-24 | chore: register the peer-cohort and CRE-downside test suites |
 | `bfded4f` | 08-24 | perf: warm the department lens caches after deploy |
 | `be75853` | 08-24 | feat: add the Underwriter Workbench lens |

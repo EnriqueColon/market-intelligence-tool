@@ -362,10 +362,21 @@ how the Executive Brief came to list a Q4 2025 crossing as Q1 2026 for 102 of 1,
 view headed "this quarter" must require a row *in* that quarter, and say how many institutions it
 therefore excluded — a silently smaller cohort reads exactly like a calmer market.
 
-**A missing FDIC field may arrive as zero rather than null.** Roughly a third of institutions elect
-the Community Bank Leverage Ratio and file no risk-weighted assets, and FDIC reports `RWAJ` and
-`RBCRWAJ` as `0` for them. A `!= null` guard passes that straight into a denominator and produces an
-infinite ratio instead of a caught absence. Test that a denominator is positive, not that it exists.
+**A missing FDIC field may arrive as zero rather than null.** 1,765 of 4,352 institutions — 40.6%,
+not a rounding error — elect the Community Bank Leverage Ratio and file no risk-weighted assets, and
+FDIC reports `RWAJ` and `RBCRWAJ` as `0` for them while omitting `RBCT1CER` and `RBC1RWAJ` entirely.
+A `!= null` guard passes that straight into a denominator and produces an infinite ratio instead of
+a caught absence. Test that a denominator is positive, not that it exists.
+
+The damage is not confined to denominators, and that is the part worth internalising. A zero
+*capital ratio* is not a missing value, it is the most alarming value the field can hold: those
+institutions rendered at 0.00% total risk-based capital, indistinguishable from the 2 banks
+genuinely below 8%. It also silently defeats `??`, which only falls through on null — so
+`cet1Ratio ?? leverageRatio` returned zero forever rather than the ratio a CBLR filer actually
+reports, and pinned 40% of the industry at the bottom of the Opportunity Score's capital component.
+Convert absence to `null` at the boundary, in the transformer, and give the field a nullable type so
+consumers must decide what absence means. `normalizeCapitalRatioPercent` does this;
+`npm run audit:fdic-columns` prints which capital fields currently use zero to mean absent.
 
 **Two regulatory levels are not comparable just because both are percentages.** The 9% CBLR figure is
 the threshold for *electing* a reporting regime; the 8% total risk-based and 4% leverage figures are

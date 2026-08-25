@@ -8,7 +8,73 @@ is it in now, and what is still open.
 
 ---
 
-## 2026-08-24 (latest) — the second lens, and a floor that was measuring the wrong thing
+## 2026-08-24 (latest) — zero is not a number, and a stacked chart that summed to 255%
+
+Two columns in the screening table were showing a plausible figure that meant something other than
+what it said. Both were found the same way as everything else today: by reconciling against what
+FDIC publishes, and by asking whether a magnitude is believable before checking any arithmetic.
+
+**Zero versus absent, which is the one that mattered.** FDIC reports `RBCRWAJ` as a literal `0` — and
+omits `RBCT1CER` and `RBC1RWAJ` entirely — for institutions on the Community Bank Leverage Ratio
+framework, because electing it excuses them from risk-weighting. That is **1,765 of 4,352, 40.6% of
+the industry**, not an edge case. Coercing those to zero rendered them at 0.00% total risk-based
+capital in the screening table, visually identical to a failed bank. The magnitude check settles it
+on its own: only **2** institutions in the country genuinely report total risk-based capital below
+8%, so a column showing 1,765 at zero is measuring a reporting regime, not distress. Their median
+leverage ratio is 11.80%, and electing CBLR requires at least 9%.
+
+The display was not the damage. The Opportunity Score's capital slot is `cet1Ratio ?? leverageRatio`,
+and `??` only falls through on **null** — so a zero never reached the leverage ratio, and every one
+of those institutions tied at the bottom of the capital distribution. Capital is 15% of the score and
+inverted, less capital meaning more distress, so **30 of the top-100 most-distressed institutions
+were CBLR filers that did not belong there**, and fixing it moved the median institution 120 rank
+places. That list is the tool's actual work product, which is what makes this the most consequential
+bug of the day despite looking like a formatting problem.
+
+Worth being precise about the blast radius, because the instinct is to assume everything moved:
+CRE-to-capital, the stress map and the Underwriter Workbench were **unaffected**. They read reported
+Tier 1 and Tier 2 dollars rather than the ratios, and `verify:workbench` produces byte-identical
+output before and after. Several places had already grown private workarounds — `reported()` in the
+workbench, `!== 0` in the drawer — which is the signal that the transformer was lying to its
+consumers rather than that its consumers were careless.
+
+The fix is at the boundary: `normalizeCapitalRatioPercent` now maps zero to null, and the four
+ratios are typed `number | null` rather than optional numbers, so a consumer has to decide what
+absence means instead of silently inheriting a zero. `RWAJ` and `RBCT1J` are guarded on positivity
+for the same reason — a zero denominator yields Infinity rather than a caught absence.
+
+**A stacked chart whose bands summed to a median of 255%.** `LNREOTH` is closed-end 1-4 family
+residential (`LNRERES − LNRELOC = LNREOTH` exactly everywhere) and was drawn as a fourth "Other CRE"
+band divided by `creLoans`, a denominator it is not part of. The third band had a quieter version of
+the same fault: it used the undivided `LNRENRES`, re-including the owner-occupied property the CRE
+definition deliberately removes. Together the shares exceeded 100% on **4,129 of the 4,164**
+institutions holding any CRE, reaching 681,607% at a thrift with a large mortgage book and almost no
+CRE — against a chart axis that stops at 100. `computeCreMix` now derives the three parts
+`computeCreLoans` actually adds up, so they sum to 100% by construction rather than by hope.
+
+**Verification, since every bug today survived a clean build and passing tests.** Read from the
+rendered page over 1,113 institutions: no row shows 0.00% CET1, the 225 CBLR filers show "—" beside
+their real leverage ratio and are labelled "Leverage", and every CRE mix sums to 100.0% ± 0.1
+rounding. `npm run audit:fdic-columns` passes on the merged state, so the lens work introduced no
+reconciliation failure; it gained a check that a zero total risk-based capital ratio always has a
+leverage ratio to fall back to (0/1,748), and a table of which capital fields use zero to mean
+absent. `verify:workbench` and `verify:lenses` both clean, no console errors.
+
+**Also removed:** a `normalizePercentToDecimal` warning that announced "treating as basis points"
+for a rescaling it never performed, firing about thirty times per page load on loans-to-deposits
+above 100% — an entirely ordinary figure. A warning that cries wolf on a normal value is the noise a
+real signal has to be spotted in.
+
+**Still open.** `npm run test:allowlist` fails on an unresolvable extensionless import of
+`lib/entity-sources` from `lib/domain-allowlist.ts` under `node --experimental-strip-types`.
+Pre-existing and unrelated; it fails identically at `bec51b8`. `npx tsc --noEmit` remains noisy at 75
+errors across a dozen files, unchanged by this work. The national payload still exceeds Next's 2MB
+data-cache entry limit, so `buildReportData` logs a cache-write failure and returns a 500 on the
+first cold national load in development.
+
+---
+
+## 2026-08-24 — the second lens, and a floor that was measuring the wrong thing
 
 Three pieces of work, in order: surface the institutions the Executive Brief was hiding, build the
 Underwriter Workbench, and stop the lenses taking fifty seconds to load.

@@ -196,6 +196,8 @@ so verify against the live API rather than inferring from the field name:
 | Past Due 30-89 / 90+ | `P3ASSET`, `P9ASSET` over `ASSET` — dollar amounts in thousands, not ratios | 0.28% / 0.00% |
 | ROA, ROE, NIM | `ROA`, `ROE`, `NIMR` as reported, in percent units | 1.19% / 11.20% / 3.54% |
 | 1-4 Family Residential | `LNRERES`, **not** `LNREDOM` | — |
+| CET1 / Leverage / Capital Used | `RBCT1CER`, `RBC1AAJ` as reported; zero means not reported, and shows "—" | 40.6% report no CET1 |
+| CRE Mix | `computeCreMix()` — the three parts of `creLoans`, summing to 100% | — |
 
 **Gross, not net, for anything struck against the loan book.** FDIC uses gross loans for every one
 of its own loan-quality ratios: `LNATRES / LNLSGR` reproduces its published `LNATRESR` exactly on all
@@ -245,6 +247,18 @@ nowhere near it, Napoleon State Bank reading 344% against a true 113%.
 `npm run test:fdic-cre` pins this. **Sanity-check any change to the CRE definition by the share of
 the cohort above 300%**, which should stay near 10%.
 
+**The CRE mix comes from `computeCreMix` in the same module, and shows only those three parts.** It
+returns construction, multifamily and non-owner-occupied as percentages of `computeCreLoans`, using
+the identical owner-occupied split, so the shares sum to 100% by construction. It is rendered in the
+screening table's CRE Mix cell, the profile drawer and the CRE Portfolio Composition chart.
+
+Until 2026-08-24 all three divided by `creLoans` themselves and drew a fourth "Other CRE" band from
+`LNREOTH`, which is closed-end 1-4 family residential and is not in that denominator, while using
+the undivided `LNRENRES` for the third band and so re-including the owner-occupied property the
+definition removes. The bands summed to a **median of 255.8%**, exceeded 100% on 4,129 of the 4,164
+institutions holding any CRE, and reached 681,607% at Liberty Savings Bank FSB — a thrift with a
+large mortgage book and almost no CRE — against a chart axis that stops at 100.
+
 `LNLSDEPR` is **net loans-to-deposits**, not a reserve, despite the FDIC data dictionary phrasing
 that suggests otherwise; it equals `LNLSNET / DEP` to the decimal place on every institution. It was
 read as Reserve Coverage until 2026-08-23 and displayed roughly thirty times too large.
@@ -258,9 +272,10 @@ the other three inputs. Shortening this window again will reintroduce that failu
 the code degrades to null rather than erroring.
 
 **FDIC reports every percent-type field in percent units, and no scale-guessing is needed or safe.**
-`ROA`, `ROE`, `NIMR` and the four PCA capital ratios all go through **`normalizeFdicPercent`** in
-`lib/format/metrics.ts`, which trusts the reported value and only rejects non-numbers.
-`normalizeCapitalRatioPercent` is the same function under its capital-specific name.
+`ROA`, `ROE` and `NIMR` go through **`normalizeFdicPercent`** in `lib/format/metrics.ts`, which
+trusts the reported value and only rejects non-numbers. The four PCA capital ratios go through
+**`normalizeCapitalRatioPercent`**, which does the same but additionally maps zero to null — see
+"Zero is not a capital ratio" below.
 
 The `normalizePercent` heuristic this replaced guessed at the scale in two directions and was wrong
 in both. It divided anything above 100 as though it were basis points: in 2026Q1, 66 of 4,352
@@ -290,6 +305,38 @@ if the capital figures ever look wrong. `RWA_TO_ASSETS_PROXY` in `lib/fdic-ratio
 only as a fallback for institutions that do not report `RWAJ`; `CapitalRatios.basis` records whether
 a row used reported dollars (`"reported"`) or the proxy (`"derived"`).
 
+**Zero is not a capital ratio; it is FDIC declining to compute one.** `cet1Ratio`, `leverageRatio`,
+`tier1RbcRatio` and `totalRbcRatio` are typed `number | null` on `BankFinancialData`, and
+`normalizeCapitalRatioPercent` returns null for an absent *or zero* value. `riskWeightedAssets` and
+`tier1Dollars` are guarded on positivity for the same reason.
+
+| Field | Column | Not reported, 2026Q1 | How FDIC signals it |
+| --- | --- | --- | --- |
+| `RBCT1CER` | `cet1Ratio` | 1,765 / 4,352 (40.6%) | null |
+| `RBC1RWAJ` | `tier1RbcRatio` | 1,765 / 4,352 (40.6%) | null |
+| `RBCRWAJ` | `totalRbcRatio` | 1,765 / 4,352 (40.6%) | **literal `0`** |
+| `RWAJ` | `riskWeightedAssets` | 1,765 / 4,352 (40.6%) | **literal `0`** (1,748) or null (17) |
+| `RBC1AAJ` | `leverageRatio` | 17 / 4,352 (0.4%) | **literal `0`** |
+
+Those 1,765 are Community Bank Leverage Ratio filers, which electing the framework excuses from
+risk-weighting; their median leverage ratio is 11.80% and election requires at least 9%. The 17 are
+branches of foreign banks, which hold capital at the parent and file no US ratio at all, so they
+correctly show "—" everywhere. Only **2** institutions in the country genuinely report total
+risk-based capital below 8%, which is the magnitude check: a capital screen that selects 40% of the
+industry is measuring a reporting regime, not distress.
+
+Passing the zeros through was live until 2026-08-24. It rendered those institutions at 0.00% in the
+CET1, Tier 1 RBC and Total RBC columns, and — the consequential part — defeated
+`cet1Ratio ?? leverageRatio`, since `??` only falls through on null. That pinned the Opportunity
+Score's capital component, 15% of the score and inverted so that less capital reads as more
+distress, at the bottom of the cohort for all of them: **30 of the top-100 most-distressed
+institutions were CBLR filers who did not belong there**, and the median institution moved 120 rank
+places when it was fixed. CRE-to-capital, the stress map and the workbench were unaffected, because
+they read reported Tier 1 and Tier 2 dollars rather than the ratios.
+
+`npm run audit:fdic-columns` prints a "zero versus absent" table for these fields and fails if a
+zero total risk-based capital ratio ever lacks a leverage ratio to fall back to.
+
 Total equity comes from **`EQTOT`**, which equals `ASSET - LIAB` on all 4,352 institutions. `EQCAP`
 was requested until 2026-08-24 and is not a field this endpoint serves, so it returned null on every
 institution and CRE / Equity silently fell back to Tier 1 capital. `EQ` is bank-only equity excluding
@@ -317,6 +364,14 @@ institutions above 70 with a 20.8-point IQR.
 Ties use the midrank convention, because these metrics tie heavily — many institutions report exactly
 zero noncurrent loans, and bottoming all of them out would be an artefact of the tie rather than a
 real difference. An empty or flat cohort returns the midpoint rather than inventing a spread.
+
+**The capital input is `cet1Ratio ?? leverageRatio`, and it depends on absent ratios being null.**
+`??` only falls through on null, so while the transformer coerced a missing CET1 to zero, the 1,765
+CBLR filers never reached their leverage ratio and instead tied at the bottom of the capital
+distribution — which, inverted, is maximum distress. That was live until 2026-08-24 and put 30
+CBLR filers into the top-100 most-distressed list. See "Zero is not a capital ratio" above. The 17
+foreign branches that report no US capital ratio at all still fall to the final `?? 0`; they are
+anomalous on every other column too, and are visible as "—" throughout.
 
 Run `scripts/verify-score-distribution.mjs [STATE]` after any change to the inputs or weights. If one
 10-point band holds most of the cohort, the score has stopped ranking. Bump the cache key version in
@@ -503,6 +558,14 @@ data-cache entry limit, in which case Next skips the write and only smaller scop
 
 `singleLineTick` exists because Recharts wraps long category labels onto a second line that overlaps
 the row beneath, which makes a twenty-row ranking unreadable.
+
+**CRE Portfolio Composition stacks three bands, not four**, on a 0–100 axis: construction,
+multifamily and non-owner-occupied, from `computeCreMix`. A stacked chart is a claim that the parts
+make up a whole, so its bands must come from the same derivation as the total — see the CRE mix note
+in section 3. `buildExposureMix` drops institutions with no CRE rather than drawing a row of zeroes,
+and needs `ownerOccupiedLoans` and `nonOwnerOccupiedLoans` on the row to split non-residential the
+way `computeCreLoans` does; without them the mix silently falls back to the undivided figure and
+stops summing to 100%.
 
 ## 4b. Bank stress map
 
