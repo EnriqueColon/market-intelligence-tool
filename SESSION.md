@@ -8,7 +8,72 @@ is it in now, and what is still open.
 
 ---
 
-## 2026-08-25 (latest) — settling what "all" means, and retiring an entity that no longer exists
+## 2026-08-25 (latest) — closing the half of the allowlist that failed open
+
+The previous entry recorded, as a finding rather than a fix, that the two layers of the publisher
+allowlist disagreed about an unrecognised entity id. `filterByAllowlist` got an empty domain list and
+dropped every result. `buildSearchQuery` got the same empty list and returned the bare keyword — a
+Google search with no `site:` restriction at all, across the open web. **That gap is now closed in
+code.** The pair was safe in practice, but only because the filter ran second and caught everything
+the unrestricted query returned, and that is a bad thing to be relying on: the filter looks redundant
+from the outside, so a maintainer could remove it on the entirely reasonable grounds that the query is
+already scoped to the allowlist, and silently widen an internal research tool to the whole internet.
+Nothing in the code said the two were load-bearing together.
+
+`buildSearchQuery` now returns `string | null`, and `null` when the entity resolves to no domains.
+The mechanism was chosen from what the call sites actually look like: **there is exactly one**,
+`searchIndustryReports` in `app/actions/search-industry-reports.ts`, and it pairs the query with
+`filterByAllowlist` on the *same* `entityId` a few lines later. So no caller ever wanted an
+unrestricted search — the open-web query was always followed by a filter that discarded all of it,
+making it pure waste as well as a hazard. With one call site the cost of the strongest option was
+close to zero, and `strict` is on in `tsconfig.json`, so `string | null` is enforced by the type
+checker rather than by whoever reads the function next.
+
+It rejects rather than throws, which was the other candidate. An unknown id is not a programming
+error: `entityId` crosses a server action boundary, and the `EntityId` union is erased at runtime, so
+a stale or hand-crafted client payload can genuinely deliver an id the registry has never heard of.
+That is untrusted input to refuse, not an assertion to trip. Throwing would also have been actively
+worse here, because `buildSearchQuery` is called *outside* the `try` that wraps the fetch, so the
+throw would have escaped the action as an unhandled error rather than a message.
+
+The call site returns its existing `{ ok: false, error }` variant, and the client component already
+renders `res.error` in its error line, so **no UI change was needed** — an unknown entity id now
+produces a clear message instead of open-web results, and no Google credentials are spent on a search
+that was going to be discarded. Note this is reachable only from outside the dropdown, which cannot
+emit an unregistered id; through the UI nothing changes.
+
+Four assertions were added to `lib/domain-allowlist.test.ts`, in a `buildSearchQuery` block placed
+directly after the `filterByAllowlist` one so both halves of the invariant are read together. Beyond
+the `null` case they assert that every dropdown option produces a `site:` clause, which is the
+property actually worth protecting. The note in the old `filterByAllowlist` assertion describing the
+asymmetry as unfixed was replaced rather than left to go stale, and the same applies to the paragraph
+in `confluence.md` that documented the fail-open branch as a known hazard.
+
+**State now.** Twelve suites, **151 assertions**, all passing, up from 147; only the allowlist suite
+changed, 14 → 18. `npm run build` compiles clean. `npx tsc --noEmit` reports **74 errors against a
+baseline of 73**, and the one added is not a type regression: it is another `TS5097` from importing
+`./google-query-builder.ts` with its extension, which is the convention every test file in the repo
+follows and which `README.md` already documents as expected and harmless. Excluding that class,
+errors are unchanged at 59 and the lists are identical line for line. Avoiding it would have meant
+either breaking the test-import convention or fixing pre-existing errors that were deliberately left
+alone.
+
+**Still open.** `npx tsc --noEmit` remains noisy, now 74 errors across a dozen files, 14 of them the
+expected `TS5097` from test imports. `mba`, `mhn` and `commercialsearch` stay in `ENTITY_SOURCES` but
+are in neither `"all"` nor `ENTITY_DROPDOWN_OPTIONS`, so nothing can select them — this is now a
+**settled decision rather than drift: they are kept as inbound-URL allowlisting only**, so that a URL
+arriving from elsewhere still validates through the resolver while an unqualified search will not
+reach them. Reaching them from the UI would mean editing `PRIMARY_V1_ENTITY_IDS`, the dropdown filter
+and the exact-list assertion together, and there is no plan to. `verify:workbench`,
+`verify:executive-brief` and `verify:lenses` were not run this session; they need live FDIC calls or a
+running server and nothing they cover was touched. The national payload still exceeds Next's 2MB
+data-cache entry limit, so `buildReportData` logs a cache-write failure and returns a 500 on the first
+cold national load in development. `LNREOTH` remains exposed for display only and must never be added
+into a CRE denominator.
+
+---
+
+## 2026-08-25 — settling what "all" means, and retiring an entity that no longer exists
 
 The session before this one revived `npm run test:allowlist`, which had aborted at module load since
 March, and deliberately left its three failing assertions red because they encoded a product question:

@@ -217,7 +217,7 @@ Tests use Node's built-in runner with `--experimental-strip-types`, which requir
 modules **with the `.ts` extension**. TypeScript flags that as an error; it is expected and harmless.
 
 `test:allowlist` is the exception: it runs under `tsx`, because the module it covers imports a
-neighbour without an extension and type stripping cannot resolve that. All twelve suites pass, 147
+neighbour without an extension and type stripping cannot resolve that. All twelve suites pass, 151
 assertions between them.
 
 Some checks need live data rather than fixtures, because they are calibrations rather than assertions

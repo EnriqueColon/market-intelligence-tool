@@ -104,10 +104,18 @@ settled 2026-08-25, not an oversight: `"all"` is the default selection, so it de
 unqualified search reaches at all. Widening it means editing `PRIMARY_V1_ENTITY_IDS`, the dropdown
 filter and the exact-list assertion in `lib/domain-allowlist.test.ts` together.
 
-Note the two layers disagree on an unrecognised entity id. `filterByAllowlist` gets an empty domain
-list and drops every result — fail closed. `buildSearchQuery` gets the same empty list and returns the
-bare keyword, an **unrestricted** Google search — fail open. The filter is what makes the pair safe, so
-do not remove it on the grounds that the query is already scoped.
+**Both layers fail closed on an unrecognised entity id, independently.** `filterByAllowlist` gets an
+empty domain list and drops every result. `buildSearchQuery` gets the same empty list and returns
+`null` rather than a query, because a domain-less query would be a bare keyword — an unrestricted
+Google search across the open web. `searchIndustryReports` treats that `null` as a rejected request
+and returns `{ ok: false, error }`, which the UI renders in its existing error line; no search is
+issued and no credentials are spent. Neither half may be relaxed on the grounds that the other one
+catches it, and `lib/domain-allowlist.test.ts` asserts both in adjacent blocks.
+
+An unrecognised id is untrusted input rather than a programming error: `entityId` crosses a server
+action boundary, where the `EntityId` union is erased at runtime, so a stale or hand-crafted client
+payload can deliver an id the registry has never heard of. That is why this rejects rather than
+throws.
 
 ### Paywall classification
 
