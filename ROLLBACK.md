@@ -8,11 +8,12 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
 | `main` | `e8bf8ad` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `01544d8` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `dev` | `da7c023` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 A SHA here can never name the commit that writes it, so the true head is usually one documentation
 commit further on. Only behavioural commits matter as rollback targets; on `dev` the newest that
-changes application behaviour is **`397a03e`** — `01544d8` above it touches only an npm script.
+changes application behaviour is still **`397a03e`** — everything above it touches an npm script, a
+doc comment, tests and documentation, and nothing that ships to a user.
 
 Production deploys automatically on every push to `main`. `dev` deploys as a Vercel preview on every
 push. Crons run only against production, and the post-deploy warm-cache GitHub Action triggers only
@@ -113,7 +114,9 @@ Not in production. Merge to `main` to ship.
 
 | Commit | Date | Summary |
 | --- | --- | --- |
-| `01544d8` | 08-25 | fix: run the allowlist suite with a loader that can resolve its imports. Script-only; no application code. Safe to revert, at the cost of returning the suite to aborting before its first assertion. Reverting also re-hides the three stale assertions it exposes, which are documented as an open product question rather than a defect. |
+| `da7c023` | 08-25 | test: settle "all" as the curated primary sources, and say so where it is decided. A doc comment and three assertions; no runtime behaviour changes, so reverting changes nothing a user sees. It does restore a comment claiming `"all"` returns every approved domain, which is false, and returns the suite to 10 pass / 3 fail. Revert only alongside a decision to widen `"all"` — the `deepStrictEqual` on the nine primary domains is deliberately the thing that breaks first if someone does. |
+| `81a751b` | 08-25 | docs: record a suite that had never run, and the question its failures encode. Documentation only. |
+| `01544d8` | 08-25 | fix: run the allowlist suite with a loader that can resolve its imports. Script-only; no application code. Safe to revert, at the cost of returning the suite to aborting before its first assertion — thirteen assertions that report nothing while looking maintained. As of `da7c023` all fourteen pass, so reverting hides real coverage rather than known failures. |
 | `fcf79ae` | 08-24 | docs: record the zero-versus-absent trap and the chart that summed to 255% |
 | `397a03e` | 08-24 | fix: read absent capital ratios as absent, and stop drawing residential as CRE |
 | `bec51b8` | 08-24 | docs: record the workbench lens and the regulatory-level trap it exposed |

@@ -8,7 +8,56 @@ is it in now, and what is still open.
 
 ---
 
-## 2026-08-25 (latest) — a test suite that had never run
+## 2026-08-25 (latest) — settling what "all" means, and retiring an entity that no longer exists
+
+The session before this one revived `npm run test:allowlist`, which had aborted at module load since
+March, and deliberately left its three failing assertions red because they encoded a product question:
+whether `getDomainsForEntity("all")` should mean every approved domain or only the eight
+`PRIMARY_V1_ENTITY_IDS`. **That question is now settled — the curated subset is the intent.** So the
+shipped behaviour stands and the documentation and the tests were the stale side of the contradiction.
+
+`getDomainsForEntity`'s own doc comment said "For 'all' returns all domains", the opposite of what the
+function does. It now says what `"all"` actually means and why: the primary Search Industry Reports
+publishers rather than everything allowlisted. That matters more than a comment usually would, because
+`"all"` is the default in the entity dropdown and `buildSearchQuery` turns the result into a `site:`
+restriction — the list decides what an unqualified search can reach at all.
+
+Three assertions changed. The `"all"` expectation is now `deepStrictEqual` against the nine domains the
+eight primary entities carry (CBRE contributes two), spelled out as a literal rather than derived from
+`PRIMARY_V1_ENTITY_IDS`, with a companion assertion that `mba.org`, `multihousingnews.com` and
+`commercialsearch.com` are absent. Deriving it from the constant would have made the test agree with
+any future widening automatically, which is exactly the silence worth preventing: widening `"all"` now
+has to be a deliberate edit in two places. Note that the excluded set is **three** entities, not the
+two named in the previous entry — `mba` is outside the primaries too, and `mba.org` was what the old
+assertion actually tripped on.
+
+Of the two `watchlist` assertions, the one in `getDomainsForEntity` is deleted outright; `watchlist` is
+gone from the `EntityId` union and there is nothing left to test. The one in `filterByAllowlist` is
+rewritten rather than deleted, because it was accidentally covering something worth keeping: passing an
+id the registry does not know produces an empty allowlist, and the filter drops **everything** rather
+than passing results through unfiltered. It now asserts that, with the id cast, and records the
+asymmetry that makes it load-bearing — `buildSearchQuery` given the same empty domain list does the
+opposite and falls back to an *unrestricted* Google query, so the filter is the only layer that fails
+closed. Replaced with a directly-named-entity assertion for the registry lookup path it used to cover.
+
+**State now.** Twelve suites, 147 assertions, all passing, up from 133 across eleven. `npm run build`
+compiles clean. `npx tsc --noEmit` went from 75 errors to 73: the two that disappeared were the old
+`"watchlist"` literals, which had never been assignable to `EntityId`. The two remaining errors in the
+file are the expected `TS5097` from importing with a `.ts` extension.
+
+**Still open.** `npx tsc --noEmit` remains noisy at 73 errors across a dozen files. `mba`, `mhn` and
+`commercialsearch` stay in `ENTITY_SOURCES` but are in neither `"all"` nor `ENTITY_DROPDOWN_OPTIONS`,
+so nothing can currently select them — they only serve to allowlist a URL that arrives from elsewhere.
+Whether they should be reachable or removed is worth an explicit decision rather than another year of
+drift. `verify:workbench` and `verify:executive-brief` were not run this session; both hit the live
+FDIC API and no FDIC code was touched. The national payload still exceeds Next's 2MB data-cache entry
+limit, so `buildReportData` logs a cache-write failure and returns a 500 on the first cold national
+load in development. `LNREOTH` remains exposed for display only and must never be added into a CRE
+denominator.
+
+---
+
+## 2026-08-25 — a test suite that had never run
 
 Closing out the previous session's work. Everything from 2026-08-24 is committed and pushed, `dev` is
 level with `origin/dev`, the build compiles clean, and eleven suites pass 133 assertions between them.

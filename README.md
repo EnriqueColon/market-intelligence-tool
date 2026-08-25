@@ -209,7 +209,7 @@ npm run test:peer-cohort      # workbench peer selection, and what it refuses to
 npm run test:cre-downside     # the capital scenario, on both regulatory capital regimes
 npm run test:memo-evidence    # the evidence guard
 npm run test:verified-metrics
-npm run test:allowlist        # 10 pass, 3 known stale — see below
+npm run test:allowlist        # publisher allowlist, and what "all" covers
 npm run build                 # next build
 ```
 
@@ -217,10 +217,8 @@ Tests use Node's built-in runner with `--experimental-strip-types`, which requir
 modules **with the `.ts` extension**. TypeScript flags that as an error; it is expected and harmless.
 
 `test:allowlist` is the exception: it runs under `tsx`, because the module it covers imports a
-neighbour without an extension and type stripping cannot resolve that. Three of its assertions fail
-on purpose — they expect a `watchlist` entity that was deliberately removed and an `all` that returns
-every approved domain rather than the V1 subset. They are left red because whether `all` should be a
-subset is an unsettled product question, not because anything is broken. See `confluence.md` §9.
+neighbour without an extension and type stripping cannot resolve that. All twelve suites pass, 147
+assertions between them.
 
 Some checks need live data rather than fixtures, because they are calibrations rather than assertions
 — the question is not "is this correct" but "is this still useful":

@@ -86,6 +86,29 @@ for finance), and fall back to the **GDELT DOC 2.0 API** when RSS yields fewer t
 actions carry near-duplicate fetching logic, so a parsing bug tends to need fixing in both — as
 happened with the CDATA regex.
 
+### Search Industry Reports: entities and the domain allowlist
+
+`lib/entity-sources.ts` is the single registry of approved publishers. It backs three things that must
+be read together: the entity dropdown (`ENTITY_DROPDOWN_OPTIONS`), the `site:` restriction
+`lib/google-query-builder.ts` puts on the Google query, and the allowlist `lib/domain-allowlist.ts`
+filters results against. Hostname matching accepts an exact match or a subdomain, and landing domains
+are kept separate from asset domains so a PDF must come from an expected host for the page that
+offered it.
+
+**`ENTITY_SOURCES` holds eleven entities; `"all"` covers eight of them.** `"all"` means the primary
+Search Industry Reports sources — Federal Reserve, FDIC, CBRE, JLL, Cushman & Wakefield, Colliers,
+NAIOP, ULI, which is nine domains because CBRE carries two. `mba`, `mhn` and `commercialsearch` are
+allowlisted, so a URL from one of them still validates if it reaches the resolver, but they are in
+neither `"all"` nor the dropdown and nothing can currently select them. This is intentional curation,
+settled 2026-08-25, not an oversight: `"all"` is the default selection, so it decides what an
+unqualified search reaches at all. Widening it means editing `PRIMARY_V1_ENTITY_IDS`, the dropdown
+filter and the exact-list assertion in `lib/domain-allowlist.test.ts` together.
+
+Note the two layers disagree on an unrecognised entity id. `filterByAllowlist` gets an empty domain
+list and drops every result — fail closed. `buildSearchQuery` gets the same empty list and returns the
+bare keyword, an **unrestricted** Google search — fail open. The filter is what makes the pair safe, so
+do not remove it on the grounds that the query is already scoped.
+
 ### Paywall classification
 
 `app/actions/news-access.ts` classifies every article URL **before** a summary is produced, so the
@@ -832,7 +855,7 @@ npm run dev                # local, reads .env.local
 npm run test:environment   # environment detection (9 tests)
 npm run test:memo-evidence # evidence guard
 npm run test:verified-metrics
-npm run test:allowlist            # 10 pass, 3 fail — stale, see below
+npm run test:allowlist            # hostname matching and what "all" covers (14 tests)
 npm run test:metrics
 npm run test:opportunity-score
 npm run test:institution-change    # change detection and brief ranking (14 tests)
@@ -843,24 +866,14 @@ npm run test:cre-downside          # the capital scenario, both regimes
 ```
 
 `test:allowlist` runs under `tsx` rather than Node's type stripping, because `lib/domain-allowlist.ts`
-imports `./entity-sources` without an extension and type stripping cannot resolve that. Until
-2026-08-25 the script used type stripping, so the suite aborted before running a single assertion and
-had been dead since the March "Market Research revamp" — a suite that cannot run is worse than one
-that fails, because it reports nothing while looking maintained.
+imports `./entity-sources` without an extension and type stripping cannot resolve that. Keep the npm
+script and the file header in agreement: until 2026-08-25 the script used type stripping, so the suite
+aborted at module load and none of its assertions had run since March. **A suite that cannot run is
+worse than one that fails**, because it reports nothing while looking maintained — worth a glance at
+the pass count, not just the exit code, after touching any runner.
 
-Ten of its thirteen assertions pass. The three failures are the test disagreeing with a deliberate
-March change, not a defect in shipped behaviour, and **they encode an open product question rather
-than a bug to fix**:
-
-- `getDomainsForEntity("watchlist")` returns nothing because `watchlist` was removed from the
-  `EntityId` union. The test still expects CBRE + JLL. The entity is gone by design.
-- `getDomainsForEntity("all")` returns only the eight `PRIMARY_V1_ENTITY_IDS`, so `mhn` and
-  `commercialsearch` are excluded; the test expects every approved domain. Its own doc comment still
-  claims "For 'all' returns all domains", which is now false.
-
-Whether `all` should mean every approved source or only the V1 primaries decides both whether that
-comment or the code is wrong and whether those assertions get updated or deleted, so it is left for
-someone who owns Search Industry Reports to settle.
+Its expectation for `"all"` is a `deepStrictEqual` against the nine primary domains, written out rather
+than derived from `PRIMARY_V1_ENTITY_IDS`, so widening that set breaks the test on purpose (see §3).
 
 Scripts that hit the live FDIC API rather than asserting, and exist to be read:
 
