@@ -8,11 +8,11 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
 | `main` | `e8bf8ad` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `30bb802` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `dev` | `08b7127` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 A SHA here can never name the commit that writes it, so the true head is usually one documentation
 commit further on. Only behavioural commits matter as rollback targets; on `dev` the newest is
-**`30bb802`**.
+**`bfded4f`**.
 
 Production deploys automatically on every push to `main`. `dev` deploys as a Vercel preview on every
 push. Crons run only against production, and the post-deploy warm-cache GitHub Action triggers only
@@ -70,7 +70,10 @@ git push --force-with-lease origin dev
 
 | Commit | Date | Why it is a safe target |
 | --- | --- | --- |
-| `30bb802` | 2026-08-24 | Newest behavioural commit on `dev` and the one to prefer. Corrects five Market Analytics columns that were reading the wrong FDIC field or the wrong units. **Most of the screening table changes at this commit and is correct afterwards**, so rolling back past it restores numbers that are wrong by two orders of magnitude in places: ROA, ROE and NIM revert to being shown a hundred times too high on 1,441 of 4,352 institutions; Noncurrent / Assets reverts to reading exactly 100.00% on 3,398 of them; the residential loan figure reverts to 2.09x its true value; CRE / Equity reverts to silently using Tier 1 capital; and reserve coverage and the NPL ratio revert to a net-loan denominator. Prefer fixing forward. Run `npm run audit:fdic-columns` after any change in this area — it fails the process on a mismatch against FDIC's published totals. |
+| `bfded4f` | 2026-08-24 | Newest behavioural commit on `dev` and the one to prefer. Warms both department lenses from the post-deploy `warm-cache` route and lengthens their cache windows from 6 hours to 23. Purely a latency change — no figure moves — so it is safe in both directions. If you roll back past it, expect the first person to select a department after a deploy to wait about fifty seconds, and note that the GitHub Action's curl timeout reverts to 120s, which is shorter than the route now takes. |
+| `be75853` | 2026-08-24 | Adds the Underwriter Workbench lens. Renders only when the department selector is set to Underwriting and replaces no existing view, so rolling it back removes a card and changes nothing else — no shared metric, cohort or export is touched. Worth knowing before reinstating any earlier version of it: the CRE downside scenario measures leverage filers against the **4% PCA adequately-capitalised** level, not the 9% CBLR trigger. An earlier iteration used 9% and made every community-bank-leverage filer appear to have the thinnest capital cushion in the state, which was an artifact of comparing an election trigger to a capital floor. Run `npm run verify:workbench` after any change here; it fails on a mismatch against FDIC's published `RBCRWAJ` and `RBC1AAJ`. |
+| `94a663c` | 2026-08-24 | Adds a "no longer reporting" section to the Executive Brief, listing the institutions it already excluded from the movement sections and previously only counted — 102 of 1,215 nationally. Additive within a card that only Executive sees; rolling back returns those institutions to being a number in the header. No movement figure changes. |
+| `30bb802` | 2026-08-24 | Corrects five Market Analytics columns. Corrects five Market Analytics columns that were reading the wrong FDIC field or the wrong units. **Most of the screening table changes at this commit and is correct afterwards**, so rolling back past it restores numbers that are wrong by two orders of magnitude in places: ROA, ROE and NIM revert to being shown a hundred times too high on 1,441 of 4,352 institutions; Noncurrent / Assets reverts to reading exactly 100.00% on 3,398 of them; the residential loan figure reverts to 2.09x its true value; CRE / Equity reverts to silently using Tier 1 capital; and reserve coverage and the NPL ratio revert to a net-loan denominator. Prefer fixing forward. Run `npm run audit:fdic-columns` after any change in this area — it fails the process on a mismatch against FDIC's published totals. |
 | `bb78bd8` | 2026-08-24 | Prior behavioural commit. Makes Executive Brief entries open the institution profile drawer, and stops the brief listing institutions that did not file for the quarter it is headed with — 102 of 1,215 nationally, whose movements were real but a quarter old. **The brief's contents change at this commit**: it now covers the same 1,113 institutions as the screening tab. Rolling back past it restores crossings dated forward a quarter, so prefer fixing forward. Bumps the brief cache key to `executive-brief-v3`; a rollback should bump it again or the corrected list will be served under the old rules. |
 | `dcc064e` | 2026-08-24 | Corrects what counts as CRE: drops the `LNREOTH` double-count and excludes owner-occupied property, taking the share of institutions above the 300% supervisory screen from 63.5% to 9.6%. **Every CRE concentration figure, Opportunity Score, map colour and export value changes at this commit and is correct afterwards.** Rolling back past it restores a headline metric that is wrong by a wide margin, so prefer fixing forward. |
 | `36dd5c1` | 2026-08-24 | Stops rescaling regulatory capital ratios above 100%, which had been rendering 66 of 4,352 institutions at roughly a hundredth of their true capital. **Rolling back past this restores a wrong number in the main screening table**, not merely a missing feature: the best-capitalised banks appear critically undercapitalised. Capital figures change for those 66 institutions at this commit and are correct afterwards. |
@@ -109,6 +112,11 @@ Not in production. Merge to `main` to ship.
 
 | Commit | Date | Summary |
 | --- | --- | --- |
+| `08b7127` | 08-24 | chore: register the peer-cohort and CRE-downside test suites |
+| `bfded4f` | 08-24 | perf: warm the department lens caches after deploy |
+| `be75853` | 08-24 | feat: add the Underwriter Workbench lens |
+| `94a663c` | 08-24 | feat: list the institutions that stopped filing in the Executive Brief |
+| `b210202` | 08-24 | docs: record the column audit and the two habits that found it |
 | `30bb802` | 08-24 | fix: correct five Market Analytics columns misread from FDIC fields |
 | `c7e0264` | 08-24 | docs: list the clickable-brief docs commit in the rollback reference |
 | `22e7a2e` | 08-24 | docs: record the clickable brief and the stale-quarter trap it exposed |

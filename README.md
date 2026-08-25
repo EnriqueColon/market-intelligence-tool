@@ -82,11 +82,18 @@ tab stays reachable whichever department is chosen. Anything that replaces a tab
 The department is a stated preference held in a non-httpOnly cookie, not an authenticated claim, so
 it selects a view and must never gate access to data.
 
-One exists today — the **Executive Brief**, which answers "what moved this quarter" in at most
-eighteen lines rather than eleven hundred rows, and whose entries open the institution profile drawer
-owned by the Market Analytics tab. A lens hands an institution to whichever view already owns the
-detail rather than rendering its own copy; `confluence.md` explains why that indirection is
-deliberate. Three more lenses are planned; see `docs/NEXT_VERSION_PLAN.md`.
+Two exist today.
+
+- **Executive Brief** — "what moved this quarter" in a couple of dozen lines rather than eleven
+  hundred rows, plus the institutions that have stopped filing altogether.
+- **Underwriter Workbench** — one institution at a time against a matched peer cohort, the
+  supervisory levels it currently sits near, and how large a loss on its CRE book it absorbs before
+  reaching its capital floor.
+
+Both hand an institution to the Market Analytics profile drawer rather than rendering their own copy,
+because that view already owns the trends and the cohort its percentiles are measured against;
+`confluence.md` explains why that indirection is deliberate. Two more lenses are planned; see
+`docs/NEXT_VERSION_PLAN.md`.
 
 ---
 
@@ -197,6 +204,9 @@ npm run test:opportunity-score # cohort scoring, including outlier compression
 npm run test:institution-change # threshold crossings, deterioration trends, brief ranking
 npm run test:fdic-cre         # what counts as CRE, and what must never be added to it
 npm run test:fdic-loan-quality # NPL, noncurrent, reserve and past-due denominators and units
+npm run test:quarter          # FDIC report-date arithmetic
+npm run test:peer-cohort      # workbench peer selection, and what it refuses to relax
+npm run test:cre-downside     # the capital scenario, on both regulatory capital regimes
 npm run test:memo-evidence    # the evidence guard
 npm run test:verified-metrics
 npm run test:allowlist
@@ -223,6 +233,26 @@ Some checks need live data rather than fixtures, because they are calibrations r
   sample, not only the counts: the failure mode is a section topped by reporting artifacts, which
   costs trust faster than showing nothing. Imports the shipped ranking functions, so it tests real
   behaviour rather than a copy.
+- `npm run verify:workbench [STATE]` — the Underwriter Workbench over live data. This one *does*
+  assert: it exits non-zero if a capital scenario's base ratio drifts from FDIC's published
+  `RBCRWAJ` or `RBC1AAJ`. It runs the shipped transformer, row mapping and analysis rather than a
+  reimplementation. Read the break-even figures split by capital regime — a systematic gap between
+  the two means a floor is measuring the reporting regime rather than the risk, which has happened.
+
+### Verifying what actually renders
+
+**Every data-accuracy bug this tool has shipped passed a clean build and its unit tests, and was
+caught by reading rendered output.** Building is not verifying. After touching a lens:
+
+```bash
+npm run dev
+npm run verify:lenses               # screenshots both lenses and dumps their text
+SKIP_BRIEF=1 npm run verify:lenses  # workbench only; the brief is slow on a cold cache
+```
+
+It reads `APP_PASSWORD` from `.env.local` inside the Node process, so the password never reaches a
+shell environment or a process list. Screenshots land in `/tmp/lens-shots`. Read the numbers against
+something published, not just for absence of a stack trace.
 
 ---
 
@@ -241,7 +271,8 @@ components/
   market-analytics/heatmap/   MapLibre stress map
   lenses/       Additive department-specific views, rendered above the tabs
 lib/            Domain logic: FDIC client and transforms, auth, features, caching, formatting
-  scoring/      Pure, testable ranking: opportunity score, change detection, brief ranking
+  scoring/      Pure, testable analysis: opportunity score, change detection, brief ranking,
+                peer cohorts, the CRE capital scenario, FDIC quarter arithmetic
 docs/           Focused guides (start with DEV_ENVIRONMENT.md)
 data/           Local SQLite and JSON — development only
 scripts/        One-off and ingestion scripts (TypeScript and Python)
@@ -331,6 +362,19 @@ how the Executive Brief came to list a Q4 2025 crossing as Q1 2026 for 102 of 1,
 view headed "this quarter" must require a row *in* that quarter, and say how many institutions it
 therefore excluded — a silently smaller cohort reads exactly like a calmer market.
 
+**A missing FDIC field may arrive as zero rather than null.** Roughly a third of institutions elect
+the Community Bank Leverage Ratio and file no risk-weighted assets, and FDIC reports `RWAJ` and
+`RBCRWAJ` as `0` for them. A `!= null` guard passes that straight into a denominator and produces an
+infinite ratio instead of a caught absence. Test that a denominator is positive, not that it exists.
+
+**Two regulatory levels are not comparable just because both are percentages.** The 9% CBLR figure is
+the threshold for *electing* a reporting regime; the 8% total risk-based and 4% leverage figures are
+PCA *capital adequacy* categories; the 300% CRE concentration figure is a *supervisory screening*
+criterion that triggers scrutiny rather than any consequence. Measuring risk-based filers against
+their adequacy floor and CBLR filers against their election trigger ranked the CBLR banks as
+uniformly more fragile — the scenario was measuring which regime a bank had elected. Establish what a
+level means before ranking institutions against it.
+
 **FDIC report dates must be `YYYYMMDD`.** A hyphenated `2025-09-30` is not rejected — it matches zero
 rows. This silently emptied every map endpoint for the entire life of the feature, and it presents as
 missing data rather than as an error.
@@ -365,6 +409,8 @@ sense against your source usually mean the build cache, not your code. Stop the 
 | Change chart appearance | `lib/chart-theme.tsx`. Use colour literals, not CSS variables — the PDF renderer cannot resolve them |
 | Add a chart to both screen and PDF | Put it in `components/charts/analytics/`; both surfaces render the same component so they cannot drift |
 | Sign everyone out | Rotate `COOKIE_SECRET`. Only when you intend to |
+| Add a lens | New file in `components/lenses/`, its own server action, render it above the tabs in `market-intelligence-dashboard.tsx` behind a department check. Remove nothing |
+| Keep a new lens off the ~50s cold load | Warm it in `app/api/cron/warm-cache/route.ts` and keep its `revalidate` under 24h, or the daily cron will always find it fresh and never refresh it |
 | Diagnose "the tool is slow" | Almost always cold caches. Check the latest `Warm Cache After Deploy` run in GitHub Actions |
 | Roll back | `ROLLBACK.md` |
 

@@ -373,24 +373,43 @@ breaking ties.
 and removes nothing, so every existing tab stays reachable no matter which department is selected.
 Anything that replaces a tab is not a lens and does not belong here.
 
-Currently one exists. **Executive Brief** (`components/lenses/executive-brief.tsx` over
-`app/actions/executive-brief.ts`) shows when the department cookie is `executive`. It renders at most
-six supervisory crossings, six watch-level crossings and six trajectories, ranked as above.
+Two exist, of the four planned.
+
+#### Executive Brief
+
+`components/lenses/executive-brief.tsx` over `app/actions/executive-brief.ts`, shown when the
+department cookie is `executive`. It renders at most six supervisory crossings, six watch-level
+crossings and six trajectories, ranked as above, plus a fourth section covering institutions that
+have stopped filing.
 
 It queries at most 10,000 FDIC rows, matching the screening tab so both see the same cohort. At nine
 quarters per institution that caps national coverage near 1,138 institutions rather than the full
 ~4,400, so the action returns `capped` and the card states the limitation rather than implying full
 coverage. Pagination would fix it properly and has not been done.
 
-**An institution that did not file for the latest quarter is excluded**, and counted in `staleCount`
-so the card can say so. This is load-bearing rather than tidiness. The card is headed "what moved
-this quarter" and names a quarter; an institution whose newest call report is a quarter old still has
-a most-recent movement, and reporting it dates that movement forward. Nationally this affects around
-100 of 1,215 institutions. `institutionCount` is therefore the number of institutions that *did*
-file, not the number in the response.
+**An institution that did not file for the latest quarter is held out of the three movement
+sections**, and counted in `staleCount`. This is load-bearing rather than tidiness. The card is headed
+"what moved this quarter" and names a quarter; an institution whose newest call report is a quarter
+old still has a most-recent movement, and reporting it there dates that movement forward. Nationally
+this affects around 100 of 1,215 institutions. `institutionCount` is therefore the number of
+institutions that *did* file, not the number in the response.
 
 That rule is also what makes the profile handoff work, since the screening tab drops the same
 institutions — see below.
+
+Those institutions appear instead in **"No longer reporting"**, the last section, as
+`nonReporting: NonReportingInstitution[]`. A bank that stops filing has usually merged, been acquired
+or failed, so its absence is itself information — the live national list is recognisable 2025 M&A.
+The section is capped at six like the others and ordered by **assets descending**: every entry is
+equally "not filing", so size is the only thing distinguishing a material absence from an immaterial
+one. `quartersStale` counts calendar quarters, and one quarter behind is frequently just a late
+filer, which the card says.
+
+It is placed last and styled quieter than a crossing because it is the weaker signal, and its rows
+are **deliberately not clickable**. The profile drawer resolves against the Market Analytics cohort,
+which is selected on the same latest-quarter rule that put these institutions in this list, so every
+one of them would resolve to "not found". Offering a control that cannot work is worse than offering
+none.
 
 **Clicking an entry opens the institution profile drawer.** The brief does not own a drawer. It calls
 `onSelectInstitution(cert)`, `market-intelligence-dashboard.tsx` stores the CERT as `focusCert` and
@@ -406,6 +425,63 @@ fails visibly rather than silently: `onFocusResolved(false)` makes the card expl
 institution is outside the analytics cohort. Rows are `<button>` elements so the list stays usable by
 keyboard; when the analytics tab is disabled, `onSelectInstitution` is omitted and rows render as
 plain text rather than as buttons that cannot work.
+
+#### Underwriter Workbench
+
+`components/lenses/underwriter-workbench.tsx` over `app/actions/underwriter-workbench.ts`, shown when
+the department cookie is `underwriting`. Institution-first: search for one, and get a peer cohort,
+threshold flags and a CRE downside scenario. It hands off to the profile drawer for trends by the
+same `onSelectInstitution` route as the brief, and for the same reason.
+
+The action returns the **whole scope's latest quarter in one cached payload** and the analysis runs in
+the browser (`analyseInstitution` in `lib/scoring/workbench-analysis.ts`). The peer cohort is a
+property of the population so a per-institution request could not compute it anyway, and working
+through a list of names is the actual use, which a round trip per name would spoil. It is O(universe)
+per selection — fine at ~1,113, not fine at 4,400.
+
+**Peer cohort** (`lib/scoring/peer-cohort.ts`). Matched on size band, then geography, then CRE mix,
+relaxing **CRE mix first and geography second** when the cohort is thinner than `MIN_COHORT` (8).
+**Size is never relaxed** — comparing a community bank to a money-centre bank on reserve coverage is
+arithmetically fine and analytically meaningless. Which criteria survived is returned as `criteria`
+and printed on the card, because a percentile against nine matched peers is a different claim from
+one against six hundred unmatched ones. Below 8 peers `percentileIn` returns null and the card says
+so rather than quoting a number. Percentiles use the same midrank convention as the Opportunity
+Score, deliberately: two percentiles on one screen that disagree about ties is a bug report waiting
+to happen. Reserve coverage is inverted at render so that a higher number always reads as the worse
+position.
+
+**Threshold flags.** Read from `METRIC_SPECS` in `lib/scoring/institution-change.ts` — the same table
+the brief crosses institutions against — so the two lenses cannot drift apart. The distinction from
+the brief is state versus event: the brief reports a level *crossed this quarter*, this reports a
+level the institution *is past now*, whenever it got there. An institution over 300% for two years
+generates no crossing and still needs flagging. `capitalRatio` is deliberately excluded, because it
+reads CET1, which CBLR filers do not report; capital is covered by the scenario instead.
+
+**CRE downside** (`lib/scoring/cre-downside.ts`). A mark on the CRE book applied as a straight
+deduction from capital with the denominator held constant, reporting the resulting ratio at 5/10/20/30%
+and the break-even mark that reaches each floor. No tax benefit and no RWA relief on charge-off; both
+omissions make it more severe than reality, which is the right direction for a screen. Two facts
+govern the implementation:
+
+- **A little under a third of institutions report no risk-weighted assets**, having elected the
+  Community Bank Leverage Ratio framework, and **FDIC returns zero for their `RWAJ` and `RBCRWAJ`, not
+  null.** A `!= null` guard passes that zero into a denominator. Every capital test here is a
+  positivity test. The `0.75 × assets` proxy in `fdic-ratio-helpers.ts` is refused outright for this
+  purpose: it would put a fabricated denominator under a number quoted to a credit committee. Such
+  institutions are measured on Tier 1 leverage, with average assets backed out of the published
+  `RBC1AAJ` rather than taken from period-end `ASSET`, so the base case equals FDIC's figure by
+  construction. Foreign bank branches report zero for *both* regimes and correctly get no scenario.
+- **The floors on the two regimes have to mean the same thing.** The headline is PCA
+  *adequately capitalised* on each measure — **8% total risk-based capital, 4% Tier 1 leverage**
+  (12 CFR 324.403). Using the 9% CBLR level instead made every leverage filer in Florida appear to
+  have the thinnest cushion in the state; 9% is where a bank loses its reporting *election*, not its
+  capital adequacy, and CBLR banks deliberately run just above it while risk-based banks sit seven
+  points clear of 8%. The CBLR trigger is still reported as `floors[1]`, separately and labelled, and
+  marked on intermediate rows of the table because it usually bites first.
+
+`(RBCT1J + RBCT2) / RWAJ` reproduces FDIC's published `RBCRWAJ` to full float precision, which is
+what licenses building on the reported dollars. `npm run verify:workbench` asserts exactly that over
+live data and exits non-zero on any drift.
 
 ## 4a. Charts
 
@@ -469,16 +545,25 @@ Generated content is expensive, so nearly everything is cached for a day.
   | `industry-outlook-shared-v12` | The generated memo |
   | `industry-outlook-verified-metrics-v1` | Fetched FRED/FDIC figures |
   | `market-analytics-report-data-v2` + scope | Full screening cohort with scores, for the PDF and Visual Analysis |
-  | `executive-brief-v3` + scope | Ranked change events for the Executive Brief |
+  | `executive-brief-v4` + scope | Ranked change events and non-reporting institutions for the Executive Brief |
+  | `underwriter-workbench-v1` + scope | Latest-quarter rows for the whole scope, for the Underwriter Workbench |
 
   `market-analytics-report-data` is keyed by scope rather than by day and revalidates every six
   hours, since FDIC publishes quarterly. **Bump its version whenever the scoring changes**, or cached
   entries keep serving scores computed under the old method — v2 marks the move to percentile rank.
-  `executive-brief` follows the same rule on a six-hour window: **bump its version whenever a
-  change-detection threshold, the trajectory run length, a ranking function, the observation mapping
-  or the cohort rule moves**, or the brief keeps reporting events under the old rules until the
-  window expires. v2 marks the capital-ratio fix; v3 marks excluding institutions that did not file
-  for the latest quarter.
+  The two lens caches follow the same rule on a **23-hour** window. **Bump `executive-brief`'s version
+  whenever a change-detection threshold, the trajectory run length, a ranking function, the
+  observation mapping or the cohort rule moves**, or the brief keeps reporting events under the old
+  rules until the window expires — v2 marks the capital-ratio fix, v3 excluding institutions that did
+  not file, v4 the non-reporting section. **Bump `underwriter-workbench`'s version whenever the row
+  shape or the quarter rule changes**, or clients keep deserialising the old shape.
+
+  **23 hours rather than 24 is deliberate and should not be rounded up.** The daily cron runs at
+  05:00 UTC and both lenses cost the better part of a minute cold, so the entry has to be *expired*
+  when the cron arrives. `unstable_cache` does not refresh a still-fresh entry, so at exactly 24 hours
+  the warm run would find it valid, return early, and leave it to lapse in front of a user later that
+  day. The residual case is a mid-afternoon deploy, which resets the clock and shifts expiry into the
+  next working day; there is no fix for that within a plain TTL.
   Locally, deleting `.next/cache` does not clear it — the dev server holds it in memory too, so
   restart the server as well.
   A national payload can exceed the 2MB entry limit, in which case Next logs a warning, skips the
@@ -510,6 +595,13 @@ curl -H "Authorization: Bearer $CRON_SECRET" "$URL/api/cron/warm-cache"
 only, sleeps 120s for the build, then calls both endpoints with `CRON_SECRET`. **This workflow's
 `CRON_SECRET` secret in GitHub must match Vercel's value** — a mismatch has broken warming before,
 and the symptom is a slow tool rather than an error.
+
+`warm-cache` includes both department lenses (`executiveBrief:national`, `workbench:national`). All
+tasks run concurrently, so wall time is the slowest single one, but that is now a lens rather than an
+OpenAI call: the workflow's curl timeout is 280s against the route's 300s `maxDuration`. **Only
+`National` is warmed, because that is the only scope either lens is mounted with** — adding a scope
+selector without adding its scopes here quietly restores a fifty-second cold load. Note that
+`warm-briefs` is unrelated: it pre-generates *news article* summaries, not the Executive Brief.
 
 `/api/cron` is exempt from the auth middleware and protected by bearer token instead.
 
@@ -682,15 +774,39 @@ npm run test:metrics
 npm run test:opportunity-score
 npm run test:institution-change    # change detection and brief ranking (14 tests)
 npm run test:fdic-cre              # the CRE definition and its two traps
+npm run test:quarter               # FDIC report-date arithmetic
+npm run test:peer-cohort           # workbench cohort selection and relaxation
+npm run test:cre-downside          # the capital scenario, both regimes
 ```
 
-Two calibration scripts hit the live FDIC API rather than asserting, and exist to be read:
+Scripts that hit the live FDIC API rather than asserting, and exist to be read:
 
 ```bash
 npm run verify:executive-brief [STATE]                      # brief volume and what leads each section
+npm run verify:workbench [STATE]                            # workbench, and reconciliation against FDIC
 node --experimental-strip-types scripts/verify-change-detection.mjs [STATE]
 node --experimental-strip-types scripts/verify-score-distribution.mjs
 ```
+
+`verify:workbench` is the one that asserts: it exits non-zero when a scenario's base capital ratio
+drifts from FDIC's published `RBCRWAJ` or `RBC1AAJ`. It runs the **shipped** pipeline — transformer,
+row mapping, analysis — rather than a copy, which is why `toWorkbenchRows` lives in the analysis
+module rather than in the server action. It runs under `tsx` rather than Node's type stripping,
+because it needs the `@/` path alias; it is a `.ts` file wrapped in a `main()` rather than a `.mts`
+with top-level await, since the package is CommonJS and Node's named-export detection cannot see
+through esbuild's export wrapper when an ES module imports that output.
+
+**Rendered output is not covered by any of the above, and every data-accuracy bug found so far
+survived a clean build and passing unit tests.** After touching a lens:
+
+```bash
+npm run dev
+npm run verify:lenses              # screenshots both lenses, dumps their text
+SKIP_BRIEF=1 npm run verify:lenses # workbench only; the brief is slow on a cold cache
+```
+
+It reads `APP_PASSWORD` from `.env.local` inside the Node process, so the password never reaches a
+shell environment or a process list. Screenshots land in `/tmp/lens-shots`. Read the numbers.
 
 Tests use Node's built-in runner with `--experimental-strip-types`, which requires importing local
 modules **with the `.ts` extension** — `import { x } from "./y.ts"`. TypeScript flags this as an
@@ -743,6 +859,18 @@ changing code, check that *your* files are clean rather than expecting a clean o
   real answer and is Phase 1 of `docs/NEXT_VERSION_PLAN.md`.
 - **Scores are cohort-relative, so any new surface must state its cohort.** A bare score is not
   meaningful on its own. This is a permanent property of percentile ranking, not a defect.
+- **The same row cap now limits the Underwriter Workbench's search.** Both lenses see the largest
+  ~1,113 institutions nationally, so an underwriter cannot look up a small local bank at all — the
+  name simply does not appear. Both cards say so, and it is the same pagination problem as above.
+- **`RWAJ` and `RBCRWAJ` are zero, not null, for CBLR filers** — roughly a third of institutions. A
+  `!= null` guard passes the zero into a denominator and yields an infinite ratio rather than an
+  error. Test positivity. `computeCapitalRatios` and `computeDownside` both do; anything new reading
+  those fields must too.
+- **Regulatory levels are not interchangeable.** The 9% CBLR figure is a *reporting election*
+  trigger, the 8%/4% PCA figures are *capital adequacy* categories, and the 300% CRE figure is a
+  *supervisory screening* criterion. Comparing one regime's institutions against a level of a
+  different kind produces a ranking that measures the regime rather than the risk — this has already
+  happened once, in the workbench scenario. Check what a level actually means before ranking on it.
 - **The screening table renders up to 30 columns** — 16 always, plus 4 capital and 7 earnings behind
   the Columns popover — with no frozen first column, so scrolling right loses the institution name.
 - **Dead code:** `app/actions/fetch-industry-outlook.ts` (superseded by `getCachedOutlook.ts`, still

@@ -8,7 +8,82 @@ is it in now, and what is still open.
 
 ---
 
-## 2026-08-24 (latest) — five more columns were reading the wrong FDIC field
+## 2026-08-24 (latest) — the second lens, and a floor that was measuring the wrong thing
+
+Three pieces of work, in order: surface the institutions the Executive Brief was hiding, build the
+Underwriter Workbench, and stop the lenses taking fifty seconds to load.
+
+**The brief now lists institutions that stopped filing.** It already held them out of the movement
+sections — an institution whose latest call report predates the as-of quarter would otherwise have a
+Q4 crossing dated to Q1 — and stated the count. Counting is not showing. A bank that stops filing has
+usually merged, been acquired or failed, and nationally that is 102 of 1,215. They now have their own
+section, last and visually quieter than a supervisory crossing, capped at six and ordered largest
+first because every one is equally "not filing" and size is all that separates a material absence
+from an immaterial one. Rows are deliberately **not** clickable: the profile drawer draws on a cohort
+selected by the same latest-quarter rule that put them in this list, so every one would resolve to
+"not found". The live output is a list of real 2025 M&A — Discover, Pacific Premier, Independent Bank
+of McKinney — which is the point.
+
+**The Underwriter Workbench is the second of the four lenses.** Same contract as the brief: renders
+above the tabs when the department cookie is `underwriting`, removes nothing, hands off to the
+Market Analytics drawer rather than growing a second cohort. It answers what the screening table
+cannot — compared to whom, what is already flagged, and how much room is left.
+
+*Compared to whom* is a peer cohort matched on size band, then geography, then CRE mix, relaxing mix
+first and geography second when too thin, and never relaxing size. Which criteria survived is printed
+on the card, and below eight peers no percentile is shown at all.
+
+*What is already flagged* reads its levels from the same `METRIC_SPECS` the brief uses, so the two
+lenses cannot disagree about the same bank. The brief reports crossings; an institution over 300% for
+two years generates none and still needs flagging.
+
+*How much room is left* is a mark on the CRE book against capital.
+
+**The bug worth remembering is in that last one, and only rendered output showed it.** A little
+under a third of institutions report no risk-weighted assets, having elected the community bank
+leverage framework — and **FDIC returns zero for their `RWAJ` and `RBCRWAJ`, not null**, so a `!= null`
+guard passes a zero into a denominator. That part was handled from the start. What was not: leverage
+filers were measured against the 9% CBLR level while risk-based filers were measured against 8% total
+risk-based capital, and every one of the eight thinnest cushions in Florida came back a CBLR filer.
+That is an artifact of the two floors meaning different things. 9% is where a bank loses its
+*reporting election*, not its capital adequacy, and CBLR banks deliberately sit just above it, while
+risk-based banks sit seven points clear of 8%. The headline is now PCA adequately-capitalised on each
+measure — 8% total risk-based, 4% Tier 1 leverage, the genuinely matched pair from 12 CFR 324.403 —
+and the CBLR trigger is still shown, separately and labelled. Afterwards the distributions overlap:
+risk-based median 19.8%, leverage 26.1%.
+
+**Verification.** `npm run verify:workbench` runs the shipped pipeline end to end over live FDIC data
+— transformer, row mapping, analysis — and fails if any base ratio drifts from FDIC's published
+`RBCRWAJ` or `RBC1AAJ`. It reimplements nothing, which is why the row mapping sits in
+`lib/scoring/workbench-analysis.ts` rather than in the server action. It reports break-evens split by
+regime, which is the line that would have caught the floor bug unaided; a pooled median hid it.
+Florida reconciles clean on all 83 institutions, and Ocean Bank's 7.2% break-even was confirmed by
+hand against the raw fields. `npm run verify:lenses` screenshots both lenses and dumps their rendered
+text, because all three data bugs found today survived a clean build and passing unit tests.
+
+**Cold loads.** Both lenses pull nine quarters for every institution the row cap allows, about fifty
+seconds. The existing post-deploy warm-cache route was extended with two entries rather than a new
+mechanism, and the Action's curl timeout raised to 280s to stay inside the route's 300s
+`maxDuration`. Cache windows went from 6 hours to **23**, not 24: the daily cron runs at 05:00 UTC, so
+a 6-hour window warmed the cache at one in the morning and let it expire before anyone arrived, and
+`unstable_cache` does not refresh a still-fresh entry — at exactly 24 the cron would find it valid,
+return early, and leave it to lapse in front of a user. Only `National` is warmed, because that is
+the only scope either lens is mounted with.
+
+**State.** Three commits on `dev`: `94a663c`, `be75853`, `bfded4f`. `npm run build` is clean and every
+scoring suite passes. Both lenses were checked in a browser, not only built.
+
+**Still open.** The national coverage gap is unchanged and now affects the workbench too: the FDIC
+row cap means both lenses see the largest ~1,113 institutions, so an underwriter cannot look up a
+small local bank. Both cards say so on their face; the real fix is pagination. The workbench is
+mounted at `National` only and has no scope selector — adding one means adding those scopes to the
+warm list or quietly restoring the cold load. `analyseInstitution` runs over the whole universe per
+selection, which is fine at 1,113 and would not be at 4,400. And `lib/scoring/quarter.ts` now holds
+quarter arithmetic that predates it in three other files; they were not migrated.
+
+---
+
+## 2026-08-24 — five more columns were reading the wrong FDIC field
 
 Three data defects were found earlier today by hand, each in a column nobody had reason to doubt. The
 obvious question was how many others were like that, so every derived column in
