@@ -21,6 +21,7 @@ import {
   type InstitutionChange,
   type QuarterObservation,
 } from "@/lib/scoring/institution-change"
+import { normalizeQuarter, quartersBetween } from "@/lib/scoring/quarter"
 
 export type BriefEvent = InstitutionChange & {
   cert: string
@@ -32,6 +33,25 @@ export type BriefEvent = InstitutionChange & {
    * the city two rows carrying different numbers look like a duplicate bug.
    */
   city?: string
+}
+
+/**
+ * An institution that did not file for the brief's as-of quarter.
+ *
+ * Deliberately not a `BriefEvent`. Nothing here moved; the institution simply
+ * stopped appearing, which is a different kind of statement and must not be
+ * mixed into a list headed "what moved this quarter".
+ */
+export type NonReportingInstitution = {
+  cert: string
+  name: string
+  state?: string
+  city?: string
+  /** Its most recent filing, which is not the cohort's latest quarter. */
+  lastQuarter: string
+  /** How far behind that filing is. One quarter is often just a late filer. */
+  quartersStale: number
+  totalAssets: number
 }
 
 export type ExecutiveBrief = {
@@ -52,6 +72,8 @@ export type ExecutiveBrief = {
    * and "we did not look" read identically to an executive.
    */
   staleCount: number
+  /** The largest of the `staleCount` institutions, capped like every section. */
+  nonReporting: NonReportingInstitution[]
   supervisoryCrossings: BriefEvent[]
   otherCrossings: BriefEvent[]
   trajectories: BriefEvent[]
@@ -71,6 +93,7 @@ const EMPTY = (scope: string, error?: string): ExecutiveBrief => ({
   movedCount: 0,
   capped: false,
   staleCount: 0,
+  nonReporting: [],
   supervisoryCrossings: [],
   otherCrossings: [],
   trajectories: [],
@@ -135,18 +158,6 @@ function toObservation(bank: {
   }
 }
 
-/**
- * Report dates arrive as either `20251231` or `2025-12-31` depending on the
- * path, and quarters are compared as strings, so they have to agree on a form
- * before any comparison means anything.
- */
-function normalizeQuarter(dateStr: string | undefined): string {
-  if (!dateStr) return ""
-  if (/^\d{8}$/.test(dateStr)) return dateStr
-  const m = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/)
-  return m ? m[1] + m[2] + m[3] : dateStr
-}
-
 async function computeBrief(scope: string): Promise<ExecutiveBrief> {
   const state = scope === "National" || scope === "national" ? undefined : scope
   const { data, error } = await fetchFDICFinancials(state, ROW_CAP, false)
@@ -172,19 +183,36 @@ async function computeBrief(scope: string): Promise<ExecutiveBrief> {
   }
 
   const events: BriefEvent[] = []
+  const nonReporting: NonReportingInstitution[] = []
   let movedCount = 0
   let reportingCount = 0
-  let staleCount = 0
 
   for (const [cert, { name, state: bankState, city, rows }] of byCert) {
     // An institution whose most recent call report predates the cohort's latest
-    // quarter is excluded. Its newest move is real but happened in an earlier
-    // quarter, and this section is headed "what moved this quarter" — listing it
-    // dates a Q4 crossing to Q1. Aligning on the latest quarter also keeps this
-    // cohort identical to the screening tab's, which is what makes handing an
-    // institution over to the profile drawer work.
+    // quarter is held out of the movement sections. Its newest move is real but
+    // happened in an earlier quarter, and those sections are headed "what moved
+    // this quarter" — listing it dates a Q4 crossing to Q1. Aligning on the
+    // latest quarter also keeps this cohort identical to the screening tab's,
+    // which is what makes handing an institution over to the drawer work.
+    //
+    // It is reported in its own section rather than only counted: an
+    // institution that stops filing has usually merged, been acquired or
+    // failed, and that is a fact worth seeing.
     if (!rows.some((r) => normalizeQuarter(r.reportDate) === latestQuarter)) {
-      staleCount++
+      const lastQuarter = rows.reduce(
+        (max, r) => (normalizeQuarter(r.reportDate) > max ? normalizeQuarter(r.reportDate) : max),
+        ""
+      )
+      const newest = rows.find((r) => normalizeQuarter(r.reportDate) === lastQuarter)
+      nonReporting.push({
+        cert,
+        name,
+        state: bankState,
+        city,
+        lastQuarter,
+        quartersStale: quartersBetween(lastQuarter, latestQuarter),
+        totalAssets: newest?.totalAssets ?? 0,
+      })
       continue
     }
     reportingCount++
@@ -203,7 +231,12 @@ async function computeBrief(scope: string): Promise<ExecutiveBrief> {
     institutionCount: reportingCount,
     movedCount,
     capped: data.length >= ROW_CAP,
-    staleCount,
+    staleCount: nonReporting.length,
+    // Largest first. Every one of these is equally "not filing", so size is the
+    // only thing that distinguishes a material absence from an immaterial one.
+    nonReporting: [...nonReporting]
+      .sort((a, b) => b.totalAssets - a.totalAssets)
+      .slice(0, PER_SECTION),
     ...groupForBrief(events, PER_SECTION),
   }
 }
@@ -216,7 +249,7 @@ async function computeBrief(scope: string): Promise<ExecutiveBrief> {
 export async function getExecutiveBrief(scope: string): Promise<ExecutiveBrief> {
   const cached = unstable_cache(
     () => computeBrief(scope),
-    ["executive-brief-v3", scope],
+    ["executive-brief-v4", scope],
     { revalidate: 60 * 60 * 6 }
   )
   return cached()

@@ -4,7 +4,13 @@ import { useEffect, useState } from "react"
 import { AlertTriangle, ArrowRight, Minus, TrendingDown, TrendingUp } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { getExecutiveBrief, type BriefEvent, type ExecutiveBrief as Brief } from "@/app/actions/executive-brief"
+import { formatQuarter } from "@/lib/scoring/quarter"
+import {
+  getExecutiveBrief,
+  type BriefEvent,
+  type ExecutiveBrief as Brief,
+  type NonReportingInstitution,
+} from "@/app/actions/executive-brief"
 
 /**
  * What moved this quarter, at a glance.
@@ -66,7 +72,8 @@ export function ExecutiveBrief({
   const nothingMoved =
     brief.supervisoryCrossings.length === 0 &&
     brief.otherCrossings.length === 0 &&
-    brief.trajectories.length === 0
+    brief.trajectories.length === 0 &&
+    brief.nonReporting.length === 0
 
   return (
     <Card className="p-6 surface-primary">
@@ -86,7 +93,7 @@ export function ExecutiveBrief({
           ? ` This covers the largest ${brief.institutionCount.toLocaleString()} institutions rather than every one, so a smaller institution that moved will not appear here.`
           : ""}
         {brief.staleCount > 0
-          ? ` A further ${brief.staleCount.toLocaleString()} did not file for this quarter and are excluded rather than dated forward.`
+          ? ` A further ${brief.staleCount.toLocaleString()} did not file for this quarter; they are listed separately below rather than having an older movement dated forward.`
           : ""}
         {onSelectInstitution ? " Select any institution to open its full statistics." : ""}
       </p>
@@ -125,6 +132,17 @@ export function ExecutiveBrief({
             tone="trend"
             events={brief.trajectories}
             onSelect={onSelectInstitution}
+          />
+          {/*
+            Last, and visually quieter than the three above it. An institution
+            that stopped filing is a weaker signal than a supervisory crossing —
+            usually a merger rather than a problem — so it should not be the
+            first thing read.
+          */}
+          <NonReportingGroup
+            institutions={brief.nonReporting}
+            total={brief.staleCount}
+            asOfQuarter={brief.asOfQuarter}
           />
         </div>
       )}
@@ -206,6 +224,81 @@ function EventGroup({
   )
 }
 
+/**
+ * Institutions that did not file for the as-of quarter.
+ *
+ * Not clickable, unlike the movement sections. The profile drawer draws on the
+ * Market Analytics cohort, which is selected on the same latest-quarter rule
+ * that put these institutions here — so every one of them would resolve to "not
+ * found". Offering a control that cannot work is worse than offering none.
+ */
+function NonReportingGroup({
+  institutions,
+  total,
+  asOfQuarter,
+}: {
+  institutions: NonReportingInstitution[]
+  total: number
+  asOfQuarter: string | null
+}) {
+  if (institutions.length === 0) return null
+  const hidden = total - institutions.length
+
+  return (
+    <section>
+      <div className="flex items-baseline gap-2">
+        <h4 className="text-sm font-semibold text-slate-800">No longer reporting</h4>
+        <span className="text-xs text-slate-500">
+          Filed nothing for {asOfQuarter ? formatQuarter(asOfQuarter) : "this quarter"}. Largest
+          first.
+        </span>
+      </div>
+      <p className="mt-1 text-xs text-slate-500">
+        Usually a merger or an acquisition rather than a failure, and one quarter behind is often
+        just a late filing. Worth checking, not worth alarm.
+      </p>
+      <ul className="mt-2 space-y-1.5">
+        {institutions.map((inst) => {
+          const place = [inst.city, inst.state].filter(Boolean).join(", ")
+          return (
+            <li
+              key={inst.cert}
+              className="flex items-start gap-2.5 rounded-md border border-slate-200 bg-white px-3 py-2"
+            >
+              <Minus className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-slate-800">
+                  {inst.name}
+                  {place ? <span className="font-normal text-slate-500">{` · ${place}`}</span> : null}
+                </p>
+                <p className="text-xs text-slate-600">
+                  {inst.quartersStale === 1
+                    ? "One quarter behind"
+                    : `${inst.quartersStale} quarters behind`}
+                  {inst.lastQuarter ? ` · last filed ${formatQuarter(inst.lastQuarter)}` : ""}
+                  {inst.totalAssets > 0 ? ` · ${formatAssets(inst.totalAssets)} in assets then` : ""}
+                </p>
+              </div>
+            </li>
+          )
+        })}
+      </ul>
+      {hidden > 0 ? (
+        <p className="mt-2 text-xs text-slate-500">
+          And {hidden.toLocaleString()} smaller {hidden === 1 ? "institution" : "institutions"}.
+        </p>
+      ) : null}
+    </section>
+  )
+}
+
+/** Dollars in, one significant scale out. Assets here are context, not a figure to reconcile. */
+function formatAssets(dollars: number) {
+  if (dollars >= 1e9) return `$${(dollars / 1e9).toFixed(1)}B`
+  if (dollars >= 1e6) return `$${Math.round(dollars / 1e6)}M`
+  return `$${Math.round(dollars / 1e3)}K`
+}
+
 function BriefSkeleton() {
   return (
     <Card className="p-6 surface-primary">
@@ -218,12 +311,4 @@ function BriefSkeleton() {
       </div>
     </Card>
   )
-}
-
-function formatQuarter(repdte: string) {
-  if (!/^\d{8}$/.test(repdte)) return repdte
-  const year = repdte.slice(0, 4)
-  const month = Number(repdte.slice(4, 6))
-  const q = month <= 3 ? 1 : month <= 6 ? 2 : month <= 9 ? 3 : 4
-  return `Q${q} ${year}`
 }
