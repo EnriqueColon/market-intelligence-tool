@@ -832,7 +832,7 @@ npm run dev                # local, reads .env.local
 npm run test:environment   # environment detection (9 tests)
 npm run test:memo-evidence # evidence guard
 npm run test:verified-metrics
-npm run test:allowlist
+npm run test:allowlist            # 10 pass, 3 fail — stale, see below
 npm run test:metrics
 npm run test:opportunity-score
 npm run test:institution-change    # change detection and brief ranking (14 tests)
@@ -841,6 +841,26 @@ npm run test:quarter               # FDIC report-date arithmetic
 npm run test:peer-cohort           # workbench cohort selection and relaxation
 npm run test:cre-downside          # the capital scenario, both regimes
 ```
+
+`test:allowlist` runs under `tsx` rather than Node's type stripping, because `lib/domain-allowlist.ts`
+imports `./entity-sources` without an extension and type stripping cannot resolve that. Until
+2026-08-25 the script used type stripping, so the suite aborted before running a single assertion and
+had been dead since the March "Market Research revamp" — a suite that cannot run is worse than one
+that fails, because it reports nothing while looking maintained.
+
+Ten of its thirteen assertions pass. The three failures are the test disagreeing with a deliberate
+March change, not a defect in shipped behaviour, and **they encode an open product question rather
+than a bug to fix**:
+
+- `getDomainsForEntity("watchlist")` returns nothing because `watchlist` was removed from the
+  `EntityId` union. The test still expects CBRE + JLL. The entity is gone by design.
+- `getDomainsForEntity("all")` returns only the eight `PRIMARY_V1_ENTITY_IDS`, so `mhn` and
+  `commercialsearch` are excluded; the test expects every approved domain. Its own doc comment still
+  claims "For 'all' returns all domains", which is now false.
+
+Whether `all` should mean every approved source or only the V1 primaries decides both whether that
+comment or the code is wrong and whether those assertions get updated or deleted, so it is left for
+someone who owns Search Industry Reports to settle.
 
 Scripts that hit the live FDIC API rather than asserting, and exist to be read:
 

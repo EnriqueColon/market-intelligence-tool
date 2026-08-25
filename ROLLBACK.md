@@ -8,11 +8,11 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
 | `main` | `e8bf8ad` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `397a03e` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `dev` | `01544d8` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 A SHA here can never name the commit that writes it, so the true head is usually one documentation
-commit further on. Only behavioural commits matter as rollback targets; on `dev` the newest is
-**`397a03e`**.
+commit further on. Only behavioural commits matter as rollback targets; on `dev` the newest that
+changes application behaviour is **`397a03e`** — `01544d8` above it touches only an npm script.
 
 Production deploys automatically on every push to `main`. `dev` deploys as a Vercel preview on every
 push. Crons run only against production, and the post-deploy warm-cache GitHub Action triggers only
@@ -113,6 +113,8 @@ Not in production. Merge to `main` to ship.
 
 | Commit | Date | Summary |
 | --- | --- | --- |
+| `01544d8` | 08-25 | fix: run the allowlist suite with a loader that can resolve its imports. Script-only; no application code. Safe to revert, at the cost of returning the suite to aborting before its first assertion. Reverting also re-hides the three stale assertions it exposes, which are documented as an open product question rather than a defect. |
+| `fcf79ae` | 08-24 | docs: record the zero-versus-absent trap and the chart that summed to 255% |
 | `397a03e` | 08-24 | fix: read absent capital ratios as absent, and stop drawing residential as CRE |
 | `bec51b8` | 08-24 | docs: record the workbench lens and the regulatory-level trap it exposed |
 | `08b7127` | 08-24 | chore: register the peer-cohort and CRE-downside test suites |

@@ -8,7 +8,46 @@ is it in now, and what is still open.
 
 ---
 
-## 2026-08-24 (latest) — zero is not a number, and a stacked chart that summed to 255%
+## 2026-08-25 (latest) — a test suite that had never run
+
+Closing out the previous session's work. Everything from 2026-08-24 is committed and pushed, `dev` is
+level with `origin/dev`, the build compiles clean, and eleven suites pass 133 assertions between them.
+One item on that session's "still open" list turned out to be understated, so it is worth correcting
+rather than carrying forward as written.
+
+`npm run test:allowlist` was recorded as failing on an unresolvable extensionless import under
+`node --experimental-strip-types`. That much was true, but the consequence was worse than "a suite
+fails": the process aborted at module load, so **not one of its thirteen assertions had ever
+executed**, and it had been that way since the March "Market Research revamp" that split the domain
+API into landing and asset variants. Both `README.md` and `confluence.md` listed it among the
+verification commands with no caveat, so the repository looked better covered than it was. The test
+file's own header had said `Run: npx tsx …` all along; only the npm script disagreed, and `tsx` was
+already a dependency. The script now matches the file, which is a one-line change and the same reason
+`verify:workbench` runs under `tsx`.
+
+Running it reveals ten passing assertions that had been providing no signal, and three failures that
+are **the test disagreeing with a deliberate change rather than a defect**. `watchlist` was removed
+from the `EntityId` union, so the two assertions expecting it to expand to CBRE + JLL are asserting
+against an entity that no longer exists. The third expects `getDomainsForEntity("all")` to return
+every approved domain, where it now returns only the eight `PRIMARY_V1_ENTITY_IDS`.
+
+Those three were left failing on purpose. `all` returning a curated subset is either the intent —
+`PRIMARY_V1_ENTITY_IDS` is an explicit named constant, which reads deliberate — or a regression, and
+the function's own doc comment still claims "For 'all' returns all domains", so the code and its
+documentation contradict each other. Deciding which is right is a product call about Search Industry
+Reports, and quietly rewriting the assertions to match current behaviour would have destroyed the
+evidence that the question exists. Nothing in this session's FDIC or lens work touches these files;
+they are byte-identical to `main` and last changed in March.
+
+**Still open.** The three allowlist assertions above, pending that decision. `npx tsc --noEmit`
+remains noisy at 75 errors across a dozen files, unchanged. The national payload still exceeds Next's
+2MB data-cache entry limit, so `buildReportData` logs a cache-write failure and returns a 500 on the
+first cold national load in development. `LNREOTH` remains exposed for display only and must never be
+added into a CRE denominator.
+
+---
+
+## 2026-08-24 — zero is not a number, and a stacked chart that summed to 255%
 
 Two columns in the screening table were showing a plausible figure that meant something other than
 what it said. Both were found the same way as everything else today: by reconciling against what
