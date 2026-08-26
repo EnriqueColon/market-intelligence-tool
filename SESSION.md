@@ -8,7 +8,60 @@ is it in now, and what is still open.
 
 ---
 
-## 2026-08-25 (latest) — closing the half of the allowlist that failed open
+## 2026-08-25 (latest) — the market pulse as a crawl
+
+Requested directly: make the Market Pulse figures rotate the way an exchange ticker does. The strip
+under the header was a five-tile grid; it is now a single continuous crawl of the same five FRED
+series — label, value, move, sparkline — separated by rules, with the rail fading at both edges so a
+figure dissolves rather than being chopped at the container boundary. **No data changed.** Same
+series, same `unstable_cache`, same figures, same silent-disappearance behaviour when FRED is
+unreachable. This is presentation only.
+
+Two things are measured at runtime rather than hardcoded, and both are the point rather than
+polish. **Lap duration comes from the measured width of one sequence**, so the crawl holds a constant
+40px/s; with a fixed duration the speed would depend on how much content there is, and a strip that
+lost two dead FRED series would visibly speed up — a rendering artefact that would read as the market
+moving faster. **Copy count comes from the measured rail width**, because two copies loop seamlessly
+only while the sequence is wider than the rail; below that, every lap drags a band of empty track
+across the screen. Both are handed to CSS as custom properties, `--pulse-ticker-shift` and
+`--pulse-ticker-duration`, and consumed by keyframes in `app/globals.css`.
+
+The reduced-motion case needed explicit handling and is the part most likely to be broken by someone
+later. `app/globals.css` already collapses every animation to `0.01ms` with a single iteration for
+anyone who has asked their OS to stop motion. For a crawl, the final frame is *one copy already
+scrolled off* — so the blanket rule alone would make the strip appear to start blank. A later rule
+drops the animation outright, hides the `aria-hidden` duplicate copies that exist only to feed the
+loop, and makes the rail scrollable by hand. The crawl also pauses on hover and `:focus-within`,
+because reading a figure off moving text is otherwise a race.
+
+Change indicators were deliberately left neutral grey rather than the green and red an exchange
+ticker would use. On a real ticker green means "up" and reads as good; here the first series is CRE
+delinquency, where up is bad. Colour would assert a valence the data does not carry, and getting it
+right would mean inverting the sense per series.
+
+**State now.** Verified against a running dev server rather than inferred from a clean build, which
+is this repo's standing rule: 120px of travel in 3 seconds against a 1782px sequence and a 1100px
+rail, the lap shifting exactly one copy, hover freezing it, and reduced motion resolving to
+`animation-name: none` with one visible copy and a scrollable rail. No console errors. `npm run
+build` compiles clean and `npx tsc --noEmit` is unchanged at **74 errors**, none in the two files
+touched. Committed as `c135ac2`.
+
+**Still open.** Unchanged from the entry below, none of it touched here. `npx tsc --noEmit` remains
+noisy at 74 errors across a dozen files, 14 of them the expected `TS5097` from test imports. `mba`,
+`mhn` and `commercialsearch` remain a settled decision rather than drift — kept in `ENTITY_SOURCES`
+as inbound-URL allowlisting only, in neither `"all"` nor `ENTITY_DROPDOWN_OPTIONS`, with no plan to
+make them selectable. `verify:workbench`, `verify:executive-brief` and `verify:lenses` have still not
+been run; they need live FDIC calls or a running server, and nothing they cover has been touched for
+two sessions. The national payload still exceeds Next's 2MB data-cache entry limit, so
+`buildReportData` logs a cache-write failure and returns a 500 on the first cold national load in
+development. `LNREOTH` remains exposed for display only and must never be added into a CRE
+denominator. And `main` is still at `e8bf8ad`: everything from the last several sessions — the
+corrected CRE definition, the capital-ratio fixes, both department lenses, the allowlist work and now
+this — is on `dev` and not in production.
+
+---
+
+## 2026-08-25 — closing the half of the allowlist that failed open
 
 The previous entry recorded, as a finding rather than a fix, that the two layers of the publisher
 allowlist disagreed about an unrecognised entity id. `filterByAllowlist` got an empty domain list and

@@ -205,9 +205,25 @@ returns an error page; `CORCREXFACBS` is correct. Verify any new series id again
 before trusting it.
 
 The Market Pulse strip under the header (`components/market-pulse-strip.tsx`) draws five of these
-same series through `app/actions/fetch-market-pulse.ts`, so its tiles and the Key Signals text agree
-by construction. Values are cached with `unstable_cache`; the strip degrades to nothing rather than
-showing a placeholder if FRED is unreachable.
+same series through `app/actions/fetch-market-pulse.ts`, so its figures and the Key Signals text
+agree by construction. Values are cached with `unstable_cache`; the strip degrades to nothing rather
+than showing a placeholder if FRED is unreachable.
+
+It renders as an exchange-style crawl rather than a static row, and two of its numbers are measured
+at runtime instead of fixed. **Lap duration** is derived from the width of one sequence of items, so
+the crawl holds a constant `CRAWL_PX_PER_SECOND`; a fixed duration would tie speed to how much
+content there is, and a strip that lost two dead FRED series would visibly speed up. **Copy count**
+is derived from the rail width, because two copies loop seamlessly only while the sequence is wider
+than the rail — below that, each lap drags a band of empty track across the screen. The component
+hands both to CSS as `--pulse-ticker-shift` (`100% / copies`, the distance of one lap) and
+`--pulse-ticker-duration`; the keyframes in `app/globals.css` consume them. Duplicate copies carry
+`aria-hidden`, so the figures are announced once.
+
+The crawl pauses on hover and on `:focus-within`. Reduced motion is handled explicitly and must stay
+that way: the blanket `prefers-reduced-motion` rule in `app/globals.css` collapses every animation to
+its final frame, which for a crawl is one copy already scrolled off, so the strip would appear to
+start blank. The later rule therefore drops the animation outright, hides the `aria-hidden`
+duplicates and makes the rail scrollable by hand.
 
 ### FDIC screening metrics
 

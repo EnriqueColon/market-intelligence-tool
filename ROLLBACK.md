@@ -8,13 +8,14 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
 | `main` | `e8bf8ad` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `4a4f3de` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `dev` | `c135ac2` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 A SHA here can never name the commit that writes it, so the true head is usually one documentation
 commit further on. Only behavioural commits matter as rollback targets; on `dev` the newest that
-changes application behaviour is **`4a4f3de`**, which makes `buildSearchQuery` fail closed. Between it
-and the previous behavioural commit, `397a03e`, everything touches an npm script, a doc comment, tests
-and documentation, and nothing that ships to a user.
+changes application behaviour is **`c135ac2`**, which turns the Market Pulse strip into a crawl. It
+is presentation only — no data source, cache key or figure changes — so the previous behavioural
+commit, **`4a4f3de`**, remains the one to reach for if anything about the tool's *output* looks
+wrong.
 
 Production deploys automatically on every push to `main`. `dev` deploys as a Vercel preview on every
 push. Crons run only against production, and the post-deploy warm-cache GitHub Action triggers only
@@ -116,6 +117,7 @@ Not in production. Merge to `main` to ship.
 
 | Commit | Date | Summary |
 | --- | --- | --- |
+| `c135ac2` | 08-25 | feat: run the market pulse as a crawl, at a speed its content cannot change. Presentation only — the same five FRED series, the same figures, the same cache. Reverting restores the five-tile grid and costs nothing but the animation. The parts worth keeping if it is ever rewritten are the two measured values: lap duration from sequence width, so crawl speed does not drift with how many series survived, and copy count from rail width, without which a short strip drags a gap across the screen each lap. The `prefers-reduced-motion` override in `app/globals.css` is load-bearing and must go with it — the blanket reduce rule would otherwise freeze the crawl on its final frame, which looks like an empty strip. |
 | `4a4f3de` | 08-25 | fix: make the query builder fail closed, so both halves of the allowlist do. `buildSearchQuery` returns `string \| null` instead of `string`, and `null` where it used to return the bare keyword for an entity with no domains. **Reverting reopens an unrestricted open-web Google search** on any entity id the registry does not recognise, and reintroduces the trap that the result filter is then the only thing keeping the tool inside the allowlist. Unreachable through the dropdown either way, so nothing a user sees changes in normal use. A revert must also drop the `null` check in `searchIndustryReports` and the four `buildSearchQuery` assertions, or the suite fails and the type no longer compiles. Prefer fixing forward. |
 | `4011754` | 08-25 | docs: record the curated "all", and the layer that fails closed around it. Documentation only. |
 | `da7c023` | 08-25 | test: settle "all" as the curated primary sources, and say so where it is decided. A doc comment and three assertions; no runtime behaviour changes, so reverting changes nothing a user sees. It does restore a comment claiming `"all"` returns every approved domain, which is false, and returns the suite to 10 pass / 3 fail. Revert only alongside a decision to widen `"all"` — the `deepStrictEqual` on the nine primary domains is deliberately the thing that breaks first if someone does. |
