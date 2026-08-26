@@ -8,7 +8,64 @@ is it in now, and what is still open.
 
 ---
 
-## 2026-08-25 (latest) — the market pulse as a crawl
+## 2026-08-25 (latest) — nineteen series on the tape, and a survey that is not a rate
+
+Asked directly: bring in other data relevant to real estate. Thirty-five candidate FRED ids were
+resolved against the live CSV endpoint before anything was written, with each one's frequency read
+off the observations it returned rather than assumed. **Fourteen were added, taking the tape from
+five series to nineteen**, grouped so a reader gets a coherent sweep: CRE credit (delinquency,
+charge-offs, $3.12T outstanding, banks tightening, resi delinquency), the cost of money (SOFR, prime,
+2Y, 10Y, 10Y–2Y, real yield, 30Y mortgage), the price of credit risk (IG and high-yield spreads), and
+property fundamentals (rental vacancy, multifamily starts, permits, Case-Shiller, nonresidential
+construction).
+
+**Two things could not be had, and both are recorded above `PULSE_SERIES` so nobody repeats the
+search.** FRED publishes no multifamily-only delinquency series — every plausible id 404s, and that
+is the figure a CRE tape would most like after price. And `COMREPUSQ159N`, its US commercial property
+price index, last published an observation in **April 2025**; it is sixteen months stale and reports
+a percent change rather than a level, so a CRE price index is simply not available from this source.
+
+Four units were added to `SeriesUnit`, and one of them is an accuracy fix rather than formatting.
+`SUBLPDCLCTSNQ` is a **net percentage of surveyed banks** tightening construction and land
+development standards, and it sits near zero — it moved from 2.0 to 4.4 this quarter. Through the
+existing `percent` path that would have printed **"up 240 bps"**, which states a survey result as if
+it were a price; through the level path it would divide by a base that is routinely zero or negative.
+So `net-percent` prints like a percent and moves in percentage points. The other three —
+`usd-millions` for Census construction spending, `units-thousands` for starts and permits, `index`
+for Case-Shiller — are mechanical.
+
+Wiring that up surfaced a latent duplication worth naming. `fetch-market-pulse.ts` carried **its own
+copy** of the unit-to-wording routing that `verified-metrics.ts` kept private. With two units the two
+copies agreed and the duplication was invisible; with six they would not have, and the new series
+would have been mis-worded on the tape while reading correctly in the outlook memo — the exact class
+of silent divergence this strip was built to prevent, since its whole point is that a figure here and
+a figure in Key Signals cannot disagree. `describeChange` is now exported and both call it.
+
+Three labels changed after reading the rendered output rather than the code. "CRE Standards" beside
+"4.40%" reads as an interest rate, and is now "Banks Tightening CRE"; "Home Prices" beside a bare
+"335.1" does not say the figure is an index; "CRE Loans O/S" was needless jargon.
+
+Crawl speed went from 40px/s to 90px/s in the same commit, because nineteen series make a 6,800px
+sequence and a lap had stretched to **two minutes fifty-one seconds** — long enough that waiting for
+one particular figure is not viable. Worth internalising: **adding series makes this tape slower, not
+busier**, which is the opposite of the intuition, so the speed constant needs revisiting whenever the
+list grows.
+
+**State now.** All nineteen verified against a running server by reading the rendered figures, not
+by trusting the build: every value matches what the endpoint returned during the probe, every tile
+carries a sparkline and an as-of, and there are no console errors. Twelve suites, **155 assertions**,
+up from 151. `npm run build` compiles clean; `npx tsc --noEmit` unchanged at **74**. Committed as
+`56cfbd0`.
+
+**Still open.** Unchanged from the entry below. One addition worth watching: the tape now issues
+nineteen concurrent FRED fetches on a cold cache rather than five. Each has a six-second timeout and
+a failed series is simply absent rather than fatal, so throttling degrades the tape quietly instead
+of breaking it — but if series start disappearing intermittently, that burst is the first place to
+look.
+
+---
+
+## 2026-08-25 — the market pulse as a crawl
 
 Requested directly: make the Market Pulse figures rotate the way an exchange ticker does. The strip
 under the header was a five-tile grid; it is now a single continuous crawl of the same five FRED

@@ -8,14 +8,13 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
 | `main` | `e8bf8ad` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `c135ac2` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `dev` | `56cfbd0` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 A SHA here can never name the commit that writes it, so the true head is usually one documentation
 commit further on. Only behavioural commits matter as rollback targets; on `dev` the newest that
-changes application behaviour is **`c135ac2`**, which turns the Market Pulse strip into a crawl. It
-is presentation only — no data source, cache key or figure changes — so the previous behavioural
-commit, **`4a4f3de`**, remains the one to reach for if anything about the tool's *output* looks
-wrong.
+changes application behaviour is **`56cfbd0`**, which widens the Market Pulse tape to nineteen FRED
+series. It touches shared formatting in `lib/verified-metrics.ts`, so unlike the crawl commit below
+it is *not* presentation-only — see its row for what a revert has to take with it.
 
 Production deploys automatically on every push to `main`. `dev` deploys as a Vercel preview on every
 push. Crons run only against production, and the post-deploy warm-cache GitHub Action triggers only
@@ -117,6 +116,7 @@ Not in production. Merge to `main` to ship.
 
 | Commit | Date | Summary |
 | --- | --- | --- |
+| `56cfbd0` | 08-25 | feat: widen the market pulse tape to nineteen real-estate series. Fourteen new FRED series, four new `SeriesUnit` variants, and `describeChange` exported so the tape and the outlook memo share one unit-to-wording map. **A revert must take `lib/verified-metrics.ts` with it** — reverting only `fetch-market-pulse.ts` leaves specs referencing units the formatter no longer has, and `formatValue`'s switch stops being exhaustive, which is a type error rather than a runtime one. The cache key moved to `market-pulse-v2`; reverting without moving it back serves the nineteen-series payload to five-series code for the rest of the ET day. Nothing outside the strip reads these units, and no FDIC or lens figure is affected. |
 | `c135ac2` | 08-25 | feat: run the market pulse as a crawl, at a speed its content cannot change. Presentation only — the same five FRED series, the same figures, the same cache. Reverting restores the five-tile grid and costs nothing but the animation. The parts worth keeping if it is ever rewritten are the two measured values: lap duration from sequence width, so crawl speed does not drift with how many series survived, and copy count from rail width, without which a short strip drags a gap across the screen each lap. The `prefers-reduced-motion` override in `app/globals.css` is load-bearing and must go with it — the blanket reduce rule would otherwise freeze the crawl on its final frame, which looks like an empty strip. |
 | `4a4f3de` | 08-25 | fix: make the query builder fail closed, so both halves of the allowlist do. `buildSearchQuery` returns `string \| null` instead of `string`, and `null` where it used to return the bare keyword for an entity with no domains. **Reverting reopens an unrestricted open-web Google search** on any entity id the registry does not recognise, and reintroduces the trap that the result filter is then the only thing keeping the tool inside the allowlist. Unreachable through the dropdown either way, so nothing a user sees changes in normal use. A revert must also drop the `null` check in `searchIndustryReports` and the four `buildSearchQuery` assertions, or the suite fails and the type no longer compiles. Prefer fixing forward. |
 | `4011754` | 08-25 | docs: record the curated "all", and the layer that fails closed around it. Documentation only. |

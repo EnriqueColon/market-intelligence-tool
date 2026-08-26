@@ -204,10 +204,32 @@ section is empty of data — treat as a regression.** Last verified: 5.
 returns an error page; `CORCREXFACBS` is correct. Verify any new series id against the live endpoint
 before trusting it.
 
-The Market Pulse strip under the header (`components/market-pulse-strip.tsx`) draws five of these
-same series through `app/actions/fetch-market-pulse.ts`, so its figures and the Key Signals text
-agree by construction. Values are cached with `unstable_cache`; the strip degrades to nothing rather
-than showing a placeholder if FRED is unreachable.
+The Market Pulse strip under the header (`components/market-pulse-strip.tsx`) draws **nineteen**
+series through `app/actions/fetch-market-pulse.ts`, reusing the same parsing and formatting, so a
+figure on the tape and a figure in Key Signals cannot disagree. Values are cached with
+`unstable_cache` under `market-pulse-v2`, keyed by ET calendar day; the strip degrades to nothing
+rather than showing a placeholder if FRED is unreachable, and a single series that fails is simply
+absent from the tape rather than fatal.
+
+The tape reads in four groups: CRE credit, the cost of money, the price of credit risk, and property
+fundamentals. **Every id was resolved against the live CSV endpoint and its frequency read off the
+returned observations before being added.** Two dead ends are recorded above `PULSE_SERIES` so the
+search is not repeated: FRED publishes no multifamily-only delinquency series, and `COMREPUSQ159N`,
+its US commercial property price index, stopped updating in April 2025 — the series a CRE tape most
+wants is not available.
+
+`SeriesUnit` carries six variants, and `net-percent` exists for accuracy rather than presentation.
+The lending-standards series (`SUBLPDCLCTSNQ`) is a *net percentage of surveyed banks* sitting near
+zero, so the other two treatments both misreport it: basis points would render a move from 2.0 to
+4.4 as "up 240 bps", dressing a survey up as a rate, and a proportional change would divide by a
+base that is routinely zero or negative. It therefore prints like a percent and moves in percentage
+points. `usd-millions` (Census construction spending), `units-thousands` (starts and permits) and
+`index` (Case-Shiller) are mechanical by comparison.
+
+`describeChange` is exported from `lib/verified-metrics.ts` and is the single place that routes a
+unit to its wording. It used to be private, with `fetch-market-pulse.ts` holding a duplicate; that
+was survivable with two units and would not have been with six — the tape would have mis-worded the
+new series while the memo read them correctly. **Add a unit in one place.**
 
 It renders as an exchange-style crawl rather than a static row, and two of its numbers are measured
 at runtime instead of fixed. **Lap duration** is derived from the width of one sequence of items, so
