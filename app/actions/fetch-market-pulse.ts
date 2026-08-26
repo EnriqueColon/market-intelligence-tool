@@ -3,8 +3,7 @@
 import { unstable_cache } from "next/cache"
 import { newsCalendarDayET, NEWS_TAB_REVALIDATE_SECONDS } from "@/lib/news-tab-cache"
 import {
-  describeLevelChange,
-  describeRateChange,
+  describeChange,
   formatValue,
   parseFredCsv,
   periodLabel,
@@ -28,8 +27,24 @@ import {
 const FRED_CSV_BASE = "https://fred.stlouisfed.org/graph/fredgraph.csv"
 const FRED_TIMEOUT_MS = 6_000
 
-/** Tile headings. The specs in verified-metrics carry sentence subjects, which are far too long here. */
+/**
+ * The tape, in reading order: what CRE credit is doing, what it costs, what
+ * credit markets charge for risk, then the property fundamentals underneath.
+ *
+ * Every id was resolved against the live CSV endpoint before being added, and
+ * its frequency read off the returned observations rather than assumed. That is
+ * not ceremony: `CABOREA`, named in `lib/fred-constants.ts` as the CRE
+ * charge-off series, does not exist and returns an error page. Two things worth
+ * knowing for anyone extending this list — FRED publishes no multifamily-only
+ * delinquency series (`DRMFRMACBS` and friends are 404), and its US commercial
+ * property price index, `COMREPUSQ159N`, stopped updating in April 2025, so the
+ * one series a CRE tape most wants is not available.
+ *
+ * Labels are tape headings. The specs in verified-metrics carry sentence
+ * subjects, which are far too long here.
+ */
 const PULSE_SERIES: Array<FredSeriesSpec & { label: string }> = [
+  // ------------------------------------------------------------ CRE credit
   {
     id: "DRCRELEXFACBS",
     label: "CRE Delinquency",
@@ -47,9 +62,78 @@ const PULSE_SERIES: Array<FredSeriesSpec & { label: string }> = [
     publisher: "Federal Reserve Board",
   },
   {
+    id: "CREACBM027NBOG",
+    label: "CRE Loans Outstanding",
+    subject: "Commercial real estate loans outstanding at all U.S. commercial banks",
+    unit: "usd-billions",
+    frequency: "monthly",
+    publisher: "Federal Reserve Board H.8",
+  },
+  {
+    id: "SUBLPDCLCTSNQ",
+    // Named for what the figure counts. "CRE Standards" beside "4.40%" reads as
+    // a rate; this is the net share of surveyed banks that tightened.
+    label: "Banks Tightening CRE",
+    subject:
+      "The net percentage of domestic banks tightening standards on construction and land development loans",
+    unit: "net-percent",
+    frequency: "quarterly",
+    publisher: "Federal Reserve Board Senior Loan Officer Survey",
+  },
+  {
+    id: "DRSFRMACBS",
+    label: "Resi Delinquency",
+    subject: "The delinquency rate on single-family residential mortgages at U.S. commercial banks",
+    unit: "percent",
+    frequency: "quarterly",
+    publisher: "Federal Reserve Board",
+  },
+
+  // -------------------------------------------------------- Cost of money
+  {
+    id: "SOFR",
+    label: "SOFR",
+    subject: "The Secured Overnight Financing Rate",
+    unit: "percent",
+    frequency: "daily",
+    publisher: "Federal Reserve Bank of New York",
+  },
+  {
+    id: "DPRIME",
+    label: "Prime Rate",
+    subject: "The bank prime loan rate",
+    unit: "percent",
+    frequency: "daily",
+    publisher: "Federal Reserve Board H.15",
+  },
+  {
+    id: "DGS2",
+    label: "2Y Treasury",
+    subject: "The 2-year Treasury yield",
+    unit: "percent",
+    frequency: "daily",
+    publisher: "U.S. Treasury",
+  },
+  {
     id: "DGS10",
     label: "10Y Treasury",
     subject: "The 10-year Treasury yield",
+    unit: "percent",
+    frequency: "daily",
+    publisher: "U.S. Treasury",
+  },
+  {
+    id: "T10Y2Y",
+    label: "10Y–2Y Spread",
+    subject: "The spread between the 10-year and 2-year Treasury yields",
+    unit: "percent",
+    frequency: "daily",
+    publisher: "Federal Reserve Bank of St. Louis",
+  },
+  {
+    id: "DFII10",
+    label: "10Y Real Yield",
+    subject: "The 10-year Treasury inflation-indexed yield",
     unit: "percent",
     frequency: "daily",
     publisher: "U.S. Treasury",
@@ -62,6 +146,16 @@ const PULSE_SERIES: Array<FredSeriesSpec & { label: string }> = [
     frequency: "weekly",
     publisher: "Freddie Mac",
   },
+
+  // ------------------------------------------------- Price of credit risk
+  {
+    id: "BAMLC0A0CM",
+    label: "IG Spread",
+    subject: "The ICE BofA U.S. corporate investment-grade option-adjusted spread",
+    unit: "percent",
+    frequency: "daily",
+    publisher: "ICE Data Indices",
+  },
   {
     id: "BAMLH0A0HYM2",
     label: "High-Yield Spread",
@@ -69,6 +163,48 @@ const PULSE_SERIES: Array<FredSeriesSpec & { label: string }> = [
     unit: "percent",
     frequency: "daily",
     publisher: "ICE Data Indices",
+  },
+
+  // ------------------------------------------------- Property fundamentals
+  {
+    id: "RRVRUSQ156N",
+    label: "Rental Vacancy",
+    subject: "The national rental vacancy rate",
+    unit: "percent",
+    frequency: "quarterly",
+    publisher: "U.S. Census Bureau",
+  },
+  {
+    id: "HOUST5F",
+    label: "Multifamily Starts",
+    subject: "Housing starts in buildings with five units or more",
+    unit: "units-thousands",
+    frequency: "monthly",
+    publisher: "U.S. Census Bureau and HUD",
+  },
+  {
+    id: "PERMIT",
+    label: "Building Permits",
+    subject: "New privately owned housing units authorized by building permit",
+    unit: "units-thousands",
+    frequency: "monthly",
+    publisher: "U.S. Census Bureau and HUD",
+  },
+  {
+    id: "CSUSHPINSA",
+    label: "Home Price Index",
+    subject: "The S&P CoreLogic Case-Shiller U.S. National Home Price Index",
+    unit: "index",
+    frequency: "monthly",
+    publisher: "S&P Dow Jones Indices",
+  },
+  {
+    id: "PNRESCONS",
+    label: "Nonres Construction",
+    subject: "Private nonresidential construction spending",
+    unit: "usd-millions",
+    frequency: "monthly",
+    publisher: "U.S. Census Bureau",
   },
 ]
 
@@ -128,11 +264,7 @@ async function fetchTile(spec: (typeof PULSE_SERIES)[number]): Promise<PulseTile
     if (!window) return null
 
     const { latest, prior } = window
-    const change = prior
-      ? spec.unit === "percent"
-        ? describeRateChange(latest.value, prior.value)
-        : describeLevelChange(latest.value, prior.value)
-      : null
+    const change = prior ? describeChange(latest.value, prior.value, spec.unit) : null
 
     return {
       id: spec.id,
@@ -165,7 +297,7 @@ export async function fetchMarketPulse(): Promise<PulseTile[]> {
       if (tiles.length === 0) throw new Error("No pulse series available")
       return tiles
     },
-    ["market-pulse-v1", newsCalendarDayET()],
+    ["market-pulse-v2", newsCalendarDayET()],
     { revalidate: NEWS_TAB_REVALIDATE_SECONDS }
   )
 

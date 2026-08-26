@@ -6,11 +6,14 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { fetchMarketPulse, type PulseTile } from "@/app/actions/fetch-market-pulse"
 
 /**
- * Crawl speed. Slow enough that a figure stays legible as it passes: an
- * exchange ticker can afford to be quick because the reader only needs the
- * ones they already care about, whereas these five are the whole set.
+ * Crawl speed, in tension with legibility and set by how long a lap takes.
+ *
+ * Nineteen series make a sequence around 6,800px wide, so at the 40px/s this
+ * started at, a reader waiting for one particular figure waited nearly three
+ * minutes. Adding series makes the tape slower, not busier, which is the
+ * opposite of the intuition — so revisit this whenever PULSE_SERIES grows.
  */
-const CRAWL_PX_PER_SECOND = 40
+const CRAWL_PX_PER_SECOND = 90
 
 /**
  * A sparkline drawn as a filled area.

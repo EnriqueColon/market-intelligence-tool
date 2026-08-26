@@ -19,8 +19,21 @@
 
 export type SeriesFrequency = "daily" | "weekly" | "monthly" | "quarterly"
 
-/** How a series' value reads, which also decides how its change is expressed. */
-export type SeriesUnit = "percent" | "usd-billions"
+/**
+ * How a series' value reads, which also decides how its change is expressed.
+ *
+ * `net-percent` is separate from `percent` on purpose. Both print as "4.40%",
+ * but a survey diffusion index is a share of respondents rather than a price,
+ * so its moves belong in percentage points; describing one in basis points
+ * would dress a survey result up as a rate.
+ */
+export type SeriesUnit =
+  | "percent"
+  | "net-percent"
+  | "usd-billions"
+  | "usd-millions"
+  | "index"
+  | "units-thousands"
 
 export type FredSeriesSpec = {
   id: string
@@ -197,8 +210,25 @@ export function formatUsdFromBillions(value: number): string {
     : `$${value.toFixed(1)} billion`
 }
 
+/** FRED counts starts and permits in thousands of units, at an annual rate. */
+export function formatUnitsFromThousands(value: number): string {
+  return value >= 1000 ? `${(value / 1000).toFixed(2)}M units` : `${Math.round(value)}k units`
+}
+
 export function formatValue(value: number, unit: SeriesUnit): string {
-  return unit === "percent" ? formatPercent(value) : formatUsdFromBillions(value)
+  switch (unit) {
+    case "percent":
+    case "net-percent":
+      return formatPercent(value)
+    case "usd-billions":
+      return formatUsdFromBillions(value)
+    case "usd-millions":
+      return formatUsdFromBillions(value / 1000)
+    case "units-thousands":
+      return formatUnitsFromThousands(value)
+    case "index":
+      return value.toFixed(1)
+  }
 }
 
 /**
@@ -220,10 +250,31 @@ export function describeLevelChange(latest: number, prior: number): string | nul
   return `${pct > 0 ? "up" : "down"} ${Math.abs(pct).toFixed(1)}%`
 }
 
-function describeChange(latest: number, prior: number, unit: SeriesUnit): string | null {
-  return unit === "percent"
-    ? describeRateChange(latest, prior)
-    : describeLevelChange(latest, prior)
+/**
+ * A move in percentage points, for a figure that is a share of something
+ * counted rather than a rate.
+ *
+ * The lending-standards series is the case that forces this. It is a net
+ * percentage of surveyed banks, and it sits near zero, so both of the other
+ * treatments mislead: basis points would report a swing from 0.0 to 4.4 as "up
+ * 440 bps", and a proportional change would divide by a base that is routinely
+ * zero or negative.
+ */
+export function describePointChange(latest: number, prior: number): string | null {
+  const points = Number((latest - prior).toFixed(1))
+  if (points === 0) return null
+  return `${points > 0 ? "up" : "down"} ${Math.abs(points).toFixed(1)} pp`
+}
+
+export function describeChange(latest: number, prior: number, unit: SeriesUnit): string | null {
+  switch (unit) {
+    case "percent":
+      return describeRateChange(latest, prior)
+    case "net-percent":
+      return describePointChange(latest, prior)
+    default:
+      return describeLevelChange(latest, prior)
+  }
 }
 
 export type VerifiedMetric = {

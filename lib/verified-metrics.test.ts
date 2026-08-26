@@ -3,10 +3,14 @@ import assert from "node:assert/strict"
 import {
   buildFdicMetric,
   buildFredMetric,
+  describeChange,
   describeLevelChange,
+  describePointChange,
   describeRateChange,
   fdicQuarterLabel,
+  formatUnitsFromThousands,
   formatUsdFromBillions,
+  formatValue,
   formatVerifiedDataBlock,
   parseFredCsv,
   periodLabel,
@@ -85,6 +89,39 @@ test("level moves are expressed as percentages", () => {
   assert.equal(describeLevelChange(3120, 3000), "up 4.0%")
   assert.equal(describeLevelChange(3000, 3120), "down 3.8%")
   assert.equal(describeLevelChange(3000, 3000), null)
+})
+
+test("a survey share moves in percentage points, not basis points", () => {
+  assert.equal(describePointChange(4.4, 0), "up 4.4 pp")
+  assert.equal(describePointChange(-1.4, 4.4), "down 5.8 pp")
+  assert.equal(describePointChange(4.4, 4.4), null)
+})
+
+test("each unit is described the way that unit is actually discussed", () => {
+  // The lending-standards series is why net-percent exists. Both other
+  // treatments misreport a move off zero: "up 440 bps" dresses a survey up as a
+  // rate, and a proportional change divides by a base that is routinely zero.
+  assert.equal(describeChange(4.4, 0, "net-percent"), "up 4.4 pp")
+  assert.equal(describeChange(4.4, 0, "percent"), "up 440 bps")
+  assert.equal(describeChange(4.4, 0, "usd-billions"), null)
+
+  assert.equal(describeChange(1.86, 1.72, "percent"), "up 14 bps")
+  assert.equal(describeChange(421, 402, "units-thousands"), "up 4.7%")
+  assert.equal(describeChange(335.1, 334.2, "index"), "up 0.3%")
+})
+
+test("non-rate units print in the terms their source publishes", () => {
+  assert.equal(formatValue(4.4, "net-percent"), "4.40%")
+  assert.equal(formatValue(335.104, "index"), "335.1")
+  // Census reports construction spending in millions; the tape reads in billions.
+  assert.equal(formatValue(745339, "usd-millions"), "$745.3 billion")
+  assert.equal(formatValue(3119.4696, "usd-billions"), "$3.12 trillion")
+})
+
+test("starts and permits read as units, scaling to millions at an annual rate", () => {
+  assert.equal(formatUnitsFromThousands(421), "421k units")
+  assert.equal(formatUnitsFromThousands(1433), "1.43M units")
+  assert.equal(formatUnitsFromThousands(1000), "1.00M units")
 })
 
 test("large balances read in trillions", () => {
