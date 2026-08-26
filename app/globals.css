@@ -514,3 +514,45 @@ table th,
     scroll-behavior: auto !important;
   }
 }
+
+/* Market pulse ticker.
+   The rail holds several copies of the same tiles, so the loop is seamless only
+   if one lap shifts by exactly one copy. That distance depends on how many
+   copies were needed to fill the rail, which the component measures at runtime
+   and hands back as --pulse-ticker-shift. */
+@keyframes pulse-ticker-crawl {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(calc(-1 * var(--pulse-ticker-shift, 50%)), 0, 0);
+  }
+}
+
+.pulse-ticker-track {
+  animation: pulse-ticker-crawl var(--pulse-ticker-duration, 40s) linear infinite;
+  will-change: transform;
+}
+
+/* Reading a figure off a moving rail is a race. Hovering or tabbing in stops it. */
+.pulse-ticker:hover .pulse-ticker-track,
+.pulse-ticker:focus-within .pulse-ticker-track {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* The blanket rule above collapses an animation to its final frame, which for
+     a crawl is one copy already scrolled off. Drop the animation entirely, hide
+     the duplicates that only exist to feed it, and let the rail be scrolled by
+     hand instead. */
+  .pulse-ticker {
+    overflow-x: auto;
+  }
+  .pulse-ticker-track {
+    animation: none !important;
+    transform: none !important;
+  }
+  .pulse-ticker-track > [aria-hidden="true"] {
+    display: none;
+  }
+}
