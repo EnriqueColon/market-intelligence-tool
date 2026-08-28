@@ -1,9 +1,13 @@
-# Next version — a tool that four departments can act on
+# Next version — a tool that three departments can act on
 
 Working plan, agreed 2026-08-24. Tracks the evolution of the tool from a single undifferentiated
-dashboard into one that serves underwriting, investor relations / business development,
-accounting / finance and senior executives — **additively**. Nothing currently in the tool is
-removed; the existing four tabs stay exactly as they are.
+dashboard into one that serves underwriting, investor relations / business development and senior
+executives — **additively**. Nothing currently in the tool is removed; the existing four tabs stay
+exactly as they are.
+
+**Amended 2026-08-28: Accounting / Finance is dropped.** It was the one group whose lens had not been
+started, and carrying it in `DEPARTMENTS` meant offering a choice that resolved to nothing. The rows
+below are kept for the record of what was considered, but the department no longer exists in code.
 
 Update the status markers as phases land. `SESSION.md` records what actually happened; this file
 records what we intend.
@@ -13,8 +17,8 @@ records what we intend.
 ## The problem this solves
 
 The tool presents data uniformly and leaves interpretation to the reader. That works for someone who
-already knows what they are looking for and is expensive for everyone else. Four departments arrive
-with four different questions and are handed the same thirty-column table.
+already knows what they are looking for and is expensive for everyone else. Each department arrives
+with a different question and is handed the same thirty-column table.
 
 Three structural facts, verified in the codebase on 2026-08-24, explain why the tool reads as
 informational rather than actionable:
@@ -38,12 +42,11 @@ Insight has to attach to a decision or it is just more data.
 | --- | --- | --- |
 | Underwriting | Is this credit sound, and what is the downside? | Approve, decline, or price |
 | IR / Business Development | Who should I call, and why now? | Where outreach goes |
-| Accounting / Finance | What is our exposure, and can I tie it out? | Reporting and reconciliation |
+| ~~Accounting / Finance~~ | ~~What is our exposure, and can I tie it out?~~ | Dropped 2026-08-28 |
 | Senior Executive | What changed, and what needs me? | Where people and capital go |
 
-Underwriting and finance are **depth** users — one institution, verify the number, trust the
-provenance. IR/BD and executives are **breadth** users — rank, direction, what moved. Two shapes, not
-four.
+Underwriting is the **depth** user — one institution, verify the number, trust the provenance. IR/BD
+and executives are **breadth** users — rank, direction, what moved. Two shapes, not three.
 
 ## Architecture: one data layer, four lenses
 
