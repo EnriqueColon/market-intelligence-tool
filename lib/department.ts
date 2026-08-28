@@ -1,7 +1,7 @@
 /**
  * Department preference.
  *
- * The tool serves four groups who arrive with different questions, and the
+ * The tool serves three groups who arrive with different questions, and the
  * department shapes what it puts in front of them. This deliberately is *not*
  * user identity: there are no accounts, only a single shared password, so a
  * department is all the tool knows and all it needs to know. Anything persisted
@@ -11,14 +11,14 @@
  * Read server-side in `app/page.tsx` so the correct view renders immediately.
  * That is why the cookie is not httpOnly: the header selector writes it from
  * the browser, while the server reads it during render.
+ *
+ * Accounting & Finance was listed here before its lens existed and has been
+ * removed rather than left as an option that resolves to nothing. A cookie
+ * still holding "finance" now fails `parseDepartment` and reads as no choice,
+ * which is the honest outcome.
  */
 
-export const DEPARTMENTS = [
-  "underwriting",
-  "origination",
-  "finance",
-  "executive",
-] as const
+export const DEPARTMENTS = ["underwriting", "origination", "executive"] as const
 
 export type Department = (typeof DEPARTMENTS)[number]
 
@@ -31,10 +31,6 @@ export const DEPARTMENT_LABELS: Record<Department, { label: string; blurb: strin
   origination: {
     label: "Investor Relations & BD",
     blurb: "Who to approach, and why now",
-  },
-  finance: {
-    label: "Accounting & Finance",
-    blurb: "Exposure aggregation with traceable sources",
   },
   executive: {
     label: "Executive",
