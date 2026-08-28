@@ -30,6 +30,12 @@ export type EnabledTabs = {
 /** Flags for content inside a tab, as opposed to the tabs themselves. */
 export type DashboardFeatures = {
   bankStressMap: boolean
+  /**
+   * The department layer: the selector, and the lenses choosing a department
+   * reveals. Off in production while the lenses are still being built, so their
+   * code ships without being reachable rather than being held back on `dev`.
+   */
+  departmentLenses: boolean
 }
 
 /** Tab order is fixed here so the bar and the content below cannot fall out of step. */
@@ -61,7 +67,7 @@ const TAB_CONTENT_CLASS = "animate-in fade-in duration-300"
 
 export function MarketIntelligenceDashboard({
   enabledTabs,
-  features = { bankStressMap: false },
+  features = { bankStressMap: false, departmentLenses: false },
   initialDepartment = null,
 }: {
   enabledTabs: EnabledTabs
@@ -71,6 +77,11 @@ export function MarketIntelligenceDashboard({
 }) {
   const router = useRouter()
   const [loggingOut, setLoggingOut] = useState(false)
+
+  // One gate rather than three. The department cookie is written by the client
+  // and outlives the flag, so resolving it to null here means a browser that
+  // picked a department on the preview cannot surface a lens in production.
+  const department = features.departmentLenses ? initialDepartment : null
 
   const visibleTabs = useMemo(() => TAB_DEFS.filter((tab) => enabledTabs[tab.flag]), [enabledTabs])
   const availableTabs = useMemo(() => visibleTabs.map((tab) => tab.value as TabValue), [visibleTabs])
@@ -132,7 +143,7 @@ export function MarketIntelligenceDashboard({
               <p className="font-body text-base text-[#006D95]/90 mt-1">News and analytics</p>
             </div>
             <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center">
-              <DepartmentSelector initial={initialDepartment} />
+              {features.departmentLenses && <DepartmentSelector initial={department} />}
               <Button
                 type="button"
                 variant="outline"
@@ -155,7 +166,7 @@ export function MarketIntelligenceDashboard({
         A lens sits above the tabs and replaces nothing, so choosing a department
         adds a view rather than taking one away. Everything below stays reachable.
       */}
-      {initialDepartment === "executive" && (
+      {department === "executive" && (
         <div className="mx-auto w-full max-w-[1100px] px-5 pt-10 md:px-[20px]">
           <ExecutiveBrief
             onSelectInstitution={analyticsAvailable ? handleSelectInstitution : undefined}
@@ -164,7 +175,7 @@ export function MarketIntelligenceDashboard({
         </div>
       )}
 
-      {initialDepartment === "underwriting" && (
+      {department === "underwriting" && (
         <div className="mx-auto w-full max-w-[1100px] px-5 pt-10 md:px-[20px]">
           <UnderwriterWorkbench
             onSelectInstitution={analyticsAvailable ? handleSelectInstitution : undefined}

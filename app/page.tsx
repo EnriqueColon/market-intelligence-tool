@@ -18,6 +18,7 @@ export default async function Page() {
   // and everything under it are client components.
   const features = {
     bankStressMap: isFeatureEnabled("bank-stress-map"),
+    departmentLenses: isFeatureEnabled("department-lenses"),
   }
 
   // Read here rather than in the client so the chosen view renders on the first

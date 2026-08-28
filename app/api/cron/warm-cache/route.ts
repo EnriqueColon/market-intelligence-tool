@@ -13,6 +13,7 @@ import { fetchMarketInsights } from "@/app/actions/fetch-insights"
 import { fetchPriceIndexData, fetchTransactionVolumeData } from "@/app/actions/fetch-cre-data"
 import { getExecutiveBrief } from "@/app/actions/executive-brief"
 import { getWorkbenchUniverse } from "@/app/actions/underwriter-workbench"
+import { isFeatureEnabled } from "@/lib/features"
 
 export const runtime = "nodejs"
 // 5 minutes — all tasks run concurrently so wall time is the slowest single task
@@ -90,8 +91,16 @@ export async function GET(request: Request) {
     // Only "National" is warmed because that is the only scope either lens is
     // mounted with. If a scope selector is added, every scope it can produce
     // has to be added here or the tool quietly regains a fifty-second cold load.
-    warmWithLabel("executiveBrief:national", () => getExecutiveBrief("National"), results),
-    warmWithLabel("workbench:national", () => getWorkbenchUniverse("National"), results),
+    //
+    // Skipped entirely where the lenses are not reachable, which is production
+    // while they are still being built. Warming them there would spend a couple
+    // of minutes of FDIC calls per deploy filling a cache nothing can read.
+    ...(isFeatureEnabled("department-lenses")
+      ? [
+          warmWithLabel("executiveBrief:national", () => getExecutiveBrief("National"), results),
+          warmWithLabel("workbench:national", () => getWorkbenchUniverse("National"), results),
+        ]
+      : []),
   ])
 
   const failed = Object.entries(results).filter(([, v]) => v !== "ok")
