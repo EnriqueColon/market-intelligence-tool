@@ -8,7 +8,32 @@ is it in now, and what is still open.
 
 ---
 
-## 2026-08-28 (latest) — shipping the fixes without shipping the lenses
+## 2026-08-28 (latest) — a gate built, a merge declined, and a department removed
+
+**Read this before the entry below it, which was written mid-session and assumed a merge that did not
+happen.** The gate is built and committed; the merge to `main` was called off. `main` remains at
+`e8bf8ad` and production still carries the CRE and capital-ratio errors, now by an explicit decision
+rather than by drift: the department sections are not developed enough to be near production even
+behind a flag, and shipping the accuracy fixes was judged not worth the proximity.
+
+That decision is reversible at any time. The gate (`3417025`) is what makes it a one-command choice
+rather than a project, and it is verified in both modes — see below.
+
+**Accounting & Finance has been removed as a department** (`d3f7973`). It was the one group whose
+lens was never started, so listing it in `DEPARTMENTS` offered a choice that resolved to nothing.
+`DEPARTMENTS` is now `underwriting`, `origination`, `executive`. Nothing else in the codebase
+referenced it, so the removal is confined to `lib/department.ts`; a cookie still holding `"finance"`
+fails `parseDepartment` and reads as no choice, which is the honest outcome rather than an empty
+view. `docs/NEXT_VERSION_PLAN.md` is amended rather than rewritten — the dropped row is struck
+through so the record of what was considered survives.
+
+Verified by type check and build only, not by rendering: the change removes one entry from a const
+array that feeds a `.map()` and a membership test, with no branch that could behave differently, and
+both consumers were exercised by the gate verification minutes earlier.
+
+---
+
+## 2026-08-28 — shipping the fixes without shipping the lenses
 
 `dev` had reached **50 commits ahead of `main`** without a single one reaching production, and the
 review of what they contained is what changed the decision. The department lenses are not finished
@@ -44,9 +69,10 @@ three seconds reports a skeleton as an absent lens.
 **State now.** Twelve suites, 155 assertions, all passing. `npm run build` clean, `npx tsc --noEmit`
 unchanged at 74. Gate committed as `3417025`.
 
-**Still open.** As below, minus the merge itself. `department-lenses` is deliberately absent from
-production's `ENABLED_TABS` and should stay absent until the lenses are ready — the remaining two,
-Origination Targeting and Exposure & Reporting, are not built at all.
+**Still open.** As below, and the merge did not go ahead — see the entry above. `department-lenses`
+is deliberately absent from production's `ENABLED_TABS` and should stay absent until the lenses are
+ready. Origination Targeting is still to build; Exposure & Reporting no longer applies, since the
+department it served has been removed.
 
 ---
 

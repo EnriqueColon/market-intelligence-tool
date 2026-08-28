@@ -8,13 +8,17 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
 | `main` | `e8bf8ad` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `56cfbd0` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `dev` | `d3f7973` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 A SHA here can never name the commit that writes it, so the true head is usually one documentation
 commit further on. Only behavioural commits matter as rollback targets; on `dev` the newest that
-changes application behaviour is **`3417025`**, which gates the department layer. It is also the
-commit that made the merge to `main` safe: reverting it on `main` exposes two unfinished lenses to
-production users with no environment change required.
+changes application behaviour is **`d3f7973`**, which drops the Accounting & Finance department.
+
+`main` has not moved since `e8bf8ad`, and that is now a decision rather than drift: the department
+sections are not developed enough to sit near production even behind a flag, so the accuracy fixes on
+`dev` are waiting with them. The gate at `3417025` is what keeps that reversible — merging becomes a
+one-command choice whenever the lenses are ready, or sooner if the CRE and capital-ratio corrections
+are judged urgent enough to go on their own.
 
 Production deploys automatically on every push to `main`. `dev` deploys as a Vercel preview on every
 push. Crons run only against production, and the post-deploy warm-cache GitHub Action triggers only
@@ -116,6 +120,8 @@ Not in production. Merge to `main` to ship.
 
 | Commit | Date | Summary |
 | --- | --- | --- |
+| `8e594c4` | 08-28 | docs: amend the plan for three departments rather than four. Documentation only. |
+| `d3f7973` | 08-28 | fix: drop the Accounting & Finance department, which had no lens behind it. `DEPARTMENTS` goes from four entries to three. Confined to `lib/department.ts`; nothing else referenced it. Reverting restores a selector option that leads nowhere — a chosen department with no lens renders the dashboard unchanged, so it reads as the tool ignoring the choice. Any `department=finance` cookie written before this commit already reads as no choice. |
 | `3417025` | 08-28 | feat: gate the department layer so the lenses can ship without being reachable. Adds the `department-lenses` key; the selector and both lenses render only where it is on, which is everywhere except production. **This is the commit that made merging to `main` safe** — reverting it on `main` exposes two unfinished lenses to production users immediately, with no environment change required. Nothing else depends on it, and the preview is unaffected either way since every feature is on outside production. |
 | `56cfbd0` | 08-25 | feat: widen the market pulse tape to nineteen real-estate series. Fourteen new FRED series, four new `SeriesUnit` variants, and `describeChange` exported so the tape and the outlook memo share one unit-to-wording map. **A revert must take `lib/verified-metrics.ts` with it** — reverting only `fetch-market-pulse.ts` leaves specs referencing units the formatter no longer has, and `formatValue`'s switch stops being exhaustive, which is a type error rather than a runtime one. The cache key moved to `market-pulse-v2`; reverting without moving it back serves the nineteen-series payload to five-series code for the rest of the ET day. Nothing outside the strip reads these units, and no FDIC or lens figure is affected. |
 | `c135ac2` | 08-25 | feat: run the market pulse as a crawl, at a speed its content cannot change. Presentation only — the same five FRED series, the same figures, the same cache. Reverting restores the five-tile grid and costs nothing but the animation. The parts worth keeping if it is ever rewritten are the two measured values: lap duration from sequence width, so crawl speed does not drift with how many series survived, and copy count from rail width, without which a short strip drags a gap across the screen each lap. The `prefers-reduced-motion` override in `app/globals.css` is load-bearing and must go with it — the blanket reduce rule would otherwise freeze the crawl on its final frame, which looks like an empty strip. |
