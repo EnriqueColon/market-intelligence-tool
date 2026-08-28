@@ -420,6 +420,7 @@ sense against your source usually mean the build cache, not your code. Stop the 
 | To do this | Change this |
 | --- | --- |
 | Expose or hide a tab | `ENABLED_TABS` in Vercel. No code change |
+| Turn on the department lenses in production | Add `department-lenses` to `ENABLED_TABS` in Vercel. The code is deployed but unreachable until you do; they are off because the lenses are unfinished, not because they are broken |
 | Add a feature flag inside a tab | Add the key to `ENABLED_TABS`, resolve it in `app/page.tsx`, pass it down as a prop — `isFeatureEnabled()` is server-only |
 | Add an FDIC column | Request the field in `lib/fdic-config.ts`, map it in `lib/fdic-data-transformer.ts`, then verify against the live API |
 | Force the outlook to regenerate | Bump the cache key version in `getCachedOutlook.ts`, push to `main`, confirm `keySignalFigures` is non-zero in the warm-cache log |

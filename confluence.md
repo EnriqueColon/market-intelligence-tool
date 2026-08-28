@@ -61,7 +61,23 @@ tab is developed on `dev` before being exposed in production.
 
 The same list also gates content *inside* a tab. `app/page.tsx` resolves those into a `features`
 object passed down to the dashboard, because `isFeatureEnabled()` reads server-only env and
-everything below it is a client component. `bank-stress-map` is the current entry.
+everything below it is a client component. The current entries are `bank-stress-map` and
+`department-lenses`.
+
+`department-lenses` gates the whole department layer: the selector in the header, and the Executive
+Brief and Underwriter Workbench that choosing a department reveals. **It is off in production while
+the lenses are still being built**, which is what let the corrected CRE definition, the capital-ratio
+fix and the FDIC column audit reach production without waiting for them — the lens code ships but is
+unreachable. Turn it on by adding `department-lenses` to `ENABLED_TABS` in Vercel; no code change is
+needed.
+
+Two details are load-bearing rather than incidental. The dashboard resolves the flag into a single
+`department` value (`features.departmentLenses ? initialDepartment : null`) instead of checking it at
+each of the three render sites, because **the department cookie is written by the client and outlives
+the flag** — a browser that chose a department on the preview must not be able to surface a lens in
+production. And `app/api/cron/warm-cache/route.ts` skips the two lens warms when the flag is off,
+where it would otherwise spend a couple of minutes of FDIC calls per deploy filling a cache nothing
+can read.
 
 The tab bar derives its column count from the number of enabled tabs. It was previously hardcoded to
 `grid-cols-4`, so production — which runs three — rendered an empty fourth cell.

@@ -8,7 +8,49 @@ is it in now, and what is still open.
 
 ---
 
-## 2026-08-25 (latest) — nineteen series on the tape, and a survey that is not a rate
+## 2026-08-28 (latest) — shipping the fixes without shipping the lenses
+
+`dev` had reached **50 commits ahead of `main`** without a single one reaching production, and the
+review of what they contained is what changed the decision. The department lenses are not finished
+and should not go live. But the same 50 commits carry the corrected CRE definition, the capital-ratio
+fix, five misread Market Analytics columns, the CBLR zero-versus-absent trap and the percentile
+scoring rework — and `origin/main` was verified to have **none** of them: `lib/fdic-cre.ts` does not
+exist there and `normalizeCapitalRatioPercent` appears zero times in its copy of
+`lib/format/metrics.ts`. So holding the merge to protect unfinished work meant continuing to serve
+overstated CRE concentration and capital ratios divided by 100 to people using the tool.
+
+The dependency only runs one way. The lenses need the corrected FDIC maths; nothing else needs the
+lenses. **So the lenses ship dark instead of being held back**, behind a `department-lenses` feature
+key. It gates the selector and both lens renders, and because `isFeatureEnabled` returns true outside
+production, the preview is unaffected and remains the place to keep building them. Turning them on
+later is a Vercel environment change, not a deploy.
+
+The flag resolves to **one** value in the dashboard — `features.departmentLenses ? initialDepartment
+: null` — rather than being tested at each of the three render sites. That is deliberate: the
+department cookie is written by the client and outlives the flag, so a browser that picked a
+department on the preview would otherwise carry a lens into production through a stale cookie. The
+post-deploy warm skips the two lens caches on the same flag, where it would otherwise spend a couple
+of minutes of FDIC calls per deploy filling a cache nothing can read.
+
+**Verified by rendering, in both modes.** With `VERCEL_ENV=production` and a `department` cookie
+already set to `executive` and then `underwriting`: no selector, no brief, no workbench, tabs and the
+Market Pulse tape unaffected, no page errors. In dev mode with the same cookies: selector present and
+the correct lens for each. Two traps worth recording. Running two `next dev` servers at once to
+compare modes side by side **does not work** — they share one `.next` directory and destroy each
+other's build artifacts, which surfaces as a 500 on `/api/auth` and reads exactly like a wrong
+password. And a lens needs the better part of a minute cold, so a check that samples the DOM after
+three seconds reports a skeleton as an absent lens.
+
+**State now.** Twelve suites, 155 assertions, all passing. `npm run build` clean, `npx tsc --noEmit`
+unchanged at 74. Gate committed as `3417025`.
+
+**Still open.** As below, minus the merge itself. `department-lenses` is deliberately absent from
+production's `ENABLED_TABS` and should stay absent until the lenses are ready — the remaining two,
+Origination Targeting and Exposure & Reporting, are not built at all.
+
+---
+
+## 2026-08-25 — nineteen series on the tape, and a survey that is not a rate
 
 Asked directly: bring in other data relevant to real estate. Thirty-five candidate FRED ids were
 resolved against the live CSV endpoint before anything was written, with each one's frequency read
