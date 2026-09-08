@@ -8,16 +8,40 @@ is it in now, and what is still open.
 
 ---
 
-## 2026-08-28 (latest) — a gate built, a merge declined, and a department removed
+## 2026-09-08 (latest) — the corrections finally reach production
 
-**Read this before the entry below it, which was written mid-session and assumed a merge that did not
-happen.** The gate is built and committed; the merge to `main` was called off. `main` remains at
-`e8bf8ad` and production still carries the CRE and capital-ratio errors, now by an explicit decision
-rather than by drift: the department sections are not developed enough to be near production even
-behind a flag, and shipping the accuracy fixes was judged not worth the proximity.
+**`main` moved for the first time since 2026-08-21**, from `e8bf8ad` to `7d74797`, carrying 55
+commits. The decision recorded on 08-28 not to merge was reversed once the question was separated
+properly: the accuracy fixes and the department lenses were only ever coupled by being on the same
+branch, and the gate built on 08-28 is what let them be uncoupled without rewriting history.
 
-That decision is reversible at any time. The gate (`3417025`) is what makes it a one-command choice
-rather than a project, and it is verified in both modes — see below.
+What reached users:
+
+- **The corrected CRE definition.** Production had been double-counting `LNREOTH` and including
+  owner-occupied non-residential property, which inflates the very ratio the 300% supervisory screen
+  is measured against. This is the most consequential of the three.
+- **The corrected capital ratios.** A bank reporting 113.99% had been displaying as 1.14%, because
+  the `normalizePercent` basis-point heuristic treated any value above 100 as needing division.
+  Strongly capitalised institutions had been rendering as failing ones.
+- **Market Analytics** — real Opportunity, Earnings and Vulnerability scores in place of columns of
+  zeros, on percentile ranking rather than min-max, plus the audited FDIC columns.
+- **Market Pulse**, which did not exist in production at all: 21 FRED series on a continuous crawl.
+
+What did not, and deliberately: the three department lenses. Their code is deployed but unreachable,
+because `isFeatureEnabled` fails closed in production and `department-lenses` is absent from
+`ENABLED_TABS`. The bank stress map stays dark for the same reason under its own key — worth knowing,
+since it is otherwise easy to assume the visual work shipped whole.
+
+Verified before merging: all twelve test suites, a clean production build, and a direct assertion
+that the flag resolves false under production's exact `ENABLED_TABS` *and* when the variable is
+unset, so the failure mode is hidden rather than visible. Verified after: the Production deployment
+for `7d74797` registered `success` and the live alias serves 200. **Not** verified: the live
+dashboard was not opened, so the gate's behaviour in production rests on the flag assertion plus the
+end-to-end browser check done on 08-28, not on looking at the deployed page. Worth closing next time
+someone signs in.
+
+The gate itself is unchanged and still `3417025`; turning the lenses on remains a Vercel setting
+rather than a deploy.
 
 **Accounting & Finance has been removed as a department** (`d3f7973`). It was the one group whose
 lens was never started, so listing it in `DEPARTMENTS` offered a choice that resolved to nothing.
@@ -69,10 +93,10 @@ three seconds reports a skeleton as an absent lens.
 **State now.** Twelve suites, 155 assertions, all passing. `npm run build` clean, `npx tsc --noEmit`
 unchanged at 74. Gate committed as `3417025`.
 
-**Still open.** As below, and the merge did not go ahead — see the entry above. `department-lenses`
-is deliberately absent from production's `ENABLED_TABS` and should stay absent until the lenses are
-ready. Origination Targeting is still to build; Exposure & Reporting no longer applies, since the
-department it served has been removed.
+**Still open.** As below. The merge described here was declined on the day and then carried out on
+09-08 — see the entry above. `department-lenses` is deliberately absent from production's
+`ENABLED_TABS` and should stay absent until the lenses are ready. Origination Targeting is still to
+build; Exposure & Reporting no longer applies, since the department it served has been removed.
 
 ---
 

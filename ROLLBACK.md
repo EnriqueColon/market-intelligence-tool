@@ -7,18 +7,24 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
-| `main` | `e8bf8ad` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `d3f7973` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `main` | `7d74797` | Production | https://market-intelligence-tool-gilt.vercel.app |
+| `dev` | `7d74797` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+
+The two branches are level, for the first time since 2026-08-21.
 
 A SHA here can never name the commit that writes it, so the true head is usually one documentation
-commit further on. Only behavioural commits matter as rollback targets; on `dev` the newest that
-changes application behaviour is **`d3f7973`**, which drops the Accounting & Finance department.
+commit further on. Only behavioural commits matter as rollback targets; the newest that changes
+application behaviour is **`d3f7973`**, which drops the Accounting & Finance department.
 
-`main` has not moved since `e8bf8ad`, and that is now a decision rather than drift: the department
-sections are not developed enough to sit near production even behind a flag, so the accuracy fixes on
-`dev` are waiting with them. The gate at `3417025` is what keeps that reversible — merging becomes a
-one-command choice whenever the lenses are ready, or sooner if the CRE and capital-ratio corrections
-are judged urgent enough to go on their own.
+**`e8bf8ad` is the last production build with the wrong numbers.** Rolling back past `7d74797`
+restores CRE concentration that double-counts `LNREOTH` and includes owner-occupied property, and
+capital ratios that divide anything above 100% by 100. Prefer rolling forward with a fix over
+reverting to it; if you must revert for an unrelated reason, know that the displayed ratios go wrong
+again with it.
+
+Rolling back does **not** expose the department lenses. They are gated on `department-lenses` in
+`ENABLED_TABS`, which no production build has ever had set, so their visibility is a Vercel setting
+and not a property of any commit here.
 
 Production deploys automatically on every push to `main`. `dev` deploys as a Vercel preview on every
 push. Crons run only against production, and the post-deploy warm-cache GitHub Action triggers only
@@ -76,7 +82,8 @@ git push --force-with-lease origin dev
 
 | Commit | Date | Why it is a safe target |
 | --- | --- | --- |
-| `4a4f3de` | 2026-08-25 | Newest behavioural commit on `dev` and the one to prefer. Makes `buildSearchQuery` fail closed, so both layers of the publisher allowlist now refuse an unrecognised entity id independently. Safe to roll *to*; **rolling back past it is a safety regression rather than a lost feature** — the query builder returns to emitting a bare keyword with no `site:` restriction for any unknown entity id, leaving the result filter as the single layer standing between the tool and the open web. Not reachable from the dropdown in either direction, so no normal user journey differs. A revert has to take the `null` check in `searchIndustryReports` and the four `buildSearchQuery` assertions with it, or the build fails to typecheck. Prefer fixing forward. |
+| `d3f7973` | 2026-08-28 | Newest behavioural commit, and the head of both branches' behaviour as of 09-08. Drops the Accounting & Finance department; see the `dev` table below. |
+| `4a4f3de` | 2026-08-25 | Prior behavioural commit, in production since 09-08. Makes `buildSearchQuery` fail closed, so both layers of the publisher allowlist now refuse an unrecognised entity id independently. Safe to roll *to*; **rolling back past it is a safety regression rather than a lost feature** — the query builder returns to emitting a bare keyword with no `site:` restriction for any unknown entity id, leaving the result filter as the single layer standing between the tool and the open web. Not reachable from the dropdown in either direction, so no normal user journey differs. A revert has to take the `null` check in `searchIndustryReports` and the four `buildSearchQuery` assertions with it, or the build fails to typecheck. Prefer fixing forward. |
 | `397a03e` | 2026-08-24 | Prior behavioural commit on `dev`. Stops reading a reported zero as a capital ratio, and stops drawing 1-4 family residential as a slice of the CRE book. **Opportunity Scores and their ranking change at this commit and are correct afterwards** — 30 of the top-100 most-distressed institutions were Community Bank Leverage Ratio filers scored as though they held no capital, and the median institution moves 120 rank places. Rolling back past it returns 1,765 of 4,352 institutions to showing 0.00% total risk-based capital, indistinguishable from a failed bank, and returns the CRE Portfolio Composition chart to stacked bands summing to a median 255% on a 0–100 axis. Prefer fixing forward. CRE-to-capital, the stress map and the workbench are untouched either way; they read reported capital dollars rather than the ratios. Note the four capital ratios became `number \| null` here, so a rollback also reverts a type change several files depend on. Run `npm run audit:fdic-columns` after any change in this area. |
 | `bfded4f` | 2026-08-24 | Warms both department lenses from the post-deploy `warm-cache` route and lengthens their cache windows from 6 hours to 23. Purely a latency change — no figure moves — so it is safe in both directions. If you roll back past it, expect the first person to select a department after a deploy to wait about fifty seconds, and note that the GitHub Action's curl timeout reverts to 120s, which is shorter than the route now takes. |
 | `be75853` | 2026-08-24 | Adds the Underwriter Workbench lens. Renders only when the department selector is set to Underwriting and replaces no existing view, so rolling it back removes a card and changes nothing else — no shared metric, cohort or export is touched. Worth knowing before reinstating any earlier version of it: the CRE downside scenario measures leverage filers against the **4% PCA adequately-capitalised** level, not the 9% CBLR trigger. An earlier iteration used 9% and made every community-bank-leverage filer appear to have the thinnest capital cushion in the state, which was an artifact of comparing an election trigger to a capital floor. Run `npm run verify:workbench` after any change here; it fails on a mismatch against FDIC's published `RBCRWAJ` and `RBC1AAJ`. |
@@ -90,7 +97,7 @@ git push --force-with-lease origin dev
 | `1a21230` | 2026-08-24 | Newest behavioural commit on `dev`. Opportunity Score ranks by percentile rather than min-max, verified on live FDIC data for Florida and national scope; fixes the map's inverted CRE/Capital colouring and the permanently-null Net Income YoY. **Every score changes at this commit** — rolling back past it restores rankings where 55% of the national cohort sits in one 10-point band. |
 | `7286e71` | 2026-08-23 | Last commit before the scoring rework, so scores here are the compressed min-max ones. Reserve Coverage and CRE/(T1+T2) verified figure-by-figure against the live FDIC API. Prefer this over `bb5e5f8`, which renders a Reserve Coverage roughly 30x too large. |
 | `bb5e5f8` | 2026-08-23 | Builds clean; charts, pulse strip and map verified against a running server. Roll back to `016d162` to remove the visual layer entirely. **Serves a wrong Reserve Coverage** — avoid unless isolating the visual layer. |
-| `e8bf8ad` | 2026-08-21 | Current production. Documentation only on top of `74807d8`, so identical in behaviour. |
+| `e8bf8ad` | 2026-08-21 | Production from 08-21 to 09-08. Documentation only on top of `74807d8`, so identical in behaviour. **The last production build with the wrong CRE and capital figures** — see "Current state". |
 | `74807d8` | 2026-08-21 | Last behavioural commit. Sessions last a year and renew on use. |
 | `eabf088` | 2026-08-17 | Last commit before the isolated dev environment and the year-long session reached production. Roll back here to restore the seven-day login expiry. |
 | `2191ff3` | 2026-08-17 | Last commit before the verified-metrics pipeline. Key Signals carried **no** figures but nothing fabricated. |
@@ -114,9 +121,13 @@ the Market Participants tab.
 
 ## Dev branch commits
 
-Not in production. Merge to `main` to ship.
+**All of these shipped to production on 2026-09-08**, when `main` fast-forwarded from `e8bf8ad` to
+`7d74797`. The section is kept as written rather than merged into the production table above, because
+the per-commit rollback notes are the useful part and they do not change by being deployed. Nothing
+currently sits on `dev` ahead of `main`.
 
-`main` sits at `e8bf8ad`. Everything above it on `dev` is listed here.
+The department lenses among these entries are deployed but unreachable: `department-lenses` is not in
+production's `ENABLED_TABS`, and `isFeatureEnabled` returns false there for anything unlisted.
 
 | Commit | Date | Summary |
 | --- | --- | --- |
@@ -188,7 +199,13 @@ tile, the screening table, the drawer and the PDF.
 
 ## Production commits
 
-Complete history of `main`, newest first. 132 commits, first on 2026-03-01.
+Complete history of `main`, newest first. 187 commits, first on 2026-03-01.
+
+### 2026-09 — the data-accuracy and visual work reaches production
+
+| Commit | Date | Summary |
+| --- | --- | --- |
+| `7d74797` | 09-08 | Fast-forward of 55 commits from `dev`, listed individually under "Dev branch commits" above. Ships the corrected CRE definition, the corrected capital ratios, the Market Analytics column and scoring corrections, and Market Pulse. The department lenses and the bank stress map ship dark behind `ENABLED_TABS`. |
 
 ### 2026-08 — sessions, dev environment, data accuracy and UI cleanup
 
