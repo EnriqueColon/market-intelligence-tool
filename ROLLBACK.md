@@ -8,13 +8,13 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
 | `main` | `7d74797` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `7d74797` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `dev` | `02e45ae` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
-The two branches are level, for the first time since 2026-08-21.
+`dev` is ahead of production by the Market Analytics performance work and the FDIC host fix.
 
 A SHA here can never name the commit that writes it, so the true head is usually one documentation
 commit further on. Only behavioural commits matter as rollback targets; the newest that changes
-application behaviour is **`d3f7973`**, which drops the Accounting & Finance department.
+application behaviour is **`02e45ae`**, which moves the Market Analytics reduction to the server.
 
 **`e8bf8ad` is the last production build with the wrong numbers.** Rolling back past `7d74797`
 restores CRE concentration that double-counts `LNREOTH` and includes owner-occupied property, and
@@ -119,7 +119,14 @@ the Market Participants tab.
 
 ---
 
-## Dev branch commits
+## Dev branch commits (not yet in production)
+
+| Commit | Date | Summary |
+| --- | --- | --- |
+| `02e45ae` | 09-08 | perf(market-analytics): move the screening reduction and scoring to the server and cache it. **No displayed figure changes** — `npm run verify:screening-parity` compares every rendered field per institution against the previous browser reduction, 51,510 comparisons nationally, all matching. Rolling back restores a tab that fetches 10.8MB and ~5.8s from FDIC on every single visit, so prefer fixing forward. If you roll back, also drop `screening:national` and `screening:florida` from the warm-cache route or it will warm a cache nothing reads. The cached entry is 1.26MB against a 2MB ceiling; adding fields to the transported row is what would break it, silently, by making Next refuse the write. |
+| `41f01b0` | 09-08 | fix(fdic): base URLs now carry the path prefix, so the fallback host resolves instead of 404ing, and the primary no longer pays a 301 on every call. **Behaviour-preserving in the normal case** — the old primary worked, it just redirected. What changes is the failure case: previously a primary outage returned empty data, because `fetchFDICData` short-circuits on 4xx and the fallback 404d. Reverting reinstates that. `npm run verify:fdic-hosts` covers all eight endpoints on both hosts. Note a rollback must take `FDIC_ENDPOINTS` with it: the base and the endpoint prefix changed together and are only correct as a pair. |
+
+## Historical dev branch commits
 
 **All of these shipped to production on 2026-09-08**, when `main` fast-forwarded from `e8bf8ad` to
 `7d74797`. The section is kept as written rather than merged into the production table above, because

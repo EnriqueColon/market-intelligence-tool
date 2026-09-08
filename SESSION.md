@@ -8,7 +8,48 @@ is it in now, and what is still open.
 
 ---
 
-## 2026-09-08 (latest) — the corrections finally reach production
+## 2026-09-08 (latest, second entry) — why Market Analytics was slow, and what fixed it
+
+The tab took several seconds on **every** visit, not just a cold one, and the cause was structural
+rather than incidental. It fetched about 10,000 raw FDIC rows per load — nine or ten quarters of
+history for roughly 1,100 institutions — shipped 10.8MB across the server-action boundary, and
+collapsed it to one row per institution in a `useMemo`. None of that was cached, and correctly so:
+`lib/fdic-client.ts` skips the Next data cache above 5,000 rows because a response that size exceeds
+the 2MB entry limit. So every visitor paid the full ~5.8s FDIC round trip, measured and repeatable.
+
+**Caching alone would not have fixed it, which is the part worth remembering.** Reduced to one row
+per institution the payload is still 2.26MB, over the ceiling. Rounding the numbers barely helped —
+2.26MB to 2.00MB — because the bulk is repeated field *names*, not digits. What got it under the
+line was dropping the fields nothing renders: the capital dollar inputs that exist only to produce
+`capitalRatios`, the `CapitalRatios` internals the table and drawer never read, and three of the
+five values in each trend quarter. That lands at **1.26MB**, so the entry caches, and the daily cron
+now pays the FDIC cost once instead of every visitor paying it every time. The browser also stops
+reducing and scoring 10,000 rows on each render.
+
+Verified by `npm run verify:screening-parity`, which reimplements the old browser reduction and
+compares every rendered field per institution against the new module — 51,510 comparisons
+nationally, plus Florida and Texas, all matching. Scores, KPIs, trends and capital ratios are
+unchanged. The 2MB limit was read out of Next's source rather than assumed.
+
+**A separate latent bug surfaced while measuring.** The FDIC base URL was the bare host while every
+endpoint carried an `/api/` prefix, so the configured fallback resolved to
+`api.fdic.gov/banks/api/financials` — a 404. `fetchFDICData` treats 4xx as unrecoverable and stops
+instead of trying the next host, so the documented two-host protection would have turned a primary
+outage into empty data. It had never worked. The prefix now lives in the base, `api.fdic.gov` is
+primary because the old host 301s to it, and `npm run verify:fdic-hosts` checks all eight endpoints
+on both. Worth knowing: that redirect means the fallback is an *alias*, not a second independent
+host, so it will not survive an api.fdic.gov outage.
+
+**Still open.** The tab has not been opened in a browser since the change. The parity script covers
+every rendered value, so the residual risk is wiring rather than arithmetic — a loading state or an
+undefined access — but this repository's own rule is that building is not verifying, and that check
+has not been done. The national coverage gap is also untouched: the tab still shows the largest
+~1,100 of ~4,450 institutions, and closing it projects to about 5.5MB, which needs a different store
+rather than more trimming.
+
+---
+
+## 2026-09-08 — the corrections finally reach production
 
 **`main` moved for the first time since 2026-08-21**, from `e8bf8ad` to `7d74797`, carrying 55
 commits. The decision recorded on 08-28 not to merge was reversed once the question was separated

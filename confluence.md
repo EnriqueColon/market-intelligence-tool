@@ -266,8 +266,23 @@ duplicates and makes the rail scrollable by hand.
 ### FDIC screening metrics
 
 Fields are requested in `lib/fdic-config.ts` and turned into `BankFinancialData` in
-`lib/fdic-data-transformer.ts`. These are the columns whose FDIC field names invite a wrong reading,
-so verify against the live API rather than inferring from the field name:
+`lib/fdic-data-transformer.ts`.
+
+**Where the tab's numbers are computed.** `lib/analytics/screening.ts` collapses the multi-quarter
+FDIC rows into one scored row per institution — latest quarter, four-quarter trend, the
+trailing-twelve-month figures, the capital ratios, then the cohort-relative scores — and
+`app/actions/market-analytics-screening.ts` caches the result. The browser renders it and computes
+nothing. An institution that did not file for the quarter the tab is headed with is dropped rather
+than shown with a stale figure under a current date, which is why the KPI institution count can
+exceed the row count.
+
+The row that reaches the browser carries **only fields something renders**. The capital *dollar*
+inputs (`RBCT1J`, `RBCT2`, `RWAJ`, equity) exist solely to produce `capitalRatios` and stay on the
+server, as do the `CapitalRatios` internals and three of the five values each trend quarter used to
+hold. That is not tidying: it is what keeps the cached entry under Next's 2MB limit. See section 5.
+
+These are the columns whose FDIC field names invite a wrong reading, so verify against the live API
+rather than inferring from the field name:
 
 | Displayed as | Derivation | Median, 2026Q1 |
 | --- | --- | --- |
@@ -693,6 +708,7 @@ Generated content is expensive, so nearly everything is cached for a day.
   | `industry-outlook-shared-v12` | The generated memo |
   | `industry-outlook-verified-metrics-v1` | Fetched FRED/FDIC figures |
   | `market-analytics-report-data-v2` + scope | Full screening cohort with scores, for the PDF and Visual Analysis |
+  | `market-analytics-screening-v1` + scope | Reduced, scored rows for the Market Analytics **tab** |
   | `executive-brief-v4` + scope | Ranked change events and non-reporting institutions for the Executive Brief |
   | `underwriter-workbench-v1` + scope | Latest-quarter rows for the whole scope, for the Underwriter Workbench |
 
@@ -703,8 +719,23 @@ Generated content is expensive, so nearly everything is cached for a day.
   whenever a change-detection threshold, the trajectory run length, a ranking function, the
   observation mapping or the cohort rule moves**, or the brief keeps reporting events under the old
   rules until the window expires — v2 marks the capital-ratio fix, v3 excluding institutions that did
-  not file, v4 the non-reporting section. **Bump `underwriter-workbench`'s version whenever the row
+  not file, v4 the non-reporting section.   **Bump `underwriter-workbench`'s version whenever the row
   shape or the quarter rule changes**, or clients keep deserialising the old shape.
+
+  `market-analytics-screening` is the tab's own payload and follows the 23-hour rule.
+  **Bump its version whenever the scoring, the transported row shape or the quarter rule
+  changes.** It is warmed for `national` and `Florida`, the two scopes `PAGE_LEVEL_TO_REGION`
+  produces; choosing another state from the dropdown pays one cold fetch and is then cached
+  for that scope as well.
+
+  **This one has a size ceiling, and it is the reason the row is trimmed.** Next refuses any
+  entry where `JSON.stringify(entry).length` exceeds 2MB and logs `Failed to set Next.js data
+  cache`, silently falling back to recomputing on every request. The reduced national payload
+  is 1.26MB. It is not 2.26MB — which is what one row per institution costs unreduced — because
+  `lib/analytics/screening.ts` carries only fields something renders. Before adding a field,
+  note that `npm run verify:screening-parity` prints the payload size, and that closing the
+  national coverage gap to all ~4,450 institutions projects to about 5.5MB, which would need a
+  different store rather than further trimming.
 
   **23 hours rather than 24 is deliberate and should not be rounded up.** The daily cron runs at
   05:00 UTC and both lenses cost the better part of a minute cold, so the entry has to be *expired*

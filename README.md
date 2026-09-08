@@ -239,6 +239,16 @@ Some checks need live data rather than fixtures, because they are calibrations r
   sample, not only the counts: the failure mode is a section topped by reporting artifacts, which
   costs trust faster than showing nothing. Imports the shipped ranking functions, so it tests real
   behaviour rather than a copy.
+- `npm run verify:screening-parity` (`STATE=Florida` to scope it) — the Market Analytics tab's
+  numbers over live data. It reimplements the reduction as the browser used to do it and compares
+  every rendered field per institution against `lib/analytics/screening.ts`, exiting non-zero on any
+  drift — about 51,500 comparisons nationally. Run it after touching the reduction, the scoring or
+  the transported row shape. It also prints the payload size, which is the number that has to stay
+  under Next's 2MB cache ceiling; at 1.26MB there is real but finite headroom.
+- `npm run verify:fdic-hosts` — every FDIC endpoint against every configured host. Exists because
+  the fallback host was configured for a long time in a form that 404s, which `fetchFDICData` treats
+  as unrecoverable, so a primary outage would have returned empty data rather than retrying. Also
+  fails the primary if it answers with a redirect.
 - `npm run verify:workbench [STATE]` — the Underwriter Workbench over live data. This one *does*
   assert: it exits non-zero if a capital scenario's base ratio drifts from FDIC's published
   `RBCRWAJ` or `RBC1AAJ`. It runs the shipped transformer, row mapping and analysis rather than a
@@ -423,6 +433,8 @@ sense against your source usually mean the build cache, not your code. Stop the 
 | Turn on the department lenses in production | Add `department-lenses` to `ENABLED_TABS` in Vercel. The code is deployed but unreachable until you do; they are off because the lenses are unfinished, not because they are broken |
 | Add a feature flag inside a tab | Add the key to `ENABLED_TABS`, resolve it in `app/page.tsx`, pass it down as a prop — `isFeatureEnabled()` is server-only |
 | Add an FDIC column | Request the field in `lib/fdic-config.ts`, map it in `lib/fdic-data-transformer.ts`, then verify against the live API |
+| Show a new field in the Market Analytics tab | Add it to the row in `lib/analytics/screening.ts` — the browser only renders what that module sends. Then run `verify:screening-parity` and check the printed payload size still clears 2MB |
+| Change what the tab's scores mean | Bump `market-analytics-screening-v1` in `app/actions/market-analytics-screening.ts`, or cached entries keep serving scores computed the old way |
 | Force the outlook to regenerate | Bump the cache key version in `getCachedOutlook.ts`, push to `main`, confirm `keySignalFigures` is non-zero in the warm-cache log |
 | Change chart appearance | `lib/chart-theme.tsx`. Use colour literals, not CSS variables — the PDF renderer cannot resolve them |
 | Add a chart to both screen and PDF | Put it in `components/charts/analytics/`; both surfaces render the same component so they cannot drift |
