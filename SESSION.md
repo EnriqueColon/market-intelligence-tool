@@ -40,12 +40,14 @@ primary because the old host 301s to it, and `npm run verify:fdic-hosts` checks 
 on both. Worth knowing: that redirect means the fallback is an *alias*, not a second independent
 host, so it will not survive an api.fdic.gov outage.
 
-**Still open.** The tab has not been opened in a browser since the change. The parity script covers
-every rendered value, so the residual risk is wiring rather than arithmetic — a loading state or an
-undefined access — but this repository's own rule is that building is not verifying, and that check
-has not been done. The national coverage gap is also untouched: the tab still shows the largest
-~1,100 of ~4,450 institutions, and closing it projects to about 5.5MB, which needs a different store
-rather than more trimming.
+**Shipped to production** the same day, `main` at `27ef6f1`. The tab was checked in a browser before
+the merge. Nothing about the department lenses changed: they remain gated on `department-lenses` in
+`ENABLED_TABS`, which production has never had set.
+
+**Still open.** The national coverage gap is untouched: the tab still shows the largest ~1,100 of
+~4,450 institutions, and closing it projects to about 5.5MB of cache entry, which needs a different
+store rather than more trimming. The first visit after any deploy still pays the ~6s FDIC fetch
+unless the warm-cache cron reaches it first.
 
 ---
 
