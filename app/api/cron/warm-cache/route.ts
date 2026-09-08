@@ -11,6 +11,7 @@ import { fetchResearchFeed } from "@/app/actions/fetch-research-feed"
 import { fetchKpiData } from "@/app/actions/fetch-kpi-data"
 import { fetchMarketInsights } from "@/app/actions/fetch-insights"
 import { fetchPriceIndexData, fetchTransactionVolumeData } from "@/app/actions/fetch-cre-data"
+import { getScreeningPayload } from "@/app/actions/market-analytics-screening"
 import { getExecutiveBrief } from "@/app/actions/executive-brief"
 import { getWorkbenchUniverse } from "@/app/actions/underwriter-workbench"
 import { isFeatureEnabled } from "@/lib/features"
@@ -81,6 +82,18 @@ export async function GET(request: Request) {
     warmWithLabel("txVolume:national", () => fetchTransactionVolumeData("national"), results),
     warmWithLabel("txVolume:florida", () => fetchTransactionVolumeData("florida"), results),
     warmWithLabel("txVolume:miami", () => fetchTransactionVolumeData("miami"), results),
+
+    // The Market Analytics screening cohort. This is the tab's whole payload:
+    // roughly six seconds at FDIC for the national scope, which every visitor
+    // used to pay because the raw response was too large to cache. It is
+    // cacheable now that the reduction happens server-side, so warming it here
+    // is what turns "six seconds each time" into "six seconds once a day".
+    //
+    // National and Florida only: those are the scopes `PAGE_LEVEL_TO_REGION`
+    // can produce. Picking another state from the dropdown pays the cold fetch
+    // once and is then cached for that scope too.
+    warmWithLabel("screening:national", () => getScreeningPayload("national"), results),
+    warmWithLabel("screening:florida", () => getScreeningPayload("Florida"), results),
 
     // Department lenses. Each pulls nine quarters for every institution the
     // FDIC row cap allows, which is roughly fifty seconds cold — long enough

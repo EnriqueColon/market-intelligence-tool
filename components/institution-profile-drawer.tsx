@@ -87,7 +87,6 @@ export type InstitutionProfileRow = {
     creToEquity: number | null
     constructionToTier1Tier2: number | null
     multifamilyToTier1Tier2: number | null
-    coverage: { hasTier1Tier2: boolean }
   }
   totalUnusedCommitments?: number
   creUnusedCommitments?: number
@@ -112,13 +111,11 @@ export type InstitutionProfileRow = {
   nonResidentialLoans?: number
   ownerOccupiedLoans?: number
   nonOwnerOccupiedLoans?: number
+  /** Only the two series the drawer charts; see `lib/analytics/screening.ts`. */
   trend?: Array<{
     reportDate: string
     creConcentration?: number
     nplRatio?: number
-    roa?: number
-    netIncome?: number
-    netInterestMargin?: number
   }>
 }
 

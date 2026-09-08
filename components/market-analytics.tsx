@@ -21,16 +21,10 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Download, Columns3 } from "lucide-react"
 import { DefTerm } from "@/components/def-term"
-import { fetchFDICFinancials } from "@/app/actions/fetch-fdic-data"
+import { getScreeningPayload } from "@/app/actions/market-analytics-screening"
 import { MarketResearch } from "@/components/market-research"
-import { computeCapitalRatios, type CapitalRatios } from "@/lib/fdic-ratio-helpers"
 import { computeCreMix } from "@/lib/fdic-cre"
-import {
-  computeOpportunityDistributions,
-  computeOpportunityScore,
-} from "@/lib/scoring/opportunity-score"
-import { computeEarningsScore, computeEarningsRanges } from "@/lib/scoring/earnings-score"
-import { computeVulnerabilityScore } from "@/lib/scoring/vulnerability-score"
+import { TAB_ROW_CAP, type ScreeningPayload, type ScreeningRow } from "@/lib/analytics/screening"
 import { toast } from "@/hooks/use-toast"
 import { KPI_EXPLANATION_NARRATIVE } from "@/lib/report/kpi-explanation"
 import {
@@ -41,7 +35,10 @@ import {
 } from "@/lib/format/metrics"
 import { getCreCapitalColor } from "@/lib/score-colors"
 import { getErrorMessage } from "@/lib/error-utils"
-import { InstitutionProfileDrawer } from "@/components/institution-profile-drawer"
+import {
+  InstitutionProfileDrawer,
+  type InstitutionProfileRow,
+} from "@/components/institution-profile-drawer"
 import { MarketAnalyticsVisuals } from "@/components/market-analytics-visuals"
 
 // MapLibre plus its stylesheet is a large dependency that touches `window` on
@@ -72,89 +69,22 @@ type Filters = {
   limit: number
 }
 
-type Financial = {
-  id: string
-  name: string
-  city?: string
-  state?: string
-  totalAssets: number
-  totalDeposits?: number
-  netIncome?: number
-  roa?: number
-  roe?: number
-  creConcentration?: number
-  creLoans?: number
-  totalLoans?: number
-  nonaccrualLoans?: number
-  constructionLoans?: number
-  multifamilyLoans?: number
-  nonResidentialLoans?: number
-  ownerOccupiedLoans?: number
-  nonOwnerOccupiedLoans?: number
-  /** LNREOTH — 1-4 family residential, not CRE. Never a share of creLoans. */
-  otherRealEstateLoans?: number
-  totalUnusedCommitments?: number
-  creUnusedCommitments?: number
-  nplRatio?: number
-  noncurrent_to_loans_ratio?: number
-  noncurrent_to_assets_ratio?: number
-  pastDue3090?: number
-  pastDue90Plus?: number
-  loanLossReserve?: number
-  netInterestMargin?: number
-  /** Null when the institution reports no such ratio, as CBLR filers do not. */
-  cet1Ratio?: number | null
-  leverageRatio?: number | null
-  tier1RbcRatio?: number | null
-  totalRbcRatio?: number | null
-  reportDate?: string
-  totalEquityDollars?: number | null
-  tier1Dollars?: number | null
-  tier2Dollars?: number | null
-  riskWeightedAssets?: number | null
-  /** Net loans to deposits, decimal. Previously mislabelled as reserve coverage. */
-  loansToDeposits?: number
-}
-
-type ScreeningRow = Financial & {
-  trend: Array<{
-    reportDate: string
-    creConcentration?: number
-    nplRatio?: number
-    roa?: number
-    netIncome?: number
-    netInterestMargin?: number
-  }>
-  /** Structural Opportunity Score (CRE concentration + credit stress) */
-  opportunityScore: number
-  /** Earnings Resilience Score (0–100) */
-  earningsScore: number
-  /** Composite Vulnerability Score (structural adjusted by earnings) */
-  vulnerabilityScore: number
-  capitalRatio: number
-  capitalRatios?: CapitalRatios
-  /** Income KPIs (null if data missing) */
-  roaLatest?: number | null
-  roaDelta4Q?: number | null
-  netIncomeTTM?: number | null
-  netIncomeYoYPct?: number | null
-  nimLatest?: number | null
-  nimDelta4Q?: number | null
-  earningsBufferPct?: number | null
-}
+/**
+ * Rows arrive already reduced and scored from the server.
+ *
+ * The tab used to fetch ~10,000 raw FDIC rows and collapse them here in a
+ * `useMemo`. That shipped 10.8MB to the browser and could not be cached, so
+ * every visitor paid the full FDIC round trip. `lib/analytics/screening.ts`
+ * now does the reduction server-side; see the note there for why the row is
+ * trimmed to only the fields something renders.
+ */
+type Financial = ScreeningRow
 
 /**
- * Row cap for the live tab's single-page fetch. Nine quarters per institution
- * means this covers roughly 1,100 institutions nationally; state scopes are far
+ * Row cap for the tab's single-page fetch. Nine quarters per institution means
+ * this covers roughly 1,100 institutions nationally; state scopes are far
  * smaller than the cap and so are complete.
  */
-const TAB_ROW_CAP = 10000
-
-/** A row before cohort-relative scoring has been applied. */
-type UnscoredRow = Omit<
-  ScreeningRow,
-  "opportunityScore" | "earningsScore" | "vulnerabilityScore"
->
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -294,10 +224,13 @@ export function MarketAnalytics({
   const [showEarningsColumns, setShowEarningsColumns] = useState(false)
   const [tableSortColumn, setTableSortColumn] = useState<"npl" | "cre">("npl")
   const [tableSortDesc, setTableSortDesc] = useState(true)
-  const [selectedInstitution, setSelectedInstitution] = useState<ScreeningRow | null>(null)
-  const [compareRows, setCompareRows] = useState<ScreeningRow[]>([])
+  // Held as the drawer's row type rather than the screening row: the compare
+  // list is populated from rows the drawer hands back, and a `ScreeningRow` is
+  // assignable to it but not the other way round.
+  const [selectedInstitution, setSelectedInstitution] = useState<InstitutionProfileRow | null>(null)
+  const [compareRows, setCompareRows] = useState<InstitutionProfileRow[]>([])
   const [loading, setLoading] = useState(true)
-  const [financials, setFinancials] = useState<Financial[]>([])
+  const [payload, setPayload] = useState<ScreeningPayload | null>(null)
   const [error, setError] = useState<string | undefined>()
   const [exporting, setExporting] = useState(false)
 
@@ -314,36 +247,26 @@ export function MarketAnalytics({
       setError(undefined)
 
       try {
-        const stateFilter = filters.region === "national" ? undefined : filters.region
-        // Full pagination is ~40k rows nationally across nine quarters, which
-        // takes roughly 20s and exceeds the 2MB data-cache ceiling, so the tab
-        // takes a single capped page instead. The cap is by row, and rows are
-        // sorted by assets descending, so nationally this is the largest ~1,100
-        // institutions rather than all ~4,450 — see SCOPE_COVERAGE_NOTE, which
-        // surfaces that limit in the UI. Phase 1's cached data layer removes it.
-        const fetchAll = false
-        const limit = Math.min(filters.limit, TAB_ROW_CAP)
-        const [financialsResult] = await Promise.all([fetchFDICFinancials(stateFilter, limit, fetchAll)])
+        // The reduction, scoring and quarter selection all happen server-side
+        // and the result is cached, so this is a small payload and usually an
+        // immediate one. The row cap still applies: nationally it covers the
+        // largest ~1,100 institutions rather than all ~4,450, which
+        // SCOPE_COVERAGE_NOTE surfaces in the UI.
+        const result = await getScreeningPayload(filters.region)
 
         if (!mounted) return
 
-        if (!financialsResult || typeof financialsResult !== "object") {
-          setError("Failed to load FDIC data: empty response.")
-          setFinancials([])
+        if (!result.ok) {
+          setError(result.error || "Failed to load FDIC data.")
+          setPayload(null)
           return
         }
 
-        if (financialsResult.error) {
-          setError(financialsResult.error || "Failed to load FDIC data.")
-          setFinancials([])
-          return
-        }
-
-        setFinancials((financialsResult.data ?? []) as Financial[])
+        setPayload(result.payload)
       } catch (err) {
         if (!mounted) return
         setError(`Failed to load FDIC data: ${getErrorMessage(err)}`)
-        setFinancials([])
+        setPayload(null)
       } finally {
         if (mounted) setLoading(false)
       }
@@ -355,60 +278,16 @@ export function MarketAnalytics({
     }
   }, [filters])
 
-  const regionFinancials = useMemo(() => {
-    return financials.filter((item) => {
-      if (filters.region === "national") return true
-      return item.state && item.state.toUpperCase() === filters.region.toUpperCase()
-    })
-  }, [financials, filters.region])
-
-  const lastQuarterDates = useMemo(() => {
-    const dates = Array.from(
-      new Set(regionFinancials.map((item) => item.reportDate).filter(Boolean))
-    ) as string[]
-    return dates
-      .sort((a, b) => {
-        const aNorm = normalizeReportDate(a)
-        const bNorm = normalizeReportDate(b)
-        return bNorm.localeCompare(aNorm)
-      })
-      .slice(0, 8)
-  }, [regionFinancials])
-
-  const lastQuarterDatesDisplay = useMemo(() => lastQuarterDates.slice(0, 4), [lastQuarterDates])
-
-  const filteredFinancials = useMemo(() => {
-    return regionFinancials.filter((item) => {
-      if (lastQuarterDates.length > 0 && item.reportDate && !lastQuarterDates.includes(item.reportDate)) {
-        return false
-      }
-      return true
-    })
-  }, [regionFinancials, lastQuarterDates])
-
-  const nplLoansSummary = useMemo(() => {
-    if (filteredFinancials.length === 0) return null
-    const latestById = new Map<string, Financial>()
-    filteredFinancials.forEach((item) => {
-      const existing = latestById.get(item.id)
-      const existingDate = existing?.reportDate ? Date.parse(existing.reportDate) : 0
-      const nextDate = item.reportDate ? Date.parse(item.reportDate) : 0
-      if (!existing || nextDate > existingDate) latestById.set(item.id, item)
-    })
-    const latest = Array.from(latestById.values())
-    const totalLoans = latest.reduce((s, i) => s + (i.totalLoans ?? 0), 0)
-    const totalNpl = latest.reduce((s, i) => s + (i.nonaccrualLoans ?? 0), 0)
-    const totalCre = latest.reduce((s, i) => s + (i.creLoans ?? 0), 0)
-    const totalAssets = latest.reduce((s, i) => s + i.totalAssets, 0)
-    const avgNpl = latest.length > 0
-      ? latest.reduce((s, i) => s + (i.nplRatio ?? 0) * 100, 0) / latest.length
-      : 0
-    const avgCreToAssets = totalAssets > 0 ? (totalCre / totalAssets) * 100 : 0
-    return { totalLoans, totalNpl, totalCre, totalAssets, avgNpl, avgCreToAssets, count: latest.length }
-  }, [filteredFinancials])
+  // Everything below used to be derived here from ~10,000 raw rows. It now
+  // arrives precomputed; these are reads, not reductions.
+  const screeningTable = useMemo<ScreeningRow[]>(() => payload?.rows ?? [], [payload])
+  const lastQuarterDates = useMemo(() => payload?.quarters ?? [], [payload])
+  const lastQuarterDatesDisplay = useMemo(() => payload?.quartersDisplay ?? [], [payload])
+  const nplLoansSummary = payload?.nplSummary ?? null
 
   const kpis = useMemo(() => {
-    if (filteredFinancials.length === 0) {
+    const k = payload?.kpis
+    if (!k || k.institutionsScreened === 0) {
       return [
         { label: "Institutions Screened", value: "0" },
         { label: "Avg NPL Ratio", value: "—" },
@@ -417,167 +296,14 @@ export function MarketAnalytics({
         { label: "Avg CRE Concentration", value: "—" },
       ]
     }
-
-    const latestById = new Map<string, Financial>()
-    filteredFinancials.forEach((item) => {
-      const existing = latestById.get(item.id)
-      const existingDate = existing?.reportDate ? Date.parse(existing.reportDate) : 0
-      const nextDate = item.reportDate ? Date.parse(item.reportDate) : 0
-      if (!existing || nextDate > existingDate) {
-        latestById.set(item.id, item)
-      }
-    })
-
-    const latest = Array.from(latestById.values())
-    const average = (values: number[]) =>
-      values.length > 0 ? values.reduce((sum, value) => sum + value, 0) / values.length : 0
-
-    const avgNpl = average(latest.map((item) => item.nplRatio || 0))
-    const avgNoncurrentLoans = average(latest.map((item) => (item.noncurrent_to_loans_ratio ?? 0) * 100))
-    const avgReserve = average(latest.map((item) => item.loanLossReserve || 0))
-    const avgCre = average(latest.map((item) => item.creConcentration || 0))
-
     return [
-      { label: "Institutions Screened", value: formatNumber(latest.length) },
-      { label: "Avg NPL Ratio", value: formatPercent(avgNpl * 100) },
-      { label: "Avg Noncurrent / Loans", value: formatPercent(avgNoncurrentLoans) },
-      { label: "Avg Reserve Coverage", value: formatPercent(avgReserve * 100) },
-      { label: "Avg CRE Concentration", value: formatPercent(avgCre) },
+      { label: "Institutions Screened", value: formatNumber(k.institutionsScreened) },
+      { label: "Avg NPL Ratio", value: formatPercent(k.avgNplRatio * 100) },
+      { label: "Avg Noncurrent / Loans", value: formatPercent(k.avgNoncurrentToLoans) },
+      { label: "Avg Reserve Coverage", value: formatPercent(k.avgReserveCoverage * 100) },
+      { label: "Avg CRE Concentration", value: formatPercent(k.avgCreConcentration) },
     ]
-  }, [filteredFinancials])
-
-  const screeningTable = useMemo<ScreeningRow[]>(() => {
-    const grouped = new Map<string, Financial[]>()
-    filteredFinancials.forEach((item) => {
-      if (!grouped.has(item.id)) grouped.set(item.id, [])
-      grouped.get(item.id)!.push(item)
-    })
-
-    const mostRecentQuarter = lastQuarterDates[0]
-    const mostRecentNorm = normalizeReportDate(mostRecentQuarter)
-    // Scores are cohort-relative, so they cannot be filled in per row here.
-    // Rows are collected first, then scored together below.
-    const rows: UnscoredRow[] = []
-    grouped.forEach((items) => {
-      const sorted = [...items].sort((a, b) => {
-        const aNorm = normalizeReportDate(a.reportDate)
-        const bNorm = normalizeReportDate(b.reportDate)
-        return bNorm.localeCompare(aNorm)
-      })
-      const byDateNorm = new Map(sorted.map((entry) => [normalizeReportDate(entry.reportDate), entry]))
-      const latest = mostRecentNorm && byDateNorm.has(mostRecentNorm)
-        ? byDateNorm.get(mostRecentNorm)!
-        : sorted[0]
-      if (mostRecentNorm && !byDateNorm.has(mostRecentNorm)) return
-      const capitalRatio = latest.cet1Ratio ?? latest.leverageRatio ?? 0
-      const trend = lastQuarterDatesDisplay
-        .filter(Boolean)
-        .map((date) => {
-          const entry = byDateNorm.get(normalizeReportDate(date))
-          return {
-            reportDate: date,
-            creConcentration: entry?.creConcentration,
-            nplRatio: entry?.nplRatio,
-            roa: entry?.roa,
-            netIncome: entry?.netIncome,
-            netInterestMargin: entry?.netInterestMargin,
-          }
-        })
-      const capitalRatios = computeCapitalRatios({
-        totalAssets: latest.totalAssets,
-        creLoans: latest.creLoans ?? 0,
-        constructionLoans: latest.constructionLoans ?? 0,
-        multifamilyLoans: latest.multifamilyLoans ?? 0,
-        leverageRatio: latest.leverageRatio,
-        tier1RbcRatio: latest.tier1RbcRatio,
-        totalRbcRatio: latest.totalRbcRatio,
-        cet1Ratio: latest.cet1Ratio,
-        totalEquityDollars: latest.totalEquityDollars,
-        tier1Dollars: latest.tier1Dollars,
-        tier2Dollars: latest.tier2Dollars,
-        riskWeightedAssets: latest.riskWeightedAssets,
-      })
-
-      const q0 = lastQuarterDates[0]
-      const q3 = lastQuarterDates[3]
-      const q7 = lastQuarterDates[7]
-      const roaLatest = latest.roa != null ? latest.roa : null
-      const roaDelta4Q =
-        lastQuarterDates.length >= 4 && roaLatest != null && byDateNorm.get(normalizeReportDate(q3))?.roa != null
-          ? roaLatest - (byDateNorm.get(normalizeReportDate(q3))!.roa ?? 0)
-          : null
-      const nimLatest = latest.netInterestMargin != null ? latest.netInterestMargin : null
-      const nimDelta4Q =
-        lastQuarterDates.length >= 4 && nimLatest != null && byDateNorm.get(normalizeReportDate(q3))?.netInterestMargin != null
-          ? nimLatest - (byDateNorm.get(normalizeReportDate(q3))!.netInterestMargin ?? 0)
-          : null
-
-      const niCurrent4 = lastQuarterDates.slice(0, 4).map((d) => byDateNorm.get(normalizeReportDate(d))?.netIncome)
-      const hasAll4 = niCurrent4.length === 4 && niCurrent4.every((v) => v != null && Number.isFinite(v))
-      const netIncomeTTM = hasAll4 ? (niCurrent4.reduce((s, v) => s! + v!, 0) as number) : null
-
-      const niPrior4 = lastQuarterDates.slice(4, 8).map((d) => byDateNorm.get(normalizeReportDate(d))?.netIncome)
-      const hasAll8 = niPrior4.length === 4 && niPrior4.every((v) => v != null && Number.isFinite(v))
-      const netIncomeTTMPrior = hasAll8 ? (niPrior4.reduce((s, v) => s! + v!, 0) as number) : null
-      const netIncomeYoYPct =
-        netIncomeTTM != null && netIncomeTTMPrior != null
-          ? (() => {
-              const denom = Math.abs(netIncomeTTMPrior)
-              if (denom === 0) return null
-              return ((netIncomeTTM - netIncomeTTMPrior) / denom) * 100
-            })()
-          : null
-
-      const creLoansLatest = latest.creLoans ?? 0
-      const earningsBufferPct =
-        netIncomeTTM != null && creLoansLatest > 0 ? (netIncomeTTM / creLoansLatest) * 100 : null
-
-      rows.push({
-        ...latest,
-        trend,
-        capitalRatio,
-        capitalRatios,
-        roaLatest: roaLatest ?? undefined,
-        roaDelta4Q: roaDelta4Q ?? undefined,
-        netIncomeTTM: netIncomeTTM ?? undefined,
-        netIncomeYoYPct: netIncomeYoYPct ?? undefined,
-        nimLatest: nimLatest ?? undefined,
-        nimDelta4Q: nimDelta4Q ?? undefined,
-        earningsBufferPct: earningsBufferPct ?? undefined,
-      })
-    })
-
-    // Every score below ranks a row against the cohort currently in view, so
-    // the same institution scores differently under a national screen than a
-    // state one. That is intended: the question is always "compared with what".
-    const opportunityInputs = rows.map((r) => ({
-      creConcentration: r.creConcentration,
-      noncurrentToLoansRatio: r.noncurrent_to_loans_ratio,
-      loanLossReserve: r.loanLossReserve,
-      cet1Ratio: r.cet1Ratio,
-      leverageRatio: r.leverageRatio,
-    }))
-    const distributions = computeOpportunityDistributions(opportunityInputs)
-
-    const earningsInputs = rows.map((r) => ({
-      earningsBufferPct: r.earningsBufferPct ?? null,
-      roaLatest: r.roaLatest ?? null,
-      roaDelta4Q: r.roaDelta4Q ?? null,
-      netIncomeYoYPct: r.netIncomeYoYPct ?? null,
-    }))
-    const earningsRanges = computeEarningsRanges(earningsInputs)
-
-    return rows.map((row, i) => {
-      const opportunityScore = computeOpportunityScore(opportunityInputs[i], distributions)
-      const earningsScore = computeEarningsScore(earningsInputs[i], earningsRanges)
-      return {
-        ...row,
-        opportunityScore,
-        earningsScore,
-        vulnerabilityScore: computeVulnerabilityScore(opportunityScore, earningsScore),
-      }
-    })
-  }, [filteredFinancials, lastQuarterDates])
+  }, [payload])
 
   // Opening the drawer for an institution handed over from another view. This
   // waits for the cohort rather than resolving against a half-loaded one,
@@ -617,14 +343,14 @@ export function MarketAnalytics({
     const count = screeningTable.length
     if (count === 0) return ""
 
-    const capHit = financials.length >= TAB_ROW_CAP
+    const capHit = (payload?.rawRowCount ?? 0) >= TAB_ROW_CAP
     const basis = `Scores are percentile ranks within this scope, so they compare these ${count.toLocaleString()} institutions against each other rather than against a fixed scale.`
 
     if (!capHit) return basis
 
     const floor = Math.min(...screeningTable.map((r) => r.totalAssets || 0))
     return `${basis} This view is capped at the largest ${count.toLocaleString()} institutions (those above roughly ${formatMoney(floor)} in assets); the downloadable report covers the full cohort.`
-  }, [screeningTable, financials.length])
+  }, [screeningTable, payload?.rawRowCount])
 
   const regionLabels: Record<string, string> = {
     national: "United States",

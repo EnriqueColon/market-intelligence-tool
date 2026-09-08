@@ -27,7 +27,9 @@
     "test:environment": "node --test --experimental-strip-types lib/environment.test.ts",
     "verify:executive-brief": "node --experimental-strip-types scripts/verify-executive-brief.mjs",
     "verify:workbench": "tsx scripts/verify-workbench.ts",
-    "verify:lenses": "node scripts/verify-lenses-visually.mjs"
+    "verify:lenses": "node scripts/verify-lenses-visually.mjs",
+    "verify:screening-parity": "tsx scripts/verify-screening-parity.ts",
+    "verify:fdic-hosts": "tsx scripts/verify-fdic-hosts.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
