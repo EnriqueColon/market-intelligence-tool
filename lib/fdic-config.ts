@@ -3,13 +3,45 @@
  * Reference: https://api.fdic.gov/banks/docs
  */
 
+/**
+ * Base URLs include the path prefix the endpoints hang off, because the two
+ * hosts disagree about it: `api.fdic.gov` serves `/banks/financials` while
+ * `banks.data.fdic.gov` serves `/api/financials`. Folding the prefix into the
+ * base is what lets both work from one set of endpoint constants.
+ *
+ * This previously did not work. The base was the bare host and every endpoint
+ * carried `/api/`, so the configured fallback resolved to
+ * `api.fdic.gov/banks/api/financials`, which is a 404 — and `fetchFDICData`
+ * treats 4xx as unrecoverable and stops rather than trying the next host. The
+ * documented two-host protection was therefore never real; it would have turned
+ * a primary-host outage into empty data rather than a retry.
+ *
+ * `api.fdic.gov` is primary because `banks.data.fdic.gov` now answers with a
+ * 301 to it. `fetch` follows redirects, so nothing was broken by that, but it
+ * cost an extra round trip on every call.
+ *
+ * That redirect also means the fallback is now an *alias* rather than a second
+ * independent host: it points at the same place, so it will not survive an
+ * api.fdic.gov outage. It is kept because it costs nothing — it is only tried
+ * after a primary failure — but it should not be mistaken for redundancy.
+ * `npm run verify:fdic-hosts` checks both and says so.
+ */
+const FDIC_DEFAULT_BASE = 'https://api.fdic.gov/banks'
+const FDIC_LEGACY_BASE = 'https://banks.data.fdic.gov/api'
+
+/** Accepts the historical override, which named the host without its prefix. */
+function resolveBaseUrl(override: string | undefined): string {
+  const trimmed = override?.trim().replace(/\/+$/, '')
+  if (!trimmed) return FDIC_DEFAULT_BASE
+  if (trimmed === 'https://banks.data.fdic.gov') return FDIC_LEGACY_BASE
+  return trimmed
+}
+
 export const FDIC_CONFIG = {
   // Server-side FDIC endpoint override (optional for production).
-  baseUrl: process.env.FDIC_API_URL || 'https://banks.data.fdic.gov',
+  baseUrl: resolveBaseUrl(process.env.FDIC_API_URL),
   // Fallback host used when the primary host has transient DNS/network issues.
-  fallbackBaseUrls: [
-    'https://api.fdic.gov/banks',
-  ],
+  fallbackBaseUrls: [FDIC_LEGACY_BASE],
   // Server-only credential. Do not expose as NEXT_PUBLIC_*.
   apiKey: process.env.FDIC_API_KEY || process.env.NEXT_PUBLIC_FDIC_API_KEY || null,
   defaultLimit: 100,
@@ -18,14 +50,14 @@ export const FDIC_CONFIG = {
 }
 
 export const FDIC_ENDPOINTS = {
-  financials: '/api/financials',
-  institutions: '/api/institutions',
-  failures: '/api/failures',
-  locations: '/api/locations',
-  history: '/api/history',
-  summary: '/api/summary',
-  sod: '/api/sod',
-  demographics: '/api/demographics',
+  financials: '/financials',
+  institutions: '/institutions',
+  failures: '/failures',
+  locations: '/locations',
+  history: '/history',
+  summary: '/summary',
+  sod: '/sod',
+  demographics: '/demographics',
 } as const
 
 /**
