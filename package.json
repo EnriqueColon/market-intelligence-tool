@@ -30,7 +30,8 @@
     "verify:lenses": "node scripts/verify-lenses-visually.mjs",
     "verify:screening-parity": "tsx scripts/verify-screening-parity.ts",
     "verify:fdic-hosts": "tsx scripts/verify-fdic-hosts.ts",
-    "verify:visuals-payload": "tsx scripts/verify-visuals-payload.ts"
+    "verify:visuals-payload": "tsx scripts/verify-visuals-payload.ts",
+    "verify:latest-quarter": "tsx scripts/verify-latest-quarter.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

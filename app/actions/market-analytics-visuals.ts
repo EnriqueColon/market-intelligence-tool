@@ -3,14 +3,17 @@
 import { unstable_cache } from "next/cache"
 import { buildReportData } from "@/app/actions/build-report-data"
 import { buildAnalyticsVisuals, type AnalyticsVisuals } from "@/lib/analytics/visuals"
+import { getLatestFdicQuarter } from "@/app/actions/fdic-latest-quarter"
 
 /**
- * A day less an hour, matching the other FDIC-derived caches. See the note in
- * confluence on why 23 rather than 24: the 05:00 UTC cron has to find the entry
- * already expired, or it returns early and leaves it to lapse in front of a
- * user later in the day.
+ * A week, matching the screening cache, and for the same reason: the published
+ * quarter is part of the key, so a new quarter refreshes this by itself and the
+ * timer only exists to pick up amended call reports.
+ *
+ * This is the payload where the old daily expiry hurt most — 22 seconds and
+ * 31MB out of FDIC, repeated every day to rebuild an identical set of charts.
  */
-const VISUALS_REVALIDATE_SECONDS = 60 * 60 * 23
+const VISUALS_REVALIDATE_SECONDS = 60 * 60 * 24 * 7
 
 export type AnalyticsVisualsResult =
   | { ok: true; visuals: AnalyticsVisuals }
@@ -25,13 +28,16 @@ export type AnalyticsVisualsResult =
  * longer travels or gets cached: it is reduced to the finished chart series
  * first, which is both small enough to cache and all the panel ever used.
  *
- * The version is part of the key. Bump it whenever a chart derivation changes,
- * or cached entries keep serving series computed the old way.
+ * The key carries a version and the published quarter. Bump the version
+ * whenever a chart derivation changes, or cached entries keep serving series
+ * computed the old way. The quarter ties the 22-second recompute to FDIC
+ * publishing rather than to a timer.
  */
 export async function getAnalyticsVisuals(scope: string): Promise<AnalyticsVisualsResult> {
+  const quarter = await getLatestFdicQuarter()
   const cached = unstable_cache(
     () => computeVisuals(scope),
-    ["market-analytics-visuals-v1", scope],
+    ["market-analytics-visuals-v1", scope, quarter],
     { revalidate: VISUALS_REVALIDATE_SECONDS }
   )
   try {
