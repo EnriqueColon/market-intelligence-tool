@@ -8,10 +8,10 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
 | `main` | `27ef6f1` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `27ef6f1` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `dev` | `e2c1a73` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
-The two branches are level. The Market Analytics performance work and the FDIC host fix reached
-production on 2026-09-08.
+The screening-table half of the Market Analytics performance work reached production on 2026-09-08.
+`dev` is ahead by the Visual Analysis half, which is the part that was still making the tab slow.
 
 A SHA here can never name the commit that writes it, so the true head is usually one documentation
 commit further on. Only behavioural commits matter as rollback targets; the newest that changes
@@ -119,6 +119,12 @@ It was deleted as superseded, not as a mistake — see `SESSION.md` for why merg
 the Market Participants tab.
 
 ---
+
+## Dev branch commits (not yet in production)
+
+| Commit | Date | Summary |
+| --- | --- | --- |
+| `e2c1a73` | 09-09 | perf(market-analytics): Visual Analysis charts derived server-side and deferred until near the viewport. **No plotted value changes** — `npm run verify:visuals-payload` compares every series against the unrounded builders, 22,087 comparisons nationally. Rolling back restores a panel that paginates 31MB out of FDIC and burns ~21.6s on every mount, because its 5.46MB payload is over the 2MB cache ceiling and Next refuses to store it. The PDF path is untouched either way: it calls the same builders through `useAnalyticsChartData`. If you roll back, drop `visuals:national` and `visuals:florida` from the warm-cache route. |
 
 ## Production commits
 

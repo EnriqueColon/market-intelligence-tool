@@ -8,7 +8,48 @@ is it in now, and what is still open.
 
 ---
 
-## 2026-09-08 (latest, second entry) — why Market Analytics was slow, and what fixed it
+## 2026-09-09 (latest) — the other half of the Market Analytics slowness
+
+The tab was still slow after yesterday's fix, and the cause was a second, larger instance of the
+same pattern sitting on the same page.
+
+The **Visual Analysis panel** mounted eagerly and called `buildReportData`, which paginates the
+entire national cohort out of FDIC — five sequential requests, 31MB raw, **21.6s measured** for
+4,607 institutions. It was nominally cached and never actually cached: the `ReportData` it produces
+is **5.46MB** against Next's 2MB entry ceiling, so Next refused the write and the full 21.6s ran
+again on every mount. The docstring on `buildReportData` had anticipated exactly this — "a national
+payload may exceed the 2MB data-cache entry limit, in which case Next skips the write" — but nobody
+had put a number to it, so it read as a caveat rather than a live bug.
+
+**Why yesterday's work did not cover it.** The field inventory established that the charts fetch
+independently of the screening table. That was read as reassurance — trimming the table could not
+break the charts — when it also meant the charts kept their own uncached path, unmeasured.
+
+The panel only ever used four derived series, and three are tiny: ten histogram bins, twenty ranking
+bars, fifteen mix bars. Only the scatter scales with the cohort, at six numbers per institution.
+Deriving them on the server gives **0.59MB**, 9.2x smaller with 1.41MB of headroom, so it caches and
+the cron warms it. The derivations are not reimplemented — `lib/analytics/visuals.ts` calls the same
+builders the PDF path calls, because screen and PDF disagreeing is what produced the deleted
+capital-analytics-viz component. Fetching is also deferred until the panel nears the viewport, since
+it sits below the table and was making everything above it wait.
+
+Verified by `npm run verify:visuals-payload`, which asserts the payload clears the ceiling and that
+rounding moved no plotted value: 22,087 comparisons nationally, 572 for Florida.
+
+**The lesson worth carrying.** An oversized cache entry is not an error. Next logs `Failed to set
+Next.js data cache` and silently recomputes, so the only symptom is a slow page — which is how this
+survived a fix aimed squarely at it. Both Market Analytics caches are one careless field away from
+the same state, which is what the two verify scripts now guard.
+
+**Still open.** The CSV and PDF export paths still pay the full ~22s pagination, which is acceptable
+because they are user-initiated downloads, but it is the same uncacheable 5.46MB payload underneath.
+No other tab has been audited for this pattern. The national coverage gap on the screening table is
+also unchanged: the table still shows the largest ~1,100 of ~4,450 institutions, while the charts
+above it now cover all ~4,600 — a discrepancy worth being aware of when reading the two together.
+
+---
+
+## 2026-09-08 — why Market Analytics was slow, and what fixed it
 
 The tab took several seconds on **every** visit, not just a cold one, and the cause was structural
 rather than incidental. It fetched about 10,000 raw FDIC rows per load — nine or ten quarters of

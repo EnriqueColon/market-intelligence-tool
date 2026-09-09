@@ -709,6 +709,7 @@ Generated content is expensive, so nearly everything is cached for a day.
   | `industry-outlook-verified-metrics-v1` | Fetched FRED/FDIC figures |
   | `market-analytics-report-data-v2` + scope | Full screening cohort with scores, for the PDF and Visual Analysis |
   | `market-analytics-screening-v1` + scope | Reduced, scored rows for the Market Analytics **tab** |
+  | `market-analytics-visuals-v1` + scope | Derived chart series for the Visual Analysis panel |
   | `executive-brief-v4` + scope | Ranked change events and non-reporting institutions for the Executive Brief |
   | `underwriter-workbench-v1` + scope | Latest-quarter rows for the whole scope, for the Underwriter Workbench |
 
@@ -736,6 +737,20 @@ Generated content is expensive, so nearly everything is cached for a day.
   note that `npm run verify:screening-parity` prints the payload size, and that closing the
   national coverage gap to all ~4,450 institutions projects to about 5.5MB, which would need a
   different store rather than further trimming.
+
+  `market-analytics-visuals` is the same story on the other half of the tab and follows the same
+  23-hour rule. **Bump its version whenever a chart derivation changes.** The panel charts the
+  full ~4,600-institution cohort, so it is built from `buildReportData` and paginating that costs
+  about 22 seconds — which is precisely why it has to cache. It did not before: `ReportData` is
+  **5.46MB**, well over the ceiling, so Next refused the write and the 22 seconds ran on every
+  mount. Deriving the four series server-side brings it to **0.59MB**. Only the scatter scales
+  with the cohort; the histogram is ten bins and the two bar charts are twenty and fifteen rows.
+  `npm run verify:visuals-payload` asserts it still fits and that rounding moved no plotted value.
+
+  **The failure mode here is silent.** An oversized entry is not an error — Next logs
+  `Failed to set Next.js data cache` and carries on recomputing, so the only symptom is a slow
+  page. Both Market Analytics caches are one careless field away from that, which is what the two
+  verify scripts exist to catch.
 
   **23 hours rather than 24 is deliberate and should not be rounded up.** The daily cron runs at
   05:00 UTC and both lenses cost the better part of a minute cold, so the entry has to be *expired*
