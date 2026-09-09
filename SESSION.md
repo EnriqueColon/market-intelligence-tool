@@ -41,11 +41,37 @@ Next.js data cache` and silently recomputes, so the only symptom is a slow page 
 survived a fix aimed squarely at it. Both Market Analytics caches are one careless field away from
 the same state, which is what the two verify scripts now guard.
 
+### Then: caching to the publication schedule rather than to a clock
+
+Prompted by the observation that these are quarterly reports, so why re-fetch daily. That was right,
+and the numbers were worse than they looked: both heavy caches expired every 23 hours, so the tool
+re-paginated 31MB and recomputed 22 seconds of work about **ninety times a quarter** to arrive at an
+identical answer.
+
+Both cache keys now carry the quarter FDIC has actually published, from a probe costing one row, 266
+bytes and 0.45s, itself cached for six hours. The expensive work is keyed to the data instead of to
+a timer: a new quarter changes the key and triggers exactly one recompute. The timers stay, stretched
+to a week, only to catch amended call reports — banks refile and FDIC restates prior quarters, over
+weeks rather than hours.
+
+**A correction to something stated earlier in this session.** Vercel's Data Cache persists across
+deployments; it is isolated per environment but shipping does not empty it. The advice given here
+that a fresh deploy means an unavoidable cold start was wrong. It also means changing a `revalidate`
+value does not retune entries that already exist — they keep the window they were written with — so
+a window change only takes effect on a new key or after a purge.
+
+The probe is load-bearing and fails silently, which it promptly demonstrated: FDIC nests each row
+under `data`, `fetchFDICData` flattens it, and the first implementation read the nested shape, got
+`undefined`, and fell through to the date-derived fallback with no error at all. The tool would have
+looked perfectly healthy while keyed to a quarter FDIC never confirmed. `verify:latest-quarter` now
+guards it.
+
 **Still open.** The CSV and PDF export paths still pay the full ~22s pagination, which is acceptable
 because they are user-initiated downloads, but it is the same uncacheable 5.46MB payload underneath.
 No other tab has been audited for this pattern. The national coverage gap on the screening table is
 also unchanged: the table still shows the largest ~1,100 of ~4,450 institutions, while the charts
 above it now cover all ~4,600 — a discrepancy worth being aware of when reading the two together.
+Nothing on `dev` has reached production yet.
 
 ---
 

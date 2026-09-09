@@ -723,8 +723,8 @@ Generated content is expensive, so nearly everything is cached for a day.
   not file, v4 the non-reporting section.   **Bump `underwriter-workbench`'s version whenever the row
   shape or the quarter rule changes**, or clients keep deserialising the old shape.
 
-  `market-analytics-screening` is the tab's own payload and follows the 23-hour rule.
-  **Bump its version whenever the scoring, the transported row shape or the quarter rule
+  `market-analytics-screening` is the tab's own payload, keyed to the published quarter (see
+  below). **Bump its version whenever the scoring, the transported row shape or the quarter rule
   changes.** It is warmed for `national` and `Florida`, the two scopes `PAGE_LEVEL_TO_REGION`
   produces; choosing another state from the dropdown pays one cold fetch and is then cached
   for that scope as well.
@@ -738,8 +738,8 @@ Generated content is expensive, so nearly everything is cached for a day.
   national coverage gap to all ~4,450 institutions projects to about 5.5MB, which would need a
   different store rather than further trimming.
 
-  `market-analytics-visuals` is the same story on the other half of the tab and follows the same
-  23-hour rule. **Bump its version whenever a chart derivation changes.** The panel charts the
+  `market-analytics-visuals` is the same story on the other half of the tab, keyed the same way.
+  **Bump its version whenever a chart derivation changes.** The panel charts the
   full ~4,600-institution cohort, so it is built from `buildReportData` and paginating that costs
   about 22 seconds — which is precisely why it has to cache. It did not before: `ReportData` is
   **5.46MB**, well over the ceiling, so Next refused the write and the 22 seconds ran on every
@@ -752,16 +752,57 @@ Generated content is expensive, so nearly everything is cached for a day.
   page. Both Market Analytics caches are one careless field away from that, which is what the two
   verify scripts exist to catch.
 
-  **23 hours rather than 24 is deliberate and should not be rounded up.** The daily cron runs at
+### Why the Market Analytics caches are keyed to a quarter
+
+  Call report data changes four times a year. Both heavy caches used to expire on a 23-hour timer,
+  so the tool re-paginated 31MB and recomputed 22 seconds of work about ninety times a quarter to
+  reach an identical answer.
+
+  Both keys now carry the **published quarter**, from `getLatestFdicQuarter` in
+  `app/actions/fdic-latest-quarter.ts` — one row, 266 bytes, roughly 0.45s, itself cached for six
+  hours. The expensive work is keyed to the data rather than to the clock: a new quarter changes
+  the key and causes exactly one recompute, and the rest of the quarter is served from cache. The
+  probe is the only component left that has to notice the world changing.
+
+  The timers remain, stretched to **seven days**, purely to pick up amended call reports. Banks
+  refile and FDIC restates prior quarters; keying on the quarter alone would never see those.
+
+  When the probe fails it returns a **date-derived quarter** rather than a sentinel, so every
+  caller during an FDIC outage agrees on one key and shares an entry instead of each paying the
+  recompute. It looks back 100 days, since naming a quarter FDIC has not published would key
+  everything to an empty result.
+
+  **The probe is load-bearing and fails invisibly** — a wrong answer serves stale figures for up
+  to a week, an unstable one makes every visitor miss the cache. `npm run verify:latest-quarter`
+  is the guard, and it already caught one such failure: FDIC nests each row under `data`,
+  `fetchFDICData` flattens it, and reading the nested shape returned `undefined` and fell through
+  to the fallback without an error.
+
+### The 23-hour windows on the department lenses
+
+  **23 rather than 24 is deliberate and should not be rounded up.** The daily cron runs at
   05:00 UTC and both lenses cost the better part of a minute cold, so the entry has to be *expired*
   when the cron arrives. `unstable_cache` does not refresh a still-fresh entry, so at exactly 24 hours
   the warm run would find it valid, return early, and leave it to lapse in front of a user later that
   day. The residual case is a mid-afternoon deploy, which resets the clock and shifts expiry into the
-  next working day; there is no fix for that within a plain TTL.
+  next working day; there is no fix for that within a plain TTL. The Market Analytics caches avoid
+  the whole problem by keying on the quarter instead.
   Locally, deleting `.next/cache` does not clear it — the dev server holds it in memory too, so
   restart the server as well.
-  A national payload can exceed the 2MB entry limit, in which case Next logs a warning, skips the
-  write and only smaller scopes are cached.
+
+### What a deployment does and does not clear
+
+  **Vercel's Data Cache persists across deployments.** It is isolated per project and per
+  environment — preview and production keep separate caches — but shipping does not empty it, and
+  it is not populated at build time either. Entries go when their TTL lapses, on an explicit
+  `revalidateTag`/`revalidatePath` or manual purge, or under LRU pressure once the project hits its
+  storage limit.
+
+  Two consequences worth knowing. A deploy does **not** reintroduce a cold-start penalty, so the
+  warm-cache cron is insurance against TTL lapse and LRU eviction rather than against shipping. And
+  because TTLs are not reconciled between deployments, **changing a `revalidate` value does not
+  retune entries that already exist** — they keep the window they were written with. Change the key,
+  or purge, if a window change has to take effect immediately.
 
 - **Client:** `sessionStorage`, with its own version constants — `industry-outlook:v8`,
   `public_mentions:v4`, `investing_news:v2`. Bump these when the shape of cached data changes, or

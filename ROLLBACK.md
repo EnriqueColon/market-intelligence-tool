@@ -8,7 +8,7 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
 | `main` | `27ef6f1` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `e2c1a73` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `dev` | `8a32b06` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 The screening-table half of the Market Analytics performance work reached production on 2026-09-08.
 `dev` is ahead by the Visual Analysis half, which is the part that was still making the tab slow.
@@ -124,6 +124,7 @@ the Market Participants tab.
 
 | Commit | Date | Summary |
 | --- | --- | --- |
+| `8a32b06` | 09-09 | perf(market-analytics): both heavy caches keyed to the published FDIC quarter, timers stretched 23h → 7d. **No displayed figure changes** — this only alters when work is recomputed. Rolling back returns to a daily 31MB re-pagination, which is wasteful but harmless. Note that reverting the `revalidate` value alone will **not** retune cache entries already written: Vercel does not reconcile TTLs between deployments, so existing entries keep their 7-day window until the key changes or the cache is purged. `npm run verify:latest-quarter` confirms the probe underneath. |
 | `e2c1a73` | 09-09 | perf(market-analytics): Visual Analysis charts derived server-side and deferred until near the viewport. **No plotted value changes** — `npm run verify:visuals-payload` compares every series against the unrounded builders, 22,087 comparisons nationally. Rolling back restores a panel that paginates 31MB out of FDIC and burns ~21.6s on every mount, because its 5.46MB payload is over the 2MB cache ceiling and Next refuses to store it. The PDF path is untouched either way: it calls the same builders through `useAnalyticsChartData`. If you roll back, drop `visuals:national` and `visuals:florida` from the warm-cache route. |
 
 ## Production commits

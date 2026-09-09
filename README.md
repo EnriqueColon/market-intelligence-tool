@@ -251,6 +251,11 @@ Some checks need live data rather than fixtures, because they are calibrations r
   derivation or anything it reads. **An oversized payload is not an error** — Next just refuses the
   write and recomputes 22 seconds of FDIC pagination on every mount — so this script is the only
   thing standing between a new chart field and a silently slow tab.
+- `npm run verify:latest-quarter` — the FDIC quarter probe. This one is load-bearing and fails
+  invisibly: its answer is part of both Market Analytics cache keys, so a wrong value serves stale
+  figures for up to a week and an unstable one makes every visitor miss the cache. It already
+  caught one such failure, where the row shape changed and the code fell through to a fallback
+  without erroring.
 - `npm run verify:fdic-hosts` — every FDIC endpoint against every configured host. Exists because
   the fallback host was configured for a long time in a form that 404s, which `fetchFDICData` treats
   as unrecoverable, so a primary outage would have returned empty data rather than retrying. Also
