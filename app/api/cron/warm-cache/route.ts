@@ -12,6 +12,7 @@ import { fetchKpiData } from "@/app/actions/fetch-kpi-data"
 import { fetchMarketInsights } from "@/app/actions/fetch-insights"
 import { fetchPriceIndexData, fetchTransactionVolumeData } from "@/app/actions/fetch-cre-data"
 import { getScreeningPayload } from "@/app/actions/market-analytics-screening"
+import { getAnalyticsVisuals } from "@/app/actions/market-analytics-visuals"
 import { getExecutiveBrief } from "@/app/actions/executive-brief"
 import { getWorkbenchUniverse } from "@/app/actions/underwriter-workbench"
 import { isFeatureEnabled } from "@/lib/features"
@@ -94,6 +95,18 @@ export async function GET(request: Request) {
     // once and is then cached for that scope too.
     warmWithLabel("screening:national", () => getScreeningPayload("national"), results),
     warmWithLabel("screening:florida", () => getScreeningPayload("Florida"), results),
+
+    // The Visual Analysis charts on the same tab. These are the expensive half:
+    // the series cover the full ~4,600-institution cohort, which means
+    // paginating the whole national dataset out of FDIC — five sequential
+    // requests, about 22 seconds. Until the series were derived server-side the
+    // result was 5.46MB, over the 2MB cache ceiling, so Next refused the write
+    // and that 22 seconds ran on every single mount. Warming only helps because
+    // the payload now fits; if a future change pushes it back over the line
+    // this entry will silently stop working. `npm run verify:visuals-payload`
+    // is the check.
+    warmWithLabel("visuals:national", () => getAnalyticsVisuals("National"), results),
+    warmWithLabel("visuals:florida", () => getAnalyticsVisuals("Florida"), results),
 
     // Department lenses. Each pulls nine quarters for every institution the
     // FDIC row cap allows, which is roughly fifty seconds cold — long enough
