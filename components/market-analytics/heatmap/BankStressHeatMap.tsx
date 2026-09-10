@@ -345,6 +345,26 @@ export function BankStressHeatMap() {
     map.current.addControl(new maplibregl.NavigationControl(), "top-right")
 
     /**
+     * Re-measure whenever the container changes size, including from zero.
+     *
+     * The Market Analytics tab stays mounted once visited and is hidden with
+     * `display: none`, which collapses this container to 0x0. MapLibre caches
+     * canvas dimensions and does not observe its container, so without this the
+     * map comes back blank or letterboxed after a tab switch — it never gets
+     * told the space it lost has returned.
+     *
+     * A ResizeObserver rather than a window resize listener, because the window
+     * is not what changed.
+     */
+    const sizeObserver = new ResizeObserver(() => {
+      const m = map.current
+      if (!m) return
+      const { width, height } = mapContainer.current?.getBoundingClientRect() ?? { width: 0, height: 0 }
+      if (width > 0 && height > 0) m.resize()
+    })
+    sizeObserver.observe(mapContainer.current)
+
+    /**
      * Only publishes the new viewport; the fetch itself is left to an effect.
      *
      * This handler is registered once and therefore captures the first render
@@ -393,6 +413,7 @@ export function BankStressHeatMap() {
     })
 
     return () => {
+      sizeObserver.disconnect()
       map.current?.remove()
       map.current = null
     }

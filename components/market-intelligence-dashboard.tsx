@@ -63,7 +63,16 @@ const TAB_TRIGGER_CLASS =
   "gap-2 px-4 py-3 text-base font-medium min-h-[52px] h-auto items-center data-[state=active]:bg-[#006D95] data-[state=active]:text-white data-[state=active]:shadow-sm data-[state=inactive]:text-[#006D95] data-[state=inactive]:hover:bg-[#006D95]/5 rounded-md transition-all duration-200 border-0"
 
 /** Switching tabs crossfades rather than snapping. Short enough not to feel like a wait. */
-const TAB_CONTENT_CLASS = "animate-in fade-in duration-300"
+/**
+ * `data-[state=inactive]:hidden` is load-bearing, not cosmetic.
+ *
+ * Panels a user has already opened stay mounted (see `keepMounted`), and Radix
+ * sets `hidden` from its own `present` flag — which `forceMount` forces true. So
+ * a force-mounted panel is *not* hidden by Radix, and without this class every
+ * visited tab would render on top of the others. Radix does still set
+ * `data-state`, which is what this hooks onto.
+ */
+const TAB_CONTENT_CLASS = "animate-in fade-in duration-300 data-[state=inactive]:hidden"
 
 export function MarketIntelligenceDashboard({
   enabledTabs,
@@ -87,6 +96,26 @@ export function MarketIntelligenceDashboard({
   const availableTabs = useMemo(() => visibleTabs.map((tab) => tab.value as TabValue), [visibleTabs])
 
   const [activeTab, setActiveTab] = useState<TabValue | "">(availableTabs[0] ?? "")
+
+  /**
+   * Tabs the user has opened at least once, which then stay mounted.
+   *
+   * Radix unmounts inactive panels by default, so leaving Market Analytics and
+   * coming back used to destroy its state and refire every data effect: the
+   * screening payload, the chart series and the map all refetched, and the
+   * region filter, sort order and selected institution reset. The server caches
+   * made that fast but never free, and it still read as the page reloading.
+   *
+   * Mounting on first visit rather than up front matters: force-mounting
+   * everything immediately would fire all four tabs' fetches on page load,
+   * trading a repeated cost for a worse initial one.
+   */
+  const [visitedTabs, setVisitedTabs] = useState<Set<string>>(
+    () => new Set(availableTabs[0] ? [availableTabs[0]] : [])
+  )
+
+  const keepMounted = (value: string) =>
+    visitedTabs.has(value) ? ({ forceMount: true } as const) : {}
 
   // Institution handed from a lens to the Market Analytics tab, which owns the
   // profile drawer. Routed through here rather than duplicating the drawer into
@@ -186,7 +215,14 @@ export function MarketIntelligenceDashboard({
 
       {availableTabs.length > 0 && (
         <main className="mx-auto w-full max-w-[1100px] px-5 py-12 md:px-[20px]">
-          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabValue)} className="flex flex-col gap-[60px]">
+          <Tabs
+            value={activeTab}
+            onValueChange={(v) => {
+              setActiveTab(v as TabValue)
+              setVisitedTabs((prev) => (prev.has(v) ? prev : new Set(prev).add(v)))
+            }}
+            className="flex flex-col gap-[60px]"
+          >
             <TabsList
               className={`grid w-full max-w-5xl ${TAB_GRID_COLS[visibleTabs.length] ?? "grid-cols-4"} gap-x-0 border border-[#006D95]/20 bg-white p-1.5 shadow-sm rounded-lg h-auto min-h-[56px]`}
             >
@@ -199,7 +235,7 @@ export function MarketIntelligenceDashboard({
             </TabsList>
 
             {enabledTabs.news && (
-              <TabsContent value="news" className={TAB_CONTENT_CLASS}>
+              <TabsContent value="news" className={TAB_CONTENT_CLASS} {...keepMounted("news")}>
                 <IndustryOutlook />
                 <div>
                   <PublicMentions />
@@ -214,7 +250,11 @@ export function MarketIntelligenceDashboard({
             )}
 
             {enabledTabs.marketResearch && (
-              <TabsContent value="market-research" className={`flex flex-col gap-[60px] ${TAB_CONTENT_CLASS}`}>
+              <TabsContent
+                value="market-research"
+                className={`flex flex-col gap-[60px] ${TAB_CONTENT_CLASS}`}
+                {...keepMounted("market-research")}
+              >
                 <div className="rounded-lg border border-[#006D95]/25 bg-white p-6 shadow-sm">
                   <div className="flex items-center gap-2 mb-2">
                     <FileText className="h-5 w-5 text-[#006D95]" />
@@ -229,7 +269,11 @@ export function MarketIntelligenceDashboard({
             )}
 
             {enabledTabs.marketAnalytics && (
-              <TabsContent value="analytics" className={`flex flex-col gap-[60px] ${TAB_CONTENT_CLASS}`}>
+              <TabsContent
+                value="analytics"
+                className={`flex flex-col gap-[60px] ${TAB_CONTENT_CLASS}`}
+                {...keepMounted("analytics")}
+              >
                 <div className="rounded-lg border border-[#006D95]/25 bg-white p-6 shadow-sm">
                   <div className="flex items-center gap-2 mb-2">
                     <LineChart className="h-5 w-5 text-[#006D95]" />
@@ -252,7 +296,11 @@ export function MarketIntelligenceDashboard({
             )}
 
             {enabledTabs.legal && (
-              <TabsContent value="legal" className={`flex flex-col gap-[60px] ${TAB_CONTENT_CLASS}`}>
+              <TabsContent
+                value="legal"
+                className={`flex flex-col gap-[60px] ${TAB_CONTENT_CLASS}`}
+                {...keepMounted("legal")}
+              >
                 <LegalUpdates />
               </TabsContent>
             )}

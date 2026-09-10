@@ -31,7 +31,8 @@
     "verify:screening-parity": "tsx scripts/verify-screening-parity.ts",
     "verify:fdic-hosts": "tsx scripts/verify-fdic-hosts.ts",
     "verify:visuals-payload": "tsx scripts/verify-visuals-payload.ts",
-    "verify:latest-quarter": "tsx scripts/verify-latest-quarter.ts"
+    "verify:latest-quarter": "tsx scripts/verify-latest-quarter.ts",
+    "verify:tab-persistence": "node scripts/verify-tab-persistence.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
