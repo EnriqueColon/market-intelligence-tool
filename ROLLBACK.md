@@ -7,15 +7,16 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
-| `main` | `27ef6f1` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `8a32b06` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `main` | `8844bea` | Production | https://market-intelligence-tool-gilt.vercel.app |
+| `dev` | `7b4e2b9` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
-The screening-table half of the Market Analytics performance work reached production on 2026-09-08.
-`dev` is ahead by the Visual Analysis half, which is the part that was still making the tab slow.
+All of the Market Analytics performance work reached production on 2026-09-09: the server-side
+screening reduction, the Visual Analysis charts, and quarter-keyed caching. `dev` is ahead by the
+tab-persistence fix, which stops a tab switch refetching everything.
 
 A SHA here can never name the commit that writes it, so the true head is usually one documentation
 commit further on. Only behavioural commits matter as rollback targets; the newest that changes
-application behaviour is **`02e45ae`**, which moves the Market Analytics reduction to the server.
+application behaviour is **`7b4e2b9`**, which keeps visited tab panels mounted.
 
 **`e8bf8ad` is the last production build with the wrong numbers.** Rolling back past `7d74797`
 restores CRE concentration that double-counts `LNREOTH` and includes owner-occupied property, and
@@ -124,6 +125,7 @@ the Market Participants tab.
 
 | Commit | Date | Summary |
 | --- | --- | --- |
+| `7b4e2b9` | 09-10 | fix(tabs): visited tab panels stay mounted, so tab switches no longer refetch. **No figures change**; this is mount behaviour only. Two coupled pieces — reverting `forceMount` alone is safe, but **leaving `forceMount` while removing `data-[state=inactive]:hidden` renders every visited tab stacked on the others**, because Radix stops setting `hidden` when force-mounted. The `ResizeObserver` in `BankStressHeatMap` is harmless either way and worth keeping: without it a hidden map container collapses to 0x0 and returns blank. `npm run verify:tab-persistence` reproduces all three failure modes in a browser. |
 | `8a32b06` | 09-09 | perf(market-analytics): both heavy caches keyed to the published FDIC quarter, timers stretched 23h → 7d. **No displayed figure changes** — this only alters when work is recomputed. Rolling back returns to a daily 31MB re-pagination, which is wasteful but harmless. Note that reverting the `revalidate` value alone will **not** retune cache entries already written: Vercel does not reconcile TTLs between deployments, so existing entries keep their 7-day window until the key changes or the cache is purged. `npm run verify:latest-quarter` confirms the probe underneath. |
 | `e2c1a73` | 09-09 | perf(market-analytics): Visual Analysis charts derived server-side and deferred until near the viewport. **No plotted value changes** — `npm run verify:visuals-payload` compares every series against the unrounded builders, 22,087 comparisons nationally. Rolling back restores a panel that paginates 31MB out of FDIC and burns ~21.6s on every mount, because its 5.46MB payload is over the 2MB cache ceiling and Next refuses to store it. The PDF path is untouched either way: it calls the same builders through `useAnalyticsChartData`. If you roll back, drop `visuals:national` and `visuals:florida` from the warm-cache route. |
 

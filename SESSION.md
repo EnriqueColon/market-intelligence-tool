@@ -8,7 +8,50 @@ is it in now, and what is still open.
 
 ---
 
-## 2026-09-09 (latest) — the other half of the Market Analytics slowness
+## 2026-09-10 (latest) — tab switches were reloading everything
+
+Reported as the page reloading its data on every tab or page change, which it was, for a reason
+unrelated to the server-side caching worked on the day before.
+
+Radix unmounts inactive tab panels. Leaving Market Analytics and coming back destroyed the panel and
+refired every data effect in it: the screening payload, the chart series and the map data all
+refetched, and the region filter, sort order and selected institution reset. The server caches made
+that cheap but never free, and no amount of server-side work would have fixed it — the request was
+being made again each time by design.
+
+Panels are now force-mounted once visited. **On first visit, not up front** — force-mounting
+everything immediately would fire all four tabs' fetches on page load, trading a repeated cost for a
+worse initial one.
+
+Two things came with that which were not obvious from the outside:
+
+- **`forceMount` makes Radix stop hiding the panel.** It derives `hidden` from its own `present`
+  flag, which `forceMount` forces true. Without a `data-[state=inactive]:hidden` class on the panel,
+  every visited tab renders stacked on the others. Caught by reading the Radix source before
+  shipping rather than by seeing it break.
+- **That hiding is `display: none`, which collapses the map container to 0x0.** MapLibre caches
+  canvas dimensions and does not observe its container, so the map returned blank. A ResizeObserver
+  now calls `resize()` when the container regains size.
+
+Verified in a real browser by `verify:tab-persistence`, which covers all three failure modes: zero
+server actions on a tab round trip, exactly one visible top-level panel, and a map canvas that still
+has dimensions. Measured 1,010 rows still rendered on return, zero server actions, canvas 974x420.
+
+**A trap worth knowing for local testing.** `npm start` sets `NODE_ENV=production`, which makes
+`isFeatureEnabled` fail closed, so a local production server renders **no tabs at all** unless
+`ENABLED_TABS` is passed explicitly. That cost a debugging cycle: sign-in succeeded and the header
+and Market Pulse rendered, so it looked like a selector problem rather than a configuration one.
+
+**Still open.** A full page reload still refetches, which is inherent — the server caches make it
+fast, but nothing survives a reload except the three research components that use `sessionStorage`.
+The screening payload is 1.26MB and the chart series 0.59MB, which is why they were not added to
+`sessionStorage`: ~1.9MB risks the quota and could evict the caches that are already there. Also
+carried forward: the CSV and PDF exports still pay the full ~22s pagination, and no other tab has
+been audited for the daily-refetch or oversized-cache patterns.
+
+---
+
+## 2026-09-09 — the other half of the Market Analytics slowness
 
 The tab was still slow after yesterday's fix, and the cause was a second, larger instance of the
 same pattern sitting on the same page.

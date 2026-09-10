@@ -790,6 +790,32 @@ Generated content is expensive, so nearly everything is cached for a day.
   Locally, deleting `.next/cache` does not clear it — the dev server holds it in memory too, so
   restart the server as well.
 
+### Tab panels stay mounted once visited
+
+  Radix unmounts inactive `TabsContent` by default. Leaving Market Analytics and returning therefore
+  destroyed the panel and refired every effect in it — the screening payload, the chart series and
+  the map data all refetched, and the region filter, sort order and selected institution reset. The
+  server caches made that fast but never free, and it read as the page reloading.
+
+  `market-intelligence-dashboard.tsx` tracks which tabs have been opened and passes `forceMount` to
+  those. Mounting **on first visit rather than up front** is deliberate: force-mounting everything
+  immediately would fire all four tabs' fetches on page load.
+
+  Two consequences that are easy to trip over.
+
+  **`forceMount` stops Radix hiding the panel.** Radix derives `hidden` from its own `present` flag,
+  which `forceMount` forces true, so a force-mounted panel is not hidden and every visited tab would
+  render stacked. `TAB_CONTENT_CLASS` therefore carries `data-[state=inactive]:hidden` — Radix does
+  still set `data-state`, which is what that hooks onto. **Any new `TabsContent` needs that class.**
+
+  **Hiding is `display: none`, which collapses a canvas to 0x0.** MapLibre caches canvas dimensions
+  and does not observe its container, so the bank stress map came back blank after a tab switch. A
+  `ResizeObserver` in `BankStressHeatMap` calls `map.resize()` when the container regains size; a
+  window resize listener would never fire, because the window is not what changed. Anything else
+  drawing into a canvas inside a tab needs the same treatment.
+
+  `npm run verify:tab-persistence` checks all three failure modes in a real browser.
+
 ### What a deployment does and does not clear
 
   **Vercel's Data Cache persists across deployments.** It is isolated per project and per

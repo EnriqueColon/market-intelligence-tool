@@ -256,6 +256,15 @@ Some checks need live data rather than fixtures, because they are calibrations r
   figures for up to a week and an unstable one makes every visitor miss the cache. It already
   caught one such failure, where the row shape changed and the code fell through to a fallback
   without erroring.
+- `npm run verify:tab-persistence` — that switching tabs does not refetch. Needs the app running,
+  and `npm start` sets `NODE_ENV=production`, so the feature flags fail closed and **`ENABLED_TABS`
+  must be passed explicitly** or the dashboard renders no tabs at all:
+
+  ```bash
+  npm run build
+  ENABLED_TABS="news,market-analytics,market-research,legal,bank-stress-map" npm start -- --port 3100
+  BASE_URL=http://localhost:3100 npm run verify:tab-persistence
+  ```
 - `npm run verify:fdic-hosts` — every FDIC endpoint against every configured host. Exists because
   the fallback host was configured for a long time in a form that 404s, which `fetchFDICData` treats
   as unrecoverable, so a primary outage would have returned empty data rather than retrying. Also
@@ -445,6 +454,7 @@ sense against your source usually mean the build cache, not your code. Stop the 
 | Add a feature flag inside a tab | Add the key to `ENABLED_TABS`, resolve it in `app/page.tsx`, pass it down as a prop — `isFeatureEnabled()` is server-only |
 | Add an FDIC column | Request the field in `lib/fdic-config.ts`, map it in `lib/fdic-data-transformer.ts`, then verify against the live API |
 | Show a new field in the Market Analytics tab | Add it to the row in `lib/analytics/screening.ts` — the browser only renders what that module sends. Then run `verify:screening-parity` and check the printed payload size still clears 2MB |
+| Add a tab, or touch `TabsContent` | Visited panels are force-mounted, and `forceMount` stops Radix setting `hidden` — so the panel must carry `data-[state=inactive]:hidden` or it will render stacked on the others. Anything with a canvas inside also needs to re-measure on reveal, since hiding is `display: none`. Run `verify:tab-persistence` |
 | Add or change an analytics chart | Derivation goes in `lib/analytics-chart-data.ts`, so screen and PDF share it; expose the series from `lib/analytics/visuals.ts`; then run `verify:visuals-payload`. Do not chart `ReportData` directly from the client — at 5.46MB it cannot be cached, which is what made the tab slow |
 | Change what the tab's scores mean | Bump `market-analytics-screening-v1` in `app/actions/market-analytics-screening.ts`, or cached entries keep serving scores computed the old way |
 | Force the outlook to regenerate | Bump the cache key version in `getCachedOutlook.ts`, push to `main`, confirm `keySignalFigures` is non-zero in the warm-cache log |
