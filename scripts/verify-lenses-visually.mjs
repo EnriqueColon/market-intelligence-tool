@@ -1,16 +1,17 @@
 /**
- * Screenshots the department lenses and dumps their rendered text.
+ * Screenshots the Executive Brief and Underwriter Workbench tabs and dumps
+ * their rendered text.
  *
  * Exists because every data-accuracy bug this tool has shipped passed both a
  * clean build and its unit tests, and was caught by reading rendered output.
  * Building is not verifying. Run this against a local dev server after touching
- * a lens, and read the numbers rather than skimming for a stack trace.
+ * either view, and read the numbers rather than skimming for a stack trace.
  *
  * Reads the password out of `.env.local` inside this process so it never passes
  * through a shell environment, a command line, or a process list.
  *
  *   npm run dev
- *   npm run verify:lenses              # both lenses
+ *   npm run verify:lenses              # both views
  *   SKIP_BRIEF=1 npm run verify:lenses # workbench only; the brief is slow cold
  *
  * Text goes to stdout, screenshots to /tmp/lens-shots.
@@ -46,16 +47,19 @@ await page.click('button[type="submit"]')
 await page.waitForURL((u) => !u.pathname.includes("login"), { timeout: 60000 })
 console.log("Signed in.")
 
-async function loadLens(department, cardHeading) {
-  await page.evaluate(
-    (d) => {
-      document.cookie = `department=${d}; path=/; max-age=31536000`
-    },
-    department
-  )
+async function loadLens(tabLabel, cardHeading) {
   await page.goto(`${BASE}/`, { waitUntil: "domcontentloaded" })
+  // Both views are off in production, so a missing tab here means ENABLED_TABS,
+  // not a broken view. Say so rather than timing out on the heading below.
+  const tab = page.getByRole("tab", { name: tabLabel })
+  if ((await tab.count()) === 0) {
+    throw new Error(
+      `No "${tabLabel}" tab. Run against a non-production build, or add its key to ENABLED_TABS.`
+    )
+  }
+  await tab.click()
 
-  // The lens fetches nine quarters of FDIC data on a cold cache, which takes
+  // The view fetches nine quarters of FDIC data on a cold cache, which takes
   // the better part of a minute. Poll for real content rather than a skeleton.
   const card = page.locator("div").filter({ hasText: cardHeading }).last()
   const deadline = Date.now() + 180000
@@ -77,7 +81,7 @@ function section(title, body) {
 // ---------------------------------------------------------------- Executive
 if (!process.env.SKIP_BRIEF) {
   console.log("\nLoading Executive Brief (cold cache, be patient)…")
-  await loadLens("executive", "What moved this quarter")
+  await loadLens("Executive Brief", "What moved this quarter")
   await page.waitForTimeout(1500)
   const briefCard = page
     .locator("div.p-6")
@@ -89,7 +93,7 @@ if (!process.env.SKIP_BRIEF) {
 
 // --------------------------------------------------------------- Workbench
 console.log("\nLoading Underwriter Workbench…")
-await loadLens("underwriting", "Underwriter workbench")
+await loadLens("Underwriter Workbench", "Underwriter workbench")
 await page.waitForTimeout(1500)
 const wbCard = page.locator("div.p-6").filter({ hasText: "Underwriter workbench" }).last()
 section("WORKBENCH — EMPTY STATE", await wbCard.innerText())

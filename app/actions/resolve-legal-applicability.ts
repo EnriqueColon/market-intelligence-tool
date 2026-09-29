@@ -5,11 +5,11 @@
  *
  * ## Why this is not inside `fetchLegalUpdates`
  *
- * Three reasons, and the first is a standing instruction in `docs/NEXT_VERSION_PLAN.md`:
+ * Three reasons:
  *
- * 1. **Department must not enter a cache key.** The watchlist overlap is per department, and
- *    keying the legal feed by department would multiply every entry. Cache the data, shape it
- *    in the component.
+ * 1. **The watchlist must not enter a cache key.** It is team state that changes whenever someone
+ *    adds an institution, while the feed is a day-keyed payload shared by everyone. Cache the
+ *    data, shape it in the component.
  * 2. **The two caches expire on different clocks.** The legal feed is keyed to the calendar day;
  *    screening is keyed to the published FDIC quarter and held for a week. Folding the counts
  *    into the legal entry would freeze figures from the previous quarter for up to a day after
@@ -26,9 +26,9 @@
  * than assumed, so a future change to the cap surfaces instead of silently skewing counts.
  */
 
-import { cookies } from "next/headers"
 import { getScreeningPayload } from "@/app/actions/market-analytics-screening"
-import { getDepartmentWatchlist, type WatchlistEntry } from "@/app/actions/department-watchlist"
+import { getWatchlist } from "@/app/actions/institution-watchlist"
+import type { WatchlistEntry } from "@/app/actions/institution-watchlist"
 import {
   type ApplicabilityExample,
   describeTest,
@@ -36,7 +36,6 @@ import {
   selectMatching,
   summarizeMatches,
 } from "@/lib/legal-applicability"
-import { DEPARTMENT_COOKIE_NAME, parseDepartment } from "@/lib/department"
 import { TAB_ROW_CAP } from "@/lib/analytics/screening"
 
 const UNIVERSE_SCOPE = "Florida"
@@ -48,7 +47,7 @@ export type ResolvedApplicability = {
   universe: number
   /** The largest matches, for checking the test against the linked document. */
   examples: ApplicabilityExample[]
-  /** How many of the matches are on this department's watchlist. */
+  /** How many of the matches are on the team's watchlist. */
   onWatchlist: number
   /** Names of watchlisted matches — the part that turns a headline into a call. */
   watchlistNames: string[]
@@ -128,16 +127,12 @@ export async function resolveLegalApplicability(
 }
 
 /**
- * `available` distinguishes "no database, so we cannot tell you" from "your watchlist is empty",
+ * `available` distinguishes "no database, so we cannot tell you" from "the watchlist is empty",
  * which the card has to say differently. Without Postgres — the normal state on `dev` — the
  * overlap line is omitted rather than shown as a reassuring zero.
  */
 async function readWatchlist(): Promise<{ entries: WatchlistEntry[]; available: boolean }> {
-  const store = await cookies()
-  const department = parseDepartment(store.get(DEPARTMENT_COOKIE_NAME)?.value)
-  if (!department) return { entries: [], available: false }
-
-  const result = await getDepartmentWatchlist(department)
+  const result = await getWatchlist()
   return result.ok
     ? { entries: result.entries, available: true }
     : { entries: [], available: false }

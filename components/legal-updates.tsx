@@ -275,7 +275,7 @@ export function LegalUpdates() {
 
   /**
    * Resolved in a second pass rather than with the feed, because the join is against FDIC data
-   * and a department watchlist — neither of which belongs in the feed's shared, day-keyed cache.
+   * and the team's watchlist — neither of which belongs in the feed's shared, day-keyed cache.
    * See `resolve-legal-applicability.ts`.
    *
    * Deliberately not gating the cards: this arrives after the tab is already readable and fills

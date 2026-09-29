@@ -108,24 +108,27 @@ export async function GET(request: Request) {
     warmWithLabel("visuals:national", () => getAnalyticsVisuals("National"), results),
     warmWithLabel("visuals:florida", () => getAnalyticsVisuals("Florida"), results),
 
-    // Department lenses. Each pulls nine quarters for every institution the
-    // FDIC row cap allows, which is roughly fifty seconds cold — long enough
-    // that the first person to pick a department after a deploy would otherwise
-    // sit in front of a skeleton. Both are cached for six hours, so warming
-    // once per deploy plus the daily cron covers the working day.
+    // The Executive Brief and Underwriter Workbench tabs. Each pulls nine
+    // quarters for every institution the FDIC row cap allows, which is roughly
+    // fifty seconds cold — long enough that the first person to open either
+    // after a deploy would otherwise sit in front of a skeleton. Both are
+    // cached for six hours, so warming once per deploy plus the daily cron
+    // covers the working day.
     //
-    // Only "National" is warmed because that is the only scope either lens is
+    // Only "National" is warmed because that is the only scope either tab is
     // mounted with. If a scope selector is added, every scope it can produce
     // has to be added here or the tool quietly regains a fifty-second cold load.
     //
-    // Skipped entirely where the lenses are not reachable, which is production
-    // while they are still being built. Warming them there would spend a couple
-    // of minutes of FDIC calls per deploy filling a cache nothing can read.
-    ...(isFeatureEnabled("department-lenses")
-      ? [
-          warmWithLabel("executiveBrief:national", () => getExecutiveBrief("National"), results),
-          warmWithLabel("workbench:national", () => getWorkbenchUniverse("National"), results),
-        ]
+    // Each is skipped where its tab is not enabled, which in production is both
+    // of them while they are still being built. Warming them there would spend
+    // a couple of minutes of FDIC calls per deploy filling a cache nothing can
+    // read. They are gated separately now that they are separate tabs — one can
+    // be turned on without paying for the other.
+    ...(isFeatureEnabled("executive-brief")
+      ? [warmWithLabel("executiveBrief:national", () => getExecutiveBrief("National"), results)]
+      : []),
+    ...(isFeatureEnabled("underwriter-workbench")
+      ? [warmWithLabel("workbench:national", () => getWorkbenchUniverse("National"), results)]
       : []),
   ])
 
