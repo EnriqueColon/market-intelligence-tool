@@ -59,28 +59,39 @@ Tabs are gated server-side in `app/page.tsx` via `isFeatureEnabled()` (`lib/feat
 the `ENABLED_TABS` comma-separated list. **Outside production every feature is on**, which is how a
 tab is developed on `dev` before being exposed in production.
 
+**`app/page.tsx` declares `export const dynamic = "force-dynamic"`, and that is load-bearing.**
+`isFeatureEnabled()` must run per request, so editing `ENABLED_TABS` in Vercel takes effect without
+a redeploy. Nothing else on the page forces dynamic rendering any more: it used to call `cookies()`
+to resolve the department, which opted out of static rendering as a side effect, and when the
+department was removed on 2026-09-29 the page became statically prerenderable and the flags froze at
+build time. Two silent failures follow from that — a variable edit appearing to do nothing, and a
+build without the variable shipping a tool with no tabs at all. Do not remove the declaration
+without replacing it with something else that forces per-request rendering.
+
 The same list also gates content *inside* a tab. `app/page.tsx` resolves those into a `features`
 object passed down to the dashboard, because `isFeatureEnabled()` reads server-only env and
-everything below it is a client component. The current entries are `bank-stress-map` and
-`department-lenses`.
+everything below it is a client component. The only entry is now `bank-stress-map`.
 
-`department-lenses` gates the whole department layer: the selector in the header, and the Executive
-Brief and Underwriter Workbench that choosing a department reveals. **It is off in production while
-the lenses are still being built**, which is what let the corrected CRE definition, the capital-ratio
-fix and the FDIC column audit reach production without waiting for them — the lens code ships but is
-unreachable. Turn it on by adding `department-lenses` to `ENABLED_TABS` in Vercel; no code change is
-needed.
+**The Executive Brief and Underwriter Workbench are ordinary tabs**, keyed `executive-brief` and
+`underwriter-workbench`, and **off in production** while they are still being built — which is what
+let the corrected CRE definition, the capital-ratio fix and the FDIC column audit reach production
+without waiting for them. Turn either on by adding its key to `ENABLED_TABS` in Vercel; no code
+change is needed, and they are gated independently so one can be enabled without paying for the
+other's cache warm.
 
-Two details are load-bearing rather than incidental. The dashboard resolves the flag into a single
-`department` value (`features.departmentLenses ? initialDepartment : null`) instead of checking it at
-each of the three render sites, because **the department cookie is written by the client and outlives
-the flag** — a browser that chose a department on the preview must not be able to surface a lens in
-production. And `app/api/cron/warm-cache/route.ts` skips the two lens warms when the flag is off,
+They were previously "lenses" revealed by choosing a department from a header dropdown that wrote a
+cookie, behind a single `department-lenses` flag. That was removed because the department was a
+preference and not an identity: the tool has one shared password and no accounts, so the cookie only
+decided which view you could find, while pushing a department value into the cache key of anything
+that read it. `app/api/cron/warm-cache/route.ts` now checks each tab's own flag before warming it,
 where it would otherwise spend a couple of minutes of FDIC calls per deploy filling a cache nothing
 can read.
 
-The tab bar derives its column count from the number of enabled tabs. It was previously hardcoded to
-`grid-cols-4`, so production — which runs three — rendered an empty fourth cell.
+The tab bar derives its column count from the number of enabled tabs, via `TAB_GRID_COLS`. It was
+previously hardcoded to `grid-cols-4`, so production — which runs three — rendered an empty fourth
+cell. The map is spelled out one class per count because Tailwind only ships classes it can see in
+the source; `grid-cols-${n}` compiles to nothing. **Adding a tab means adding its column count**,
+which is why the map runs to six.
 
 | Tab | Feature key | What it shows |
 | --- | --- | --- |
@@ -88,6 +99,8 @@ The tab bar derives its column count from the number of enabled tabs. It was pre
 | Market Analytics | `market-analytics` | FDIC bank financials with state filter, institution drawer and export (`market-analytics.tsx`); a Visual Analysis chart section (`market-analytics-visuals.tsx`); a Bank Stress Map behind `bank-stress-map`; plus a nested FRED/Census indicator panel (`market-research.tsx`) |
 | Market Research | `market-research` | Live publisher-by-publisher research feed with Postgres-backed archive (`market-research-feed.tsx`) and memo generation (`research-memo-modal.tsx`) |
 | Legal Landscape | `legal` | Three AI-generated sections — Regulatory Watch, Legislative Tracker, Enforcement & Litigation (`legal-updates.tsx`). Despite the name, no LegiScan data is involved |
+| Executive Brief | `executive-brief` | What moved and what needs a decision (`lenses/executive-brief.tsx`). Off in production; unfinished |
+| Underwriter Workbench | `underwriter-workbench` | One institution, verified figures, peer cohort (`lenses/underwriter-workbench.tsx`). Off in production; unfinished |
 
 Production currently runs `ENABLED_TABS=news,market-analytics,market-research` (plus `legal` where
 enabled) — confirm the live value in Vercel rather than trusting this line.
@@ -1055,12 +1068,28 @@ selector without adding its scopes here quietly restores a fifty-second cold loa
 | `research_summaries` | `summarize-report`, `research-feed.ts`, `summarize-found-report.ts` |
 | `research_search_cache` | `search-industry-reports.ts` |
 | `research_feed_cache` | `api/research/feed-reports` (auto-creates itself) |
-| `department_watchlist` | `app/actions/department-watchlist.ts` (auto-creates itself) |
+| `institution_watchlist` | `app/actions/institution-watchlist.ts` (auto-creates itself) |
 
-`department_watchlist` holds FDIC institutions a department is tracking, keyed `(department, cert)`.
+`institution_watchlist` holds FDIC institutions the team is tracking, keyed on `cert` alone. One
+shared list: the tool has a single shared password and no accounts, so there is exactly one team.
+
+It replaced `department_watchlist`, which keyed the same rows `(department, cert)` from a cookie
+value. That was removed on 2026-09-29 for three reasons — the cookie was a preference rather than an
+identity, so anyone could change which list they wrote to from the browser console; it forced the
+department into the cache key of every reader; and **nothing in the interface ever wrote to the
+table**, so it was an orphaned capability of the same kind the department model was introduced to
+replace. `ensureTable` carries any surviving rows across, collapsing the composite key by taking the
+earliest entry per `cert`. **The old table is deliberately not dropped** — it is expected to be
+empty, but "expected" is not grounds for an irreversible statement running off a cache-warming
+request. Drop it by hand once you have looked.
+
+The only reader today is `app/actions/resolve-legal-applicability.ts`, which intersects it with the
+institutions a legal development covers. There is still no interface for adding to it, so
+`addToWatchlist` and `removeFromWatchlist` are wired but unreachable.
+
 It is **not** related to `data/watchlist.json`, which is curated reference data — 45 named
 distressed-credit firms with aliases and categories, loaded by `app/lib/watchlist.ts` and used to
-match news and counterparties. That file belongs in the repository; this table is user state.
+match news and counterparties. That file belongs in the repository; this table is team state.
 
 Note that `app/actions/watchlist.ts` is orphaned **and dangerous**: it writes a flat array of strings
 to `data/watchlist.json` and would destroy the curated schema if ever called. Nothing imports it. It

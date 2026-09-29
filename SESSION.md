@@ -8,7 +8,73 @@ is it in now, and what is still open.
 
 ---
 
-## 2026-09-29 (latest) — the legal tab counts who a rule hits
+## 2026-09-29 (latest) — the department is gone; two lenses become two tabs
+
+"I don't like the department card approach. Let's go with something else." The decision taken was
+to remove **the mechanism as a whole** — the header dropdown, the cookie, and the per-department
+watchlist — and replace the storage half with one shared watchlist that has no department
+dimension.
+
+Removing it was the right call for a reason worth writing down. The department was a **preference
+wearing the costume of an identity.** A non-httpOnly cookie anyone can edit from the browser
+console is fine while it only decides which view you see; it had started deciding **which
+watchlist you write to**, and that is a claim about who you are. The tool has one shared password
+and no accounts, so there is exactly one team, and modelling several was inventing a distinction
+the deployment does not have.
+
+Two findings made the removal far less risky than it looked, and both were checked rather than
+assumed. `department_watchlist` **has no writer anywhere in the codebase** — no interface ever
+added to it, so it is expected empty; and `department-lenses` is **off in production**, so the
+entire department layer was dark to production users. Nothing live was being taken away.
+
+### What replaced it
+
+The Executive Brief and Underwriter Workbench are now **ordinary tabs**, keyed `executive-brief`
+and `underwriter-workbench` and gated independently, so one can be switched on without paying for
+the other's cache warm. They lost nothing in the move: the two views only ever rendered above the
+tab bar, and a tab is how everyone reaches them without first guessing which department they are.
+
+Storage became `institution_watchlist`, keyed on `cert` alone. `ensureTable` carries any surviving
+rows over, collapsing the composite key by earliest entry per cert. **The old table is not
+dropped.** It is expected to be empty, but "expected" is not grounds for an irreversible statement
+running off a cache-warming request; drop it by hand after looking.
+
+### The regression this nearly shipped with
+
+Removing the department made `app/page.tsx` **statically prerendered**, and that froze the feature
+flags into the build. Nothing announced it. The page had been dynamic only as a *side effect* of
+calling `cookies()` to read the department, and taking the cookie away took the dynamic rendering
+with it — the build output flipped from `ƒ /` to `○ /`, one character, in a line nobody reads.
+
+Two silent failures follow. Editing `ENABLED_TABS` in Vercel would appear to do nothing, which
+`README.md` documents as the supported way to switch a tab on; and a build without the variable
+ships **a tool with no tabs at all**. It was caught because the tab-render check returned HTTP 200
+with every flag `false` despite the variable being set, and that mismatch was the only evidence.
+`app/page.tsx` now declares `export const dynamic = "force-dynamic"` with the reasoning next to it,
+because the next person to look will find no visible reason for the line.
+
+`scripts/verify-lenses-visually.mjs` was quietly broken too — it set a department cookie to reach
+each view. It clicks the tab now, and says so explicitly when the tab is absent, since the likely
+cause is `ENABLED_TABS` rather than a broken view.
+
+Verified: six tabs render with `grid-cols-6` and the flags resolve at **runtime**; 48 unit tests
+pass; the applicability script still selects 13 of 85 Florida institutions on the 300% limb.
+`TAB_GRID_COLS` is spelled out one class per count because Tailwind cannot see `grid-cols-${n}`,
+so adding a tab means adding its column count.
+
+**Still open.** Unchanged from the entry below: enforcement items are not yet matched by **named
+institution** to an FDIC cert, which is where the distressed-seller signal lives and which doubles
+as a fabrication check; the applicability hit rate is low and honestly so, 1–2 items per run. Still
+no browser confirmation for the fourth session running — the Cursor browser tool cannot reach
+`localhost` here, so the tab layout is verified by reading the rendered payload over curl, not by
+eye. New and open: `institution_watchlist` has **a reader but still no writer**, so the watchlist
+overlap on legal cards will read zero until something can add to it — the department model's
+orphaned-capability problem survives its removal, in smaller form. `department_watchlist` is still
+present in Postgres and should be dropped by hand. **All of this is on `dev`.**
+
+---
+
+## 2026-09-29 — the legal tab counts who a rule hits
 
 Asked directly: "this is simply providing information, and telling us why it matters — how can we
 make this tab actionable?" The observation was structural rather than cosmetic. Each card's last

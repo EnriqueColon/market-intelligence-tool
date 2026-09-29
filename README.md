@@ -73,16 +73,12 @@ names imply something different from what they contain, and getting one wrong pu
 badly wrong number in front of a user. `confluence.md` §4 "FDIC screening metrics" lists the ones
 that have already caused incidents.
 
-### Lenses
+### The views in `components/lenses/`
 
-Alongside the tabs, `components/lenses/` holds department-specific views selected by the header
-department control. **A lens is additive**: it renders above the tabs and removes nothing, so every
-tab stays reachable whichever department is chosen. Anything that replaces a tab is not a lens.
-
-The department is a stated preference held in a non-httpOnly cookie, not an authenticated claim, so
-it selects a view and must never gate access to data.
-
-Two exist today.
+`components/lenses/` holds two task-shaped views that are ordinary tabs like any other, off in
+production behind `executive-brief` and `underwriter-workbench` because they are unfinished. The
+directory keeps its name from when they were "lenses" revealed by choosing a department; the
+department was removed on 2026-09-29 and they are now simply tabs.
 
 - **Executive Brief** — "what moved this quarter" in a couple of dozen lines rather than eleven
   hundred rows, plus the institutions that have stopped filing altogether.
@@ -92,8 +88,7 @@ Two exist today.
 
 Both hand an institution to the Market Analytics profile drawer rather than rendering their own copy,
 because that view already owns the trends and the cohort its percentiles are measured against;
-`confluence.md` explains why that indirection is deliberate. Two more lenses are planned; see
-`docs/NEXT_VERSION_PLAN.md`.
+`confluence.md` explains why that indirection is deliberate.
 
 ---
 
@@ -294,7 +289,7 @@ Some checks need live data rather than fixtures, because they are calibrations r
 ### Verifying what actually renders
 
 **Every data-accuracy bug this tool has shipped passed a clean build and its unit tests, and was
-caught by reading rendered output.** Building is not verifying. After touching a lens:
+caught by reading rendered output.** Building is not verifying. After touching either view:
 
 ```bash
 npm run dev
@@ -520,7 +515,7 @@ sense against your source usually mean the build cache, not your code. Stop the 
 | To do this | Change this |
 | --- | --- |
 | Expose or hide a tab | `ENABLED_TABS` in Vercel. No code change |
-| Turn on the department lenses in production | Add `department-lenses` to `ENABLED_TABS` in Vercel. The code is deployed but unreachable until you do; they are off because the lenses are unfinished, not because they are broken |
+| Turn on the Executive Brief or Underwriter Workbench in production | Add `executive-brief` or `underwriter-workbench` to `ENABLED_TABS` in Vercel — independently, so one can go on without the other. The code is deployed but unreachable until you do; they are off because they are unfinished, not because they are broken |
 | Add a feature flag inside a tab | Add the key to `ENABLED_TABS`, resolve it in `app/page.tsx`, pass it down as a prop — `isFeatureEnabled()` is server-only |
 | Add an FDIC column | Request the field in `lib/fdic-config.ts`, map it in `lib/fdic-data-transformer.ts`, then verify against the live API |
 | Show a new field in the Market Analytics tab | Add it to the row in `lib/analytics/screening.ts` — the browser only renders what that module sends. Then run `verify:screening-parity` and check the printed payload size still clears 2MB |
@@ -531,8 +526,8 @@ sense against your source usually mean the build cache, not your code. Stop the 
 | Change chart appearance | `lib/chart-theme.tsx`. Use colour literals, not CSS variables — the PDF renderer cannot resolve them |
 | Add a chart to both screen and PDF | Put it in `components/charts/analytics/`; both surfaces render the same component so they cannot drift |
 | Sign everyone out | Rotate `COOKIE_SECRET`. Only when you intend to |
-| Add a lens | New file in `components/lenses/`, its own server action, render it above the tabs in `market-intelligence-dashboard.tsx` behind a department check. Remove nothing |
-| Keep a new lens off the ~50s cold load | Warm it in `app/api/cron/warm-cache/route.ts` and keep its `revalidate` under 24h, or the daily cron will always find it fresh and never refresh it |
+| Add a tab | Component plus its server action, then a `TAB_DEFS` entry, a `TabsContent` block and an `EnabledTabs` key in `market-intelligence-dashboard.tsx`, an `isFeatureEnabled()` call in `app/page.tsx`, and **a `TAB_GRID_COLS` entry for the new column count** — Tailwind cannot see `grid-cols-${n}` |
+| Keep a new tab off the ~50s cold load | Warm it in `app/api/cron/warm-cache/route.ts` behind its own flag, and keep its `revalidate` under 24h, or the daily cron will always find it fresh and never refresh it |
 | Diagnose "the tool is slow" | Almost always cold caches. Check the latest `Warm Cache After Deploy` run in GitHub Actions |
 | Roll back | `ROLLBACK.md` |
 

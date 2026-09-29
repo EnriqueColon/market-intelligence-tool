@@ -48,7 +48,7 @@ Insight has to attach to a decision or it is just more data.
 Underwriting is the **depth** user — one institution, verify the number, trust the provenance. IR/BD
 and executives are **breadth** users — rank, direction, what moved. Two shapes, not three.
 
-## Architecture: one data layer, four lenses
+## Architecture: one data layer, several task-shaped views
 
 **Rejected: four separate dashboards.** It quadruples the surface area, and the same figure rendered
 in four places will drift. That is precisely the failure that produced the Reserve Coverage bug,
@@ -73,14 +73,36 @@ otherwise discards the history.
 
 ## Identity model
 
-**Department selection, not user accounts.** The user picks a department; the tool shapes itself
-accordingly. This avoids user management entirely.
+**Amended 2026-09-29: there is no identity model. The department was removed.** What follows is the
+original design, kept for the record; the paragraph after it explains what replaced it and why.
 
-- Stored in a **cookie, not `localStorage`** — deliberately, so `app/page.tsx` can read it
-  server-side and render the correct view immediately rather than flashing the wrong one.
-- Persistence keyed by department, so **watchlists and flags are shared within a department**.
-  Agreed as intended: the team's context survives any individual being away. The trade is that there
-  is no private workspace and no attribution unless we add it later.
+> **Department selection, not user accounts.** The user picks a department; the tool shapes itself
+> accordingly. This avoids user management entirely.
+>
+> - Stored in a **cookie, not `localStorage`** — deliberately, so `app/page.tsx` can read it
+>   server-side and render the correct view immediately rather than flashing the wrong one.
+> - Persistence keyed by department, so **watchlists and flags are shared within a department**.
+>   Agreed as intended: the team's context survives any individual being away. The trade is that
+>   there is no private workspace and no attribution unless we add it later.
+
+It was built and then removed without ever being switched on in production. Three things were wrong
+with it. The department was a **preference wearing the costume of an identity** — a non-httpOnly
+cookie anyone could edit from the browser console — which was fine while it only chose a view, but
+it was already deciding which watchlist you wrote to, and that is a claim, not a preference. It put
+a low-cardinality user-controlled value **into the write path of shared state**, so two people
+could disagree about what the team was tracking with no way to tell who was right. And the whole
+mechanism existed to reveal two views that could simply be tabs.
+
+What replaced it: **one shared watchlist keyed on CERT alone**, and the Executive Brief and
+Underwriter Workbench as ordinary tabs behind their own feature keys. The tool has a single shared
+password and no accounts — so there is exactly one team, and modelling several was inventing a
+distinction the deployment does not have. If per-person state is ever genuinely needed, the honest
+version is authentication, not a cookie.
+
+The original justification for departments — that each group arrives asking a different question —
+still holds, and the two task-shaped views are how it is answered. **The insight was about
+task-shaped views; it did not require identity to deliver them**, and a tab does the same job
+reachable by everyone.
 
 ---
 
@@ -136,25 +158,32 @@ that a relative movement filter is not enough — a metric starting near zero ma
 enormous — so trajectories now require an absolute materiality floor as well.
 
 1. **Department selector** in the header beside the scope selector; cookie-persisted and
-   server-readable.
+   server-readable. *(Removed 2026-09-29 — see the amended Identity model above.)*
 2. **Quarter-over-quarter deltas** per institution — score, CRE concentration, credit quality,
    reserves, capital. FDIC data is immutable once published, so it caches cleanly per quarter.
 3. **Watchlist to Postgres**, keyed by department, replacing the filesystem version. Degrade through
    the existing `isDbEnabled()` pattern so local development still runs without a database.
+   *(Amended 2026-09-29 — now `institution_watchlist`, one shared list keyed on CERT alone. The
+   `isDbEnabled()` degradation held and is unchanged.)*
 4. **The change engine**, producing two distinct classes:
    - **Crossings** — passed a threshold that means something externally, e.g. CRE concentration above
      the 300% regulatory guidance level.
    - **Trajectories** — third or fourth consecutive quarter of deterioration with nothing crossed
      yet. This is the early-warning half.
 
-## Phase 2 — The four lenses
+## Phase 2 — The task-shaped views
 
-**Status: Executive Brief complete; three remaining.** Built from existing components. The current
-tabs are untouched.
+**Status: Executive Brief and Underwriter Workbench built, neither finished; both off in
+production.** Built from existing components. The pre-existing tabs are untouched.
+
+**Amended 2026-09-29: these are tabs, not lenses.** They were "lenses" revealed by choosing a
+department and rendered above the tab bar; they are now ordinary tabs behind `executive-brief` and
+`underwriter-workbench`. The count of four came from the department list, so there is no longer a
+fixed target — a view gets built when there is a question worth building it for.
 
 - **Executive Brief** — **done.** `components/lenses/executive-brief.tsx` over
-  `app/actions/executive-brief.ts`. Renders above the tabs when the selected department is
-  Executive, and replaces nothing: every tab stays reachable. Three ranked sections — supervisory
+  `app/actions/executive-brief.ts`. Its own tab since 2026-09-29; previously rendered above the tab
+  bar for the Executive department. Three ranked sections — supervisory
   crossings, watch-level crossings, deterioration — capped at six each, because a brief that needs
   scrolling is not a brief. Deliberately no thirty-column table.
 
@@ -173,7 +202,7 @@ tabs are untouched.
   Entries are clickable and open the institution profile drawer owned by the Market Analytics tab,
   via a `focusCert` handed down through the dashboard. The lens does not render its own drawer: the
   drawer's figures are percentiles against a cohort, and a second cohort would make one institution
-  read at two different percentiles. This is the pattern the remaining three lenses should follow —
+  read at two different percentiles. This is the pattern any further view should follow —
   hand off to the view that already owns the detail. It works because both sides select the same
   cohort, so a change to either side's cohort rule breaks it; the failure is surfaced in the card
   rather than swallowed.
@@ -201,7 +230,9 @@ tabs are untouched.
 
 ## Risks to hold onto
 
-**Do not put department into a cache key.** Keying caches by department multiplies every entry by
+**Do not put department into a cache key.** *(Moot since 2026-09-29 — there is no department. Kept
+because the general form still bites: never key a cache on a user-controlled value.)* Keying caches
+by department multiplies every entry by
 four. Cache the data; shape it in the component.
 
 **Re-scoring changes rankings people may already have opinions about.** Keep the previous score
