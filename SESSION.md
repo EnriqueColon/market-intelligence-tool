@@ -102,11 +102,64 @@ API. The diagnostic was reading `data.output_text`, which the Responses API ofte
 `lib/openai.ts` has a fallback for exactly this and the throwaway script did not. Nearly chased a
 non-existent bug.
 
-**Still open.** Not yet confirmed in a browser after deploy. The two 2026-06-18 items that render
-are outside the 90-day prompt window but inside the 180-day filter, which is the intended overlap
-rather than a defect. Item quality is now the weak point rather than freshness — "CRA Performance
-Evaluations for 23 National Banks" is recent but thin for a distressed-debt reader, and the
-prompts do not yet push hard on CRE relevance.
+### "Is this bringing in actual legislation?" — no, it was inventing it
+
+Asked that directly, and checking rather than assuming was the whole value of the question. Ran the
+three prompts and fetched every URL they cited. Regulatory resolved 4 of 4. Legislative and
+Enforcement resolved 1 of 7 between them.
+
+What the Legislative Tracker actually returned:
+
+- **"Homeownership Promise Act — S. 1234."** That bill number is copied verbatim from the prompt's
+  own formatting example, `e.g. SB 1234 — Florida Senate`. The prompt was feeding it the answer.
+- **"Live Local Act 2026 Update — HB 1389"**, dated exactly the 90-day cutoff, linked to Florida
+  Statute 714.09 — "Status of receiver as lien creditor", enacted 2020, unrelated.
+- **A Federal Reserve rate decision**, filed as legislation, cited to a loan broker's blog.
+- **"Ratepayer Protection Act — H.R. 10322"**, whose URL 404s.
+
+Enforcement was worse: consent orders against "Sunset Bank" and "Liberty Bank", Chapter 11 by
+"Downtown Plaza Mall", every URL assembled from a pattern and none of them real. For a
+distressed-debt reader those are not low-quality items, they are actionable-looking fiction.
+
+**A correction to what I reported earlier today.** The 82–83% "in-window" figure measured only
+whether the date *string* fell inside the window, and the clustering of items on exactly
+`2026-07-01` — the cutoff — was the model back-stamping old law to satisfy the instruction. The
+prompt fix was real and Regulatory Watch genuinely improved, but that number said much less about
+quality than I implied.
+
+So an item now renders only if its URL is a listed primary source **and** that URL loads. Both
+halves are needed, which took a couple of passes to get right:
+
+- Checking only that the link resolves admits trade press and law-firm briefings. They resolve
+  perfectly well, which makes them indistinguishable from a real citation to a link check.
+- Checking only the host admits URLs constructed on the right domain. The recurring one is
+  `federalreserve.gov/newsevents/pressreleases/2026-press20260924a.htm`, the exact shape of a
+  genuine Fed release.
+- Naming the permitted domains **in the prompt** took provenance from 38% to 100%. Without it the
+  model cites the commentary it found the item through, and the guard then discards a real
+  development for want of a link.
+
+Two false starts worth recording. Domain-restricted search via `searchAllowedDomains` looked like
+the obvious answer and is not: it forces `gpt-4.1`, which returned one item for legislative and
+none for enforcement. And the first pass at anti-fabrication wording stacked up so many
+permissions to return nothing that recall collapsed to zero items across all three sections — the
+model took the exemption rather than the work. It now has to search before it may report nothing.
+
+Sections retry once when nothing survives verification, because the failure is erratic rather than
+steady: a fabricated URL on one attempt, the real page on the next. Four consecutive runs after
+that: 2–8 items rendering, all verified, never empty.
+
+The verify script grew two better gates in the process. It now asserts the guard does not leak and
+that fabrication stays under half, rather than scoring the model's raw output — and it measures
+age against the filter's 180-day window rather than the prompt's 90, since an OCC order from four
+months ago is a real development that renders, and failing it only measured the gap between two
+numbers I had chosen myself.
+
+**Still open.** Not confirmed in a browser after deploy. Legislative and Enforcement will now
+sometimes be empty with a note, which is the honest answer while Florida is out of session but is
+worth watching — if Legislative is still empty in January the prompt, not the guard, is wrong.
+`gpt-4.1-mini` remains the model; it beat `gpt-4.1` on both freshness and recall here, which is
+worth remembering before anyone "upgrades" it.
 
 Also: the `ROLLBACK.md` current-state table was stale again on arrival — it named `8844bea` for
 production when `main` was actually at `996efa9`, with the tab-persistence fix already shipped.

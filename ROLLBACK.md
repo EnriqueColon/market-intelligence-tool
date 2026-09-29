@@ -7,18 +7,19 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
-| `main` | `8625c7c` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `8625c7c` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `main` | `e5414c3` | Production | https://market-intelligence-tool-gilt.vercel.app |
+| `dev` | `e5414c3` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 All of the Market Analytics performance work reached production on 2026-09-09 — the server-side
 screening reduction, the Visual Analysis charts and quarter-keyed caching — followed by the
 tab-persistence fix on 09-10. The branches were level again after the Legal Landscape work merged
 on 09-29.
 
-The newest commit changing application behaviour is **`8625c7c`**, which puts today's date into the
-Legal Landscape prompts. The three legal commits are a set: `2384143` stops the feed rendering one
-development several times, `10fd202` withholds stale items, and `8625c7c` stops the feed being
-stale in the first place. **`10fd202` alone renders an empty tab** — it was briefly live that way.
+The newest commit changing application behaviour is **`e5414c3`**, which stops the feed publishing
+items it cannot point at a real primary source for. The four legal commits are a set: `2384143`
+stops the feed rendering one development several times, `10fd202` withholds stale items, `8625c7c`
+stops it being stale in the first place, and `e5414c3` stops it inventing citations. **`10fd202`
+alone renders an empty tab** — it was briefly live that way.
 
 This table had drifted before this session: it named `8844bea` as production when `main` was
 actually at `996efa9`, and listed three commits as dev-only that had already shipped. Verify with
@@ -94,7 +95,8 @@ git push --force-with-lease origin dev
 
 | Commit | Date | Why it is a safe target |
 | --- | --- | --- |
-| `8625c7c` | 2026-09-29 | Newest behavioural commit. The Legal Landscape feed deduped, freshness-filtered and given today's date; nothing outside that tab is touched, so it is a safe target for unrelated work. |
+| `e5414c3` | 2026-09-29 | Newest behavioural commit. The Legal Landscape feed deduped, freshness-filtered, date-aware and source-verified; nothing outside that tab is touched, so it is a safe target for unrelated work. |
+| `8625c7c` | 2026-09-29 | **Known-bad: publishes fabricated legislation and enforcement actions.** Dates are current but citations are invented — consent orders against banks that do not exist. Do not roll back to this point; go to `e5414c3`. |
 | `10fd202` | 2026-09-29 | **Known-bad: renders an empty Legal Landscape tab.** The staleness filter without the prompt fix, so every item the model returns is withheld. Do not roll back to this point; go to `8625c7c` or past `2384143`. |
 | `996efa9` | 2026-09-10 | All Market Analytics performance work plus tab persistence, with no figure changes anywhere in that range. **Known-bad for the Legal Landscape tab**: this is the build that renders an interagency rule once per issuing agency and serves a 2019 rule under a 90-day heading, reported by a user on 09-29. Prefer rolling forward to `10fd202`. |
 | `d3f7973` | 2026-08-28 | Newest behavioural commit, and the head of both branches' behaviour as of 09-08. Drops the Accounting & Finance department; see the `dev` table below. |
@@ -138,6 +140,7 @@ the Market Participants tab.
 
 | Commit | Date | Summary |
 | --- | --- | --- |
+| `e5414c3` | 09-29 | fix(legal): an item renders only if its URL is a listed primary source in `lib/legal-updates-sources.ts` **and** that URL loads. **Do not revert this and leave the tab live.** Without it the feed publishes invented consent orders against named banks and bill numbers copied from the prompt's own example — actionable-looking fiction for a distressed-debt reader, which is worse than an empty tab. If the sections look thin, widen the host lists or the window; do not remove the check. Keep both halves: link-checking alone admits trade press, host-checking alone admits URLs constructed on the right domain. Keep the domain list in the prompt too — removing it dropped provenance from 100% to 38%. `npm run verify:legal-freshness`, several times. |
 | `8625c7c` | 09-29 | fix(legal): the section prompts state today's date and instruct month-named searches, moving to `lib/legal-updates-prompts.ts`. **Do not revert this while `10fd202` stands** — the filter plus the old prompts is the combination that rendered an empty tab, because the model dates "recent" from its training cutoff and returns material from 2006 onward. If the tab needs reverting, revert both or neither. Prompt edits here are unverifiable by reading: run `npm run verify:legal-freshness`, more than once. Bump the cache key on any change. |
 | `10fd202` | 09-29 | fix(legal): the Legal Landscape feed withholds items dated more than `MAX_ITEM_AGE_DAYS` (180) in the past, and renames the module to `lib/legal-updates-filter.ts`. **This one can change what a user sees to nothing**: if the model returns no recent developments, a section empties and is not rendered, with a note in its place explaining why. Tune `MAX_ITEM_AGE_DAYS` before reverting — a wider window is almost always the right answer over no filter, since without it the tab serves a 2019 rule under a 90-day heading. Two behaviours a revert or rewrite must preserve: **future dates are kept**, because an effective date or scheduled vote is the point of the tab, unlike the news feeds which reject them; and **an unparseable date is kept**, which is why the parser refuses prose rather than letting `Date.parse` pin "Fall 2026" to January. Bump the cache key on any revert. `npm run test:legal-filter`. |
 | `2384143` | 09-29 | fix(legal): the Legal Landscape feed dedupes its merged items by normalized title, so an interagency rule stops rendering once per issuing agency. **No item's content changes** — this only removes repeats, so the visible effect is a shorter Regulatory Watch list. Safe to revert in isolation; the cost is the five-copy bug returning. Two things to know if you do. **Reverting must bump `legal-updates-v3` to v4**, or the cache serves whichever shape was written last. And if you keep the dedupe but change the key to the URL, the bug comes straight back: agencies mirror joint rules at their own domains, so the copies are URL-distinct and title-identical. `npm run test:legal-filter` asserts exactly that. Superseded in part by `10fd202`, which renames the module; revert the two together. |

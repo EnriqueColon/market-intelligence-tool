@@ -122,10 +122,35 @@ query, finds nothing it will vouch for, and returns an empty list. It also needs
 named sources by month ("OCC news releases September 2026"), at which point results land in the
 current quarter. Both halves were measured; neither is decoration.
 
-Run `npm run verify:legal-freshness` after any prompt edit. It calls the live API for all three
-sections and fails if the tab would render empty or if under 60% of items fall inside the window.
-Expect to run it more than once — the output is probabilistic. Three consecutive runs on
-2026-09-29 gave 82–83% in-window and 11–12 items rendering.
+**An item renders only if its URL is a listed primary source and that URL loads.**
+`lib/legal-updates-sources.ts` holds the per-section host lists and the check. This is the gate
+that matters, because the model fabricates freely here: it has produced a bill numbered `S. 1234`
+copied from the prompt's own formatting example, a "2026 update" linked to a statute enacted in
+2020, and consent orders against banks that do not exist, each with a URL built from the real URL
+pattern. `federalreserve.gov/newsevents/pressreleases/2026-press20260924a.htm` is the exact shape
+of a genuine Fed release and is not one.
+
+Both halves of the check are load-bearing. Requiring only that the URL resolves admits trade press
+and law-firm briefings, which resolve perfectly well while being someone's summary rather than the
+document. Requiring only a listed host admits constructed URLs on the right domain.
+
+`occ.treas.gov` is a live OCC host and is listed. `occ.ustreas.gov` is not and does not resolve;
+the model has produced both, which is precisely why the resolution check exists alongside the list.
+
+The prompts name the permitted domains, and must keep doing so — left to itself the model cites
+the commentary it found the item through, and the guard then discards a real development for want
+of a link. Naming them took provenance from 38% to 100% in testing.
+
+**Sections retry once when nothing survives verification.** The failure is erratic rather than
+steady: a fabricated URL on one attempt and the real page on the next. Verification always protects
+the reader, so the retry only decides whether a section has anything in it.
+
+Run `npm run verify:legal-freshness` after any prompt or source-list edit. It calls the live API
+for all three sections and fails if the tab would render empty, if the guard leaks an unverified
+item, if over half the items cite a non-existent URL, or if over 40% fall outside the filter's
+window. Expect to run it more than once — the output is probabilistic, and early runs of this work
+swung between 0 and 8 items. Four consecutive runs on 2026-09-29 gave 2–8 items rendering, all
+verified.
 
 The merged list then passes through `lib/legal-updates-filter.ts`, first `dedupeByTitle` and then
 `dropStaleItems`. Both are load-bearing, and both exist because of one user report on 2026-09-29
@@ -768,7 +793,7 @@ Generated content is expensive, so nearly everything is cached for a day.
   | `market-analytics-visuals-v1` + scope | Derived chart series for the Visual Analysis panel |
   | `executive-brief-v4` + scope | Ranked change events and non-reporting institutions for the Executive Brief |
   | `underwriter-workbench-v1` + scope | Latest-quarter rows for the whole scope, for the Underwriter Workbench |
-  | `legal-updates-v5` | Deduped, freshness-filtered items for the Legal Landscape tab |
+  | `legal-updates-v6` | Deduped, freshness-filtered, source-verified items for the Legal Landscape tab |
 
   `market-analytics-report-data` is keyed by scope rather than by day and revalidates every six
   hours, since FDIC publishes quarterly. **Bump its version whenever the scoring changes**, or cached

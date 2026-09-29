@@ -257,10 +257,13 @@ Some checks need live data rather than fixtures, because they are calibrations r
   figures for up to a week and an unstable one makes every visitor miss the cache. It already
   caught one such failure, where the row shape changed and the code fell through to a fallback
   without erroring.
-- `npm run verify:legal-freshness` — calls the live API with the three Legal Landscape prompts and
-  fails if the tab would render empty or if under 60% of items fall inside the 90-day window. The
-  only check that catches a prompt the model reads as a request for history; run it after any edit
-  to `lib/legal-updates-prompts.ts`, and more than once, since the output is probabilistic.
+- `npm run verify:legal-freshness` — calls the live API with the three Legal Landscape prompts,
+  then fetches every URL they cite. Fails if the tab would render empty, if an unverified item
+  would reach it, if over half the items cite a URL that does not exist, or if too much falls
+  outside the filter's window. The only check that catches either a prompt the model reads as a
+  request for history or one it answers with invented citations; run it after any edit to
+  `lib/legal-updates-prompts.ts` or `lib/legal-updates-sources.ts`, and more than once, since the
+  output is probabilistic.
 - `npm run verify:tab-persistence` — that switching tabs does not refetch. Needs the app running,
   and `npm start` sets `NODE_ENV=production`, so the feature flags fail closed and **`ENABLED_TABS`
   must be passed explicitly** or the dashboard renders no tabs at all:
@@ -366,6 +369,13 @@ prompt. The Legal Landscape feed asked for the past 90 days and was observed sea
 is half the fix; the model must also be told to search named sources by month, or it makes one
 broad query and reports finding nothing. Verify with a live call, not by reading the prompt — see
 `npm run verify:legal-freshness`.
+
+**A resolving URL is not a citation.** Checking that a model's link loads catches invented URLs,
+and nothing else. The Legal Landscape feed cited law-firm briefings and trade press that resolved
+perfectly well while being summaries of a development rather than the document, alongside bill
+numbers copied from the prompt's own formatting example. Pin the acceptable hosts per source type
+*and* check the link, and name those hosts in the prompt so the model goes to them first. See
+`lib/legal-updates-sources.ts`.
 
 **`Date.parse` invents a January.** Given prose it cannot fully parse, it extracts a year and pins
 it to the 1st of January — "Fall 2026" becomes 2026-01-01, nine months early. Anywhere a parsed
