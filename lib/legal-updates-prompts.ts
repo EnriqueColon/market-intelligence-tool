@@ -47,6 +47,39 @@ Do not invent anything. Every "url" must be a page you actually opened through w
 Search thoroughly before concluding there is nothing: open each source's own newsroom or bill listing for this month and the two before it. Only once you have actually looked may you return a short list, and a short list of verified items is the goal — but it has to follow the search rather than replace it.`
 }
 
+/**
+ * Asks the model what a rule says about its own scope, so the tab can compute the affected
+ * institutions from FDIC data instead of printing a claim.
+ *
+ * Two things this must not become. It must not ask which institutions are affected — the model
+ * has no view of our data and would invent names, which is the failure this feed has already
+ * been through. And it must not be answered by inference: a threshold the rule does not state
+ * produces a confident count of the wrong thing, which is worse than an empty field, so the
+ * instruction to omit is emphatic and repeated.
+ *
+ * **Regulatory only, deliberately.** Applied to the other two sections it produced nothing
+ * usable, for a reason that turned out to be conceptual rather than fixable by wording. A
+ * foreclosure statute applies to properties and lienholders, not to a set of insured banks by
+ * size; a consent order applies to the one institution named in it. Asked anyway, the model
+ * reached for `appliesToAllInstitutions` on Florida bills, which resolved to "every institution
+ * in the state" — a large number carrying no information. Enforcement's actionable join is the
+ * named institution, which is a different mechanism.
+ *
+ * `minCreToCapitalPct` is named for its units deliberately. Supervisory thresholds are measured
+ * against Tier 1 + Tier 2 capital, while the screening table's `creConcentration` is CRE over
+ * total loans and cannot exceed 100 — resolving one against the other silently matches nothing.
+ * See `lib/legal-applicability.ts`.
+ */
+const APPLICABILITY_INSTRUCTION = `Federal rules almost always state who they cover, usually in a section headed "Applicability" or "Scope", or in the press release as "applies to institutions with total assets of ...". Read that language and record it as an "applicability" object. Do not infer it from the subject matter.
+
+  - "minTotalAssetsUsd" / "maxTotalAssetsUsd": asset thresholds in dollars, so $10 billion is 10000000000 and $100 billion is 100000000000. Community-bank relief usually sets a ceiling; capital and resolution rules usually set a floor.
+  - "minCreToCapitalPct": a commercial real estate concentration threshold as a percentage of total capital (Tier 1 plus Tier 2). The 2006 interagency guidance limb is 300. Do not put a percentage of total loans or of total assets here — those are different measures and the number would be meaningless.
+  - "minConstructionToCapitalPct": the construction and land development limb, as a percentage of total capital. The 2006 guidance limb is 100.
+  - "appliesToAllInstitutions": true only where the document says it covers all insured institutions regardless of size. Do not use this as a default for a rule whose scope you could not find.
+  - "basis": the scope quoted or closely paraphrased from the document, so a reader can check it.
+
+If you did not find scope language in the document, omit "applicability" entirely. An omitted field is correct and expected. Never estimate a threshold, never carry one over from a different rule, and never repeat the example numbers above unless that is genuinely what this document says.`
+
 const SECTION_BODIES: Record<LegalSection, string> = {
   regulatory: `You are a CRE regulatory intelligence analyst. Find up to 5 recent regulatory developments — fewer if that is all there is — from agencies including OCC, FDIC, Federal Reserve, CFPB, HUD, or Florida OFR that directly affect commercial real estate lending, CRE loan servicing, foreclosure processes, bank CRE concentration limits, or CMBS/securitization rules.
 
@@ -64,6 +97,8 @@ For each item include:
 - Direct URL to the rule or announcement if available
 - Status: Proposed Rule, Final Rule, Guidance, or Notice
 
+${APPLICABILITY_INSTRUCTION}
+
 Return ONLY valid JSON:
 {
   "items": [
@@ -75,6 +110,7 @@ Return ONLY valid JSON:
       "summary": "2-3 sentence plain-English summary",
       "whyItMatters": "1-2 sentences on relevance to distressed CRE debt investing",
       "status": "Proposed Rule | Final Rule | Guidance | Notice",
+      "applicability": "omit this field entirely unless the document states its scope; see above for its keys",
       "url": "https://..."
     }
   ]

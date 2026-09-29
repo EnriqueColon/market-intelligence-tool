@@ -1,6 +1,7 @@
 "use server"
 
 import { unstable_cache } from "next/cache"
+import { type LegalApplicability, normalizeApplicability } from "@/lib/legal-applicability"
 import { dedupeByTitle, dropStaleItems } from "@/lib/legal-updates-filter"
 import { buildSectionPrompt } from "@/lib/legal-updates-prompts"
 import { partitionByRelevance } from "@/lib/legal-updates-relevance"
@@ -25,6 +26,12 @@ export type LegalItem = {
   whyItMatters: string
   status?: string
   url?: string
+  /**
+   * What the document says about its own scope, if anything. Resolved against FDIC data by
+   * `resolveLegalApplicability` at render time rather than here — see that action for why the
+   * join is deliberately outside this cache.
+   */
+  applicability?: LegalApplicability
 }
 
 export type LegalUpdatesResponse = {
@@ -80,6 +87,7 @@ async function querySection(section: LegalSection, now: Date): Promise<LegalItem
             : "",
         status: typeof item.status === "string" ? item.status.trim() : undefined,
         url: typeof item.url === "string" ? item.url.trim() : undefined,
+        applicability: normalizeApplicability(item.applicability) ?? undefined,
       }))
   } catch {
     return []

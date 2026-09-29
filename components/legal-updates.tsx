@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import {
   AlertTriangle,
   BookOpen,
+  Building2,
   ExternalLink,
   Gavel,
   Landmark,
@@ -18,6 +19,10 @@ import {
   type LegalItem,
   type LegalUpdatesResponse,
 } from "@/app/actions/fetch-legal-updates"
+import {
+  resolveLegalApplicability,
+  type ResolvedApplicability,
+} from "@/app/actions/resolve-legal-applicability"
 
 // ── Section config ─────────────────────────────────────────────────────────────
 
@@ -65,7 +70,17 @@ function JurisdictionBadge({ jurisdiction }: { jurisdiction: LegalItem["jurisdic
 
 // ── Single card ────────────────────────────────────────────────────────────────
 
-function LegalCard({ item, sectionKey }: { item: LegalItem; sectionKey: typeof SECTIONS[number]["key"] }) {
+function LegalCard({
+  item,
+  sectionKey,
+  exposure,
+  exposureScope,
+}: {
+  item: LegalItem
+  sectionKey: typeof SECTIONS[number]["key"]
+  exposure?: ResolvedApplicability
+  exposureScope: string
+}) {
   const section = SECTIONS.find((s) => s.key === sectionKey)!
 
   return (
@@ -119,7 +134,74 @@ function LegalCard({ item, sectionKey }: { item: LegalItem; sectionKey: typeof S
           </p>
         </div>
       )}
+
+      {exposure && <ExposureBlock exposure={exposure} scope={exposureScope} />}
     </Card>
+  )
+}
+
+// ── Who it hits ────────────────────────────────────────────────────────────────
+
+/**
+ * The affected institutions, counted from FDIC call reports rather than claimed.
+ *
+ * Sits below "Why it matters" on purpose: that paragraph asserts importance, this one
+ * demonstrates it, and a reader who doubts the assertion should find the arithmetic directly
+ * underneath it.
+ *
+ * A rule covering every institution shows no fraction. "150 of 150" is arithmetically true and
+ * tells the reader nothing, and dressing it up as a computed finding would make the genuine
+ * counts less credible by association.
+ */
+function ExposureBlock({
+  exposure,
+  scope,
+}: {
+  exposure: ResolvedApplicability
+  scope: string
+}) {
+  const universal = exposure.matched >= exposure.universe
+
+  return (
+    <div className="space-y-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+      <div className="flex items-start gap-2.5">
+        <Building2 className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-slate-500" />
+        <p className="text-xs leading-relaxed text-slate-700">
+          {universal ? (
+            <>
+              <span className="font-semibold">Scope: </span>
+              {exposure.test}.
+            </>
+          ) : (
+            <>
+              <span className="font-semibold">
+                {exposure.matched} of {exposure.universe} {scope} institutions
+              </span>
+              {" meet this rule's own test — "}
+              {exposure.test}.
+            </>
+          )}
+          {exposure.capped && " Counted over the screened cohort, not every filer."}
+        </p>
+      </div>
+
+      {exposure.onWatchlist > 0 && (
+        <p className="pl-6 text-xs font-medium text-[#006D95]">
+          {exposure.onWatchlist} on your watchlist
+          {exposure.watchlistNames.length > 0 && `: ${exposure.watchlistNames.join(", ")}`}
+        </p>
+      )}
+
+      {!universal && exposure.examples.length > 0 && (
+        <p className="pl-6 text-xs text-slate-500">
+          Largest affected: {exposure.examples.map((e) => e.name).join(", ")}
+        </p>
+      )}
+
+      {exposure.basis && (
+        <p className="pl-6 text-xs italic text-slate-400">Stated scope: {exposure.basis}</p>
+      )}
+    </div>
   )
 }
 
@@ -178,6 +260,8 @@ export function LegalUpdates() {
   const [loading, setLoading] = useState(true)
   const [activeSection, setActiveSection] = useState<ActiveSection>("all")
   const [activeJurisdiction, setActiveJurisdiction] = useState<ActiveJurisdiction>("all")
+  const [exposure, setExposure] = useState<Record<string, ResolvedApplicability>>({})
+  const [exposureScope, setExposureScope] = useState("Florida")
 
   useEffect(() => {
     let mounted = true
@@ -188,6 +272,31 @@ export function LegalUpdates() {
       .finally(() => { if (mounted) setLoading(false) })
     return () => { mounted = false }
   }, [])
+
+  /**
+   * Resolved in a second pass rather than with the feed, because the join is against FDIC data
+   * and a department watchlist — neither of which belongs in the feed's shared, day-keyed cache.
+   * See `resolve-legal-applicability.ts`.
+   *
+   * Deliberately not gating the cards: this arrives after the tab is already readable and fills
+   * in underneath, so an FDIC outage costs the exposure line and nothing else.
+   */
+  useEffect(() => {
+    const requests = (data?.items ?? [])
+      .filter((item) => item.applicability)
+      .map((item) => ({ id: item.id, applicability: item.applicability }))
+    if (requests.length === 0) return
+
+    let mounted = true
+    resolveLegalApplicability(requests)
+      .then((res) => {
+        if (!mounted) return
+        setExposure(res.resolved)
+        setExposureScope(res.scope)
+      })
+      .catch(() => { /* the cards stand on their own without it */ })
+    return () => { mounted = false }
+  }, [data])
 
   const filtered = useMemo(() => {
     if (!data) return []
@@ -352,7 +461,13 @@ export function LegalUpdates() {
                 {items.length > 0 ? (
                   <div className="space-y-3">
                     {items.map((item) => (
-                      <LegalCard key={item.id} item={item} sectionKey={section.key} />
+                      <LegalCard
+                        key={item.id}
+                        item={item}
+                        sectionKey={section.key}
+                        exposure={exposure[item.id]}
+                        exposureScope={exposureScope}
+                      />
                     ))}
                   </div>
                 ) : (

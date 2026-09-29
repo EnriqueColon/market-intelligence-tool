@@ -27,6 +27,7 @@
     "test:environment": "node --test --experimental-strip-types lib/environment.test.ts",
     "test:legal-filter": "node --test --experimental-strip-types lib/legal-updates-filter.test.ts",
     "test:legal-relevance": "node --test --experimental-strip-types lib/legal-updates-relevance.test.ts",
+    "test:legal-applicability": "node --test --experimental-strip-types lib/legal-applicability.test.ts",
     "verify:executive-brief": "node --experimental-strip-types scripts/verify-executive-brief.mjs",
     "verify:workbench": "tsx scripts/verify-workbench.ts",
     "verify:lenses": "node scripts/verify-lenses-visually.mjs",
@@ -35,7 +36,8 @@
     "verify:visuals-payload": "tsx scripts/verify-visuals-payload.ts",
     "verify:latest-quarter": "tsx scripts/verify-latest-quarter.ts",
     "verify:tab-persistence": "node scripts/verify-tab-persistence.mjs",
-    "verify:legal-freshness": "tsx scripts/verify-legal-freshness.ts"
+    "verify:legal-freshness": "tsx scripts/verify-legal-freshness.ts",
+    "verify:legal-applicability": "tsx scripts/verify-legal-applicability.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

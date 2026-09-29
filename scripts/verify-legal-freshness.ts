@@ -13,6 +13,7 @@
 import { readFileSync } from "node:fs"
 
 import { buildSectionPrompt } from "../lib/legal-updates-prompts"
+import { describeTest, normalizeApplicability } from "../lib/legal-applicability"
 import { dedupeByTitle, isStale } from "../lib/legal-updates-filter"
 import { isCreRelevant } from "../lib/legal-updates-relevance"
 import { LEGAL_SECTIONS, type LegalSection, windowFor } from "../lib/legal-updates-sections"
@@ -56,6 +57,7 @@ type Item = {
   summary?: string
   whyItMatters?: string
   status?: string
+  applicability?: unknown
 }
 
 async function querySection(section: LegalSection, now: Date) {
@@ -131,6 +133,7 @@ async function main() {
   let offTopic = 0
   let sourced = 0
   let fabricated = 0
+  let scoped = 0
 
   for (const r of results) {
     console.log(`── ${r.section} ──  ${r.searchCount} search(es), ${r.items.length} item(s)`)
@@ -147,11 +150,19 @@ async function main() {
       if (!topical) offTopic += 1
       if (verdicts[i] === "ok") sourced += 1
       if (verdicts[i] === "dead") fabricated += 1
+      const test = normalizeApplicability(it.applicability)
+      if (test) scoped += 1
       const flags = [old ? "OLD" : "IN", topical ? "CRE" : "OFF", verdicts[i].toUpperCase()]
       console.log(
         `   [${flags.join("|").padEnd(20)}] ${it.date ?? "(no date)"}  ${String(it.title).slice(0, 48)}`
       )
       if (verdicts[i] !== "ok") console.log(`             ${it.url ?? "(no url)"}`)
+      // Printed in full because the failure mode here is a plausible threshold that misreads the
+      // rule, and that is only visible by eye against the document we cited.
+      if (test) console.log(`             scope: ${describeTest(test)}`)
+      else if (it.applicability) {
+        console.log(`             scope: REJECTED ${JSON.stringify(it.applicability)}`)
+      }
     })
     console.log()
   }
@@ -173,6 +184,9 @@ async function main() {
   console.log(`${offTopic}/${total} with no clear bearing on commercial real estate`)
   console.log(`${sourced}/${total} backed by a primary source that loads`)
   console.log(`${fabricated}/${total} cite a URL that does not exist (${(fabricatedRatio * 100).toFixed(0)}%)`)
+  // Informational rather than a gate. Most developments state no quantitative scope, so a low
+  // number here is often correct; it is a sudden jump to zero, or a rejected test, that matters.
+  console.log(`${scoped}/${total} state a usable scope test`)
   console.log(`${rendered.length} item(s) would render`)
 
   // The contract is not that the model behaves — it does not — but that nothing unverifiable
