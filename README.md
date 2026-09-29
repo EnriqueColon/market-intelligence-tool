@@ -209,6 +209,7 @@ npm run test:peer-cohort      # workbench peer selection, and what it refuses to
 npm run test:cre-downside     # the capital scenario, on both regulatory capital regimes
 npm run test:memo-evidence    # the evidence guard
 npm run test:verified-metrics
+npm run test:legal-dedupe     # collapsing repeated legal developments, and why the key is not the URL
 npm run test:allowlist        # publisher allowlist, and what "all" covers
 npm run build                 # next build
 ```
@@ -346,6 +347,13 @@ scripts/        One-off and ingestion scripts (TypeScript and Python)
 preview builds too, so a dev deployment is indistinguishable from the live tool. Use
 `lib/environment.ts`, and call `assertSafeToMutateProductionData()` before any irreversible write,
 mapping the thrown `ProductionDataWriteError` to a 403.
+
+**Any feed that merges several AI-generated result sets needs a dedupe pass, and the key should be
+the title rather than the URL.** The Legal Landscape tab shipped without one and rendered a single
+interagency rule five times — the model had returned it once per issuing agency — until a user
+reported it on 2026-09-29. The URL is the intuitive key and the wrong one, because each agency
+mirrors a joint rule at its own domain, so the copies are URL-distinct and title-identical. See
+`lib/legal-updates-dedupe.ts` and section 3 of `confluence.md`.
 
 **Verify FDIC fields against the live API before trusting a field name.** `LNLSDEPR` reads like a
 loan-loss reserve and is actually net loans-to-deposits; it was displayed as "Reserve Coverage",

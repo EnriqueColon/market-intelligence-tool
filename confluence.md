@@ -102,6 +102,28 @@ for finance), and fall back to the **GDELT DOC 2.0 API** when RSS yields fewer t
 actions carry near-duplicate fetching logic, so a parsing bug tends to need fixing in both — as
 happened with the CDATA regex.
 
+### Legal Landscape: three prompts, one dedupe pass
+
+`fetch-legal-updates.ts` runs the Regulatory, Legislative and Enforcement prompts concurrently
+against OpenAI with web search on, then concatenates the three result sets. A section that fails
+returns an empty array rather than throwing, so one bad prompt degrades that section only.
+
+**The merged list then passes through `dedupeByTitle` (`lib/legal-updates-dedupe.ts`), and that pass
+is load-bearing.** Without it, an interagency rule comes back once per issuing agency and the tab
+renders the same development several times over — five copies of the HVCRE final rule reached a user
+this way on 2026-09-29. The key is the normalized title, **not the URL**: each agency mirrors a joint
+rule at its own domain, so URL-keyed dedupe keeps the copies. The official title is verbatim across
+all of them. Normalization lowercases, decodes `&amp;`, strips non-alphanumerics and collapses
+whitespace; first occurrence wins, and since regulatory items are concatenated first, a development
+appearing in two sections is kept under the earlier one.
+
+Deduping is global rather than per-section, which is deliberate — the same consent order can be both
+a regulatory and an enforcement item. The prompt also tells the model an interagency rule is one
+item, but treat that as a hint only; prompt instructions have not held on their own in this repo.
+
+Note the synthesized `id` appends an array index, so duplicates carry distinct React keys and the UI
+will never collapse them for you. `npm run test:legal-dedupe` covers the reported five-copy payload.
+
 ### Search Industry Reports: entities and the domain allowlist
 
 `lib/entity-sources.ts` is the single registry of approved publishers. It backs three things that must
@@ -712,6 +734,7 @@ Generated content is expensive, so nearly everything is cached for a day.
   | `market-analytics-visuals-v1` + scope | Derived chart series for the Visual Analysis panel |
   | `executive-brief-v4` + scope | Ranked change events and non-reporting institutions for the Executive Brief |
   | `underwriter-workbench-v1` + scope | Latest-quarter rows for the whole scope, for the Underwriter Workbench |
+  | `legal-updates-v3` | Deduped Regulatory / Legislative / Enforcement items for the Legal Landscape tab |
 
   `market-analytics-report-data` is keyed by scope rather than by day and revalidates every six
   hours, since FDIC publishes quarterly. **Bump its version whenever the scoring changes**, or cached

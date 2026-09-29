@@ -8,7 +8,52 @@ is it in now, and what is still open.
 
 ---
 
-## 2026-09-10 (latest) — tab switches were reloading everything
+## 2026-09-29 (latest) — one legal item, rendered five times
+
+Reported by email from a user: an item on the Legal Landscape tab "appears to repeat 5 times". It
+did. Regulatory Watch showed the HVCRE final rule as five separate cards with identical summaries.
+
+The model had returned it once per issuing agency — the joint rule reads "Federal Reserve, FDIC,
+OCC" on the first card and just "FDIC" on the second — and `fetch-legal-updates.ts` concatenated its
+three section results and returned them untouched. It was **the only AI-backed feed in the repo
+without a dedupe pass**; `fetch-research-feed.ts`, `fetch-news.ts` and `fetch-public-mentions.ts` all
+have one. Nothing downstream caught it either, because the synthesized `id` appends an array index,
+so the five copies carried distinct React keys and rendered happily.
+
+Deduping now happens on the merged list, keyed on the normalized title. **Not on the URL**, which
+was the tempting choice and the wrong one: each agency mirrors a joint rule at its own domain, so
+four of the five copies had distinct URLs and would have survived. The official title is verbatim
+across all of them. The logic went to `lib/legal-updates-dedupe.ts` rather than staying in the
+action, because the action is `"use server"` and imports `next/cache`, which makes it impossible to
+exercise from a test — and an unverified dedupe is how this class of bug gets shipped twice.
+
+The prompt now also states that an interagency rule is a single item, but that is belt-and-braces.
+The repo's own history says prompt instructions alone have not prevented this kind of thing; the
+programmatic guard is what holds.
+
+Cache key bumped to `legal-updates-v3`. Without that the fix would be invisible — Vercel's Data
+Cache survives deploys, so production would keep serving today's already-duplicated entry until
+midnight ET.
+
+Verified by `npm run test:legal-dedupe`, eight cases built from the exact five-card payload the user
+saw, including an explicit assertion that URL-keyed dedupe would have kept four of them. Build and
+typecheck clean. Not yet verified in a browser against live model output.
+
+**Still open, and worth a decision.** The repeated rule is dated **2019-11-19**, and the prompt asks
+for developments from the past 90 days — so the feed is also serving content roughly seven years
+stale, which dedupe does nothing about. A freshness filter is the obvious fix but it is a real
+product call, not a cleanup: if the model returns nothing genuinely recent, Regulatory Watch empties
+out, and an empty section may read worse to a user than an old one. Deliberately left alone pending
+that decision.
+
+Also open: this commit is on `dev` and **has not been pushed or merged to `main`**, so the live tool
+still shows the five copies. And the `ROLLBACK.md` current-state table was stale again on arrival —
+it named `8844bea` for production when `main` was actually at `996efa9`, with the tab-persistence
+fix already shipped. Corrected, but it has now drifted twice in three sessions.
+
+---
+
+## 2026-09-10 — tab switches were reloading everything
 
 Reported as the page reloading its data on every tab or page change, which it was, for a reason
 unrelated to the server-side caching worked on the day before.

@@ -7,12 +7,19 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
-| `main` | `8844bea` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `7b4e2b9` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `main` | `996efa9` | Production | https://market-intelligence-tool-gilt.vercel.app |
+| `dev` | `2384143` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
-All of the Market Analytics performance work reached production on 2026-09-09: the server-side
-screening reduction, the Visual Analysis charts, and quarter-keyed caching. `dev` is ahead by the
-tab-persistence fix, which stops a tab switch refetching everything.
+All of the Market Analytics performance work reached production on 2026-09-09 — the server-side
+screening reduction, the Visual Analysis charts and quarter-keyed caching — followed by the
+tab-persistence fix on 09-10. `dev` is ahead by the Legal Landscape dedupe fix.
+
+**`2384143` is on `dev` and has not been pushed.** Production still renders the duplicated Legal
+Landscape items the fix addresses.
+
+This table had drifted before this session: it named `8844bea` as production when `main` was
+actually at `996efa9`, and listed three commits as dev-only that had already shipped. Verify with
+`git merge-base --is-ancestor <sha> main` rather than trusting the previous entry.
 
 A SHA here can never name the commit that writes it, so the true head is usually one documentation
 commit further on. Only behavioural commits matter as rollback targets; the newest that changes
@@ -84,6 +91,7 @@ git push --force-with-lease origin dev
 
 | Commit | Date | Why it is a safe target |
 | --- | --- | --- |
+| `996efa9` | 2026-09-10 | Current production head, and the newest commit on `main`. All Market Analytics performance work plus tab persistence, with no figure changes anywhere in that range. **Known-bad for the Legal Landscape tab**: this is the build that renders an interagency rule once per issuing agency, which is what a user reported on 09-29. Fixed on `dev` in `2384143`, not yet shipped. |
 | `d3f7973` | 2026-08-28 | Newest behavioural commit, and the head of both branches' behaviour as of 09-08. Drops the Accounting & Finance department; see the `dev` table below. |
 | `4a4f3de` | 2026-08-25 | Prior behavioural commit, in production since 09-08. Makes `buildSearchQuery` fail closed, so both layers of the publisher allowlist now refuse an unrecognised entity id independently. Safe to roll *to*; **rolling back past it is a safety regression rather than a lost feature** — the query builder returns to emitting a bare keyword with no `site:` restriction for any unknown entity id, leaving the result filter as the single layer standing between the tool and the open web. Not reachable from the dropdown in either direction, so no normal user journey differs. A revert has to take the `null` check in `searchIndustryReports` and the four `buildSearchQuery` assertions with it, or the build fails to typecheck. Prefer fixing forward. |
 | `397a03e` | 2026-08-24 | Prior behavioural commit on `dev`. Stops reading a reported zero as a capital ratio, and stops drawing 1-4 family residential as a slice of the CRE book. **Opportunity Scores and their ranking change at this commit and are correct afterwards** — 30 of the top-100 most-distressed institutions were Community Bank Leverage Ratio filers scored as though they held no capital, and the median institution moves 120 rank places. Rolling back past it returns 1,765 of 4,352 institutions to showing 0.00% total risk-based capital, indistinguishable from a failed bank, and returns the CRE Portfolio Composition chart to stacked bands summing to a median 255% on a 0–100 axis. Prefer fixing forward. CRE-to-capital, the stress map and the workbench are untouched either way; they read reported capital dollars rather than the ratios. Note the four capital ratios became `number \| null` here, so a rollback also reverts a type change several files depend on. Run `npm run audit:fdic-columns` after any change in this area. |
@@ -125,6 +133,13 @@ the Market Participants tab.
 
 | Commit | Date | Summary |
 | --- | --- | --- |
+| `2384143` | 09-29 | fix(legal): the Legal Landscape feed dedupes its merged items by normalized title, so an interagency rule stops rendering once per issuing agency. **No item's content changes** — this only removes repeats, so the visible effect is a shorter Regulatory Watch list. Safe to revert in isolation; the cost is the five-copy bug returning. Two things to know if you do. **Reverting must bump `legal-updates-v3` to v4**, or the cache serves whichever shape was written last. And if you keep the dedupe but change the key to the URL, the bug comes straight back: agencies mirror joint rules at their own domains, so the copies are URL-distinct and title-identical. `npm run test:legal-dedupe` asserts exactly that. Does **not** address the separate staleness problem — the rule that triggered the report is dated 2019 despite a 90-day prompt window. |
+
+The three commits below shipped to production on 09-09 and 09-10 and are retained here for their
+rollback notes; see the production table for the current head.
+
+| Commit | Date | Summary |
+| --- | --- | --- |
 | `7b4e2b9` | 09-10 | fix(tabs): visited tab panels stay mounted, so tab switches no longer refetch. **No figures change**; this is mount behaviour only. Two coupled pieces — reverting `forceMount` alone is safe, but **leaving `forceMount` while removing `data-[state=inactive]:hidden` renders every visited tab stacked on the others**, because Radix stops setting `hidden` when force-mounted. The `ResizeObserver` in `BankStressHeatMap` is harmless either way and worth keeping: without it a hidden map container collapses to 0x0 and returns blank. `npm run verify:tab-persistence` reproduces all three failure modes in a browser. |
 | `8a32b06` | 09-09 | perf(market-analytics): both heavy caches keyed to the published FDIC quarter, timers stretched 23h → 7d. **No displayed figure changes** — this only alters when work is recomputed. Rolling back returns to a daily 31MB re-pagination, which is wasteful but harmless. Note that reverting the `revalidate` value alone will **not** retune cache entries already written: Vercel does not reconcile TTLs between deployments, so existing entries keep their 7-day window until the key changes or the cache is purged. `npm run verify:latest-quarter` confirms the probe underneath. |
 | `e2c1a73` | 09-09 | perf(market-analytics): Visual Analysis charts derived server-side and deferred until near the viewport. **No plotted value changes** — `npm run verify:visuals-payload` compares every series against the unrounded builders, 22,087 comparisons nationally. Rolling back restores a panel that paginates 31MB out of FDIC and burns ~21.6s on every mount, because its 5.46MB payload is over the 2MB cache ceiling and Next refuses to store it. The PDF path is untouched either way: it calls the same builders through `useAnalyticsChartData`. If you roll back, drop `visuals:national` and `visuals:florida` from the warm-cache route. |
@@ -133,7 +148,8 @@ the Market Participants tab.
 
 | Commit | Date | Summary |
 | --- | --- | --- |
-| `27ef6f1` | 09-08 | Production head. Documentation on top of `02e45ae`, so identical in behaviour. |
+| `996efa9` | 09-10 | Production head. Documentation on top of `7b4e2b9`, so identical in behaviour. |
+| `27ef6f1` | 09-08 | Documentation on top of `02e45ae`, so identical in behaviour. |
 | `02e45ae` | 09-08 | perf(market-analytics): move the screening reduction and scoring to the server and cache it. **No displayed figure changes** — `npm run verify:screening-parity` compares every rendered field per institution against the previous browser reduction, 51,510 comparisons nationally, all matching. Rolling back restores a tab that fetches 10.8MB and ~5.8s from FDIC on every single visit, so prefer fixing forward. If you roll back, also drop `screening:national` and `screening:florida` from the warm-cache route or it will warm a cache nothing reads. The cached entry is 1.26MB against a 2MB ceiling; adding fields to the transported row is what would break it, silently, by making Next refuse the write. |
 | `41f01b0` | 09-08 | fix(fdic): base URLs now carry the path prefix, so the fallback host resolves instead of 404ing, and the primary no longer pays a 301 on every call. **Behaviour-preserving in the normal case** — the old primary worked, it just redirected. What changes is the failure case: previously a primary outage returned empty data, because `fetchFDICData` short-circuits on 4xx and the fallback 404d. Reverting reinstates that. `npm run verify:fdic-hosts` covers all eight endpoints on both hosts. Note a rollback must take `FDIC_ENDPOINTS` with it: the base and the endpoint prefix changed together and are only correct as a pair. |
 
