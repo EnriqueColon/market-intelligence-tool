@@ -13,7 +13,7 @@
  */
 
 import { extractHostname, isHostnameAllowed } from "./domain-allowlist"
-import type { LegalSection } from "./legal-updates-prompts"
+import type { LegalSection } from "./legal-updates-sections"
 
 /**
  * Primary sources only: the body that issued the thing, or an official publisher of record.
@@ -32,7 +32,11 @@ const AUTHORITATIVE_HOSTS: Record<LegalSection, string[]> = {
     "hud.gov",
     "flofr.gov",
     "federalregister.gov",
+    "regulations.gov",
     "govinfo.gov",
+    "ncua.gov",
+    "fhfa.gov",
+    "treasury.gov",
     // FDIC issues Financial Institution Letters through GovDelivery rather than fdic.gov.
     "content.govdelivery.com",
   ],
@@ -42,8 +46,11 @@ const AUTHORITATIVE_HOSTS: Record<LegalSection, string[]> = {
     "govtrack.us",
     "flsenate.gov",
     "myfloridahouse.gov",
+    "leg.state.fl.us",
     "laws.flrules.org",
     "flrules.org",
+    // The Governor's office is where Florida bill signings are announced.
+    "flgov.com",
   ],
   enforcement: [
     "fdic.gov",
@@ -52,9 +59,15 @@ const AUTHORITATIVE_HOSTS: Record<LegalSection, string[]> = {
     "federalreserve.gov",
     "justice.gov",
     "sec.gov",
+    "fincen.gov",
+    "ncua.gov",
+    // Covers the district and bankruptcy courts, which sit on *.uscourts.gov subdomains.
     "uscourts.gov",
     "flcourts.gov",
     "govinfo.gov",
+    // Free mirror of PACER filings. Included because bankruptcy dockets are otherwise paywalled,
+    // which previously left the model citing the PACER homepage as though it were a document.
+    "courtlistener.com",
   ],
 }
 

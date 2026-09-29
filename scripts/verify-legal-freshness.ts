@@ -12,12 +12,10 @@
 
 import { readFileSync } from "node:fs"
 
-import {
-  FRESHNESS_WINDOW_DAYS,
-  buildSectionPrompt,
-  type LegalSection,
-} from "../lib/legal-updates-prompts"
-import { MAX_ITEM_AGE_DAYS, dedupeByTitle, dropStaleItems, isStale } from "../lib/legal-updates-filter"
+import { buildSectionPrompt } from "../lib/legal-updates-prompts"
+import { dedupeByTitle, isStale } from "../lib/legal-updates-filter"
+import { isCreRelevant } from "../lib/legal-updates-relevance"
+import { LEGAL_SECTIONS, type LegalSection, windowFor } from "../lib/legal-updates-sections"
 import { checkSourceUrl } from "../lib/legal-updates-sources"
 
 for (const line of readFileSync(".env.local", "utf8").split("\n")) {
@@ -27,7 +25,7 @@ for (const line of readFileSync(".env.local", "utf8").split("\n")) {
 
 const API_KEY = process.env.OPENAI_API_KEY
 const MODEL = process.env.OPENAI_FAST_MODEL || "gpt-4.1-mini"
-const SECTIONS: LegalSection[] = ["regulatory", "legislative", "enforcement"]
+const SECTIONS = LEGAL_SECTIONS
 
 /**
  * Share of items so old the feed's own filter withholds them. Measured against the filter's
@@ -50,7 +48,15 @@ if (!API_KEY) {
   process.exit(1)
 }
 
-type Item = { title?: string; date?: string; source?: string; url?: string }
+type Item = {
+  title?: string
+  date?: string
+  source?: string
+  url?: string
+  summary?: string
+  whyItMatters?: string
+  status?: string
+}
 
 async function querySection(section: LegalSection, now: Date) {
   const res = await fetch("https://api.openai.com/v1/responses", {
@@ -96,8 +102,12 @@ async function querySection(section: LegalSection, now: Date) {
 
 async function main() {
   const now = new Date()
-  const cutoff = new Date(now.getTime() - FRESHNESS_WINDOW_DAYS * 86400000).toISOString().slice(0, 10)
-  console.log(`model=${MODEL}  today=${now.toISOString().slice(0, 10)}  cutoff=${cutoff}\n`)
+  console.log(`model=${MODEL}  today=${now.toISOString().slice(0, 10)}`)
+  for (const s of SECTIONS) {
+    const w = windowFor(s)
+    console.log(`  ${s.padEnd(12)} prompt ${w.promptDays}d / filter ${w.filterDays}d`)
+  }
+  console.log()
 
   const results = await Promise.all(
     SECTIONS.map(async (section) => {
@@ -117,8 +127,8 @@ async function main() {
   )
 
   let total = 0
-  let fresh = 0
   let withheld = 0
+  let offTopic = 0
   let sourced = 0
   let fabricated = 0
 
@@ -128,35 +138,39 @@ async function main() {
     for (const q of r.queries) console.log(`   searched: "${String(q).slice(0, 96)}"`)
 
     const verdicts = await Promise.all(r.items.map((it) => checkSourceUrl(it.url, r.section)))
+    const filterDays = windowFor(r.section).filterDays
     r.items.forEach((it, i) => {
-      const inWindow = (it.date ?? "") >= cutoff
+      const old = isStale(it.date, now.getTime(), filterDays)
+      const topical = isCreRelevant(it)
       total += 1
-      if (inWindow) fresh += 1
-      if (isStale(it.date, now.getTime())) withheld += 1
+      if (old) withheld += 1
+      if (!topical) offTopic += 1
       if (verdicts[i] === "ok") sourced += 1
       if (verdicts[i] === "dead") fabricated += 1
+      const flags = [old ? "OLD" : "IN", topical ? "CRE" : "OFF", verdicts[i].toUpperCase()]
       console.log(
-        `   [${inWindow ? "FRESH" : "STALE"}|${verdicts[i].toUpperCase().padEnd(7)}] ` +
-          `${it.date ?? "(no date)"}  ${String(it.title).slice(0, 52)}`
+        `   [${flags.join("|").padEnd(20)}] ${it.date ?? "(no date)"}  ${String(it.title).slice(0, 48)}`
       )
       if (verdicts[i] !== "ok") console.log(`             ${it.url ?? "(no url)"}`)
     })
     console.log()
   }
 
-  // What the tab would actually render, all three gates included.
+  // What the tab would actually render, every gate included and in the action's order.
   const all = results.flatMap((r) =>
     r.items.map((i) => ({ ...i, title: i.title ?? "", section: r.section }))
   )
-  const surviving = dropStaleItems(dedupeByTitle(all), now.getTime()).kept
+  const surviving = dedupeByTitle(
+    all.filter((i) => !isStale(i.date, now.getTime(), windowFor(i.section).filterDays) && isCreRelevant(i))
+  )
   const verified = await Promise.all(surviving.map((i) => checkSourceUrl(i.url, i.section)))
   const rendered = surviving.filter((_, i) => verified[i] === "ok")
 
   const withheldRatio = total ? withheld / total : 0
   const fabricatedRatio = total ? fabricated / total : 0
 
-  console.log(`${fresh}/${total} within the prompt's ${FRESHNESS_WINDOW_DAYS} days`)
-  console.log(`${withheld}/${total} older than the filter's ${MAX_ITEM_AGE_DAYS} days (${(withheldRatio * 100).toFixed(0)}%)`)
+  console.log(`${withheld}/${total} older than their section's filter window (${(withheldRatio * 100).toFixed(0)}%)`)
+  console.log(`${offTopic}/${total} with no clear bearing on commercial real estate`)
   console.log(`${sourced}/${total} backed by a primary source that loads`)
   console.log(`${fabricated}/${total} cite a URL that does not exist (${(fabricatedRatio * 100).toFixed(0)}%)`)
   console.log(`${rendered.length} item(s) would render`)

@@ -123,6 +123,25 @@ function LegalCard({ item, sectionKey }: { item: LegalItem; sectionKey: typeof S
   )
 }
 
+// ── Empty section ──────────────────────────────────────────────────────────────
+
+function SectionEmptyState({
+  Icon,
+  message,
+}: {
+  Icon: typeof Landmark
+  message: string
+}) {
+  return (
+    <Card className="border-dashed border-slate-200 bg-slate-50/60 px-4 py-6">
+      <div className="flex items-start gap-3">
+        <Icon className="mt-0.5 h-4 w-4 flex-shrink-0 text-slate-300" />
+        <p className="text-xs leading-relaxed text-slate-500">{message}</p>
+      </div>
+    </Card>
+  )
+}
+
 // ── Skeleton loader ────────────────────────────────────────────────────────────
 
 function SectionSkeleton() {
@@ -165,7 +184,7 @@ export function LegalUpdates() {
     setLoading(true)
     fetchLegalUpdates()
       .then((res) => { if (mounted) setData(res) })
-      .catch(() => { if (mounted) setData({ items: [], generatedAt: new Date().toISOString(), notes: ["Failed to load legal intelligence."] }) })
+      .catch(() => { if (mounted) setData({ items: [], generatedAt: new Date().toISOString(), notes: ["Failed to load legal intelligence."], sectionNotes: {} }) })
       .finally(() => { if (mounted) setLoading(false) })
     return () => { mounted = false }
   }, [])
@@ -197,6 +216,25 @@ export function LegalUpdates() {
     }
     return counts
   }, [data])
+
+  // Sections are rendered even when empty, so that "nothing happened" is visibly an answer rather
+  // than the section quietly not existing. The section filter still narrows which ones show.
+  const visibleSections = useMemo(
+    () => (activeSection === "all" ? SECTIONS : SECTIONS.filter((s) => s.key === activeSection)),
+    [activeSection]
+  )
+
+  /**
+   * An empty section means one of two different things, and conflating them misleads: the feed
+   * found nothing, or the reader's own jurisdiction filter hid what it found.
+   */
+  const emptyMessageFor = (key: ActiveSection) => {
+    if (key === "all") return ""
+    if ((sectionCounts[key] ?? 0) > 0) {
+      return `No ${activeJurisdiction === "all" ? "" : `${activeJurisdiction} `}items in this section match the selected filters.`
+    }
+    return data?.sectionNotes?.[key] ?? "Nothing to report."
+  }
 
   return (
     <div className="space-y-5">
@@ -295,38 +333,38 @@ export function LegalUpdates() {
       )}
 
       {/* Content */}
-      {!loading && (
-        <>
-          {filtered.length === 0 ? (
-            <Card className="p-8 border-slate-200 bg-slate-50 text-center">
-              <Scale className="mx-auto h-8 w-8 text-slate-300 mb-3" />
-              <p className="text-sm text-slate-500">No items match the selected filters.</p>
-            </Card>
-          ) : (
-            <div className="space-y-8">
-              {SECTIONS.filter((s) => grouped[s.key]?.length).map((section) => (
-                <div key={section.key} className="space-y-3">
-                  {/* Section heading */}
-                  <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
-                    <section.Icon className={`h-4 w-4 flex-shrink-0 ${section.color}`} />
-                    <h3 className="text-sm font-semibold text-slate-800">{section.label}</h3>
-                    <span className="text-xs text-slate-400">
-                      {grouped[section.key].length} item{grouped[section.key].length !== 1 ? "s" : ""}
-                    </span>
-                    <p className="text-xs text-slate-400 hidden sm:block ml-1">— {section.description}</p>
-                  </div>
+      {!loading && data && (
+        <div className="space-y-8">
+          {visibleSections.map((section) => {
+            const items = grouped[section.key] ?? []
+            return (
+              <div key={section.key} className="space-y-3">
+                {/* Section heading */}
+                <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
+                  <section.Icon className={`h-4 w-4 flex-shrink-0 ${section.color}`} />
+                  <h3 className="text-sm font-semibold text-slate-800">{section.label}</h3>
+                  <span className="text-xs text-slate-400">
+                    {items.length} item{items.length !== 1 ? "s" : ""}
+                  </span>
+                  <p className="text-xs text-slate-400 hidden sm:block ml-1">— {section.description}</p>
+                </div>
 
-                  {/* Cards */}
+                {items.length > 0 ? (
                   <div className="space-y-3">
-                    {grouped[section.key].map((item) => (
+                    {items.map((item) => (
                       <LegalCard key={item.id} item={item} sectionKey={section.key} />
                     ))}
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </>
+                ) : (
+                  <SectionEmptyState
+                    Icon={section.Icon}
+                    message={emptyMessageFor(section.key)}
+                  />
+                )}
+              </div>
+            )
+          })}
+        </div>
       )}
 
       {/* Generated timestamp */}

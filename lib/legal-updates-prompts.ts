@@ -5,12 +5,10 @@
  * the live API. Editing them without running that script is how the tab ends up full of history.
  */
 
+import { type LegalSection, windowFor } from "./legal-updates-sections"
 import { authoritativeHostsFor } from "./legal-updates-sources"
 
-export type LegalSection = "regulatory" | "legislative" | "enforcement"
-
-/** The window the prompts ask for. The feed's own filter is deliberately wider — see the filter. */
-export const FRESHNESS_WINDOW_DAYS = 90
+export type { LegalSection }
 
 function isoDay(ms: number): string {
   return new Date(ms).toISOString().slice(0, 10)
@@ -29,9 +27,10 @@ function monthAndYear(ms: number): string {
  * broad query and reports finding nothing; told to search agency newsrooms by month, it returns
  * genuinely current items. Both halves were measured, and neither is decoration.
  */
-export function buildFreshnessPreamble(now: Date): string {
+export function buildFreshnessPreamble(section: LegalSection, now: Date): string {
   const nowMs = now.getTime()
-  const cutoff = isoDay(nowMs - FRESHNESS_WINDOW_DAYS * 86400000)
+  const { promptDays } = windowFor(section)
+  const cutoff = isoDay(nowMs - promptDays * 86400000)
   const thisMonth = monthAndYear(nowMs)
   const lastMonth = monthAndYear(nowMs - 30 * 86400000)
 
@@ -40,6 +39,8 @@ export function buildFreshnessPreamble(now: Date): string {
 Do not make one broad query. Search the sources directly, naming a month, and run several searches before answering — for example "OCC news releases ${thisMonth}", "FDIC press releases ${lastMonth}", "Florida OFR ${thisMonth}". If a search returns nothing recent, try the previous month before giving up.
 
 Every item must be dated on or after ${cutoff}. Omit anything older rather than padding the list to length; four genuinely recent items are worth more than ten that are not.
+
+Every item must bear on commercial real estate credit, commercial property, or distressed debt — note sales, workouts, foreclosures, receiverships, REO. Routine supervisory housekeeping is not in scope: skip CRA performance evaluations, prohibition orders against individuals where CRE lending is not the subject, consumer-only matters, and anything whose connection to commercial property you would have to strain to explain. If an item's "Why it matters" could be written about any bank, it does not belong here.
 
 Do not invent anything. Every "url" must be a page you actually opened through web search and that returned the document itself — never a URL assembled from a pattern, never a homepage, search page or index. Every bill number, docket number, institution name and date must appear on that page; if you did not read it there, leave the item out.
 
@@ -84,6 +85,8 @@ Return ONLY valid JSON:
 Prioritize bills that have passed a committee, received a floor vote, or been signed into law. Skip bills with no movement.
 
 This section is legislation only. Every item must be a numbered bill, cited to its own page on a legislature's site showing that number. A court decision, an agency rule, a monetary policy action or an already-enacted statute is not a bill, however recent — those belong in the other sections, so leave them out.
+
+Florida's regular session runs roughly January to March, and most session laws take effect on 1 July, so a genuine Florida item is often dated to the signing or to that effective date rather than to this month. Outside session, report what the last session enacted and any interim committee activity; Congress moves year-round, so look there too.
 
 For each item include:
 - The official bill title and bill number
@@ -157,5 +160,5 @@ function sourceRestriction(section: LegalSection): string {
 }
 
 export function buildSectionPrompt(section: LegalSection, now: Date = new Date()): string {
-  return `${buildFreshnessPreamble(now)}\n\n${sourceRestriction(section)}\n\n${SECTION_BODIES[section]}`
+  return `${buildFreshnessPreamble(section, now)}\n\n${sourceRestriction(section)}\n\n${SECTION_BODIES[section]}`
 }
