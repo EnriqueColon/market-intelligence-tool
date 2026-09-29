@@ -33,7 +33,8 @@
     "verify:fdic-hosts": "tsx scripts/verify-fdic-hosts.ts",
     "verify:visuals-payload": "tsx scripts/verify-visuals-payload.ts",
     "verify:latest-quarter": "tsx scripts/verify-latest-quarter.ts",
-    "verify:tab-persistence": "node scripts/verify-tab-persistence.mjs"
+    "verify:tab-persistence": "node scripts/verify-tab-persistence.mjs",
+    "verify:legal-freshness": "tsx scripts/verify-legal-freshness.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

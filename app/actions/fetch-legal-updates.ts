@@ -2,6 +2,7 @@
 
 import { unstable_cache } from "next/cache"
 import { MAX_ITEM_AGE_DAYS, dedupeByTitle, dropStaleItems } from "@/lib/legal-updates-filter"
+import { buildSectionPrompt } from "@/lib/legal-updates-prompts"
 import { newsCalendarDayET } from "@/lib/news-tab-cache"
 import { callOpenAiJson, getOpenAiApiKey } from "@/lib/openai"
 
@@ -30,122 +31,17 @@ const SECTION_LABELS: Record<LegalItem["section"], string> = {
   enforcement: "Enforcement & Litigation",
 }
 
-// ── Claude query per section ───────────────────────────────────────────────────
-
-const SECTION_PROMPTS: Record<
-  "regulatory" | "legislative" | "enforcement",
-  string
-> = {
-  regulatory: `You are a CRE regulatory intelligence analyst. Use live web search to find the 4-5 most recent regulatory developments (past 90 days) from agencies including OCC, FDIC, Federal Reserve, CFPB, HUD, or Florida OFR that directly affect commercial real estate lending, CRE loan servicing, foreclosure processes, bank CRE concentration limits, or CMBS/securitization rules.
-
-Each item must be a distinct development. Interagency rules are issued jointly by several agencies and are still one item — list every issuer in a single "source" rather than repeating the rule once per agency. Return fewer items rather than padding the list with restatements.
-
-Recency is the point of this section: the reader needs to know what is in motion now, not what the rule book already says. Do not reach back beyond 90 days to fill the list, and prefer a proposal still open for comment or a rule with an effective date ahead of it over one long settled. "date" must be the most recent action on the item — publication, adoption or effective date — never the date of an earlier version.
-
-For each item include:
-- The exact rule/guidance title
-- Issuing agency (source)
-- Publication or effective date
-- Whether it is Federal or Florida jurisdiction
-- A 2-3 sentence plain-English summary of what it changes
-- A 1-2 sentence "Why it matters" specifically for a distressed CRE debt investor (note sales, workouts, foreclosures, REO)
-- Direct URL to the rule or announcement if available
-- Status: Proposed Rule, Final Rule, Guidance, or Notice
-
-Return ONLY valid JSON:
-{
-  "items": [
-    {
-      "title": "exact rule or guidance title",
-      "source": "agency name",
-      "date": "YYYY-MM-DD",
-      "jurisdiction": "Federal or Florida",
-      "summary": "2-3 sentence plain-English summary",
-      "whyItMatters": "1-2 sentences on relevance to distressed CRE debt investing",
-      "status": "Proposed Rule | Final Rule | Guidance | Notice",
-      "url": "https://..."
-    }
-  ]
-}`,
-
-  legislative: `You are a CRE legislative intelligence analyst. Use live web search to find the 4-5 most recent (past 90 days) Florida state bills or U.S. federal bills with active legislative movement that affect commercial real estate, mortgage lending, foreclosure law, property rights, landlord/tenant regulations, property tax assessments, or CRE-related banking regulations.
-
-Prioritize bills that have passed a committee, received a floor vote, or been signed into law. Skip bills with no movement.
-
-Recency is the point of this section: the reader needs to know what is coming and what has just landed. "date" must be the most recent action on the bill, not its introduction date. Do not reach back beyond 90 days to fill the list — return fewer bills instead.
-
-For each item include:
-- The official bill title and bill number
-- Legislative body (e.g., Florida Senate, U.S. House)
-- Most recent action date
-- Whether it is Federal or Florida jurisdiction
-- A 2-3 sentence plain-English summary of what the bill does
-- A 1-2 sentence "Why it matters" for a distressed CRE debt investor
-- Direct URL to the bill text or tracker
-- Status: e.g., "Passed Senate Committee", "Signed into Law", "Awaiting Floor Vote"
-
-Return ONLY valid JSON:
-{
-  "items": [
-    {
-      "title": "full bill title",
-      "source": "bill number + legislative body (e.g. SB 1234 — Florida Senate)",
-      "date": "YYYY-MM-DD",
-      "jurisdiction": "Federal or Florida",
-      "summary": "2-3 sentence plain-English summary",
-      "whyItMatters": "1-2 sentences on relevance to distressed CRE debt investing",
-      "status": "current legislative status",
-      "url": "https://..."
-    }
-  ]
-}`,
-
-  enforcement: `You are a CRE enforcement and litigation intelligence analyst. Use live web search to find the 4-5 most recent (past 90 days) high-impact developments in any of these categories:
-1. FDIC enforcement actions or consent orders against banks with significant CRE loan exposure
-2. OCC enforcement actions related to CRE lending practices
-3. Major commercial real estate Chapter 11 bankruptcy filings (assets > $50M)
-4. Court-appointed receiverships on large CRE assets in Florida or nationally
-5. High-profile lender liability or foreclosure litigation with broad market implications
-
-Recency is the point of this section: report the most recent action in a matter, not the matter's origin. "date" must be that action's date. Do not reach back beyond 90 days to fill the list — return fewer items instead.
-
-For each item include:
-- Descriptive title (institution name + action type, or property/borrower + filing type)
-- Source (FDIC, OCC, court, etc.)
-- Date of action or filing
-- Whether it is Federal or Florida (or Multi-State)
-- A 2-3 sentence summary of what happened and who is involved
-- A 1-2 sentence "Why it matters" for a distressed CRE debt investor looking for note sale or acquisition opportunities
-- Direct URL to the enforcement action, court filing, or press release if available
-- Status: e.g., "Consent Order Issued", "Chapter 11 Filed", "Receivership Appointed", "Settled"
-
-Return ONLY valid JSON:
-{
-  "items": [
-    {
-      "title": "descriptive title",
-      "source": "FDIC | OCC | U.S. Bankruptcy Court | etc.",
-      "date": "YYYY-MM-DD",
-      "jurisdiction": "Federal or Florida or Multi-State",
-      "summary": "2-3 sentence summary",
-      "whyItMatters": "1-2 sentences on relevance to distressed CRE debt investing",
-      "status": "action status",
-      "url": "https://..."
-    }
-  ]
-}`,
-}
-
 // ── OpenAI fetch ───────────────────────────────────────────────────────────────
 
 async function querySection(
-  section: "regulatory" | "legislative" | "enforcement"
+  section: "regulatory" | "legislative" | "enforcement",
+  now: Date
 ): Promise<LegalItem[]> {
   try {
     const parsed = await callOpenAiJson({
       system:
         "Return ONLY valid JSON. Use your web search tool. Do not fabricate items — only include real, verifiable developments.",
-      user: SECTION_PROMPTS[section],
+      user: buildSectionPrompt(section, now),
       tier: "fast",
       temperature: 0.1,
       maxTokens: 1800,
@@ -197,15 +93,18 @@ async function fetchLegalUpdatesImpl(): Promise<LegalUpdatesResponse> {
     }
   }
 
+  // One clock for the prompts and the filter, so they cannot disagree about what "recent" means.
+  const now = new Date()
+
   // Run all three section queries in parallel
   const [regulatory, legislative, enforcement] = await Promise.all([
-    querySection("regulatory"),
-    querySection("legislative"),
-    querySection("enforcement"),
+    querySection("regulatory", now),
+    querySection("legislative", now),
+    querySection("enforcement", now),
   ])
 
   const deduped = dedupeByTitle([...regulatory, ...legislative, ...enforcement])
-  const { kept: allItems, dropped } = dropStaleItems(deduped)
+  const { kept: allItems, dropped } = dropStaleItems(deduped, now.getTime())
 
   // An emptied section disappears from the tab entirely, so say why rather than let it look broken.
   for (const section of ["regulatory", "legislative", "enforcement"] as const) {
@@ -233,7 +132,7 @@ export async function fetchLegalUpdates(): Promise<LegalUpdatesResponse> {
   const day = newsCalendarDayET()
   return unstable_cache(
     async () => fetchLegalUpdatesImpl(),
-    ["legal-updates-v4", day],
+    ["legal-updates-v5", day],
     // 25h so the entry outlives the day and never expires just before the cron.
     { revalidate: 90000 }
   )()
