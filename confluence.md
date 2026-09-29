@@ -102,13 +102,42 @@ for finance), and fall back to the **GDELT DOC 2.0 API** when RSS yields fewer t
 actions carry near-duplicate fetching logic, so a parsing bug tends to need fixing in both — as
 happened with the CDATA regex.
 
-### Legal Landscape: three prompts, then two hygiene passes
+### Legal Landscape: three prompts, each through four gates
 
 `fetch-legal-updates.ts` runs the Regulatory, Legislative and Enforcement prompts concurrently
-against OpenAI with web search on, then concatenates the three result sets. A section that fails
+against OpenAI with web search on. Each section's results pass through age, CRE relevance and
+source verification on their own before the three are merged and deduped. A section that fails
 returns an empty array rather than throwing, so one bad prompt degrades that section only. One
-`new Date()` is taken per run and passed to both the prompts and the filter, so the two cannot
+`new Date()` is taken per run and passed to both the prompts and the filters, so the two cannot
 disagree about what "recent" means.
+
+The gates run cheapest first — age and relevance are local string work, source verification costs
+an HTTP fetch per item — and they run *inside* the retry rather than after it. Filtering after the
+retry means a section can spend its retry on items that a later pass then discards, ending up
+empty with nothing left to try.
+
+**Each section has its own freshness window**, in `lib/legal-updates-sections.ts`, which is also
+the single source of the section list and its display labels.
+
+| Section | Prompt asks for | Filter allows |
+| --- | --- | --- |
+| Regulatory Watch | 90 days | 180 days |
+| Legislative Tracker | 270 days | 400 days |
+| Enforcement & Litigation | 90 days | 180 days |
+
+Legislative is wider because the Florida legislature sits roughly January to March and most
+session laws take effect on 1 July. For most of the year a 90-day window asks it about a period
+in which the legislature did nothing, and the section went blank. The prompt carries the same
+session calendar, so out of session the model reports what the last session enacted and any
+interim committee activity rather than finding nothing. Widen the window and leave the prompt
+alone and the model will still only look at the current month; the pair is what works.
+
+**Items with no bearing on commercial real estate are dropped**, by `lib/legal-updates-relevance.ts`,
+which reads title, summary, why-it-matters and status together. The prompt states the requirement
+and does most of the work; this is the backstop, on the same reasoning as the dedupe. The bar is
+deliberately low — it is there to catch an overdraft-fee rule or a prohibition order against an
+individual teller, not to adjudicate relevance. Across 24 live items on 2026-09-29 it dropped
+none, so treat it as unexercised in practice and suspect it first if good material disappears.
 
 **The prompts must state today's date, and must name the months to search.** They live in
 `lib/legal-updates-prompts.ts` for that reason. The model has no clock: asked for "the past 90
@@ -147,14 +176,15 @@ the reader, so the retry only decides whether a section has anything in it.
 
 Run `npm run verify:legal-freshness` after any prompt or source-list edit. It calls the live API
 for all three sections and fails if the tab would render empty, if the guard leaks an unverified
-item, if over half the items cite a non-existent URL, or if over 40% fall outside the filter's
-window. Expect to run it more than once — the output is probabilistic, and early runs of this work
-swung between 0 and 8 items. Four consecutive runs on 2026-09-29 gave 2–8 items rendering, all
-verified.
+item, if over half the items cite a non-existent URL, or if over 40% fall outside their section's
+filter window. Expect to run it more than once — the output is probabilistic, and early runs of
+this work swung between 0 and 8 items. Three consecutive runs after the per-section windows landed
+gave 6–9 items rendering, all verified, with Legislative populated every time.
 
-The merged list then passes through `lib/legal-updates-filter.ts`, first `dedupeByTitle` and then
-`dropStaleItems`. Both are load-bearing, and both exist because of one user report on 2026-09-29
-where Regulatory Watch showed five copies of a 2019 rule under a 90-day heading.
+The three surviving sets are merged and passed through `dedupeByTitle` in
+`lib/legal-updates-filter.ts`, which also holds `dropStaleItems`. Both are load-bearing, and both
+exist because of one user report on 2026-09-29 where Regulatory Watch showed five copies of a 2019
+rule under a 90-day heading.
 
 **Dedupe is keyed on the normalized title, not the URL.** Without it an interagency rule comes back
 once per issuing agency. Each agency mirrors a joint rule at its own domain, so URL-keyed dedupe
@@ -164,9 +194,10 @@ regulatory items are concatenated first, a development appearing in two sections
 earlier one. Deduping is global rather than per-section deliberately — the same consent order can
 legitimately be both a regulatory and an enforcement item.
 
-**Staleness is bounded on one side only.** `MAX_ITEM_AGE_DAYS` is 180, twice the prompt's window,
+**Staleness is bounded on one side only.** Each section's filter window is twice its prompt window,
 because the model dates items imprecisely and a bill signed at the close of a Florida session stays
-relevant past 90 days. Future dates are **kept**: an effective date or a scheduled floor vote is the
+relevant well past the date it was asked about. `MAX_ITEM_AGE_DAYS` (180) remains the default for
+callers that do not name a section. Future dates are **kept**: an effective date or a scheduled floor vote is the
 "what is coming" the tab exists to show, which is the opposite of the news feeds, where
 `isWithinLastDays` rejects anything future-dated. Do not unify the two.
 
@@ -175,8 +206,16 @@ stale. That makes the parser's strictness a safety property: it accepts `YYYY-MM
 naming a specific day, and **refuses vaguer prose**. Bare `Date.parse` pulls a year out of prose and
 pins it to January 1, so "Fall 2026" becomes 2026-01-01 — early enough to withhold a live item.
 
-When the filter empties a section, the feed pushes a note saying so. Sections with no items are not
-rendered at all, so without the note an emptied Regulatory Watch would simply vanish.
+**All three sections always render, and an empty one explains itself in place.** Until 2026-09-29
+the tab rendered only sections that had items, so an emptied Legislative Tracker left no trace
+beyond a note at the top of the page, which read as an error rather than an answer. The action now
+returns `sectionNotes` keyed by section alongside the feed-wide `notes`, and `legal-updates.tsx`
+renders the matching note inside the section's own dashed placeholder. Keep the two apart: `notes`
+is for feed-wide faults such as a missing API key, `sectionNotes` is for an ordinary quiet section.
+
+The placeholder distinguishes two cases that previously looked identical — the feed found nothing,
+or the reader's own jurisdiction filter hid what it found. When the feed found nothing it names
+what was set aside and why: too old, off-topic, or without a verifiable primary source.
 
 Note the synthesized `id` appends an array index, so duplicates carry distinct React keys and the UI
 will never collapse them for you. The prompts also state that interagency rules are one item and
@@ -793,7 +832,7 @@ Generated content is expensive, so nearly everything is cached for a day.
   | `market-analytics-visuals-v1` + scope | Derived chart series for the Visual Analysis panel |
   | `executive-brief-v4` + scope | Ranked change events and non-reporting institutions for the Executive Brief |
   | `underwriter-workbench-v1` + scope | Latest-quarter rows for the whole scope, for the Underwriter Workbench |
-  | `legal-updates-v6` | Deduped, freshness-filtered, source-verified items for the Legal Landscape tab |
+  | `legal-updates-v7` | Deduped, freshness-filtered, CRE-relevant, source-verified items for the Legal Landscape tab |
 
   `market-analytics-report-data` is keyed by scope rather than by day and revalidates every six
   hours, since FDIC publishes quarterly. **Bump its version whenever the scoring changes**, or cached

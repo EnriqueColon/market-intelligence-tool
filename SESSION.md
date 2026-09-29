@@ -8,7 +8,64 @@ is it in now, and what is still open.
 
 ---
 
-## 2026-09-29 (latest) — a legal feed that did not know what year it was
+## 2026-09-29 (latest) — making the legal feed useful, not merely truthful
+
+Follow-on to the same day's work, on `dev` only. The source-verification guard shipped earlier had
+left the Legal Landscape tab honest but thin, and it exposed three things the earlier fixes had
+papered over. All four were asked for together.
+
+**One 90-day window was being applied to three sections that do not move at the same speed.** The
+Florida legislature sits roughly January to March and most session laws take effect on 1 July, so
+for most of the year a 90-day window asks the Legislative Tracker about a period in which the
+legislature did nothing. It went blank, correctly, and read as a bug. Windows are now per section
+in `lib/legal-updates-sections.ts`: Legislative asks for 270 days and filters at 400, spanning a
+full annual session cycle; Regulatory and Enforcement stay at 90/180 because agencies publish
+year-round. The prompt also now tells the model about the session calendar, so out of session it
+reports what the last session enacted rather than finding nothing.
+
+**Nothing checked that an item had anything to do with commercial real estate.** The guard proved
+a URL was real; it could not tell a CRE appraisal threshold from an overdraft fee rule.
+`lib/legal-updates-relevance.ts` drops items with no CRE bearing, reading title, summary, why-it-
+matters and status together. The bar is deliberately low — the prompt states the requirement and
+does the real work, and this is the backstop, on the same reasoning as the dedupe: prompt
+instructions alone have not held in this repo. Worth being straight about the evidence, though:
+across 24 live items it dropped **zero**. The unit tests show it discriminates; production has not
+yet given it anything to catch.
+
+**The host allowlist was too narrow to let good items through.** Widened with `regulations.gov`,
+NCUA, FHFA and Treasury for Regulatory; the Florida legislature and governor's office for
+Legislative; FinCEN, NCUA and CourtListener for Enforcement. This is the lever to reach for when a
+section looks thin — not the guard.
+
+**An empty section vanished instead of saying anything.** The tab rendered only sections that had
+items, so the previous deploy's empty Legislative Tracker left no trace beyond a note at the top
+of the page that read like an error. All three sections now always render, and an empty one
+carries its own explanation in place, distinguishing the two cases that were previously
+indistinguishable: the feed found nothing, or the reader's own jurisdiction filter hid what it
+found. The note names what was set aside and why — too old, off-topic, unverifiable — so a thin
+section is legible as an answer.
+
+Filtering also moved inside `collectSection`, which matters for the retry: previously the retry
+gave up as soon as verification passed, then a later global pass could still discard the item for
+age, and the section would end up empty with a retry already spent. Cheapest checks run first —
+date and topic are local, source verification costs a fetch each.
+
+Verified live three times: 6–9 items, 0 stale, 0 off-topic, 0–2 fabricated URLs caught by the
+guard, Legislative populated on every run with March and June session bills that the old 90-day
+window could not have seen. `npm run test:legal-filter` and the new `npm run test:legal-relevance`
+pass, 24 cases. Build and typecheck clean. Cache key bumped to `legal-updates-v7`.
+
+**Still open.** Not confirmed in a browser — the Cursor browser tool cannot reach `localhost` in
+this environment, so the empty-state rendering is verified by build and by reading, not by eye.
+This is the second session running where the tab has shipped without a visual check, and the
+regression it caused last time was purely visual. **This is on `dev` and has not been merged to
+`main`.** The relevance filter is unexercised in practice, as above. And the January question from
+this morning still stands, now sharper: if the Legislative Tracker is thin *during* session, the
+prompt is wrong, not the windows.
+
+---
+
+## 2026-09-29 (earlier) — a legal feed that did not know what year it was
 
 Reported by email from a user: an item on the Legal Landscape tab "appears to repeat 5 times". It
 did. Regulatory Watch showed the HVCRE final rule as five separate cards with identical summaries.

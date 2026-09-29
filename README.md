@@ -210,6 +210,7 @@ npm run test:cre-downside     # the capital scenario, on both regulatory capital
 npm run test:memo-evidence    # the evidence guard
 npm run test:verified-metrics
 npm run test:legal-filter     # legal feed hygiene: collapsing repeats, and withholding stale items
+npm run test:legal-relevance  # legal feed: CRE relevance bar, and the per-section freshness windows
 npm run test:allowlist        # publisher allowlist, and what "all" covers
 npm run build                 # next build
 ```
@@ -260,10 +261,10 @@ Some checks need live data rather than fixtures, because they are calibrations r
 - `npm run verify:legal-freshness` — calls the live API with the three Legal Landscape prompts,
   then fetches every URL they cite. Fails if the tab would render empty, if an unverified item
   would reach it, if over half the items cite a URL that does not exist, or if too much falls
-  outside the filter's window. The only check that catches either a prompt the model reads as a
+  outside its section's window. The only check that catches either a prompt the model reads as a
   request for history or one it answers with invented citations; run it after any edit to
-  `lib/legal-updates-prompts.ts` or `lib/legal-updates-sources.ts`, and more than once, since the
-  output is probabilistic.
+  `lib/legal-updates-prompts.ts`, `lib/legal-updates-sources.ts` or `lib/legal-updates-sections.ts`,
+  and more than once, since the output is probabilistic.
 - `npm run verify:tab-persistence` — that switching tabs does not refetch. Needs the app running,
   and `npm start` sets `NODE_ENV=production`, so the feature flags fail closed and **`ENABLED_TABS`
   must be passed explicitly** or the dashboard renders no tabs at all:
@@ -376,6 +377,19 @@ perfectly well while being summaries of a development rather than the document, 
 numbers copied from the prompt's own formatting example. Pin the acceptable hosts per source type
 *and* check the link, and name those hosts in the prompt so the model goes to them first. See
 `lib/legal-updates-sources.ts`.
+
+**A section that renders nothing should still render.** The Legal Landscape tab drew only the
+sections that had items, so when the freshness filter emptied one it vanished, and the only sign
+was a note at the top of the page that read as a failure. Draw the heading regardless and put the
+explanation inside it, distinguishing "the feed found nothing" from "your filter hid it". The same
+applies to any list a filter can empty.
+
+**One freshness window across sources that move at different speeds will empty the slow one.** The
+Legal Landscape tab applied 90 days to federal agencies, which publish year-round, and to the
+Florida legislature, which sits about three months a year — so the Legislative Tracker was blank
+nine months out of twelve and looked broken. Windows are per section in
+`lib/legal-updates-sections.ts`, and the prompt has to know the same calendar; widening the window
+alone just makes the model search a longer period it still believes is quiet.
 
 **`Date.parse` invents a January.** Given prose it cannot fully parse, it extracts a year and pins
 it to the 1st of January — "Fall 2026" becomes 2026-01-01, nine months early. Anywhere a parsed
