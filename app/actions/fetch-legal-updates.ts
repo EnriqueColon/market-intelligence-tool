@@ -1,7 +1,7 @@
 "use server"
 
 import { unstable_cache } from "next/cache"
-import { dedupeByTitle } from "@/lib/legal-updates-dedupe"
+import { MAX_ITEM_AGE_DAYS, dedupeByTitle, dropStaleItems } from "@/lib/legal-updates-filter"
 import { newsCalendarDayET } from "@/lib/news-tab-cache"
 import { callOpenAiJson, getOpenAiApiKey } from "@/lib/openai"
 
@@ -24,6 +24,12 @@ export type LegalUpdatesResponse = {
   notes: string[]
 }
 
+const SECTION_LABELS: Record<LegalItem["section"], string> = {
+  regulatory: "Regulatory Watch",
+  legislative: "Legislative Tracker",
+  enforcement: "Enforcement & Litigation",
+}
+
 // ── Claude query per section ───────────────────────────────────────────────────
 
 const SECTION_PROMPTS: Record<
@@ -33,6 +39,8 @@ const SECTION_PROMPTS: Record<
   regulatory: `You are a CRE regulatory intelligence analyst. Use live web search to find the 4-5 most recent regulatory developments (past 90 days) from agencies including OCC, FDIC, Federal Reserve, CFPB, HUD, or Florida OFR that directly affect commercial real estate lending, CRE loan servicing, foreclosure processes, bank CRE concentration limits, or CMBS/securitization rules.
 
 Each item must be a distinct development. Interagency rules are issued jointly by several agencies and are still one item — list every issuer in a single "source" rather than repeating the rule once per agency. Return fewer items rather than padding the list with restatements.
+
+Recency is the point of this section: the reader needs to know what is in motion now, not what the rule book already says. Do not reach back beyond 90 days to fill the list, and prefer a proposal still open for comment or a rule with an effective date ahead of it over one long settled. "date" must be the most recent action on the item — publication, adoption or effective date — never the date of an earlier version.
 
 For each item include:
 - The exact rule/guidance title
@@ -63,6 +71,8 @@ Return ONLY valid JSON:
   legislative: `You are a CRE legislative intelligence analyst. Use live web search to find the 4-5 most recent (past 90 days) Florida state bills or U.S. federal bills with active legislative movement that affect commercial real estate, mortgage lending, foreclosure law, property rights, landlord/tenant regulations, property tax assessments, or CRE-related banking regulations.
 
 Prioritize bills that have passed a committee, received a floor vote, or been signed into law. Skip bills with no movement.
+
+Recency is the point of this section: the reader needs to know what is coming and what has just landed. "date" must be the most recent action on the bill, not its introduction date. Do not reach back beyond 90 days to fill the list — return fewer bills instead.
 
 For each item include:
 - The official bill title and bill number
@@ -96,6 +106,8 @@ Return ONLY valid JSON:
 3. Major commercial real estate Chapter 11 bankruptcy filings (assets > $50M)
 4. Court-appointed receiverships on large CRE assets in Florida or nationally
 5. High-profile lender liability or foreclosure litigation with broad market implications
+
+Recency is the point of this section: report the most recent action in a matter, not the matter's origin. "date" must be that action's date. Do not reach back beyond 90 days to fill the list — return fewer items instead.
 
 For each item include:
 - Descriptive title (institution name + action type, or property/borrower + filing type)
@@ -192,9 +204,21 @@ async function fetchLegalUpdatesImpl(): Promise<LegalUpdatesResponse> {
     querySection("enforcement"),
   ])
 
-  const allItems = dedupeByTitle([...regulatory, ...legislative, ...enforcement])
+  const deduped = dedupeByTitle([...regulatory, ...legislative, ...enforcement])
+  const { kept: allItems, dropped } = dropStaleItems(deduped)
 
-  if (allItems.length === 0) {
+  // An emptied section disappears from the tab entirely, so say why rather than let it look broken.
+  for (const section of ["regulatory", "legislative", "enforcement"] as const) {
+    const droppedHere = dropped.filter((i) => i.section === section).length
+    if (droppedHere === 0) continue
+    if (allItems.some((i) => i.section === section)) continue
+    notes.push(
+      `${SECTION_LABELS[section]}: no developments in the last ${MAX_ITEM_AGE_DAYS} days. ` +
+        `${droppedHere} older item${droppedHere === 1 ? " was" : "s were"} withheld.`
+    )
+  }
+
+  if (allItems.length === 0 && dropped.length === 0) {
     notes.push("No legal intelligence items returned. Check OpenAI API key and quota.")
   }
 
@@ -209,7 +233,7 @@ export async function fetchLegalUpdates(): Promise<LegalUpdatesResponse> {
   const day = newsCalendarDayET()
   return unstable_cache(
     async () => fetchLegalUpdatesImpl(),
-    ["legal-updates-v3", day],
+    ["legal-updates-v4", day],
     // 25h so the entry outlives the day and never expires just before the cron.
     { revalidate: 90000 }
   )()

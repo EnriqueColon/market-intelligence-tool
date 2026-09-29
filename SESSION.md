@@ -8,7 +8,7 @@ is it in now, and what is still open.
 
 ---
 
-## 2026-09-29 (latest) — one legal item, rendered five times
+## 2026-09-29 (latest) — one legal item rendered five times, and it was seven years old
 
 Reported by email from a user: an item on the Legal Landscape tab "appears to repeat 5 times". It
 did. Regulatory Watch showed the HVCRE final rule as five separate cards with identical summaries.
@@ -23,7 +23,7 @@ so the five copies carried distinct React keys and rendered happily.
 Deduping now happens on the merged list, keyed on the normalized title. **Not on the URL**, which
 was the tempting choice and the wrong one: each agency mirrors a joint rule at its own domain, so
 four of the five copies had distinct URLs and would have survived. The official title is verbatim
-across all of them. The logic went to `lib/legal-updates-dedupe.ts` rather than staying in the
+across all of them. The logic went to `lib/legal-updates-filter.ts` rather than staying in the
 action, because the action is `"use server"` and imports `next/cache`, which makes it impossible to
 exercise from a test — and an unverified dedupe is how this class of bug gets shipped twice.
 
@@ -31,25 +31,48 @@ The prompt now also states that an interagency rule is a single item, but that i
 The repo's own history says prompt instructions alone have not prevented this kind of thing; the
 programmatic guard is what holds.
 
-Cache key bumped to `legal-updates-v3`. Without that the fix would be invisible — Vercel's Data
+### The second defect, in the same screenshot
+
+The repeated rule was dated **2019-11-19** against a prompt asking for the past 90 days, so the
+feed was also about seven years stale — something dedupe does nothing about. This was raised as a
+product call rather than fixed silently, because filtering can empty a section and an empty
+Regulatory Watch may read worse than an old one. The answer settled it: the point of the tab is to
+know what is moving now, so stale content is not a lesser evil, it is the failure.
+
+Stale items are now withheld. Three decisions inside that are not obvious:
+
+- **The window is 180 days, not the prompt's 90.** The model dates items imprecisely, and a bill
+  signed at the close of a Florida legislative session is still live well past 90 days. The filter
+  exists to catch content that is not of this era at all, not to police the prompt.
+- **Future dates are kept.** The news feeds reject anything future-dated; here an effective date or
+  a scheduled floor vote is exactly the "what is coming" the section is for. Only the past is
+  bounded, and the two must not be unified later on the grounds that they look alike.
+- **An unparseable date is kept, which makes the parser's strictness a safety property.** `Date.parse`
+  pulls a year out of prose and pins it to January 1, so "Fall 2026" becomes 2026-01-01 — nine
+  months early, and early enough to withhold a live item once we are past mid-2026. Found by a test
+  that expected "sometime in 2019" to be unparseable and got 2019-01-01 back. The parser now takes
+  `YYYY-MM-DD` and formats naming a specific day, and refuses the rest.
+
+When the filter empties a section the feed says so, because sections with no items are not rendered
+at all and an emptied Regulatory Watch would otherwise just disappear.
+
+Cache key bumped to `legal-updates-v4`. Without that the fix would be invisible — Vercel's Data
 Cache survives deploys, so production would keep serving today's already-duplicated entry until
 midnight ET.
 
-Verified by `npm run test:legal-dedupe`, eight cases built from the exact five-card payload the user
+Verified by `npm run test:legal-filter`, 17 cases built from the exact five-card payload the user
 saw, including an explicit assertion that URL-keyed dedupe would have kept four of them. Build and
-typecheck clean. Not yet verified in a browser against live model output.
+typecheck clean.
 
-**Still open, and worth a decision.** The repeated rule is dated **2019-11-19**, and the prompt asks
-for developments from the past 90 days — so the feed is also serving content roughly seven years
-stale, which dedupe does nothing about. A freshness filter is the obvious fix but it is a real
-product call, not a cleanup: if the model returns nothing genuinely recent, Regulatory Watch empties
-out, and an empty section may read worse to a user than an old one. Deliberately left alone pending
-that decision.
+**Still open.** None of this has been seen in a browser against live model output — the logic is
+tested but the rendered result is not, and the honest check is to open the tab after the deploy and
+confirm Regulatory Watch shows distinct, recent items rather than one card or none. If it comes back
+thin, the lever is `MAX_ITEM_AGE_DAYS`, not the dedupe.
 
-Also open: this commit is on `dev` and **has not been pushed or merged to `main`**, so the live tool
-still shows the five copies. And the `ROLLBACK.md` current-state table was stale again on arrival —
-it named `8844bea` for production when `main` was actually at `996efa9`, with the tab-persistence
-fix already shipped. Corrected, but it has now drifted twice in three sessions.
+Also: the `ROLLBACK.md` current-state table was stale again on arrival — it named `8844bea` for
+production when `main` was actually at `996efa9`, with the tab-persistence fix already shipped.
+Corrected, but it has now drifted twice in three sessions, so the table carries an instruction to
+verify with `git merge-base` rather than trust the previous entry.
 
 ---
 

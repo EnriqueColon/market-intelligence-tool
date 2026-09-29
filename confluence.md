@@ -102,27 +102,42 @@ for finance), and fall back to the **GDELT DOC 2.0 API** when RSS yields fewer t
 actions carry near-duplicate fetching logic, so a parsing bug tends to need fixing in both — as
 happened with the CDATA regex.
 
-### Legal Landscape: three prompts, one dedupe pass
+### Legal Landscape: three prompts, then two hygiene passes
 
 `fetch-legal-updates.ts` runs the Regulatory, Legislative and Enforcement prompts concurrently
 against OpenAI with web search on, then concatenates the three result sets. A section that fails
 returns an empty array rather than throwing, so one bad prompt degrades that section only.
 
-**The merged list then passes through `dedupeByTitle` (`lib/legal-updates-dedupe.ts`), and that pass
-is load-bearing.** Without it, an interagency rule comes back once per issuing agency and the tab
-renders the same development several times over — five copies of the HVCRE final rule reached a user
-this way on 2026-09-29. The key is the normalized title, **not the URL**: each agency mirrors a joint
-rule at its own domain, so URL-keyed dedupe keeps the copies. The official title is verbatim across
-all of them. Normalization lowercases, decodes `&amp;`, strips non-alphanumerics and collapses
-whitespace; first occurrence wins, and since regulatory items are concatenated first, a development
-appearing in two sections is kept under the earlier one.
+The merged list then passes through `lib/legal-updates-filter.ts`, first `dedupeByTitle` and then
+`dropStaleItems`. Both are load-bearing, and both exist because of one user report on 2026-09-29
+where Regulatory Watch showed five copies of a 2019 rule under a 90-day heading.
 
-Deduping is global rather than per-section, which is deliberate — the same consent order can be both
-a regulatory and an enforcement item. The prompt also tells the model an interagency rule is one
-item, but treat that as a hint only; prompt instructions have not held on their own in this repo.
+**Dedupe is keyed on the normalized title, not the URL.** Without it an interagency rule comes back
+once per issuing agency. Each agency mirrors a joint rule at its own domain, so URL-keyed dedupe
+keeps the copies; the official title is verbatim across all of them. Normalization lowercases,
+decodes `&amp;`, strips non-alphanumerics and collapses whitespace. First occurrence wins, and since
+regulatory items are concatenated first, a development appearing in two sections is kept under the
+earlier one. Deduping is global rather than per-section deliberately — the same consent order can
+legitimately be both a regulatory and an enforcement item.
+
+**Staleness is bounded on one side only.** `MAX_ITEM_AGE_DAYS` is 180, twice the prompt's window,
+because the model dates items imprecisely and a bill signed at the close of a Florida session stays
+relevant past 90 days. Future dates are **kept**: an effective date or a scheduled floor vote is the
+"what is coming" the tab exists to show, which is the opposite of the news feeds, where
+`isWithinLastDays` rejects anything future-dated. Do not unify the two.
+
+An item whose date will not parse is kept rather than withheld, since it cannot be shown to be
+stale. That makes the parser's strictness a safety property: it accepts `YYYY-MM-DD` and formats
+naming a specific day, and **refuses vaguer prose**. Bare `Date.parse` pulls a year out of prose and
+pins it to January 1, so "Fall 2026" becomes 2026-01-01 — early enough to withhold a live item.
+
+When the filter empties a section, the feed pushes a note saying so. Sections with no items are not
+rendered at all, so without the note an emptied Regulatory Watch would simply vanish.
 
 Note the synthesized `id` appends an array index, so duplicates carry distinct React keys and the UI
-will never collapse them for you. `npm run test:legal-dedupe` covers the reported five-copy payload.
+will never collapse them for you. The prompts also state that interagency rules are one item and
+that `date` must be the most recent action, but treat prompt wording as a hint; the programmatic
+passes are what hold. `npm run test:legal-filter` covers both, built from the reported payload.
 
 ### Search Industry Reports: entities and the domain allowlist
 
@@ -734,7 +749,7 @@ Generated content is expensive, so nearly everything is cached for a day.
   | `market-analytics-visuals-v1` + scope | Derived chart series for the Visual Analysis panel |
   | `executive-brief-v4` + scope | Ranked change events and non-reporting institutions for the Executive Brief |
   | `underwriter-workbench-v1` + scope | Latest-quarter rows for the whole scope, for the Underwriter Workbench |
-  | `legal-updates-v3` | Deduped Regulatory / Legislative / Enforcement items for the Legal Landscape tab |
+  | `legal-updates-v4` | Deduped, freshness-filtered items for the Legal Landscape tab |
 
   `market-analytics-report-data` is keyed by scope rather than by day and revalidates every six
   hours, since FDIC publishes quarterly. **Bump its version whenever the scoring changes**, or cached

@@ -25,7 +25,7 @@
     "test:memo-evidence": "node --test --experimental-strip-types lib/memo-evidence.test.ts",
     "test:verified-metrics": "node --test --experimental-strip-types lib/verified-metrics.test.ts",
     "test:environment": "node --test --experimental-strip-types lib/environment.test.ts",
-    "test:legal-dedupe": "node --test --experimental-strip-types lib/legal-updates-dedupe.test.ts",
+    "test:legal-filter": "node --test --experimental-strip-types lib/legal-updates-filter.test.ts",
     "verify:executive-brief": "node --experimental-strip-types scripts/verify-executive-brief.mjs",
     "verify:workbench": "tsx scripts/verify-workbench.ts",
     "verify:lenses": "node scripts/verify-lenses-visually.mjs",

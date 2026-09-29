@@ -209,7 +209,7 @@ npm run test:peer-cohort      # workbench peer selection, and what it refuses to
 npm run test:cre-downside     # the capital scenario, on both regulatory capital regimes
 npm run test:memo-evidence    # the evidence guard
 npm run test:verified-metrics
-npm run test:legal-dedupe     # collapsing repeated legal developments, and why the key is not the URL
+npm run test:legal-filter     # legal feed hygiene: collapsing repeats, and withholding stale items
 npm run test:allowlist        # publisher allowlist, and what "all" covers
 npm run build                 # next build
 ```
@@ -353,7 +353,12 @@ the title rather than the URL.** The Legal Landscape tab shipped without one and
 interagency rule five times — the model had returned it once per issuing agency — until a user
 reported it on 2026-09-29. The URL is the intuitive key and the wrong one, because each agency
 mirrors a joint rule at its own domain, so the copies are URL-distinct and title-identical. See
-`lib/legal-updates-dedupe.ts` and section 3 of `confluence.md`.
+`lib/legal-updates-filter.ts` and section 3 of `confluence.md`.
+
+**`Date.parse` invents a January.** Given prose it cannot fully parse, it extracts a year and pins
+it to the 1st of January — "Fall 2026" becomes 2026-01-01, nine months early. Anywhere a parsed
+date decides whether content is too old to show, that is enough to withhold something current. Parse
+only formats that name a specific day, and treat the rest as undated.
 
 **Verify FDIC fields against the live API before trusting a field name.** `LNLSDEPR` reads like a
 loan-loss reserve and is actually net loans-to-deposits; it was displayed as "Reserve Coverage",
