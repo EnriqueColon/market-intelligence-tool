@@ -1,6 +1,7 @@
 "use server"
 
 import { unstable_cache } from "next/cache"
+import { dedupeByTitle } from "@/lib/legal-updates-dedupe"
 import { newsCalendarDayET } from "@/lib/news-tab-cache"
 import { callOpenAiJson, getOpenAiApiKey } from "@/lib/openai"
 
@@ -30,6 +31,8 @@ const SECTION_PROMPTS: Record<
   string
 > = {
   regulatory: `You are a CRE regulatory intelligence analyst. Use live web search to find the 4-5 most recent regulatory developments (past 90 days) from agencies including OCC, FDIC, Federal Reserve, CFPB, HUD, or Florida OFR that directly affect commercial real estate lending, CRE loan servicing, foreclosure processes, bank CRE concentration limits, or CMBS/securitization rules.
+
+Each item must be a distinct development. Interagency rules are issued jointly by several agencies and are still one item — list every issuer in a single "source" rather than repeating the rule once per agency. Return fewer items rather than padding the list with restatements.
 
 For each item include:
 - The exact rule/guidance title
@@ -189,7 +192,7 @@ async function fetchLegalUpdatesImpl(): Promise<LegalUpdatesResponse> {
     querySection("enforcement"),
   ])
 
-  const allItems = [...regulatory, ...legislative, ...enforcement]
+  const allItems = dedupeByTitle([...regulatory, ...legislative, ...enforcement])
 
   if (allItems.length === 0) {
     notes.push("No legal intelligence items returned. Check OpenAI API key and quota.")
@@ -206,7 +209,7 @@ export async function fetchLegalUpdates(): Promise<LegalUpdatesResponse> {
   const day = newsCalendarDayET()
   return unstable_cache(
     async () => fetchLegalUpdatesImpl(),
-    ["legal-updates-v2", day],
+    ["legal-updates-v3", day],
     // 25h so the entry outlives the day and never expires just before the cron.
     { revalidate: 90000 }
   )()
