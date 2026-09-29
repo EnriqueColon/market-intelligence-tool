@@ -8,7 +8,7 @@ is it in now, and what is still open.
 
 ---
 
-## 2026-09-29 (latest) — one legal item rendered five times, and it was seven years old
+## 2026-09-29 (latest) — a legal feed that did not know what year it was
 
 Reported by email from a user: an item on the Legal Landscape tab "appears to repeat 5 times". It
 did. Regulatory Watch showed the HVCRE final rule as five separate cards with identical summaries.
@@ -64,10 +64,49 @@ Verified by `npm run test:legal-filter`, 17 cases built from the exact five-card
 saw, including an explicit assertion that URL-keyed dedupe would have kept four of them. Build and
 typecheck clean.
 
-**Still open.** None of this has been seen in a browser against live model output — the logic is
-tested but the rendered result is not, and the honest check is to open the tab after the deploy and
-confirm Regulatory Watch shows distinct, recent items rather than one card or none. If it comes back
-thin, the lever is `MAX_ITEM_AGE_DAYS`, not the dedupe.
+### The filter emptied the tab, which was the correct answer to the wrong question
+
+Deployed, and Legal Landscape rendered nothing at all: three notes saying 1, 3 and 3 older items
+had been withheld, and "No items match the selected filters." Every item the feed produced was
+stale. The filter was right; the feed was in far worse shape than the duplicate report suggested.
+
+**The model does not know what day it is.** Asked for "the past 90 days" it measures from its own
+training cutoff. Calling the live API with the production prompt shows it plainly — it searched
+`after:2024-03-01` and returned interagency guidance dated 2006, 2015 and 2023. The 2019 rule in
+the original report was not a fluke, it was this. And nothing in the code hints at it: the prompt
+reads exactly like a request for recent material.
+
+Worth recording how the diagnosis went, because guessing would have produced a worse fix. A sanity
+query proved the search index has content from this month, which ruled out the tool being broken
+and pointed at the prompt. Then four variants against the live API:
+
+| Variant | Result |
+| --- | --- |
+| Production prompt | 4 items, dated 2006–2023 |
+| + today's date | `{"items":[]}` — one broad query, nothing it would vouch for |
+| + search named sources by month | **5 items, all inside 90 days** |
+| Same, on full `gpt-4.1` | 1 of 5 fresh — the larger model was *worse* here |
+
+So the date is necessary and not sufficient; the model also has to be told to search agency
+newsrooms by name and month. Both halves are now in the prompt and both were measured. A forced
+`tool_choice: {type: "web_search"}` was tried and discarded — it sends the entire prompt as the
+search query.
+
+Prompts moved to `lib/legal-updates-prompts.ts` so `npm run verify:legal-freshness` can run them
+for real. That script is worth more than any unit test here, since the failure is invisible in the
+source. Three consecutive runs: 82–83% of items inside the window, 11–12 rendering, against zero
+before. It fails the process if the tab would be empty or under 60% is in-window.
+
+One harness lesson: an early run showed every variant returning nothing, which looked like a dead
+API. The diagnostic was reading `data.output_text`, which the Responses API often omits —
+`lib/openai.ts` has a fallback for exactly this and the throwaway script did not. Nearly chased a
+non-existent bug.
+
+**Still open.** Not yet confirmed in a browser after deploy. The two 2026-06-18 items that render
+are outside the 90-day prompt window but inside the 180-day filter, which is the intended overlap
+rather than a defect. Item quality is now the weak point rather than freshness — "CRA Performance
+Evaluations for 23 National Banks" is recent but thin for a distressed-debt reader, and the
+prompts do not yet push hard on CRE relevance.
 
 Also: the `ROLLBACK.md` current-state table was stale again on arrival — it named `8844bea` for
 production when `main` was actually at `996efa9`, with the tab-persistence fix already shipped.

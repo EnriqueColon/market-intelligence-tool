@@ -106,7 +106,26 @@ happened with the CDATA regex.
 
 `fetch-legal-updates.ts` runs the Regulatory, Legislative and Enforcement prompts concurrently
 against OpenAI with web search on, then concatenates the three result sets. A section that fails
-returns an empty array rather than throwing, so one bad prompt degrades that section only.
+returns an empty array rather than throwing, so one bad prompt degrades that section only. One
+`new Date()` is taken per run and passed to both the prompts and the filter, so the two cannot
+disagree about what "recent" means.
+
+**The prompts must state today's date, and must name the months to search.** They live in
+`lib/legal-updates-prompts.ts` for that reason. The model has no clock: asked for "the past 90
+days" it measures from its own training cutoff, and the live API can be observed searching
+`after:2024-03-01` and returning interagency guidance from 2006, 2015 and 2023. This is what made
+the tab useless until 2026-09-29, and nothing about it is visible in the code — the prompt reads
+perfectly well.
+
+Supplying the date is necessary and not sufficient. Given the date alone the model issues one broad
+query, finds nothing it will vouch for, and returns an empty list. It also needs telling to search
+named sources by month ("OCC news releases September 2026"), at which point results land in the
+current quarter. Both halves were measured; neither is decoration.
+
+Run `npm run verify:legal-freshness` after any prompt edit. It calls the live API for all three
+sections and fails if the tab would render empty or if under 60% of items fall inside the window.
+Expect to run it more than once — the output is probabilistic. Three consecutive runs on
+2026-09-29 gave 82–83% in-window and 11–12 items rendering.
 
 The merged list then passes through `lib/legal-updates-filter.ts`, first `dedupeByTitle` and then
 `dropStaleItems`. Both are load-bearing, and both exist because of one user report on 2026-09-29
@@ -749,7 +768,7 @@ Generated content is expensive, so nearly everything is cached for a day.
   | `market-analytics-visuals-v1` + scope | Derived chart series for the Visual Analysis panel |
   | `executive-brief-v4` + scope | Ranked change events and non-reporting institutions for the Executive Brief |
   | `underwriter-workbench-v1` + scope | Latest-quarter rows for the whole scope, for the Underwriter Workbench |
-  | `legal-updates-v4` | Deduped, freshness-filtered items for the Legal Landscape tab |
+  | `legal-updates-v5` | Deduped, freshness-filtered items for the Legal Landscape tab |
 
   `market-analytics-report-data` is keyed by scope rather than by day and revalidates every six
   hours, since FDIC publishes quarterly. **Bump its version whenever the scoring changes**, or cached

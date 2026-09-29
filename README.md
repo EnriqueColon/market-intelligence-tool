@@ -257,6 +257,10 @@ Some checks need live data rather than fixtures, because they are calibrations r
   figures for up to a week and an unstable one makes every visitor miss the cache. It already
   caught one such failure, where the row shape changed and the code fell through to a fallback
   without erroring.
+- `npm run verify:legal-freshness` — calls the live API with the three Legal Landscape prompts and
+  fails if the tab would render empty or if under 60% of items fall inside the 90-day window. The
+  only check that catches a prompt the model reads as a request for history; run it after any edit
+  to `lib/legal-updates-prompts.ts`, and more than once, since the output is probabilistic.
 - `npm run verify:tab-persistence` — that switching tabs does not refetch. Needs the app running,
   and `npm start` sets `NODE_ENV=production`, so the feature flags fail closed and **`ENABLED_TABS`
   must be passed explicitly** or the dashboard renders no tabs at all:
@@ -354,6 +358,14 @@ interagency rule five times — the model had returned it once per issuing agenc
 reported it on 2026-09-29. The URL is the intuitive key and the wrong one, because each agency
 mirrors a joint rule at its own domain, so the copies are URL-distinct and title-identical. See
 `lib/legal-updates-filter.ts` and section 3 of `confluence.md`.
+
+**A model does not know what day it is, and will not tell you so.** Any prompt asking for "recent"
+or "the last N days" is measured against the model's training cutoff unless the date is in the
+prompt. The Legal Landscape feed asked for the past 90 days and was observed searching
+`after:2024-03-01`, returning guidance from 2006 and 2015 alongside a 2019 rule. Supplying the date
+is half the fix; the model must also be told to search named sources by month, or it makes one
+broad query and reports finding nothing. Verify with a live call, not by reading the prompt — see
+`npm run verify:legal-freshness`.
 
 **`Date.parse` invents a January.** Given prose it cannot fully parse, it extracts a year and pins
 it to the 1st of January — "Fall 2026" becomes 2026-01-01, nine months early. Anywhere a parsed

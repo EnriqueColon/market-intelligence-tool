@@ -7,16 +7,18 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
-| `main` | `10fd202` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `10fd202` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `main` | `8625c7c` | Production | https://market-intelligence-tool-gilt.vercel.app |
+| `dev` | `8625c7c` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 All of the Market Analytics performance work reached production on 2026-09-09 — the server-side
 screening reduction, the Visual Analysis charts and quarter-keyed caching — followed by the
 tab-persistence fix on 09-10. The branches were level again after the Legal Landscape work merged
 on 09-29.
 
-The newest commit changing application behaviour is **`10fd202`**, which withholds stale legal
-items; `2384143` before it stops the same feed rendering one development several times.
+The newest commit changing application behaviour is **`8625c7c`**, which puts today's date into the
+Legal Landscape prompts. The three legal commits are a set: `2384143` stops the feed rendering one
+development several times, `10fd202` withholds stale items, and `8625c7c` stops the feed being
+stale in the first place. **`10fd202` alone renders an empty tab** — it was briefly live that way.
 
 This table had drifted before this session: it named `8844bea` as production when `main` was
 actually at `996efa9`, and listed three commits as dev-only that had already shipped. Verify with
@@ -92,7 +94,8 @@ git push --force-with-lease origin dev
 
 | Commit | Date | Why it is a safe target |
 | --- | --- | --- |
-| `10fd202` | 2026-09-29 | Newest behavioural commit. The Legal Landscape feed deduped and freshness-filtered; nothing outside that tab is touched, so it is a safe target for unrelated work. |
+| `8625c7c` | 2026-09-29 | Newest behavioural commit. The Legal Landscape feed deduped, freshness-filtered and given today's date; nothing outside that tab is touched, so it is a safe target for unrelated work. |
+| `10fd202` | 2026-09-29 | **Known-bad: renders an empty Legal Landscape tab.** The staleness filter without the prompt fix, so every item the model returns is withheld. Do not roll back to this point; go to `8625c7c` or past `2384143`. |
 | `996efa9` | 2026-09-10 | All Market Analytics performance work plus tab persistence, with no figure changes anywhere in that range. **Known-bad for the Legal Landscape tab**: this is the build that renders an interagency rule once per issuing agency and serves a 2019 rule under a 90-day heading, reported by a user on 09-29. Prefer rolling forward to `10fd202`. |
 | `d3f7973` | 2026-08-28 | Newest behavioural commit, and the head of both branches' behaviour as of 09-08. Drops the Accounting & Finance department; see the `dev` table below. |
 | `4a4f3de` | 2026-08-25 | Prior behavioural commit, in production since 09-08. Makes `buildSearchQuery` fail closed, so both layers of the publisher allowlist now refuse an unrecognised entity id independently. Safe to roll *to*; **rolling back past it is a safety regression rather than a lost feature** — the query builder returns to emitting a bare keyword with no `site:` restriction for any unknown entity id, leaving the result filter as the single layer standing between the tool and the open web. Not reachable from the dropdown in either direction, so no normal user journey differs. A revert has to take the `null` check in `searchIndustryReports` and the four `buildSearchQuery` assertions with it, or the build fails to typecheck. Prefer fixing forward. |
@@ -135,6 +138,7 @@ the Market Participants tab.
 
 | Commit | Date | Summary |
 | --- | --- | --- |
+| `8625c7c` | 09-29 | fix(legal): the section prompts state today's date and instruct month-named searches, moving to `lib/legal-updates-prompts.ts`. **Do not revert this while `10fd202` stands** — the filter plus the old prompts is the combination that rendered an empty tab, because the model dates "recent" from its training cutoff and returns material from 2006 onward. If the tab needs reverting, revert both or neither. Prompt edits here are unverifiable by reading: run `npm run verify:legal-freshness`, more than once. Bump the cache key on any change. |
 | `10fd202` | 09-29 | fix(legal): the Legal Landscape feed withholds items dated more than `MAX_ITEM_AGE_DAYS` (180) in the past, and renames the module to `lib/legal-updates-filter.ts`. **This one can change what a user sees to nothing**: if the model returns no recent developments, a section empties and is not rendered, with a note in its place explaining why. Tune `MAX_ITEM_AGE_DAYS` before reverting — a wider window is almost always the right answer over no filter, since without it the tab serves a 2019 rule under a 90-day heading. Two behaviours a revert or rewrite must preserve: **future dates are kept**, because an effective date or scheduled vote is the point of the tab, unlike the news feeds which reject them; and **an unparseable date is kept**, which is why the parser refuses prose rather than letting `Date.parse` pin "Fall 2026" to January. Bump the cache key on any revert. `npm run test:legal-filter`. |
 | `2384143` | 09-29 | fix(legal): the Legal Landscape feed dedupes its merged items by normalized title, so an interagency rule stops rendering once per issuing agency. **No item's content changes** — this only removes repeats, so the visible effect is a shorter Regulatory Watch list. Safe to revert in isolation; the cost is the five-copy bug returning. Two things to know if you do. **Reverting must bump `legal-updates-v3` to v4**, or the cache serves whichever shape was written last. And if you keep the dedupe but change the key to the URL, the bug comes straight back: agencies mirror joint rules at their own domains, so the copies are URL-distinct and title-identical. `npm run test:legal-filter` asserts exactly that. Superseded in part by `10fd202`, which renames the module; revert the two together. |
 
