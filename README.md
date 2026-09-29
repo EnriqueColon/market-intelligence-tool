@@ -211,6 +211,7 @@ npm run test:memo-evidence    # the evidence guard
 npm run test:verified-metrics
 npm run test:legal-filter     # legal feed hygiene: collapsing repeats, and withholding stale items
 npm run test:legal-relevance  # legal feed: CRE relevance bar, and the per-section freshness windows
+npm run test:legal-applicability # which institutions a rule covers, and the two CRE-concentration units
 npm run test:allowlist        # publisher allowlist, and what "all" covers
 npm run build                 # next build
 ```
@@ -265,6 +266,12 @@ Some checks need live data rather than fixtures, because they are calibrations r
   request for history or one it answers with invented citations; run it after any edit to
   `lib/legal-updates-prompts.ts`, `lib/legal-updates-sources.ts` or `lib/legal-updates-sections.ts`,
   and more than once, since the output is probabilistic.
+- `npm run verify:legal-applicability` — applies the supervisory CRE thresholds to live Florida
+  call reports and fails if they return implausible counts. This is what catches a concentration
+  test wired to the wrong field: `creConcentration` is CRE over loans and caps at 100, so a
+  300%-of-capital rule resolved against it matches nothing, on every institution, without raising
+  anything. Run it after any change to `lib/legal-applicability.ts` or to the applicability
+  instruction in the regulatory prompt.
 - `npm run verify:tab-persistence` — that switching tabs does not refetch. Needs the app running,
   and `npm start` sets `NODE_ENV=production`, so the feature flags fail closed and **`ENABLED_TABS`
   must be passed explicitly** or the dashboard renders no tabs at all:
@@ -383,6 +390,20 @@ sections that had items, so when the freshness filter emptied one it vanished, a
 was a note at the top of the page that read as a failure. Draw the heading regardless and put the
 explanation inside it, distinguishing "the feed found nothing" from "your filter hid it". The same
 applies to any list a filter can empty.
+
+**Two fields in this codebase are both called CRE concentration and mean different things.**
+`creConcentration` is CRE over total loans and cannot exceed 100; `capitalRatios.creToTier1Tier2`
+is CRE over Tier 1 + Tier 2 capital and is what every supervisory threshold means, expressed as a
+multiple. Comparing a 300%-of-capital threshold against the first matches nothing, on every
+institution, and raises nothing — it looks like a rule that happens to affect no one. Name any new
+field for its units and check it against live data, not by reading. See
+`lib/legal-applicability.ts` and `npm run verify:legal-applicability`.
+
+**Do not ask a model to tell you which of your own entities something affects.** Ask it what the
+document says about its own scope, then resolve that against your data. The Legal Landscape
+exposure counts follow this split deliberately: the model has no view of the FDIC universe or the
+watchlist, and an invented institution name is more dangerous than an invented URL because there
+is nothing to click and check.
 
 **One freshness window across sources that move at different speeds will empty the slow one.** The
 Legal Landscape tab applied 90 days to federal agencies, which publish year-round, and to the

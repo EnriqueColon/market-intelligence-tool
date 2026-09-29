@@ -8,7 +8,91 @@ is it in now, and what is still open.
 
 ---
 
-## 2026-09-29 (latest) — making the legal feed useful, not merely truthful
+## 2026-09-29 (latest) — the legal tab counts who a rule hits
+
+Asked directly: "this is simply providing information, and telling us why it matters — how can we
+make this tab actionable?" The observation was structural rather than cosmetic. Each card's last
+field is literally called `whyItMatters` and is generated prose: it asserts importance without
+demonstrating any.
+
+The reframe that shaped everything below: **actionability cannot come from better writing.** The
+tempting move is a "recommended action" field filled by the model, and it is the same fabrication
+failure this feed went through this morning — worse, in fact, because an invented "this affects
+your Florida banks" has nothing to click and check. So the tab now joins legal items to data we
+already hold.
+
+Cards carry the affected institutions, counted from FDIC call reports. The model reports what the
+rule says about **its own scope** — an asset band, a concentration threshold, read off the rule's
+"Applicability" section — and we resolve it. It is never asked which institutions are affected,
+only what the document it cited says about who it covers, which is a question it can actually
+answer from the page in front of it.
+
+### The unit trap this nearly died on
+
+`ScreeningRow` carries two things both called CRE concentration:
+
+- `creConcentration` is CRE over **total loans**, and cannot exceed 100.
+- `capitalRatios.creToTier1Tier2` is CRE over **Tier 1 + Tier 2 capital**, expressed as a multiple.
+
+Every supervisory threshold — the 2006 interagency guidance and everything citing it since — is
+measured against the second. Resolve a "300% of capital" rule against the first and it matches
+**nothing, on every institution, forever**: no type error, no exception, no empty state, just a
+confident zero that reads as a rule which happens to affect no one. The field is therefore named
+`minCreToCapitalPct` for its units, and `npm run verify:legal-applicability` exists to fail if the
+supervisory limbs return implausible counts against live data. On live Florida reports CRE over
+loans peaks at 72% while CRE over capital peaks at 528%, which is the distinction made visible.
+
+### Regulatory only, and that is conceptual
+
+Asked of all three sections it produced nothing usable, for a reason wording could not fix. A
+foreclosure statute applies to properties and lienholders, not to banks by size; a consent order
+applies to the one institution it names. Asked anyway, the model reached for
+`appliesToAllInstitutions` on Florida bills, which resolved to every institution in the state — a
+large number carrying no information. So the instruction moved into the regulatory prompt alone.
+Enforcement's actionable join is the **named institution**, matched to an FDIC cert, which is a
+different mechanism and is not built.
+
+One near-repeat caught before it shipped: the first draft put `"minCreToCapitalPct": 300` in the
+prompt's JSON example. This feed has already returned a bill numbered `S. 1234` copied verbatim
+from the prompt's own formatting example, so a literal threshold sitting in the template was the
+same trap set again. It is now a placeholder sentence that cannot be mistaken for data.
+
+### Where the join lives, and why not in the feed
+
+Outside `fetchLegalUpdates`, in `resolveLegalApplicability`, for three reasons. Department must not
+enter a cache key — a standing instruction in `docs/NEXT_VERSION_PLAN.md`, and the watchlist
+overlap is per department. The two caches expire on different clocks: the feed is keyed to the
+calendar day, screening to the published FDIC quarter. And the feed is one payload shared by every
+visitor, while this is not. It also means an FDIC outage costs the exposure line and nothing else.
+
+The universe is **Florida**, which is a correctness decision rather than a scope decision.
+`getScreeningPayload("national")` fetches at most `TAB_ROW_CAP` rows across nine quarters, so
+nationally it covers roughly the largest thousand of ~4,350 institutions — a denominator biased to
+large banks in a way the reader could not see. Filtered to Florida the cap is never approached: 85
+institutions from 876 rows, complete. Institutions missing the capital inputs (6 of 85) are
+excluded from a concentration test rather than counted, so the number reads as "at least this
+many", which is the honest direction to be wrong in.
+
+Verified live: the 300% limb selects 13 of 85 Florida institutions — Ocean Bank, U S Century Bank,
+International Finance Bank. 39 unit tests across the three legal modules. Build clean.
+
+**Still open.** The hit rate is low and honestly so: 1–2 items per run state a usable scope test,
+because most developments state no quantitative scope and the field is omitted rather than guessed.
+That is correct behaviour but it means the feature is quiet, and the obvious complement is the one
+not built — matching the institution **named** in an enforcement action to an FDIC cert, which is
+where the distressed-seller signal actually lives and which doubles as a fabrication check, since
+"Sunset Bank" would simply fail to match. Still no browser confirmation, for the third session
+running: the Cursor browser tool cannot reach `localhost` here, so the exposure block is verified
+by build, unit tests and live data, not by eye. **All of this is on `dev`.**
+
+Also worth recording: the repo rule claims four files carry CRLF line endings. **About 190 tracked
+TypeScript files do** — CRLF is the majority convention here, not the exception. The caution the
+rule teaches is right and it caught a real 1,757-line diff this morning, but anyone trusting the
+specific list of four will mangle a file and not know why.
+
+---
+
+## 2026-09-29 — making the legal feed useful, not merely truthful
 
 Follow-on to the same day's work, on `dev` only. The source-verification guard shipped earlier had
 left the Legal Landscape tab honest but thin, and it exposed three things the earlier fixes had

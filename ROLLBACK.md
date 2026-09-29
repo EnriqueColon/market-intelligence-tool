@@ -8,7 +8,7 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
 | `main` | `9faaf35` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `5e6d9da` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `dev` | `6789d45` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 This table names the newest commit on each branch that **changes behaviour**; documentation-only
 commits sit on top of it and are deliberately not tracked here, because amending one rotates its
@@ -18,10 +18,10 @@ SHA and the table then reads as stale when nothing has moved. Confirm with
 All of the Market Analytics performance work reached production on 2026-09-09 — the server-side
 screening reduction, the Visual Analysis charts and quarter-keyed caching — followed by the
 tab-persistence fix on 09-10. The branches were level after the Legal Landscape source-verification
-work merged on 09-29, and **`dev` is now one commit ahead** with the per-section windows, the CRE
-relevance gate and the always-rendered sections.
+work merged on 09-29, and **`dev` is now two commits ahead**: the per-section windows, CRE
+relevance gate and always-rendered sections, then the computed exposure counts.
 
-The newest commit changing application behaviour is **`5e6d9da`** on `dev`; in production it is
+The newest commit changing application behaviour is **`6789d45`** on `dev`; in production it is
 **`e5414c3`**, which stops the feed publishing items it cannot point at a real primary source for. The four legal commits are a set: `2384143`
 stops the feed rendering one development several times, `10fd202` withholds stale items, `8625c7c`
 stops it being stale in the first place, and `e5414c3` stops it inventing citations. **`10fd202`
@@ -147,6 +147,7 @@ the Market Participants tab.
 
 | Commit | Date | Summary |
 | --- | --- | --- |
+| `6789d45` | 09-29 | Legal Landscape cards carry the institutions a rule actually hits, counted from FDIC call reports. **Read `lib/legal-applicability.ts` before touching any concentration test.** `ScreeningRow.creConcentration` is CRE over total loans and cannot exceed 100; `capitalRatios.creToTier1Tier2` is CRE over Tier 1 + Tier 2 capital, which is what the supervisory thresholds mean. Resolving a 300%-of-capital rule against the first matches nothing on every institution with no error — a confident zero that reads as a rule affecting no one. Safe to revert whole; the cards lose the exposure block and go back to ending at generated prose. **Do not move the join into `fetchLegalUpdates`** — department would enter a cache key, and the feed's daily cache and screening's quarter-keyed cache expire on different clocks. The Florida universe is a correctness choice, not a scope one: the national payload is capped at 10,000 rows and biased to large banks. `npm run test:legal-applicability` and `npm run verify:legal-applicability`, the latter against live FDIC data. |
 | `5e6d9da` | 09-29 | Legal Landscape: per-section freshness windows, a CRE relevance gate, wider host lists, and sections that render even when empty. **This is the commit that makes an empty section visible rather than absent** — all three now always render with an in-place explanation, so a reverted tab will look like it did when the emptied Legislative Tracker simply disappeared and read as a bug. Safe to revert as a whole; the cost is Legislative going blank for the nine months Florida is out of session, because the windows in `lib/legal-updates-sections.ts` are what let it reach back to the last session. **Do not revert the windows alone and leave the prompt's session guidance** — the pair is what produces items between April and December. The relevance gate in `lib/legal-updates-relevance.ts` is the least load-bearing piece and dropped nothing across 24 live items; revert that in isolation if it starts discarding good material. Bump the cache key on any revert; `legal-updates-v7` is current. `npm run test:legal-filter`, `npm run test:legal-relevance`, and `npm run verify:legal-freshness` more than once. |
 | `e5414c3` | 09-29 | fix(legal): an item renders only if its URL is a listed primary source in `lib/legal-updates-sources.ts` **and** that URL loads. **Do not revert this and leave the tab live.** Without it the feed publishes invented consent orders against named banks and bill numbers copied from the prompt's own example — actionable-looking fiction for a distressed-debt reader, which is worse than an empty tab. If the sections look thin, widen the host lists or the window; do not remove the check. Keep both halves: link-checking alone admits trade press, host-checking alone admits URLs constructed on the right domain. Keep the domain list in the prompt too — removing it dropped provenance from 100% to 38%. `npm run verify:legal-freshness`, several times. |
 | `8625c7c` | 09-29 | fix(legal): the section prompts state today's date and instruct month-named searches, moving to `lib/legal-updates-prompts.ts`. **Do not revert this while `10fd202` stands** — the filter plus the old prompts is the combination that rendered an empty tab, because the model dates "recent" from its training cutoff and returns material from 2006 onward. If the tab needs reverting, revert both or neither. Prompt edits here are unverifiable by reading: run `npm run verify:legal-freshness`, more than once. Bump the cache key on any change. |

@@ -217,6 +217,63 @@ The placeholder distinguishes two cases that previously looked identical — the
 or the reader's own jurisdiction filter hid what it found. When the feed found nothing it names
 what was set aside and why: too old, off-topic, or without a verifiable primary source.
 
+### Legal Landscape: who a rule applies to, counted rather than claimed
+
+Regulatory cards carry the number of institutions the rule's own scope test selects, resolved
+against FDIC call reports. The model reports what the document says about **its own coverage** —
+the asset band or concentration threshold in its "Applicability" or "Scope" section — and
+`lib/legal-applicability.ts` answers it. The model is never asked which institutions are affected;
+it has no view of this data and would invent names, which is the same failure as the fabricated
+citations, without a link to expose it.
+
+**Two fields are both called CRE concentration and they are not interchangeable.** This is the
+one thing to know before editing anything here:
+
+| Field | Measures | Range |
+| --- | --- | --- |
+| `ScreeningRow.creConcentration` | CRE over **total loans** | 0–100 by construction |
+| `ScreeningRow.capitalRatios.creToTier1Tier2` | CRE over **Tier 1 + Tier 2 capital** | a multiple, so `3` is 300% |
+
+Supervisory thresholds — the 2006 interagency guidance and every rule citing it — are measured
+against the second. A "300% of capital" test resolved against the first matches nothing, on every
+institution, with no error raised: a confident zero that reads as a rule affecting no one. The
+prompt field is therefore `minCreToCapitalPct`, named for its units, and it is resolved against
+`creToTier1Tier2 * 100` in one place. On live Florida data CRE over loans peaks around 72% while
+CRE over capital peaks around 528%.
+
+**Regulatory only, for a conceptual reason.** A foreclosure statute applies to properties and
+lienholders, not to banks by size; a consent order applies to the institution it names. Asked of
+those sections the model reached for `appliesToAllInstitutions` on Florida bills, resolving to
+every institution in the state — a large number carrying no information. Enforcement's actionable
+join is the named institution matched to an FDIC cert, which is a different mechanism and is not
+built.
+
+**The join is in `resolveLegalApplicability`, deliberately outside the feed's cache.** Department
+must not enter a cache key, the feed is keyed to the calendar day while screening is keyed to the
+published FDIC quarter, and the feed is one payload shared by every visitor. A consequence worth
+keeping: the exposure line arrives after the cards are already readable, so an FDIC outage costs
+that line and nothing else.
+
+**The universe is Florida because it is complete.** `getScreeningPayload("national")` fetches at
+most `TAB_ROW_CAP` rows across nine quarters, covering roughly the largest thousand of ~4,350
+institutions — a denominator biased towards large banks that the reader could not see. Filtered to
+Florida the cap is never approached: about 85 institutions from under 900 rows. `capped` is
+returned rather than assumed, so raising the cap surfaces instead of skewing counts.
+
+Institutions whose capital inputs FDIC omits are **excluded** from a concentration test rather
+than counted, so the figure reads as "at least this many". A rule covering every institution
+renders no fraction: "85 of 85" is true and uninformative, and presenting it as a computed finding
+would make the real counts less credible.
+
+Thresholds from the model are validated, never clamped — a clamped threshold silently answers a
+different question than the rule asked. An inverted asset band is rejected outright as a misread.
+An item with no stated scope produces no test at all, which is distinct from an empty test: an
+empty test matches everyone.
+
+Run `npm run verify:legal-applicability` after any change here. It applies the supervisory limbs
+to live Florida call reports and fails if they return implausible counts, which is what catches
+the unit trap; `npm run test:legal-applicability` covers the same ground in isolation.
+
 Note the synthesized `id` appends an array index, so duplicates carry distinct React keys and the UI
 will never collapse them for you. The prompts also state that interagency rules are one item and
 that `date` must be the most recent action, but treat prompt wording as a hint; the programmatic
@@ -832,7 +889,7 @@ Generated content is expensive, so nearly everything is cached for a day.
   | `market-analytics-visuals-v1` + scope | Derived chart series for the Visual Analysis panel |
   | `executive-brief-v4` + scope | Ranked change events and non-reporting institutions for the Executive Brief |
   | `underwriter-workbench-v1` + scope | Latest-quarter rows for the whole scope, for the Underwriter Workbench |
-  | `legal-updates-v7` | Deduped, freshness-filtered, CRE-relevant, source-verified items for the Legal Landscape tab |
+  | `legal-updates-v7` | Deduped, freshness-filtered, CRE-relevant, source-verified items for the Legal Landscape tab. Exposure counts are **not** in here — see `resolveLegalApplicability` |
 
   `market-analytics-report-data` is keyed by scope rather than by day and revalidates every six
   hours, since FDIC publishes quarterly. **Bump its version whenever the scoring changes**, or cached
