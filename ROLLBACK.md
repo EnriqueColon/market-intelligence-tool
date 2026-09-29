@@ -7,15 +7,16 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
-| `main` | `996efa9` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `2384143` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `main` | `10fd202` | Production | https://market-intelligence-tool-gilt.vercel.app |
+| `dev` | `10fd202` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 All of the Market Analytics performance work reached production on 2026-09-09 — the server-side
 screening reduction, the Visual Analysis charts and quarter-keyed caching — followed by the
-tab-persistence fix on 09-10. `dev` is ahead by the Legal Landscape dedupe fix.
+tab-persistence fix on 09-10. The branches were level again after the Legal Landscape work merged
+on 09-29.
 
-**`2384143` is on `dev` and has not been pushed.** Production still renders the duplicated Legal
-Landscape items the fix addresses.
+The newest commit changing application behaviour is **`10fd202`**, which withholds stale legal
+items; `2384143` before it stops the same feed rendering one development several times.
 
 This table had drifted before this session: it named `8844bea` as production when `main` was
 actually at `996efa9`, and listed three commits as dev-only that had already shipped. Verify with
@@ -91,7 +92,8 @@ git push --force-with-lease origin dev
 
 | Commit | Date | Why it is a safe target |
 | --- | --- | --- |
-| `996efa9` | 2026-09-10 | Current production head, and the newest commit on `main`. All Market Analytics performance work plus tab persistence, with no figure changes anywhere in that range. **Known-bad for the Legal Landscape tab**: this is the build that renders an interagency rule once per issuing agency, which is what a user reported on 09-29. Fixed on `dev` in `2384143`, not yet shipped. |
+| `10fd202` | 2026-09-29 | Newest behavioural commit. The Legal Landscape feed deduped and freshness-filtered; nothing outside that tab is touched, so it is a safe target for unrelated work. |
+| `996efa9` | 2026-09-10 | All Market Analytics performance work plus tab persistence, with no figure changes anywhere in that range. **Known-bad for the Legal Landscape tab**: this is the build that renders an interagency rule once per issuing agency and serves a 2019 rule under a 90-day heading, reported by a user on 09-29. Prefer rolling forward to `10fd202`. |
 | `d3f7973` | 2026-08-28 | Newest behavioural commit, and the head of both branches' behaviour as of 09-08. Drops the Accounting & Finance department; see the `dev` table below. |
 | `4a4f3de` | 2026-08-25 | Prior behavioural commit, in production since 09-08. Makes `buildSearchQuery` fail closed, so both layers of the publisher allowlist now refuse an unrecognised entity id independently. Safe to roll *to*; **rolling back past it is a safety regression rather than a lost feature** — the query builder returns to emitting a bare keyword with no `site:` restriction for any unknown entity id, leaving the result filter as the single layer standing between the tool and the open web. Not reachable from the dropdown in either direction, so no normal user journey differs. A revert has to take the `null` check in `searchIndustryReports` and the four `buildSearchQuery` assertions with it, or the build fails to typecheck. Prefer fixing forward. |
 | `397a03e` | 2026-08-24 | Prior behavioural commit on `dev`. Stops reading a reported zero as a capital ratio, and stops drawing 1-4 family residential as a slice of the CRE book. **Opportunity Scores and their ranking change at this commit and are correct afterwards** — 30 of the top-100 most-distressed institutions were Community Bank Leverage Ratio filers scored as though they held no capital, and the median institution moves 120 rank places. Rolling back past it returns 1,765 of 4,352 institutions to showing 0.00% total risk-based capital, indistinguishable from a failed bank, and returns the CRE Portfolio Composition chart to stacked bands summing to a median 255% on a 0–100 axis. Prefer fixing forward. CRE-to-capital, the stress map and the workbench are untouched either way; they read reported capital dollars rather than the ratios. Note the four capital ratios became `number \| null` here, so a rollback also reverts a type change several files depend on. Run `npm run audit:fdic-columns` after any change in this area. |
@@ -133,7 +135,8 @@ the Market Participants tab.
 
 | Commit | Date | Summary |
 | --- | --- | --- |
-| `2384143` | 09-29 | fix(legal): the Legal Landscape feed dedupes its merged items by normalized title, so an interagency rule stops rendering once per issuing agency. **No item's content changes** — this only removes repeats, so the visible effect is a shorter Regulatory Watch list. Safe to revert in isolation; the cost is the five-copy bug returning. Two things to know if you do. **Reverting must bump `legal-updates-v3` to v4**, or the cache serves whichever shape was written last. And if you keep the dedupe but change the key to the URL, the bug comes straight back: agencies mirror joint rules at their own domains, so the copies are URL-distinct and title-identical. `npm run test:legal-dedupe` asserts exactly that. Does **not** address the separate staleness problem — the rule that triggered the report is dated 2019 despite a 90-day prompt window. |
+| `10fd202` | 09-29 | fix(legal): the Legal Landscape feed withholds items dated more than `MAX_ITEM_AGE_DAYS` (180) in the past, and renames the module to `lib/legal-updates-filter.ts`. **This one can change what a user sees to nothing**: if the model returns no recent developments, a section empties and is not rendered, with a note in its place explaining why. Tune `MAX_ITEM_AGE_DAYS` before reverting — a wider window is almost always the right answer over no filter, since without it the tab serves a 2019 rule under a 90-day heading. Two behaviours a revert or rewrite must preserve: **future dates are kept**, because an effective date or scheduled vote is the point of the tab, unlike the news feeds which reject them; and **an unparseable date is kept**, which is why the parser refuses prose rather than letting `Date.parse` pin "Fall 2026" to January. Bump the cache key on any revert. `npm run test:legal-filter`. |
+| `2384143` | 09-29 | fix(legal): the Legal Landscape feed dedupes its merged items by normalized title, so an interagency rule stops rendering once per issuing agency. **No item's content changes** — this only removes repeats, so the visible effect is a shorter Regulatory Watch list. Safe to revert in isolation; the cost is the five-copy bug returning. Two things to know if you do. **Reverting must bump `legal-updates-v3` to v4**, or the cache serves whichever shape was written last. And if you keep the dedupe but change the key to the URL, the bug comes straight back: agencies mirror joint rules at their own domains, so the copies are URL-distinct and title-identical. `npm run test:legal-filter` asserts exactly that. Superseded in part by `10fd202`, which renames the module; revert the two together. |
 
 The three commits below shipped to production on 09-09 and 09-10 and are retained here for their
 rollback notes; see the production table for the current head.
