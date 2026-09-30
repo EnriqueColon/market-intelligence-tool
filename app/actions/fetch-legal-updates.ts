@@ -7,13 +7,28 @@ import { billKeyFor, keepVerifiedBills } from "@/lib/legal-updates-bills"
 import type { BillMovement } from "@/lib/legal-updates-movement"
 import { dedupeByTitle, dropStaleItems } from "@/lib/legal-updates-filter"
 import {
+  buildRuleSummaryPrompt,
+  describeAgencies,
+  describeRuleFromRecord,
+  fetchFederalRules,
+} from "@/lib/legal-updates-federal-register"
+import {
+  buildFloridaSummaryPrompt,
+  describeFloridaFromRecord,
+  fetchFloridaBills,
+} from "@/lib/legal-updates-florida"
+import {
   buildBillSummaryPrompt,
   describeFromRecord,
   fetchFederalBills,
   type SourcedBill,
 } from "@/lib/legal-updates-legislation"
 import { buildSectionPrompt } from "@/lib/legal-updates-prompts"
-import { bearsOnFirmOperations, partitionByRelevance } from "@/lib/legal-updates-relevance"
+import {
+  bearsOnFirmOperations,
+  partitionByRelevance,
+  recordBearsOnFirmOperations,
+} from "@/lib/legal-updates-relevance"
 import {
   LEGAL_SECTIONS,
   SECTION_LABELS,
@@ -141,14 +156,23 @@ async function collectFederalBills(now: Date, filterDays: number): Promise<Legal
   })
 }
 
-async function summariseBills(
-  bills: SourcedBill[]
+/**
+ * Prose for items whose facts are already settled.
+ *
+ * One function for all three records, because the shape of the exchange is identical: a prompt
+ * carrying the facts, and an answer keyed by the record's own identifier. `keys` is passed rather
+ * than derived so a model that invents a key, reorders the list or answers for only some of it
+ * still lands each summary on the right item — and anything it added is ignored.
+ */
+async function summariseRecords(
+  prompt: string,
+  keys: string[]
 ): Promise<Map<string, { summary: string; whyItMatters: string }>> {
   const out = new Map<string, { summary: string; whyItMatters: string }>()
   try {
     const parsed = await callOpenAiJson({
-      system: "Return ONLY valid JSON. Do not add, rename or renumber the bills you are given.",
-      user: buildBillSummaryPrompt(bills),
+      system: "Return ONLY valid JSON. Do not add, rename or renumber the items you are given.",
+      user: prompt,
       tier: "fast",
       temperature: 0.1,
       maxTokens: 1600,
@@ -158,19 +182,103 @@ async function summariseBills(
     const summaries = parsed?.summaries
     if (!summaries || typeof summaries !== "object") return out
 
-    for (const bill of bills) {
-      const entry = (summaries as Record<string, unknown>)[bill.displayNumber]
+    for (const key of keys) {
+      const entry = (summaries as Record<string, unknown>)[key]
       if (!entry || typeof entry !== "object") continue
       const { summary, whyItMatters } = entry as Record<string, unknown>
-      out.set(bill.displayNumber, {
+      out.set(key, {
         summary: typeof summary === "string" ? summary.trim() : "",
         whyItMatters: typeof whyItMatters === "string" ? whyItMatters.trim() : "",
       })
     }
   } catch {
-    /* falls back to describeFromRecord */
+    /* every caller falls back to its own describe-from-record */
   }
   return out
+}
+
+function summariseBills(
+  bills: SourcedBill[]
+): Promise<Map<string, { summary: string; whyItMatters: string }>> {
+  return summariseRecords(
+    buildBillSummaryPrompt(bills),
+    bills.map((b) => b.displayNumber)
+  )
+}
+
+/**
+ * Florida legislation, built from the record the same way as the federal side.
+ *
+ * Reached through LegiScan, whose key has been in the environment unused since the project was set
+ * up. Absent the key this returns nothing and the feed says so in a note, rather than falling back
+ * to asking a model — which is what produced `CS/HB 1353` and `HB 793`, neither of which exists.
+ */
+async function collectFloridaBills(now: Date, filterDays: number): Promise<LegalItem[]> {
+  const bills = await fetchFloridaBills(
+    process.env.LEGISCAN_API_KEY,
+    now,
+    filterDays,
+    recordBearsOnFirmOperations
+  )
+  if (bills.length === 0) return []
+
+  const prose = await summariseRecords(
+    buildFloridaSummaryPrompt(bills),
+    bills.map((b) => b.displayNumber)
+  )
+
+  return bills.map((bill, idx) => {
+    const written = prose.get(bill.displayNumber)
+    return {
+      id: `legislative-fl-${idx}-${bill.displayNumber.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`,
+      section: "legislative" as const,
+      title: `${bill.displayNumber} – ${bill.title}`,
+      source: `${bill.displayNumber} — Florida ${bill.chamber === "senate" ? "Senate" : "House"}`,
+      date: bill.statusDate,
+      jurisdiction: "Florida" as const,
+      summary: written?.summary || describeFloridaFromRecord(bill),
+      whyItMatters: written?.whyItMatters || "",
+      status: bill.statusLabel,
+      url: bill.url,
+    }
+  })
+}
+
+/**
+ * Rulemaking from the Federal Register, built from the record and then given prose by the model.
+ *
+ * A supplement rather than a replacement for the regulatory prompt: the Federal Register carries
+ * rulemaking only, and the FDIC's Financial Institution Letters, OCC bulletins and supervisory
+ * guidance — a large part of what this section is for — never appear in it.
+ */
+async function collectFederalRules(now: Date, filterDays: number): Promise<LegalItem[]> {
+  const rules = await fetchFederalRules(now, filterDays, recordBearsOnFirmOperations)
+  if (rules.length === 0) return []
+
+  const prose = await summariseRecords(
+    buildRuleSummaryPrompt(rules),
+    rules.map((r) => r.documentNumber)
+  )
+
+  return rules.map((rule, idx) => {
+    const written = prose.get(rule.documentNumber)
+    return {
+      id: `regulatory-fr-${idx}-${rule.documentNumber}`,
+      section: "regulatory" as const,
+      title: rule.title,
+      source: `${describeAgencies(rule)} — ${rule.type}`,
+      date: rule.publicationDate,
+      jurisdiction: "Federal" as const,
+      summary: written?.summary || describeRuleFromRecord(rule),
+      whyItMatters: written?.whyItMatters || "",
+      status: rule.commentsCloseOn
+        ? `Comments close ${rule.commentsCloseOn}`
+        : rule.effectiveOn
+          ? `Effective ${rule.effectiveOn}`
+          : rule.type,
+      url: rule.url,
+    }
+  })
 }
 
 /**
@@ -189,16 +297,40 @@ type SectionResult = {
   discarded: { stale: number; unverified: number; offTopic: number; misattributed: number }
 }
 
+/** The record-sourced half of a section, fetched in parallel where there is more than one source. */
+async function collectFromRecord(
+  section: LegalSection,
+  now: Date,
+  filterDays: number
+): Promise<LegalItem[]> {
+  if (section === "legislative") {
+    const [federal, florida] = await Promise.all([
+      collectFederalBills(now, filterDays),
+      collectFloridaBills(now, filterDays),
+    ])
+    return [...federal, ...florida]
+  }
+  if (section === "regulatory") return collectFederalRules(now, filterDays)
+  // Enforcement has no equivalent: consent orders and prohibition notices are published as news
+  // releases, not into a queryable record.
+  return []
+}
+
 async function collectSection(section: LegalSection, now: Date): Promise<SectionResult> {
   const discarded = { stale: 0, unverified: 0, offTopic: 0, misattributed: 0 }
   const { filterDays } = windowFor(section)
 
-  // Federal legislation comes from the record, so it is fetched once and not retried against the
-  // model. Florida still goes through the prompt below, there being no open API for it.
-  const sourced = section === "legislative" ? await collectFederalBills(now, filterDays) : []
+  // Whatever this section has a published record for, fetched once and not retried against the
+  // model. Legislation has one for both jurisdictions now; regulatory has one for rulemaking only.
+  const sourced = await collectFromRecord(section, now, filterDays)
 
   for (let attempt = 0; attempt < 2; attempt++) {
-    const raw = [...sourced, ...(await querySection(section, now))]
+    // For legislation the model is a fallback rather than a supplement. Both jurisdictions come
+    // from a record, so asking as well would put the same bill on the page twice under two
+    // spellings of one title — `dedupeByTitle` matches "SB 300 – Alternative Judicial Sales
+    // Procedures" against "SB 300: Alternative Judicial Sales" not at all.
+    const askModel = section !== "legislative" || sourced.length === 0
+    const raw = [...sourced, ...(askModel ? await querySection(section, now) : [])]
     if (raw.length === 0) continue
 
     // Cheapest checks first: date and topic are local, source verification costs a fetch each.
@@ -286,6 +418,12 @@ async function fetchLegalUpdatesImpl(): Promise<LegalUpdatesResponse> {
     }
   }
 
+  // Said out loud rather than degrading quietly: without the key the Legislative Tracker shows
+  // federal bills only, and a half-empty section is indistinguishable from a quiet fortnight.
+  if (!process.env.LEGISCAN_API_KEY?.trim()) {
+    notes.push("Missing LEGISCAN_API_KEY — Florida bills are omitted from the Legislative Tracker.")
+  }
+
   // One clock for the prompts and the filter, so they cannot disagree about what "recent" means.
   const now = new Date()
 
@@ -316,7 +454,7 @@ export async function fetchLegalUpdates(): Promise<LegalUpdatesResponse> {
   const day = newsCalendarDayET()
   return unstable_cache(
     async () => fetchLegalUpdatesImpl(),
-    ["legal-updates-v8", day],
+    ["legal-updates-v9", day],
     // 25h so the entry outlives the day and never expires just before the cron.
     { revalidate: 90000 }
   )()

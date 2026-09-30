@@ -43,8 +43,22 @@ function describedBy(item: RelevanceCandidate): string {
  * Every entry is anchored with `\b` or ends in a stem that cannot appear inside an unrelated word.
  * Bare substrings are how `lien` admitted "client", "clients", "resilience" and "salient", and
  * `tenant` admitted "lieutenant" — four false positives in fifteen sample headlines.
+ *
+ * The terms are split into two lists below, which together are this one. Nothing is scored: a term
+ * either names this world or it does not, and the split records which of those two it is.
  */
-const RELEVANT_TERMS = [
+/**
+ * Split by how selective a term actually is, not by what it means.
+ *
+ * A core term names this firm's world wherever it appears: nothing writes "commercial mortgage"
+ * about something else. An incidental term appears in a sentence about something else at least as
+ * often as not — a Florida bill on court procedure mentions liens, an Office of Personnel
+ * Management rule on staff reviews is titled "Performance Appraisal", and a statute reviser's bill
+ * deletes provisions rendered inoperative by "noncurrent" repeal.
+ *
+ * The distinction only matters for candidates drawn from a record. See `recordBearsOnFirmOperations`.
+ */
+const CORE_TERMS = [
   // Commercial property and the loans against it
   "commercial real estate",
   "\\bcre\\b",
@@ -62,43 +76,53 @@ const RELEVANT_TERMS = [
   "\\badc\\b",
   "real estate lending",
   "real estate loan",
-  "mortgage lending",
   "mortgage servic\\w*",
-  "loan servicing",
   "special servic\\w*",
-  "\\bappraisal\\w*",
   "loan-to-value",
   "\\bltv\\b",
   "concentration limit",
   "concentration risk",
-  "risk-based capital",
-  "capital requirement",
-  "allowance for credit loss",
   // Distress, and what happens to an asset in it
   "foreclos\\w*",
   "receivership",
   "\\breceiver\\b",
-  "bankrupt\\w*",
   "chapter 11",
   "\\bworkout\\w*",
   "loan modification",
   "troubled debt",
   "nonaccrual",
   "noncurrent",
-  "delinquen\\w*",
   "charge-off",
   "note sale",
   "loan sale",
   "distressed",
   "\\breo\\b",
   "deed in lieu",
+  "assignment of rents",
+]
+
+/**
+ * Real signals, but ones that a document about something else uses in passing. Enough on their own
+ * for an item a model was asked to find, since the question it answered was already about this
+ * firm; not enough for one pulled out of everything a legislature or an agency published.
+ */
+const INCIDENTAL_TERMS = [
+  "mortgage lending",
+  "loan servicing",
+  "\\bappraisal\\w*",
+  "risk-based capital",
+  "capital requirement",
+  "allowance for credit loss",
+  "bankrupt\\w*",
+  "delinquen\\w*",
   "\\blien\\b",
   "\\bliens\\b",
-  "assignment of rents",
   // `default` alone matched "default judgment" and "by default". Qualified, it is the real thing.
   "(loan|payment|monetary|mortgage|borrower) default\\w*",
   "default(ed|ing) (on|loan)",
 ]
+
+const RELEVANT_TERMS = [...CORE_TERMS, ...INCIDENTAL_TERMS]
 
 const RELEVANCE_PATTERN = new RegExp(RELEVANT_TERMS.join("|"), "i")
 
@@ -123,11 +147,54 @@ const INDIVIDUAL_ACTION_TERMS = [
 
 const INDIVIDUAL_ACTION_PATTERN = new RegExp(INDIVIDUAL_ACTION_TERMS.join("|"), "i")
 
+/**
+ * Subjects ruled out of scope, matched against the title only.
+ *
+ * Dropping the residential terms from the relevance list stopped those items being *admitted* on
+ * their own subject, but not through a body that mentions something commercial in passing. Over a
+ * 400-day window of Florida legislation, five of fifteen otherwise-qualifying bills were housing
+ * bills that reached the gate on the word "multifamily" or "construction loan" somewhere in their
+ * official description — "Affordable Housing Property Tax Exemptions" among them.
+ *
+ * Title only, deliberately. A commercial foreclosure bill may well mention homestead exemptions in
+ * its text; what puts an item out of scope is being *about* housing, and the title is where a
+ * legislature says what a bill is about.
+ */
+const EXCLUDED_SUBJECT_TERMS = [
+  "\\bhousing\\b",
+  "\\bhomestead\\b",
+  "residential tenanc\\w*",
+  "\\blandlord\\w*",
+  "\\beviction\\w*",
+  "mobile home",
+  "manufactured home",
+  "\\bhomeless\\w*",
+  "property tax exemption",
+  "\\bad valorem\\b",
+  // Not a subject so much as a collision: `appraisal` is an incidental term, and the Office of
+  // Personnel Management titles its staff-review rules "Performance Appraisal for the General
+  // Schedule". Excluding the phrase is narrower than qualifying the term.
+  "performance appraisal",
+]
+
+const CORE_PATTERN = new RegExp(CORE_TERMS.join("|"), "i")
+const EXCLUDED_SUBJECT_PATTERN = new RegExp(EXCLUDED_SUBJECT_TERMS.join("|"), "i")
+
 export type RelevanceCandidate = {
   title?: string
   summary?: string
   whyItMatters?: string
   status?: string
+}
+
+/**
+ * No `whyItMatters`: there is no model argument attached to a record, and the type says so rather
+ * than relying on a caller to leave the field off.
+ */
+export type RecordCandidate = {
+  title?: string
+  /** The publisher's own abstract or description. */
+  summary?: string
 }
 
 /** True for an action against a named individual rather than an institution or a rule. */
@@ -147,6 +214,33 @@ export function isCreRelevant(item: RelevanceCandidate): boolean {
  */
 export function bearsOnFirmOperations(item: RelevanceCandidate): boolean {
   return isCreRelevant(item) && !isIndividualAction(item)
+}
+
+/**
+ * The same question for an item that came from a record rather than from a model.
+ *
+ * Stricter, because the base rate is different and nothing else about the candidate is. A model
+ * asked for recent CRE developments returns a list that is mostly about CRE, so a term appearing
+ * anywhere in it is good evidence. A sweep of every bill a legislature passed returns 1,930
+ * candidates of which six concern this firm, and at that base rate an incidental term buried in a
+ * long description is noise: gating on any term anywhere kept 32 Florida bills, most of them
+ * fire-district and county bills whose official descriptions mention liens in passing.
+ *
+ * Where the term appears is what decides, because length is what makes a term unreliable. A title
+ * is a few words the publisher chose to say what the thing is about, so `bankrupt` in a title is
+ * almost always the subject — "Bankruptcy Threshold Adjustment Act" is real and it matters here. A
+ * two-hundred-word abstract mentions liens on its way to somewhere else. So a title is read on all
+ * the terms and a body only on the core ones.
+ *
+ * `summary` is the agency's or the legislature's own abstract, never model prose — which is why it
+ * can be read at all. See `describedBy`.
+ */
+export function recordBearsOnFirmOperations(item: RecordCandidate): boolean {
+  const title = item.title || ""
+  if (EXCLUDED_SUBJECT_PATTERN.test(title)) return false
+  if (isIndividualAction(item)) return false
+  if (RELEVANCE_PATTERN.test(title)) return true
+  return CORE_PATTERN.test([title, item.summary].filter(Boolean).join(" "))
 }
 
 export function partitionByRelevance<T extends RelevanceCandidate>(

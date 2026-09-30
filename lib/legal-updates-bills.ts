@@ -229,6 +229,24 @@ async function lookupFederalBill(
   }
 }
 
+/**
+ * Two attempts, because "could not check" drops a real bill.
+ *
+ * govtrack answers its first request after an idle period in around 28 seconds and the rest in a
+ * quarter of one, so the generous timeout here is not padding — it is the actual cost of the first
+ * request of the day. The retry is for a transient failure rather than a cold start, which no
+ * number of short retries will outlast.
+ */
+async function lookupFederalBillWithRetry(
+  reference: FederalBillReference,
+  congress: number,
+  timeoutMs: number
+): Promise<GovTrackBill | null | "error"> {
+  const first = await lookupFederalBill(reference, congress, timeoutMs)
+  if (first !== "error") return first
+  return lookupFederalBill(reference, congress, timeoutMs)
+}
+
 /** Markers Florida's legislature sites put on a page for a bill they do not have. */
 const NOT_FOUND_MARKERS =
   /(page (you requested|cannot be found))|(bill (was )?not found)|(no (bill|results) (were )?found)|(does not exist)|(invalid bill)/i
@@ -278,7 +296,7 @@ export type BillCandidate = {
 export async function verifyBill(
   item: BillCandidate,
   now: Date = new Date(),
-  timeoutMs = 12_000
+  timeoutMs = 30_000
 ): Promise<BillVerdict> {
   const fromUrl = parseCongressGovUrl(item.url)
   const fromText = parseBillReference(item.source) ?? parseBillReference(item.title)
@@ -305,7 +323,7 @@ export async function verifyBill(
 
   const year = Number(item.date?.slice(0, 4)) || now.getFullYear()
   const congress = reference.congress ?? congressForYear(year)
-  const found = await lookupFederalBill(reference, congress, timeoutMs)
+  const found = await lookupFederalBillWithRetry(reference, congress, timeoutMs)
 
   if (found === "error") return { status: "unchecked", reason: "govtrack unreachable" }
   if (found === null) return { status: "no-such-bill", reference }

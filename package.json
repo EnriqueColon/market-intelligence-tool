@@ -30,6 +30,8 @@
     "test:legal-bills": "node --experimental-strip-types --test lib/legal-updates-bills.test.ts",
     "test:legal-legislation": "node --experimental-strip-types --test lib/legal-updates-legislation.test.ts",
     "test:legal-movement": "node --experimental-strip-types --test lib/legal-updates-movement.test.ts",
+    "test:legal-fedreg": "node --experimental-strip-types --test lib/legal-updates-federal-register.test.ts",
+    "test:legal-florida": "node --experimental-strip-types --test lib/legal-updates-florida.test.ts",
     "test:legal-applicability": "node --test --experimental-strip-types lib/legal-applicability.test.ts",
     "verify:executive-brief": "node --experimental-strip-types scripts/verify-executive-brief.mjs",
     "verify:workbench": "tsx scripts/verify-workbench.ts",

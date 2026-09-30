@@ -13,6 +13,12 @@
 import { readFileSync } from "node:fs"
 
 import { describeVerdict, verifyBill } from "../lib/legal-updates-bills"
+import {
+  describeAgencies,
+  describeRuleFromRecord,
+  fetchFederalRules,
+} from "../lib/legal-updates-federal-register"
+import { describeFloridaFromRecord, fetchFloridaBills } from "../lib/legal-updates-florida"
 import { describeFromRecord, fetchFederalBills } from "../lib/legal-updates-legislation"
 import { buildSectionPrompt } from "../lib/legal-updates-prompts"
 import { describeTest, normalizeApplicability } from "../lib/legal-applicability"
@@ -21,6 +27,7 @@ import {
   bearsOnFirmOperations,
   isCreRelevant,
   isIndividualAction,
+  recordBearsOnFirmOperations,
 } from "../lib/legal-updates-relevance"
 import { LEGAL_SECTIONS, type LegalSection, windowFor } from "../lib/legal-updates-sections"
 import { checkSourceUrl } from "../lib/legal-updates-sources"
@@ -134,13 +141,21 @@ async function main() {
     })
   )
 
-  // Federal legislation does not come from the model any more, so the run is only representative
-  // if the record's own items are in it. Mirrors collectFederalBills.
-  const sourcedBills = await fetchFederalBills(
-    now,
-    windowFor("legislative").filterDays,
-    (title) => bearsOnFirmOperations({ title })
-  )
+  // Most of this feed does not come from the model any more, so the run is only representative if
+  // the records' own items are in it. Mirrors collectFromRecord.
+  const [sourcedBills, sourcedFlBills, sourcedRules] = await Promise.all([
+    fetchFederalBills(now, windowFor("legislative").filterDays, (title) =>
+      bearsOnFirmOperations({ title })
+    ),
+    fetchFloridaBills(
+      process.env.LEGISCAN_API_KEY,
+      now,
+      windowFor("legislative").filterDays,
+      recordBearsOnFirmOperations
+    ),
+    fetchFederalRules(now, windowFor("regulatory").filterDays, recordBearsOnFirmOperations),
+  ])
+
   const recordItems: Item[] = sourcedBills.map((b) => ({
     title: `${b.displayNumber} – ${b.title}`,
     source: `${b.displayNumber} — ${b.displayNumber.startsWith("S") ? "U.S. Senate" : "U.S. House"}`,
@@ -149,10 +164,42 @@ async function main() {
     url: b.url,
     summary: describeFromRecord(b),
   }))
-  const legislative = results.find((r) => r.section === "legislative")
-  if (legislative) legislative.items = [...recordItems, ...legislative.items]
+  const flRecordItems: Item[] = sourcedFlBills.map((b) => ({
+    title: `${b.displayNumber} – ${b.title}`,
+    source: `${b.displayNumber} — Florida ${b.chamber === "senate" ? "Senate" : "House"}`,
+    date: b.statusDate,
+    status: b.statusLabel,
+    url: b.url,
+    summary: describeFloridaFromRecord(b),
+  }))
+  const ruleRecordItems: Item[] = sourcedRules.map((r) => ({
+    title: r.title,
+    source: `${describeAgencies(r)} — ${r.type}`,
+    date: r.publicationDate,
+    status: r.commentsCloseOn ? `Comments close ${r.commentsCloseOn}` : r.type,
+    url: r.url,
+    summary: describeRuleFromRecord(r),
+  }))
 
-  console.log(`sourced from the congressional record: ${recordItems.length} bill(s)\n`)
+  const legislative = results.find((r) => r.section === "legislative")
+  // The action stops asking the model once the record has produced something, so that the same
+  // bill cannot appear twice under two spellings of its title. Mirrored here or the run would
+  // overstate both the item count and the model's contribution.
+  if (legislative) {
+    const fromRecord = [...recordItems, ...flRecordItems]
+    legislative.items = fromRecord.length > 0 ? fromRecord : legislative.items
+  }
+  const regulatory = results.find((r) => r.section === "regulatory")
+  if (regulatory) regulatory.items = [...ruleRecordItems, ...regulatory.items]
+
+  console.log(
+    `from the record: ${recordItems.length} federal bill(s), ${flRecordItems.length} Florida bill(s), ` +
+      `${ruleRecordItems.length} Federal Register rule(s)`
+  )
+  if (!process.env.LEGISCAN_API_KEY?.trim()) {
+    console.log("  note: LEGISCAN_API_KEY not set, so Florida was not searched")
+  }
+  console.log()
 
   let total = 0
   let withheld = 0

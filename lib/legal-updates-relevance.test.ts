@@ -5,6 +5,7 @@ import {
   bearsOnFirmOperations,
   isCreRelevant,
   isIndividualAction,
+  recordBearsOnFirmOperations,
   partitionByRelevance,
 } from "./legal-updates-relevance.ts"
 import { LEGAL_SECTIONS, SECTION_LABELS, windowFor } from "./legal-updates-sections.ts"
@@ -152,4 +153,111 @@ test("every section has a window and a label", () => {
     assert.ok(filterDays >= promptDays, "the filter must not be tighter than what the prompt asked for")
     assert.ok(SECTION_LABELS[section].length > 0)
   }
+})
+
+// ── The record gate ────────────────────────────────────────────────────────────
+//
+// Everything above judges an item a model was asked to find. These judge one pulled out of
+// everything a legislature or an agency published, where the base rate is different and the same
+// evidence therefore means less.
+
+test("an incidental term in the title is the subject, and qualifies", () => {
+  // `bankrupt` is incidental because a court-procedure bill mentions bankruptcy in passing. In a
+  // title chosen to say what the thing is about, it is the thing it is about — and subchapter V
+  // debt limits genuinely bear on how a workout is negotiated.
+  assert.equal(
+    recordBearsOnFirmOperations({ title: "Bankruptcy Threshold Adjustment Act" }),
+    true
+  )
+})
+
+test("an incidental term buried in a long description does not qualify", () => {
+  // A bill about who files what with whom, which mentions liens on its way past. This is the case
+  // that gating on any term anywhere got wrong: it kept 32 Florida bills where 6 were the subject.
+  assert.equal(
+    recordBearsOnFirmOperations({
+      title: "Determination of Mental Conditions in Judicial Proceedings",
+      summary:
+        "Revising procedures for the appointment of experts; conforming cross-references to the "
+        + "chapter governing liens and encumbrances recorded before the hearing date.",
+    }),
+    false
+  )
+})
+
+test("a core term in boilerplate is why local bills are excluded by number, not by subject", () => {
+  // This gate cannot catch Florida's local bills, and it is worth a test saying so. The charter
+  // boilerplate for a fire district really does describe assessments against industrial property,
+  // which is a core term meaning exactly what it says — the bill is simply not legislation anyone
+  // here can act on. `isLocalBill` is what excludes it, on the numbering.
+  assert.equal(
+    recordBearsOnFirmOperations({
+      title: "Pace Fire Rescue District, Santa Rosa County",
+      summary:
+        "Codifying the charter of the district; providing for the levy of assessments which shall "
+        + "constitute a lien against industrial properties within the district until paid.",
+    }),
+    true
+  )
+})
+
+test("a core term in the description qualifies, wherever it sits", () => {
+  // "Court Fees" says nothing on its own; the description is where the legislature says the fees
+  // are foreclosure fees.
+  assert.equal(
+    recordBearsOnFirmOperations({
+      title: "Court Fees",
+      summary: "Revising the service charges collected by clerks in foreclosure proceedings.",
+    }),
+    true
+  )
+})
+
+test("a housing bill is out of scope however commercial its description sounds", () => {
+  // Residential policy was ruled out of scope. Dropping the residential terms from the relevance
+  // list stopped these being admitted on their own subject but not through a body that mentions
+  // something commercial, so the title carries an exclusion of its own.
+  assert.equal(
+    recordBearsOnFirmOperations({
+      title: "Affordable Housing Property Tax Exemptions",
+      summary: "Providing an exemption for multifamily projects meeting certain criteria.",
+    }),
+    false
+  )
+})
+
+test("a staff-review rule is not an appraisal rule", () => {
+  // Live false positive from the Federal Register, and the one place a term had to be excluded as
+  // a phrase rather than qualified.
+  assert.equal(
+    recordBearsOnFirmOperations({
+      title: "Performance Appraisal for General Schedule and Prevailing Rate Employees",
+      summary: "OPM is revising its regulations on performance appraisal systems.",
+    }),
+    false
+  )
+})
+
+test("an action against an individual is still out, record or not", () => {
+  // The one rule both gates share, and for the same reason: it is a ruling about one person's
+  // employability whatever the underlying conduct involved.
+  assert.equal(
+    recordBearsOnFirmOperations({
+      title: "Notice of Prohibition Order",
+      summary: "Removal and prohibition order concerning a former loan officer's commercial mortgage file.",
+    }),
+    false
+  )
+})
+
+test("the record gate is stricter than the model gate, on the same item", () => {
+  // The distinction is the whole design, so it is asserted rather than left implied. This item
+  // mentions liens in a body and nothing in its title; a model that returned it was answering a
+  // question about CRE, and a legislature that published it was not.
+  const item = {
+    title: "Clerks of the Court",
+    summary: "Revising the duties of clerks with respect to liens recorded under this chapter.",
+  }
+  assert.equal(bearsOnFirmOperations(item), true)
+  assert.equal(recordBearsOnFirmOperations(item), false)
 })
