@@ -232,7 +232,9 @@ npm run test:cre-downside     # the capital scenario, on both regulatory capital
 npm run test:memo-evidence    # the evidence guard
 npm run test:verified-metrics
 npm run test:legal-filter     # legal feed hygiene: collapsing repeats, and withholding stale items
-npm run test:legal-relevance  # legal feed: CRE relevance bar, and the per-section freshness windows
+npm run test:legal-relevance  # legal feed: the firm-operations bar, and the per-section windows
+npm run test:legal-bills      # legal feed: bill numbers, and the fabricated bills that reached the tab
+npm run test:legal-legislation # legal feed: federal bills read from the record, and companion-bill dedupe
 npm run test:legal-applicability # which institutions a rule covers, and the two CRE-concentration units
 npm run test:allowlist        # publisher allowlist, and what "all" covers
 npm run build                 # next build
@@ -281,13 +283,18 @@ Some checks need live data rather than fixtures, because they are calibrations r
   figures for up to a week and an unstable one makes every visitor miss the cache. It already
   caught one such failure, where the row shape changed and the code fell through to a fallback
   without erroring.
-- `npm run verify:legal-freshness` — calls the live API with the three Legal Landscape prompts,
-  then fetches every URL they cite. Fails if the tab would render empty, if an unverified item
-  would reach it, if over half the items cite a URL that does not exist, or if too much falls
-  outside its section's window. The only check that catches either a prompt the model reads as a
-  request for history or one it answers with invented citations; run it after any edit to
-  `lib/legal-updates-prompts.ts`, `lib/legal-updates-sources.ts` or `lib/legal-updates-sections.ts`,
-  and more than once, since the output is probabilistic.
+- `npm run verify:legal-freshness` — calls the live API with the Legal Landscape prompts, fetches
+  federal bills from the congressional record, and reports how much of the result is recent,
+  on-topic, primary-sourced and — for legislation — the bill it claims to be. **It fails if a
+  misattributed bill would render.** This is the check that found the tab showing `S. 1234`
+  "Commercial Real Estate Credit Enhancement Act", which is really the SSI Savings Penalty
+  Elimination Act. It also fails if the tab would render empty, if an unverified item would reach
+  it, if over half the items cite a URL that does not exist, or if too much falls outside its
+  section's window. The only check that catches a prompt the model reads as a request for history,
+  or one it answers with invented citations. Run it after any edit to
+  `lib/legal-updates-prompts.ts`, `lib/legal-updates-sources.ts`, `lib/legal-updates-sections.ts`,
+  `lib/legal-updates-bills.ts` or `lib/legal-updates-legislation.ts` — and run it more than once,
+  because the output is probabilistic and one clean run proves less than it looks.
 - `npm run verify:peer-cohort [STATE=…]` — what the matched peer cohort does to the drawer's
   percentiles on live call reports, against the scope-wide figure it replaced. Fails if the
   percentiles barely move (the cohort is not being applied), if small institutions move *less* than
@@ -389,6 +396,22 @@ scripts/        One-off and ingestion scripts (TypeScript and Python)
 ## Maintenance notes
 
 ### Traps that have already caused incidents
+
+**"The URL loads" is not verification on every host.** The Legal Landscape source guard treats a
+403 as "the host refused us, not that the page is absent", which is correct for a rate-limiting
+regulator and meant **no congress.gov URL was ever checked** — the host is behind Cloudflare and
+403s everything. flsenate.gov and govinfo.gov serve soft 404s with HTTP 200. From the day the
+guard was added (`e5414c3`) the Legislative Tracker rendered real bill numbers carrying invented
+titles, and every gate passed them while looking like it was working. The feed itself had been
+live since April 2026. If you add a host to `lib/legal-updates-sources.ts`, check by hand what it
+returns for a
+path that certainly does not exist; if the answer is 200 or 403, a URL check tells you nothing
+there and the item needs a content-level check like `lib/legal-updates-bills.ts`.
+
+**Do not ask a model to judge whether its own output is relevant.** The same feed's relevance gate
+read `whyItMatters` — a field the prompt instructs the model to write about "relevance to
+distressed CRE debt investing" — so every item certified itself and the gate passed nearly
+everything. Judge on fields that describe the source, never on fields that argue for it.
 
 **Never use `process.env.NODE_ENV` to detect production.** Vercel sets it to `"production"` on
 preview builds too, so a dev deployment is indistinguishable from the live tool. Use

@@ -8,7 +8,109 @@ is it in now, and what is still open.
 
 ---
 
-## 2026-09-30 (latest) — the drawer's percentiles start meaning something
+## 2026-09-30 (latest) — the Legislative Tracker was inventing its bills
+
+Found by reviewing `dev` before merging, not by a test. The reported symptom was mild — the Legal
+Landscape tab had "too wide of a pull for things we do not really use", with an OCC prohibition
+order against a named individual given as the example. Following that led somewhere worse.
+
+### The reported problem: a gate that asked the model to grade itself
+
+`isCreRelevant` read four fields, one of which was `whyItMatters` — and the prompt instructs the
+model to write that field about "relevance to distressed CRE debt investing". So every item arrived
+carrying its own relevance certificate. The flagged item passed on that field alone, on the phrase
+"can affect how lenders manage their CRE loan portfolios", while its title, summary and status said
+nothing of the kind. The gate was not too loose; it was self-defeating, and no amount of term
+tuning would have touched it. It now reads title, summary and status — what the source describes,
+never what the model argues.
+
+Three smaller things came with it. 1818(e) prohibition orders are dropped as rulings about one
+person's employability, whatever the underlying conduct involved. Every term is anchored, because
+bare `lien` matched "client", "clients", "resilience" and "salient" and `tenant` matched
+"lieutenant" — four false positives in fifteen sample headlines. And residential and land-use
+policy is out of scope by decision, which was the user's call between three options.
+
+### The real problem: four fabricated bills, and a guard that had never worked
+
+Tightening the gate meant re-running the live check to confirm no section went blank. Four
+legislative items survived: `S. 1234`, `H.R. 5678`, `S. 2345`, `S. 3456`. Those numbers looked like
+placeholders, so I checked them against the record.
+
+| The tab said | The bill actually is |
+| --- | --- |
+| S. 1234 — Commercial Real Estate Credit Enhancement Act | SSI Savings Penalty Elimination Act |
+| H.R. 5678 — Commercial Property Foreclosure Reform Act | No Pay for Disarray Act |
+| S. 2345 — Commercial Mortgage Lending Transparency Act | Short on Competition Act |
+| S. 3456 — Distressed Commercial Property Acquisition Act | Law Enforcement Officer and Firefighter Recreation Pass Act |
+
+Real numbers, entirely unrelated real titles. A second run reproduced all four, so it is systematic:
+plausible sequential numbers with invented titles is what the model does when asked to recall
+legislation it cannot find.
+
+They passed because **source verification had never functioned for this section**, and nothing
+about it was visible in the code. `checkSourceUrl` asks whether a URL loads and treats 403 as "the
+host refused us, not that the page is absent" — correct for a rate-limiting regulator, and
+congress.gov is behind Cloudflare and 403s everything. Probed directly, `senate-bill/999999`,
+`401st-congress/senate-bill/1` and the literal path `senate-bill/not-a-bill` all returned `ok`.
+flsenate.gov and govinfo.gov serve soft 404s with HTTP 200. The guard looked like it was working
+for as long as it had existed.
+
+### The fix, in two steps
+
+**A guard on identity rather than reachability** (`lib/legal-updates-bills.ts`). A bill has a
+chamber, a number and a congress, all matters of record, so the claim can be checked against the
+record. Federal via govtrack, which needs no key and was already on the allowlist; Florida via the
+cited page, which must both not announce a missing bill and actually print the number claimed —
+something a soft 404 cannot do. Titles are compared by overlap of significant words rather than
+equality, because a genuine citation often gives the short title where the record gives the
+official one, while all four fabrications shared zero words. An item that cannot be checked is
+dropped, since failing open is what produced this.
+
+That made the feed honest and left the section empty. So, second:
+
+**Stop asking.** `lib/legal-updates-legislation.ts` reads federal bills from the record — number,
+title, status, date, sponsor, link — and hands them to the model, which is asked only for prose. It
+is never asked for an identity, so it cannot invent one. This reverses the order the other two
+sections use, and it is the right order wherever the fact is already published; the model is left
+doing the part it is actually good at.
+
+Relevance is judged on the authoritative title alone. The cost is known and accepted: H.R. 10375
+modernises the SBA 504 programme, which is commercial real estate lending, and no title of it says
+so. Letting a model judge instead is how invented items got in.
+
+Deduplication runs twice, because a bill repeats for two reasons — it surfaces under several of the
+twelve searches, and the chambers move companion bills under one title. The Bankruptcy Threshold
+Adjustment Act arrived as H.R. 7730 and again as S. 3977 "of 2026". Three rows for one piece of
+legislation is the padding this feed is supposed to have stopped.
+
+Live result: four items, all fabricated, became three real federal bills plus real Florida bills,
+none failing the identity check. The Florida half of the guard earned itself in the same run,
+dropping items that cited `CS/HB 1353` and `HB 793` as bills that do not exist.
+
+### Worth remembering
+
+The reported bug was cosmetic and the real one was that the tab was quotable and wrong. It had
+passed a clean build, the full test suite, and a live-data script that checked freshness and source
+reachability without ever asking whether an item was the thing it claimed to be. Two sessions
+running, the defect that mattered was found by looking at output rather than by a green check.
+
+Also: I damaged two files by normalising line endings twice in one script, turning a 3-line change
+into a 73-line rewrite before spotting it in `git diff --numstat`. The repository rule names four
+CRLF files; roughly 190 tracked TypeScript files are CRLF, so the rule understates it badly.
+
+**Still open.** Unchanged: enforcement items are not matched by named institution to an FDIC cert;
+`institution_watchlist` has a reader and no writer; 77 pre-existing typecheck errors that the build
+ignores. New: `content.govdelivery.com` is allowed for regulatory but not enforcement, so genuine
+FDIC enforcement bulletins are being rejected as unlisted — visible in every live run and not yet
+fixed. "Medical Bankruptcy Fairness Act" passes the title gate on `bankrupt` while being consumer
+bankruptcy; the prompt is told to say when an effect is marginal, which is the mitigation rather
+than a fix. `govinfo.gov` remains unverifiable for legislation, so items citing it will be dropped.
+And nothing here has reached production: `main` is still at `9faaf35`, so the live tool is still
+showing scope-wide percentiles, a 180-day legislative window and the fabricated bills.
+
+---
+
+## 2026-09-30 — the drawer's percentiles start meaning something
 
 Two fixes taken from a production-issues list, only one of which was code. The legal feed's single
 180-day window was already fixed on `dev`, so that one shipped by merging. The other was live and

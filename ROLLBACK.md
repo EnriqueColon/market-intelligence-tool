@@ -8,7 +8,7 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
 | `main` | `9faaf35` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `3bec6d7` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `dev` | `c992ace` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 This table names the newest commit on each branch that **changes behaviour**; documentation-only
 commits sit on top of it and are deliberately not tracked here, because amending one rotates its
@@ -21,9 +21,9 @@ tab-persistence fix on 09-10. The branches were level after the Legal Landscape 
 work merged on 09-29, and **`dev` is now four commits ahead**: the per-section windows, CRE
 relevance gate and always-rendered sections, then the computed exposure counts, then the removal of
 the department model, then the removal of the two lens tabs, then the matched peer cohort in the
-institution drawer.
+institution drawer, then the Legal Landscape relevance gate and the bill-identity guard.
 
-The newest commit changing application behaviour is **`3bec6d7`** on `dev`; in production it is
+The newest commit changing application behaviour is **`c992ace`** on `dev`; in production it is
 **`e5414c3`**, which stops the feed publishing items it cannot point at a real primary source for. The four legal commits are a set: `2384143`
 stops the feed rendering one development several times, `10fd202` withholds stale items, `8625c7c`
 stops it being stale in the first place, and `e5414c3` stops it inventing citations. **`10fd202`
@@ -103,6 +103,7 @@ git push --force-with-lease origin dev
 
 | Commit | Date | Why it is a safe target |
 | --- | --- | --- |
+| `8ef34d3` | 2026-09-30 | First `dev` commit at which the Legal Landscape tab cannot render a bill that is not the bill it names. Everything before this can. |
 | `e45845f` | 2026-09-30 | Last `dev` commit before the drawer's percentiles changed meaning. The only reason to come back here is reconciling a figure someone exported under the scope-wide comparison. |
 | `f40b8df` | 2026-09-30 | Last `dev` commit with the two views reachable, as tabs. Only useful if you intend to restore them as tabs, which has been rejected; prefer surfacing the analysis inside the institution drawer. |
 | `6789d45` | 2026-09-29 | Last `dev` commit **with** the department model, if the removal needs undoing without losing the Legal Landscape exposure counts. Reverting `f40b8df` is preferable to rolling back here, since the two are independent. |
@@ -152,6 +153,8 @@ the Market Participants tab.
 
 | Commit | Date | Summary |
 | --- | --- | --- |
+| `c992ace` | 09-30 | Takes **federal legislation from the congressional record** instead of from the model. `lib/legal-updates-legislation.ts` reads bills from govtrack and the model only writes prose for bills it is handed, so it is never asked for an identity it could invent. Also dedupes companion bills across chambers, and narrows the legislative prompt to Florida only. **Reverting returns the Legislative Tracker to model-recalled bills** — which, with `8ef34d3` still in place, means the guard drops them and the section goes empty rather than wrong. Reverting both together restores the fabricated bills. `npm run test:legal-legislation` and `npm run verify:legal-freshness`. |
+| `8ef34d3` | 09-30 | Two Legal Landscape fixes. The relevance gate stops reading `whyItMatters`, a field the prompt tells the model to write about CRE relevance — so items no longer certify themselves; it also drops 1818(e) actions against individuals, anchors every term (bare `lien` matched "client" and "resilience"), and puts residential and land-use policy out of scope. Second and more important, `lib/legal-updates-bills.ts` checks that a cited bill **is the bill claimed**, because `checkSourceUrl` never verified anything on congress.gov: the host 403s everything and the guard reads 403 as "refused us, not absent". **This is the commit that stops fabricated legislation rendering** — do not revert it without reverting `c992ace` too, or the section keeps model-recalled bills with no identity check. Cache key `legal-updates-v7` → `v8`; any revert must bump it again or the Data Cache serves whichever shape was written last. `npm run test:legal-bills`, `npm run test:legal-relevance`. |
 | `3bec6d7` | 09-30 | Ranks the institution profile drawer's Peer Positioning percentiles against a **matched peer cohort** instead of the whole selected scope. **This changes numbers users have already quoted**: every institution that can be ranked moves, by 26.6 percentile points on average for banks under $1bn in Texas and up to 86 points. Reverting restores figures dominated by asset size — defensible only if someone is reconciling against an old export, and `verify:peer-cohort` will fail on the reverted code because the percentiles stop moving. Also in here: the ordinal fix (the old code rendered "2th percentile"), and two guards in `lib/scoring/peer-cohort.ts` — a single-state universe can no longer describe its cohort as national, and an institution with absent loan figures is no longer matched on lending mix. `npm run test:peer-cohort`, `npm run verify:peer-cohort` against live FDIC, and `npm run verify:peer-positioning` which reads the rendered drawer in a browser. |
 | `e45845f` | 09-30 | Takes the Executive Brief and Underwriter Workbench out of `TAB_DEFS`, so the tab bar is the four it has always been and **no `ENABLED_TABS` value reaches either view**. Reverting restores two tabs that have now been rejected twice — read the Lenses section of `confluence.md` and Phase 2 of `docs/NEXT_VERSION_PLAN.md` before doing so. Nothing was deleted: both components, both server actions and the five `lib/scoring/` calculators remain, with 39 passing tests. Also removed, because they had no caller left, the dashboard's focus-institution routing and the two cron cache warms — a revert must restore the warms or the first visitor after a deploy waits roughly fifty seconds. Safe: production never rendered either view. |
 | `f40b8df` | 09-29 | Removes the department model whole: the header dropdown, the cookie, `lib/department.ts`, and `department_watchlist`. Executive Brief and Underwriter Workbench become ordinary tabs behind `executive-brief` and `underwriter-workbench`, gated independently. Storage becomes `institution_watchlist`, keyed on `cert` alone, carrying over any surviving rows; **the old table is not dropped**, so a revert still finds its data. Low risk to revert because nothing live was using it — `department_watchlist` had no writer anywhere in the codebase and `department-lenses` was off in production. **The load-bearing line is `export const dynamic = "force-dynamic"` in `app/page.tsx`.** The page was dynamic only as a side effect of calling `cookies()`; without that declaration it prerenders statically and `ENABLED_TABS` freezes into the build, so editing the variable in Vercel silently does nothing and a build without it ships no tabs at all. If you revert this commit, the `cookies()` call comes back and covers it again — but do not remove the declaration on its own. Adding a tab also means adding its count to `TAB_GRID_COLS`; Tailwind cannot see `grid-cols-${n}`. |

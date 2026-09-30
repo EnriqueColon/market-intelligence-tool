@@ -121,7 +121,12 @@ for finance), and fall back to the **GDELT DOC 2.0 API** when RSS yields fewer t
 actions carry near-duplicate fetching logic, so a parsing bug tends to need fixing in both — as
 happened with the CDATA regex.
 
-### Legal Landscape: three prompts, each through four gates
+### Legal Landscape: two prompts, one record, and five gates
+
+Federal legislation is **not** model-generated. `lib/legal-updates-legislation.ts` reads it from
+govtrack, and the model is only asked to explain bills it is handed. Everything below about prompts
+and fabrication applies to Regulatory, Enforcement and Florida legislation; see "why the
+Legislative Tracker stopped asking" further down for why that section is different.
 
 `fetch-legal-updates.ts` runs the Regulatory, Legislative and Enforcement prompts concurrently
 against OpenAI with web search on. Each section's results pass through age, CRE relevance and
@@ -151,12 +156,93 @@ session calendar, so out of session the model reports what the last session enac
 interim committee activity rather than finding nothing. Widen the window and leave the prompt
 alone and the model will still only look at the current month; the pair is what works.
 
-**Items with no bearing on commercial real estate are dropped**, by `lib/legal-updates-relevance.ts`,
-which reads title, summary, why-it-matters and status together. The prompt states the requirement
-and does most of the work; this is the backstop, on the same reasoning as the dedupe. The bar is
-deliberately low — it is there to catch an overdraft-fee rule or a prohibition order against an
-individual teller, not to adjudicate relevance. Across 24 live items on 2026-09-29 it dropped
-none, so treat it as unexercised in practice and suspect it first if good material disappears.
+**Items with no bearing on the firm's operations are dropped**, by
+`lib/legal-updates-relevance.ts`. Two questions, because they fail differently: is it on topic, and
+is its subject an institution, a rule or a case rather than one person?
+
+The gate reads **title, summary and status — never `whyItMatters`**. It used to read that field
+too, and that made it self-defeating. The prompt instructs the model to write `whyItMatters` about
+"relevance to distressed CRE debt investing", so every item arrived carrying its own relevance
+certificate and the gate passed almost everything. The item that exposed it was
+`OCC Enforcement Action: Danny Seibel Prohibited from Banking Activities`, admitted on a
+`whyItMatters` reading "can affect how lenders manage their CRE loan portfolios" while its title,
+summary and status mentioned nothing of the kind. `summary` is still read, because the prompt asks
+it to describe what the document changes — reporting rather than argument — and an enforcement
+action is often titled with nothing but an institution's name.
+
+**Actions against individuals are dropped whatever else they say.** Removal-and-prohibition orders
+under 12 U.S.C. 1818(e) can only be issued against a person, so the phrasing identifies them
+without any attempt to classify names — which would misfile institutions named after their
+founders. The conduct behind such an order often involved the CRE book, and it is still a ruling
+about one person's employability, so topic alone must not carry it.
+
+**Every term is anchored.** Bare substrings are not a style preference here: `lien` matched
+"client", "clients", "resilience" and "salient", and `tenant` matched "lieutenant" — four false
+positives in fifteen sample .gov headlines. `default` is qualified (`loan default`, `payment
+default`) because alone it matched "default judgment" and "by default".
+
+**Residential and land-use policy is out of scope by decision**, not oversight. `housing`,
+`affordable housing`, `eviction`, `landlord`, `tenant`, `property tax`, `zoning` and `land use`
+admitted HUD homelessness grants and residential tenancy bills, which crowded out commercial
+items. `multifamily` stays, being an asset class here rather than housing policy. If someone wants
+commercial landlord-tenant coverage back, add the commercial-qualified forms rather than the bare
+words.
+
+### Legal Landscape: why the Legislative Tracker stopped asking
+
+The other two sections ask a model what happened and then check the answer. That works because a
+regulator's page either exists or does not. For legislation it did not work at all, and the failure
+was invisible for as long as the section existed.
+
+**Source verification was a no-op for this section.** `checkSourceUrl` asks whether a URL loads.
+congress.gov sits behind Cloudflare and returns **403**, which the guard deliberately reads as "the
+host refused us, not that the page is absent" — right for a press release, and it meant no
+congress.gov URL was ever checked. Probed directly, `senate-bill/999999`, `401st-congress/senate-bill/1`
+and the literal path `senate-bill/not-a-bill` all returned `ok`. flsenate.gov and govinfo.gov serve
+soft 404s with HTTP 200, so gibberish passed there too.
+
+**What that rendered.** On 2026-09-30 the tab showed four bills: `S. 1234` "Commercial Real Estate
+Credit Enhancement Act", `H.R. 5678` "Commercial Property Foreclosure Reform Act", `S. 2345` and
+`S. 3456`. Every number is a real bill and not one of those titles is — S. 1234 is the SSI Savings
+Penalty Elimination Act, H.R. 5678 is the No Pay for Disarray Act. A second run reproduced all
+four, so this is systematic rather than a bad sample. Plausible sequential numbers with invented
+titles is what the model does when asked to recall legislation.
+
+**A bill is a matter of record, so it is no longer asked for.** `lib/legal-updates-legislation.ts`
+reads federal bills from govtrack — number, title, status label, last-action date, sponsor, link —
+and the model is handed those facts and asked only for prose. It is never asked for an identity, so
+it has no opportunity to invent one. govtrack rather than `api.congress.gov` because the official
+API returns 403 without a key and this has to work with no new secret provisioned; govtrack was
+already on the legislative allowlist.
+
+Relevance is judged on the **authoritative title and nothing else**, and the cost is known:
+H.R. 10375 modernises the SBA 504 programme, which is commercial real estate lending, and no title
+of it says so. The alternative is letting the model judge, which is how invented items got in.
+
+**Deduplication runs twice**, because a bill repeats for two reasons. It surfaces under several of
+the twelve searches; and the chambers move companion bills under one title, so the Bankruptcy
+Threshold Adjustment Act arrived as H.R. 7730 and again as S. 3977 "of 2026". The copy with the
+later action wins, being the one that has moved.
+
+**`lib/legal-updates-bills.ts` is still the guard**, and now checks identity rather than
+reachability. Federal bills are looked up and the record's title compared with the item's; Florida
+has no open API, so the cited page must both not announce a missing bill and actually print the
+number claimed, which a soft 404 cannot do. Comparison is overlap of significant words, not
+equality — a genuine citation often gives the short title where the record gives the official one,
+whereas all four fabrications shared zero words. An item that **cannot** be checked is dropped, not
+shown: failing open is what produced this.
+
+For federal items the guard should now always pass, since their identity came from the record. It
+is kept because it is the invariant, and it is what would catch a regression in the sourcing path.
+It earns itself on Florida in ordinary runs — one live run dropped items citing `CS/HB 1353` and
+`HB 793` as bills that do not exist.
+
+The legislative prompt is therefore **Florida-only**, and tells the model the number will be
+checked against the page, so a guessed number costs the slot and gains nothing.
+
+If summarisation fails, items still render from `describeFromRecord`: number, title, status and
+sponsor, all quotable. A real bill with a thin description beats no bill, and beats an invented one
+by considerably more.
 
 **The prompts must state today's date, and must name the months to search.** They live in
 `lib/legal-updates-prompts.ts` for that reason. The model has no clock: asked for "the past 90
@@ -966,7 +1052,7 @@ Generated content is expensive, so nearly everything is cached for a day.
   | `market-analytics-visuals-v1` + scope | Derived chart series for the Visual Analysis panel |
   | `executive-brief-v4` + scope | Ranked change events and non-reporting institutions for the Executive Brief. **Never populated** — the view is unreachable and the cron no longer warms it |
   | `underwriter-workbench-v1` + scope | Latest-quarter rows for the whole scope, for the Underwriter Workbench. **Never populated**, as above |
-  | `legal-updates-v7` | Deduped, freshness-filtered, CRE-relevant, source-verified items for the Legal Landscape tab. Exposure counts are **not** in here — see `resolveLegalApplicability` |
+  | `legal-updates-v8` | Legal Landscape items: deduped, freshness-filtered, relevant to the firm's operations, source-verified, and — for legislation — checked against the bill record. Exposure counts are **not** in here, see `resolveLegalApplicability`. Bumped from `v7` because `v7` entries hold the fabricated bills and the Data Cache survives deploys |
 
   `market-analytics-report-data` is keyed by scope rather than by day and revalidates every six
   hours, since FDIC publishes quarterly. **Bump its version whenever the scoring changes**, or cached
