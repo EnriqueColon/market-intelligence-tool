@@ -13,8 +13,7 @@
  * record supplies what it has and the model still goes looking for the rest.
  *
  * Unlike govtrack, the Federal Register publishes the agency's own abstract. That is authoritative
- * text rather than an argument, so the relevance gate is allowed to read it — which is the whole
- * reason `recordBearsOnFirmOperations` takes a summary at all.
+ * text rather than an argument, so the relevance gate is allowed to read it as the item's summary.
  */
 
 export type SourcedRule = {
@@ -54,6 +53,29 @@ const SEARCH_TERMS = [
 
 /** Rulemaking only. Notices and presidential documents are a different kind of thing. */
 const DOCUMENT_TYPES = ["RULE", "PRORULE"]
+
+/**
+ * The regulators of the institutions this firm buys from, works with and is itself subject to.
+ * Federal Register agency slugs, as `GET /api/v1/agencies` names them.
+ *
+ * Restricting by issuer as well as by subject, because subject alone let through a Farm Credit
+ * Administration rule on troubled-debt classification: real terms, real rule, and the FCA
+ * regulates farm lenders that no one here will ever hold a note from. The relevance gate cannot see
+ * that. Who issued the rule is a fact the record states outright, so it is used.
+ *
+ * Treasury is listed as the department because the OCC's rules are frequently filed under both,
+ * and FinCEN is not: its rulemaking is anti-money-laundering, which is real but not this tab.
+ */
+const AGENCIES = [
+  "comptroller-of-the-currency",
+  "federal-deposit-insurance-corporation",
+  "federal-reserve-system",
+  "consumer-financial-protection-bureau",
+  "federal-housing-finance-agency",
+  "housing-and-urban-development-department",
+  "treasury-department",
+  "national-credit-union-administration",
+]
 
 const FIELDS = [
   "document_number",
@@ -169,6 +191,7 @@ function searchUrl(term: string, since: string): string {
     "conditions[term]": `"${term}"`,
   })
   for (const type of DOCUMENT_TYPES) params.append("conditions[type][]", type)
+  for (const agency of AGENCIES) params.append("conditions[agencies][]", agency)
   for (const field of FIELDS) params.append("fields[]", field)
   return `https://www.federalregister.gov/api/v1/documents.json?${params.toString()}`
 }

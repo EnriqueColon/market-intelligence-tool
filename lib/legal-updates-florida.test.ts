@@ -14,10 +14,10 @@ import {
   type FloridaCandidate,
   type SourcedFloridaBill,
 } from "./legal-updates-florida.ts"
-import { recordBearsOnFirmOperations } from "./legal-updates-relevance.ts"
+import { bearsOnFirmOperations } from "./legal-updates-relevance.ts"
 
 /** The predicate the action passes in, so these tests exercise the real policy. */
-const isRelevant = recordBearsOnFirmOperations
+const isRelevant = bearsOnFirmOperations
 
 const candidate = (over: Partial<FloridaCandidate> = {}): FloridaCandidate => ({
   billId: 1888888,

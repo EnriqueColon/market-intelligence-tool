@@ -27,7 +27,6 @@ import { buildSectionPrompt } from "@/lib/legal-updates-prompts"
 import {
   bearsOnFirmOperations,
   partitionByRelevance,
-  recordBearsOnFirmOperations,
 } from "@/lib/legal-updates-relevance"
 import {
   LEGAL_SECTIONS,
@@ -223,7 +222,7 @@ async function collectFloridaBills(now: Date, filterDays: number): Promise<Legal
     process.env.LEGISCAN_API_KEY,
     now,
     filterDays,
-    recordBearsOnFirmOperations
+    bearsOnFirmOperations
   )
   if (bills.length === 0) return []
 
@@ -257,7 +256,7 @@ async function collectFloridaBills(now: Date, filterDays: number): Promise<Legal
  * guidance — a large part of what this section is for — never appear in it.
  */
 async function collectFederalRules(now: Date, filterDays: number): Promise<LegalItem[]> {
-  const rules = await fetchFederalRules(now, filterDays, recordBearsOnFirmOperations)
+  const rules = await fetchFederalRules(now, filterDays, bearsOnFirmOperations)
   if (rules.length === 0) return []
 
   const prose = await summariseRecords(

@@ -56,7 +56,7 @@ function describedBy(item: RelevanceCandidate): string {
  * Management rule on staff reviews is titled "Performance Appraisal", and a statute reviser's bill
  * deletes provisions rendered inoperative by "noncurrent" repeal.
  *
- * The distinction only matters for candidates drawn from a record. See `recordBearsOnFirmOperations`.
+ * Where a term sits decides how much it counts; see `isCreRelevant`.
  */
 const CORE_TERMS = [
   // Commercial property and the loans against it
@@ -103,8 +103,7 @@ const CORE_TERMS = [
 
 /**
  * Real signals, but ones that a document about something else uses in passing. Enough on their own
- * for an item a model was asked to find, since the question it answered was already about this
- * firm; not enough for one pulled out of everything a legislature or an agency published.
+ * in a heading, where the publisher is telling you the subject; not enough buried in a body.
  */
 const INCIDENTAL_TERMS = [
   "mortgage lending",
@@ -187,24 +186,32 @@ export type RelevanceCandidate = {
   status?: string
 }
 
-/**
- * No `whyItMatters`: there is no model argument attached to a record, and the type says so rather
- * than relying on a caller to leave the field off.
- */
-export type RecordCandidate = {
-  title?: string
-  /** The publisher's own abstract or description. */
-  summary?: string
-}
-
 /** True for an action against a named individual rather than an institution or a rule. */
 export function isIndividualAction(item: RelevanceCandidate): boolean {
   return INDIVIDUAL_ACTION_PATTERN.test(describedBy(item))
 }
 
-/** True when the source's own description touches commercial property, credit or distress. */
+/**
+ * True when the source's own description touches commercial property, credit or distress.
+ *
+ * Where a term appears is what decides, because length is what makes a term unreliable. A title
+ * is a few words the publisher chose to say what the thing is about, so `bankrupt` in a title is
+ * almost always the subject — "Bankruptcy Threshold Adjustment Act" is real and it matters here.
+ * A two-hundred-word summary mentions liens on its way to somewhere else, and a stablecoin proposal
+ * mentions capital requirements. So **a heading is read on all the terms and a body only on the
+ * core ones.** The status is treated as heading: it is short, and the publisher chose it.
+ *
+ * This began as a stricter rule for record-sourced items only, on the theory that a model asked
+ * about CRE returns a list that is mostly CRE and so a term anywhere in it is good evidence. The
+ * model path then admitted a Federal Reserve stablecoin proposal on "capital requirements" in its
+ * body, which is the same failure at a different base rate. One rule is simpler to reason about
+ * and there is no longer an argument for two.
+ */
 export function isCreRelevant(item: RelevanceCandidate): boolean {
-  return RELEVANCE_PATTERN.test(describedBy(item))
+  const heading = [item.title, item.status].filter(Boolean).join(" ")
+  if (EXCLUDED_SUBJECT_PATTERN.test(item.title || "")) return false
+  if (RELEVANCE_PATTERN.test(heading)) return true
+  return CORE_PATTERN.test([heading, item.summary].filter(Boolean).join(" "))
 }
 
 /**
@@ -214,33 +221,6 @@ export function isCreRelevant(item: RelevanceCandidate): boolean {
  */
 export function bearsOnFirmOperations(item: RelevanceCandidate): boolean {
   return isCreRelevant(item) && !isIndividualAction(item)
-}
-
-/**
- * The same question for an item that came from a record rather than from a model.
- *
- * Stricter, because the base rate is different and nothing else about the candidate is. A model
- * asked for recent CRE developments returns a list that is mostly about CRE, so a term appearing
- * anywhere in it is good evidence. A sweep of every bill a legislature passed returns 1,930
- * candidates of which six concern this firm, and at that base rate an incidental term buried in a
- * long description is noise: gating on any term anywhere kept 32 Florida bills, most of them
- * fire-district and county bills whose official descriptions mention liens in passing.
- *
- * Where the term appears is what decides, because length is what makes a term unreliable. A title
- * is a few words the publisher chose to say what the thing is about, so `bankrupt` in a title is
- * almost always the subject — "Bankruptcy Threshold Adjustment Act" is real and it matters here. A
- * two-hundred-word abstract mentions liens on its way to somewhere else. So a title is read on all
- * the terms and a body only on the core ones.
- *
- * `summary` is the agency's or the legislature's own abstract, never model prose — which is why it
- * can be read at all. See `describedBy`.
- */
-export function recordBearsOnFirmOperations(item: RecordCandidate): boolean {
-  const title = item.title || ""
-  if (EXCLUDED_SUBJECT_PATTERN.test(title)) return false
-  if (isIndividualAction(item)) return false
-  if (RELEVANCE_PATTERN.test(title)) return true
-  return CORE_PATTERN.test([title, item.summary].filter(Boolean).join(" "))
 }
 
 export function partitionByRelevance<T extends RelevanceCandidate>(

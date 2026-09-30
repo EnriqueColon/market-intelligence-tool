@@ -11,10 +11,10 @@ import {
   toSourcedRule,
   type SourcedRule,
 } from "./legal-updates-federal-register.ts"
-import { recordBearsOnFirmOperations } from "./legal-updates-relevance.ts"
+import { bearsOnFirmOperations } from "./legal-updates-relevance.ts"
 
 /** The predicate the action passes in, so these tests exercise the real policy. */
-const isRelevant = recordBearsOnFirmOperations
+const isRelevant = bearsOnFirmOperations
 
 const rule = (over: Partial<SourcedRule> = {}): SourcedRule => ({
   documentNumber: "2026-10036",

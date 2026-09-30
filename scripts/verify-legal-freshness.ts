@@ -27,7 +27,6 @@ import {
   bearsOnFirmOperations,
   isCreRelevant,
   isIndividualAction,
-  recordBearsOnFirmOperations,
 } from "../lib/legal-updates-relevance"
 import { LEGAL_SECTIONS, type LegalSection, windowFor } from "../lib/legal-updates-sections"
 import { checkSourceUrl } from "../lib/legal-updates-sources"
@@ -151,9 +150,9 @@ async function main() {
       process.env.LEGISCAN_API_KEY,
       now,
       windowFor("legislative").filterDays,
-      recordBearsOnFirmOperations
+      bearsOnFirmOperations
     ),
-    fetchFederalRules(now, windowFor("regulatory").filterDays, recordBearsOnFirmOperations),
+    fetchFederalRules(now, windowFor("regulatory").filterDays, bearsOnFirmOperations),
   ])
 
   const recordItems: Item[] = sourcedBills.map((b) => ({

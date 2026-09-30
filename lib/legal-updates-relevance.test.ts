@@ -5,7 +5,6 @@ import {
   bearsOnFirmOperations,
   isCreRelevant,
   isIndividualAction,
-  recordBearsOnFirmOperations,
   partitionByRelevance,
 } from "./legal-updates-relevance.ts"
 import { LEGAL_SECTIONS, SECTION_LABELS, windowFor } from "./legal-updates-sections.ts"
@@ -84,7 +83,7 @@ test("word-boundary anchoring keeps out client, resilience and lieutenant", () =
   }
   // The words the anchors exist to protect still match.
   assert.ok(isCreRelevant({ title: "Florida bill on lien priority for construction lenders" }))
-  assert.ok(isCreRelevant({ summary: "The buyer takes title subject to existing liens." }))
+  assert.ok(isCreRelevant({ title: "Buyer takes title subject to existing liens" }))
 })
 
 test("residential and land-use policy is out of scope", () => {
@@ -102,7 +101,7 @@ test("residential and land-use policy is out of scope", () => {
 
 test("bare 'default' no longer admits default judgments", () => {
   assert.equal(isCreRelevant({ title: "Court Enters Default Judgment in Trademark Suit" }), false)
-  assert.ok(isCreRelevant({ summary: "Guidance on servicing a borrower default." }))
+  assert.ok(isCreRelevant({ title: "Guidance on servicing a borrower default" }))
 })
 
 test("drops a consumer-banking item with no CRE bearing anywhere", () => {
@@ -155,18 +154,18 @@ test("every section has a window and a label", () => {
   }
 })
 
-// ── The record gate ────────────────────────────────────────────────────────────
+// ── Where a term sits ──────────────────────────────────────────────────────────
 //
-// Everything above judges an item a model was asked to find. These judge one pulled out of
-// everything a legislature or an agency published, where the base rate is different and the same
-// evidence therefore means less.
+// A heading is read on every term; a body only on the core ones. These began as a stricter gate
+// for record-sourced items and became the only gate when the model path admitted a stablecoin
+// proposal on "capital requirements" in its body.
 
 test("an incidental term in the title is the subject, and qualifies", () => {
   // `bankrupt` is incidental because a court-procedure bill mentions bankruptcy in passing. In a
   // title chosen to say what the thing is about, it is the thing it is about — and subchapter V
   // debt limits genuinely bear on how a workout is negotiated.
   assert.equal(
-    recordBearsOnFirmOperations({ title: "Bankruptcy Threshold Adjustment Act" }),
+    bearsOnFirmOperations({ title: "Bankruptcy Threshold Adjustment Act" }),
     true
   )
 })
@@ -175,7 +174,7 @@ test("an incidental term buried in a long description does not qualify", () => {
   // A bill about who files what with whom, which mentions liens on its way past. This is the case
   // that gating on any term anywhere got wrong: it kept 32 Florida bills where 6 were the subject.
   assert.equal(
-    recordBearsOnFirmOperations({
+    bearsOnFirmOperations({
       title: "Determination of Mental Conditions in Judicial Proceedings",
       summary:
         "Revising procedures for the appointment of experts; conforming cross-references to the "
@@ -191,7 +190,7 @@ test("a core term in boilerplate is why local bills are excluded by number, not 
   // which is a core term meaning exactly what it says — the bill is simply not legislation anyone
   // here can act on. `isLocalBill` is what excludes it, on the numbering.
   assert.equal(
-    recordBearsOnFirmOperations({
+    bearsOnFirmOperations({
       title: "Pace Fire Rescue District, Santa Rosa County",
       summary:
         "Codifying the charter of the district; providing for the levy of assessments which shall "
@@ -205,7 +204,7 @@ test("a core term in the description qualifies, wherever it sits", () => {
   // "Court Fees" says nothing on its own; the description is where the legislature says the fees
   // are foreclosure fees.
   assert.equal(
-    recordBearsOnFirmOperations({
+    bearsOnFirmOperations({
       title: "Court Fees",
       summary: "Revising the service charges collected by clerks in foreclosure proceedings.",
     }),
@@ -218,7 +217,7 @@ test("a housing bill is out of scope however commercial its description sounds",
   // list stopped these being admitted on their own subject but not through a body that mentions
   // something commercial, so the title carries an exclusion of its own.
   assert.equal(
-    recordBearsOnFirmOperations({
+    bearsOnFirmOperations({
       title: "Affordable Housing Property Tax Exemptions",
       summary: "Providing an exemption for multifamily projects meeting certain criteria.",
     }),
@@ -230,7 +229,7 @@ test("a staff-review rule is not an appraisal rule", () => {
   // Live false positive from the Federal Register, and the one place a term had to be excluded as
   // a phrase rather than qualified.
   assert.equal(
-    recordBearsOnFirmOperations({
+    bearsOnFirmOperations({
       title: "Performance Appraisal for General Schedule and Prevailing Rate Employees",
       summary: "OPM is revising its regulations on performance appraisal systems.",
     }),
@@ -242,7 +241,7 @@ test("an action against an individual is still out, record or not", () => {
   // The one rule both gates share, and for the same reason: it is a ruling about one person's
   // employability whatever the underlying conduct involved.
   assert.equal(
-    recordBearsOnFirmOperations({
+    bearsOnFirmOperations({
       title: "Notice of Prohibition Order",
       summary: "Removal and prohibition order concerning a former loan officer's commercial mortgage file.",
     }),
@@ -250,14 +249,27 @@ test("an action against an individual is still out, record or not", () => {
   )
 })
 
-test("the record gate is stricter than the model gate, on the same item", () => {
-  // The distinction is the whole design, so it is asserted rather than left implied. This item
-  // mentions liens in a body and nothing in its title; a model that returned it was answering a
-  // question about CRE, and a legislature that published it was not.
-  const item = {
-    title: "Clerks of the Court",
-    summary: "Revising the duties of clerks with respect to liens recorded under this chapter.",
-  }
-  assert.equal(bearsOnFirmOperations(item), true)
-  assert.equal(recordBearsOnFirmOperations(item), false)
+test("a stablecoin proposal does not qualify on 'capital requirements' in its body", () => {
+  // Live case from the model path, and the reason there is one gate rather than two.
+  assert.equal(
+    bearsOnFirmOperations({
+      title:
+        "Federal Reserve Board requests public comment on two proposals related to establishing a regulatory framework for Board-supervised payment stablecoin issuers under the GENIUS Act",
+      summary:
+        "The second proposal introduces standardized capital requirements and risk management standards to address credit and operational risks associated with payment stablecoin activities.",
+    }),
+    false
+  )
+})
+
+test("the status is read as a heading", () => {
+  // "Receivership Appointed" is two words the publisher chose; it is not a body.
+  assert.equal(
+    bearsOnFirmOperations({
+      title: "Sunwest Bank Assumes All Deposits of Nano Banc",
+      status: "Receivership Appointed",
+      summary: "Depositors automatically became depositors of Sunwest Bank.",
+    }),
+    true
+  )
 })
