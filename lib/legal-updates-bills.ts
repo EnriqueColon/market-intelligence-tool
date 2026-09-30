@@ -355,6 +355,31 @@ export async function keepVerifiedBills<T extends BillCandidate>(
   return { kept, rejected }
 }
 
+/**
+ * A stable key for a bill across days, for the status table.
+ *
+ * Deliberately not the item's title or id. Titles get reworded between runs and the feed's `id`
+ * embeds the item's position in the list, so either would make the same bill look like a new one
+ * tomorrow and the tracking would report movement that never happened. The chamber, number and
+ * jurisdiction are the parts that cannot change without it being a different bill.
+ *
+ * The congress is left out on purpose: a bill reintroduced in the next congress keeps its number
+ * only by coincidence, but treating that as continuity is the lesser error against re-flagging
+ * every bill each January.
+ */
+export function billKey(reference: BillReference): string {
+  return reference.jurisdiction === "federal"
+    ? `US ${reference.billType} ${reference.number}`
+    : `FL ${reference.chamber} ${reference.number}`
+}
+
+/** The key for an item, or `null` if no bill can be read out of it. */
+export function billKeyFor(item: BillCandidate): string | null {
+  const reference =
+    parseCongressGovUrl(item.url) ?? parseBillReference(item.source) ?? parseBillReference(item.title)
+  return reference ? billKey(reference) : null
+}
+
 /** Exported for the verify script's per-item log line. */
 export function describeVerdict(verdict: BillVerdict): string {
   switch (verdict.status) {

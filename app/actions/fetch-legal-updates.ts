@@ -1,8 +1,10 @@
 "use server"
 
 import { unstable_cache } from "next/cache"
+import { trackBillStatuses, type TrackedBill } from "@/app/actions/bill-status-tracking"
 import { type LegalApplicability, normalizeApplicability } from "@/lib/legal-applicability"
-import { keepVerifiedBills } from "@/lib/legal-updates-bills"
+import { billKeyFor, keepVerifiedBills } from "@/lib/legal-updates-bills"
+import type { BillMovement } from "@/lib/legal-updates-movement"
 import { dedupeByTitle, dropStaleItems } from "@/lib/legal-updates-filter"
 import {
   buildBillSummaryPrompt,
@@ -39,6 +41,11 @@ export type LegalItem = {
    * join is deliberately outside this cache.
    */
   applicability?: LegalApplicability
+  /**
+   * How the bill's status changed since this tool last looked. Legislative items only, and only
+   * where a database is configured — absent on the dev preview, which has none.
+   */
+  movement?: BillMovement
 }
 
 export type LegalUpdatesResponse = {
@@ -219,6 +226,34 @@ async function collectSection(section: LegalSection, now: Date): Promise<Section
   return { section, kept: [], discarded }
 }
 
+/**
+ * Records each rendered bill's status and hangs any transition on the item.
+ *
+ * Runs on the deduped set rather than per section, so the status recorded is the one the tab
+ * actually shows. Doing it earlier would record bills that a later gate then discarded, and the
+ * next run would report a move from a status no reader ever saw.
+ */
+async function attachMovement(items: LegalItem[]): Promise<LegalItem[]> {
+  const keys = new Map<LegalItem, string>()
+  const tracked: TrackedBill[] = []
+
+  for (const item of items) {
+    if (item.section !== "legislative" || !item.status || !item.date) continue
+    const key = billKeyFor(item)
+    if (!key) continue
+    keys.set(item, key)
+    tracked.push({ key, title: item.title, status: item.status, statusDate: item.date })
+  }
+
+  const movements = await trackBillStatuses(tracked)
+  if (movements.size === 0) return items
+
+  return items.map((item) => {
+    const movement = movements.get(keys.get(item) ?? "")
+    return movement ? { ...item, movement } : item
+  })
+}
+
 /** Reads as an answer rather than an error, because most of the time it is one. */
 function describeEmptySection(result: SectionResult): string | undefined {
   const { stale, unverified, offTopic, misattributed } = result.discarded
@@ -257,7 +292,7 @@ async function fetchLegalUpdatesImpl(): Promise<LegalUpdatesResponse> {
   const collected = await Promise.all(LEGAL_SECTIONS.map((s) => collectSection(s, now)))
 
   // Dedupe last and across sections, so one development cannot occupy two of them.
-  const allItems = dedupeByTitle(collected.flatMap((c) => c.kept))
+  const allItems = await attachMovement(dedupeByTitle(collected.flatMap((c) => c.kept)))
 
   const sectionNotes: Partial<Record<LegalSection, string>> = {}
   for (const result of collected) {

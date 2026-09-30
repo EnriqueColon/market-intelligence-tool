@@ -2,6 +2,8 @@ import assert from "node:assert/strict"
 import { test } from "node:test"
 
 import {
+  billKey,
+  billKeyFor,
   congressForYear,
   parseBillReference,
   parseCongressGovUrl,
@@ -93,6 +95,34 @@ test("the four fabricated items from the live feed are all caught", () => {
   for (const [claimed, authoritative] of fabrications) {
     assert.equal(titlesAgree(claimed, authoritative), false, claimed)
   }
+})
+
+test("the same bill keys the same way however the item is worded", () => {
+  // The status table is keyed on this. If a reworded title produced a different key, the bill
+  // would look unseen tomorrow and the tracker would report a move that never happened.
+  const monday = billKeyFor({
+    title: "H.R. 7730 – Bankruptcy Threshold Adjustment Act",
+    source: "H.R. 7730 — U.S. House",
+    url: "https://www.congress.gov/bill/119th-congress/house-bill/7730",
+  })
+  const tuesday = billKeyFor({
+    title: "Bankruptcy Threshold Adjustment Act (H.R. 7730), as passed",
+    source: "H.R. 7730",
+  })
+  assert.equal(monday, tuesday)
+  assert.equal(monday, "US house_bill 7730")
+})
+
+test("the two legislatures cannot collide in the status table", () => {
+  // "SB 110" and "S. 110" are different bills. Sharing a key would make one overwrite the other.
+  assert.notEqual(
+    billKey({ jurisdiction: "florida", chamber: "senate", number: 110 }),
+    billKey({ jurisdiction: "federal", billType: "senate_bill", number: 110 })
+  )
+})
+
+test("an item with no bill in it has no key rather than a made-up one", () => {
+  assert.equal(billKeyFor({ title: "Florida Legislature Adjourns Regular Session" }), null)
 })
 
 test("a genuine citation survives a wording difference between short and long title", () => {

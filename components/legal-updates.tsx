@@ -13,6 +13,7 @@ import {
   Landmark,
   Scale,
   ShieldAlert,
+  TrendingUp,
 } from "lucide-react"
 import {
   fetchLegalUpdates,
@@ -96,8 +97,26 @@ function LegalCard({
             {item.status}
           </span>
         )}
+        {item.movement && (
+          <span
+            className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800"
+            title={`Was "${item.movement.from}"${item.movement.fromDate ? ` as of ${item.movement.fromDate}` : ""} when this tool last checked`}
+          >
+            <TrendingUp className="h-3 w-3" />
+            Moved
+          </span>
+        )}
         <span className="ml-auto text-xs text-slate-400">{item.date}</span>
       </div>
+
+      {/* The only thing here a reader cannot get by opening the bill: that it changed. */}
+      {item.movement && (
+        <p className="text-xs text-amber-800">
+          {item.movement.from} <span aria-hidden="true">→</span>
+          <span className="sr-only">to</span> <strong className="font-semibold">{item.movement.to}</strong> on{" "}
+          {item.movement.on}
+        </p>
+      )}
 
       {/* Title */}
       <div>
