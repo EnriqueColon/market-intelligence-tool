@@ -424,7 +424,9 @@ worked on model-returned items, where most candidates are already on topic, kept
 Florida bills when pointed at an entire legislative session — mostly fire-district and county bills
 whose official descriptions mention liens in passing. Moving a filter from a narrow feed to a wide
 one is a behaviour change even when the filter does not change, so measure it against the wide feed
-before shipping. See `recordBearsOnFirmOperations` and the two strictnesses in `confluence.md`.
+before shipping. It ended with one rule for both — a heading read on every term, a body only on the
+core ones — because the model path then admitted a stablecoin proposal the same way. See
+"Where a term sits decides how much it counts" in `confluence.md`.
 
 **Check whether a key in `.env.local` is actually read before trusting a document that says it is
 not.** `LEGISCAN_API_KEY` sat in the environment from the start of the project. A deployment

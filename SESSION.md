@@ -37,10 +37,26 @@ supervisory guidance — a large part of that section — never appear in it.
 The interesting problem was not plumbing. The relevance gate, tuned against items a model returns
 when asked about CRE, behaves differently when pointed at everything a legislature published: it
 kept 32 of 1,930 Florida bills, and most of them were fire-district and county bills whose official
-descriptions mention liens. So there are now two strictnesses. The terms are split by how selective
-they are, a title is read on all of them and a body only on the core ones, and residential subjects
-are excluded by title — which implements a decision taken this morning but only half applied, since
-five of the fifteen near-misses were housing bills that got in on "multifamily" in the body.
+descriptions mention liens. So the terms are split by how selective they are, a heading is read on
+all of them and a body only on the core ones, and residential subjects are excluded by title — which
+implements a decision taken this morning but only half applied, since five of the fifteen
+near-misses were housing bills that got in on "multifamily" in the body.
+
+This was first shipped as a second, stricter gate for record items only, on a base-rate argument.
+It lasted a few hours: the first look at the tab found a Federal Reserve stablecoin proposal
+admitted through the model path on "capital requirements" in its body, which is the same failure.
+There is now one gate. The same look found a Farm Credit Administration rule that got in on
+genuine terms and regulates nobody this firm deals with, so the Federal Register search is now
+restricted to the financial regulators. And it found three plain defects: every Florida bill
+rendering as its raw description with no "why it matters" (the model drops the `summaries` wrapper
+half the time and that read as no answer), `&#39;` printed literally from LegiScan text, and a real
+OCC rule summarised as "No agency abstract was published" because its republication carries none
+and the original does.
+
+Decided and kept as they are: bills that died still show, since a bill that died signals where the
+legislature is heading; and Florida bills qualifying on one core term in a long description are
+accepted, because no rule separates the grab-bag preemption bill from "Alternative Judicial Sales
+Procedures" without losing the second.
 
 Two structural exclusions were verified rather than assumed: Florida numbers local bills in the
 4000s (48 of 53 name a county or district), and the reviser's bills are titled exactly "Florida

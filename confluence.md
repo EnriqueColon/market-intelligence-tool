@@ -296,28 +296,42 @@ so asking as well would put one bill on the page twice under two spellings of it
 Procedures" against "SB 300: Alternative Judicial Sales". The prompt still runs when the records
 return nothing at all, and the identity guard still stands behind it.
 
-#### Two strictnesses, because the base rate differs
+#### Where a term sits decides how much it counts
 
-`bearsOnFirmOperations` judges an item a model was asked to find. `recordBearsOnFirmOperations`
-judges one pulled out of everything a legislature or an agency published, and it is stricter,
-because the base rate is different and nothing else about the candidate is. A model asked for recent
-CRE developments returns a list that is mostly CRE, so a term appearing anywhere in it is good
-evidence. A sweep of 1,930 Florida bills with an action in the window contains about six that
-concern this firm, and at that base rate an incidental term is noise: gating on any term anywhere
-kept 32, most of them fire-district and county bills whose official descriptions mention liens.
+The relevance terms are split by **how selective they are**, not by what they mean. A core term
+names this world wherever it appears — nothing writes "commercial mortgage" about something else.
+An incidental term appears in a sentence about something else at least as often as not: a bill on
+court procedure mentions liens, a stablecoin proposal mentions capital requirements, a staff-review
+rule is titled "Performance Appraisal".
 
-So the terms are split by **how selective they are**, not by what they mean. A core term names this
-world wherever it appears; an incidental term appears in a sentence about something else at least
-as often as not. Where the term appears then decides, because length is what makes a term
-unreliable: a title is a few words the publisher chose to say what the thing is about, so
-`bankrupt` in a title is almost always the subject — "Bankruptcy Threshold Adjustment Act" is real
-and it matters here — while a two-hundred-word abstract mentions liens on its way past. **A title is
-read on all the terms; a body only on the core ones.**
+Where the term appears then decides, because length is what makes a term unreliable. A heading —
+the title, and the status, which is equally short and equally the publisher's choice — is a few
+words chosen to say what the thing is about, so `bankrupt` in a title is almost always the subject:
+"Bankruptcy Threshold Adjustment Act" is real and it matters here. A two-hundred-word body mentions
+liens on its way past. **A heading is read on all the terms; a body only on the core ones.** This
+is `isCreRelevant`, and `bearsOnFirmOperations` is that plus the individual-action exclusion.
 
-The body can be read at all only because these sources publish their own abstracts. The Federal
-Register gives the agency's abstract and LegiScan the legislature's description. That is
-authoritative text rather than an argument, which is the distinction the whole gate rests on — see
-`describedBy` and the defect it was written to fix.
+This began, for a few hours, as a second and stricter gate applied to record-sourced items only.
+The argument was base rate: a model asked for recent CRE developments returns a list that is mostly
+CRE, so a term anywhere in its answer is good evidence, whereas a sweep of 1,930 Florida bills
+contains about six that matter and there an incidental term in a body is noise — gating on any term
+anywhere kept 32 of them, mostly fire-district and county bills whose descriptions mention liens.
+Then the model path admitted a Federal Reserve stablecoin proposal on "capital requirements" in its
+body, which is the same failure at a different base rate. One rule is simpler to reason about, and
+there is no longer an argument for two.
+
+A body can be read at all only where it is the publisher's own text. For record-sourced items that
+is the Federal Register's agency abstract or LegiScan's official description; for model-sourced
+items it is the model's `summary`, which the prompt asks it to write as reporting rather than
+argument. Neither is `whyItMatters` — see `describedBy` and the defect it was written to fix.
+
+**Federal Register rulemaking is restricted by issuer as well as by subject.** A Farm Credit
+Administration rule on troubled-debt classification arrived on real terms, and the FCA regulates
+farm lenders no one here will hold a note from. Nothing about the subject can say that; who issued
+the rule is a fact the record states outright, so the search names the regulators of the
+institutions this firm deals with — OCC, FDIC, the Federal Reserve, CFPB, FHFA, HUD, Treasury and
+NCUA — and nothing else comes back. Treasury is listed because the OCC's rules are frequently filed
+under both; FinCEN is not, its rulemaking being anti-money-laundering.
 
 Residential subjects are now excluded **by title**, which implements a decision already taken but
 only half applied. Dropping the residential terms from the relevance list stopped those items being
