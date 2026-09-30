@@ -13,6 +13,7 @@
 import { readFileSync } from "node:fs"
 
 import { describeVerdict, verifyBill } from "../lib/legal-updates-bills"
+import { describeFromRecord, fetchFederalBills } from "../lib/legal-updates-legislation"
 import { buildSectionPrompt } from "../lib/legal-updates-prompts"
 import { describeTest, normalizeApplicability } from "../lib/legal-applicability"
 import { dedupeByTitle, isStale } from "../lib/legal-updates-filter"
@@ -132,6 +133,26 @@ async function main() {
       }
     })
   )
+
+  // Federal legislation does not come from the model any more, so the run is only representative
+  // if the record's own items are in it. Mirrors collectFederalBills.
+  const sourcedBills = await fetchFederalBills(
+    now,
+    windowFor("legislative").filterDays,
+    (title) => bearsOnFirmOperations({ title })
+  )
+  const recordItems: Item[] = sourcedBills.map((b) => ({
+    title: `${b.displayNumber} – ${b.title}`,
+    source: `${b.displayNumber} — ${b.displayNumber.startsWith("S") ? "U.S. Senate" : "U.S. House"}`,
+    date: b.statusDate,
+    status: b.statusLabel,
+    url: b.url,
+    summary: describeFromRecord(b),
+  }))
+  const legislative = results.find((r) => r.section === "legislative")
+  if (legislative) legislative.items = [...recordItems, ...legislative.items]
+
+  console.log(`sourced from the congressional record: ${recordItems.length} bill(s)\n`)
 
   let total = 0
   let withheld = 0

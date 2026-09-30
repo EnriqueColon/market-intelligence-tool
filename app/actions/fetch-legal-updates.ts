@@ -4,8 +4,14 @@ import { unstable_cache } from "next/cache"
 import { type LegalApplicability, normalizeApplicability } from "@/lib/legal-applicability"
 import { keepVerifiedBills } from "@/lib/legal-updates-bills"
 import { dedupeByTitle, dropStaleItems } from "@/lib/legal-updates-filter"
+import {
+  buildBillSummaryPrompt,
+  describeFromRecord,
+  fetchFederalBills,
+  type SourcedBill,
+} from "@/lib/legal-updates-legislation"
 import { buildSectionPrompt } from "@/lib/legal-updates-prompts"
-import { partitionByRelevance } from "@/lib/legal-updates-relevance"
+import { bearsOnFirmOperations, partitionByRelevance } from "@/lib/legal-updates-relevance"
 import {
   LEGAL_SECTIONS,
   SECTION_LABELS,
@@ -96,6 +102,71 @@ async function querySection(section: LegalSection, now: Date): Promise<LegalItem
 }
 
 /**
+ * Federal legislation, built from the record and then given prose by the model.
+ *
+ * The identity of every item here — number, title, status, date, link — comes from govtrack and is
+ * never round-tripped through the model. If the summary call fails, the item still renders on
+ * `describeFromRecord`, because a real bill with a thin description is worth more than nothing and
+ * far more than an invented one.
+ */
+async function collectFederalBills(now: Date, filterDays: number): Promise<LegalItem[]> {
+  const bills = await fetchFederalBills(now, filterDays, (title) =>
+    bearsOnFirmOperations({ title })
+  )
+  if (bills.length === 0) return []
+
+  const prose = await summariseBills(bills)
+
+  return bills.map((bill, idx) => {
+    const written = prose.get(bill.displayNumber)
+    return {
+      id: `legislative-${idx}-${bill.displayNumber.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`,
+      section: "legislative" as const,
+      title: `${bill.displayNumber} – ${bill.title}`,
+      source: `${bill.displayNumber} — ${bill.displayNumber.startsWith("S") ? "U.S. Senate" : "U.S. House"}`,
+      date: bill.statusDate,
+      jurisdiction: "Federal" as const,
+      summary: written?.summary || describeFromRecord(bill),
+      whyItMatters: written?.whyItMatters || "",
+      status: bill.statusLabel,
+      url: bill.url,
+    }
+  })
+}
+
+async function summariseBills(
+  bills: SourcedBill[]
+): Promise<Map<string, { summary: string; whyItMatters: string }>> {
+  const out = new Map<string, { summary: string; whyItMatters: string }>()
+  try {
+    const parsed = await callOpenAiJson({
+      system: "Return ONLY valid JSON. Do not add, rename or renumber the bills you are given.",
+      user: buildBillSummaryPrompt(bills),
+      tier: "fast",
+      temperature: 0.1,
+      maxTokens: 1600,
+      // No search: the facts are supplied, and the only task left is explanation.
+      webSearch: false,
+    })
+    const summaries = parsed?.summaries
+    if (!summaries || typeof summaries !== "object") return out
+
+    for (const bill of bills) {
+      const entry = (summaries as Record<string, unknown>)[bill.displayNumber]
+      if (!entry || typeof entry !== "object") continue
+      const { summary, whyItMatters } = entry as Record<string, unknown>
+      out.set(bill.displayNumber, {
+        summary: typeof summary === "string" ? summary.trim() : "",
+        whyItMatters: typeof whyItMatters === "string" ? whyItMatters.trim() : "",
+      })
+    }
+  } catch {
+    /* falls back to describeFromRecord */
+  }
+  return out
+}
+
+/**
  * A section's worth of items that survived source verification.
  *
  * Retried once when nothing survives, because the model's failure here is erratic rather than
@@ -115,8 +186,12 @@ async function collectSection(section: LegalSection, now: Date): Promise<Section
   const discarded = { stale: 0, unverified: 0, offTopic: 0, misattributed: 0 }
   const { filterDays } = windowFor(section)
 
+  // Federal legislation comes from the record, so it is fetched once and not retried against the
+  // model. Florida still goes through the prompt below, there being no open API for it.
+  const sourced = section === "legislative" ? await collectFederalBills(now, filterDays) : []
+
   for (let attempt = 0; attempt < 2; attempt++) {
-    const raw = await querySection(section, now)
+    const raw = [...sourced, ...(await querySection(section, now))]
     if (raw.length === 0) continue
 
     // Cheapest checks first: date and topic are local, source verification costs a fetch each.

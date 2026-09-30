@@ -116,7 +116,9 @@ Return ONLY valid JSON:
   ]
 }`,
 
-  legislative: `You are a CRE legislative intelligence analyst. Find up to 5 Florida state bills or U.S. federal bills — fewer if that is all there is — with active legislative movement that affect commercial real estate, commercial mortgage lending, foreclosure and receivership procedure, lien priority, distressed-debt or note sales, or bank CRE lending regulation.
+  legislative: `You are a CRE legislative intelligence analyst. Find up to 4 **Florida** state bills — fewer if that is all there is — with active legislative movement that affect commercial real estate, commercial mortgage lending, foreclosure and receivership procedure, lien priority, distressed-debt or note sales, or bank CRE lending regulation.
+
+**Florida bills only.** Federal legislation for this section is taken directly from the congressional record and is already on the page, so a federal bill reported here is at best a duplicate. Do not return one.
 
 Scope is commercial. A bill about residential tenancy, homestead protection, affordable-housing funding or municipal zoning is out of scope even though it concerns property — those were removed after they crowded out the commercial items. Where a bill covers both, report it for what it does to commercial property or the credit secured on it.
 
@@ -124,7 +126,9 @@ Prioritize bills that have passed a committee, received a floor vote, or been si
 
 This section is legislation only. Every item must be a numbered bill, cited to its own page on a legislature's site showing that number. A court decision, an agency rule, a monetary policy action or an already-enacted statute is not a bill, however recent — those belong in the other sections, so leave them out.
 
-Florida's regular session runs roughly January to March, and most session laws take effect on 1 July, so a genuine Florida item is often dated to the signing or to that effective date rather than to this month. Outside session, report what the last session enacted and any interim committee activity; Congress moves year-round, so look there too.
+**The bill number will be checked against the cited page before anything is displayed.** An item whose number does not appear on the page it cites is discarded, so a guessed or remembered number costs you the slot and gains nothing. Copy the number from the page in front of you; if you cannot find the page, omit the item.
+
+Florida's regular session runs roughly January to March, and most session laws take effect on 1 July, so a genuine Florida item is often dated to the signing or to that effective date rather than to this month. Outside session, report what the last session enacted and any interim committee activity.
 
 For each item include:
 - The official bill title and bill number

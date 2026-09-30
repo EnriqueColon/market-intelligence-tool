@@ -28,6 +28,7 @@
     "test:legal-filter": "node --test --experimental-strip-types lib/legal-updates-filter.test.ts",
     "test:legal-relevance": "node --test --experimental-strip-types lib/legal-updates-relevance.test.ts",
     "test:legal-bills": "node --experimental-strip-types --test lib/legal-updates-bills.test.ts",
+    "test:legal-legislation": "node --experimental-strip-types --test lib/legal-updates-legislation.test.ts",
     "test:legal-applicability": "node --test --experimental-strip-types lib/legal-applicability.test.ts",
     "verify:executive-brief": "node --experimental-strip-types scripts/verify-executive-brief.mjs",
     "verify:workbench": "tsx scripts/verify-workbench.ts",
