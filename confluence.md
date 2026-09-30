@@ -188,6 +188,55 @@ items. `multifamily` stays, being an asset class here rather than housing policy
 commercial landlord-tenant coverage back, add the commercial-qualified forms rather than the bare
 words.
 
+### Legal Landscape: the one thing that outlives a day
+
+Everything else in this tab is a cache keyed to the calendar day with a 25-hour life. It is
+regenerated each morning by the cron, and **there is no table for legal items** — so yesterday's
+feed does not exist anywhere. That is a deliberate design for a news feed and it made the
+"Legislative Tracker" a misnomer: it could report that H.R. 7730 was at "Passed House & Senate" and
+was structurally unable to report that it had been in committee the week before, which is the only
+thing in the section a reader cannot get by opening the bill.
+
+`bill_status_history` is the minimum that fixes it: one row per bill, holding the status last seen
+and the one before it. Deliberately **not** a full action history — govtrack publishes that, and a
+second copy of a public record is a synchronisation problem in exchange for nothing.
+
+`lib/legal-updates-movement.ts` holds the comparison and `app/actions/bill-status-tracking.ts`
+holds the storage, split so the part with the logic can be tested without a database.
+
+Three behaviours that are decisions rather than accidents:
+
+- **A first sighting reports no movement**, not "new". The table starts empty, so the first run
+  after a deployment would otherwise flag every bill, and a bill introduced eight months ago is not
+  news. "First seen by this tool" is a fact about the tool, not the legislation.
+- **A transition keeps showing until the bill moves again**, rather than only on the day it
+  happened. Someone who checks weekly should not have to have been watching on the right morning.
+- **Re-running cannot consume a movement.** The feed regenerates on a cron and again on demand; if
+  the second pass reported nothing, whether a reader saw a move would depend on which request they
+  happened to make. `diffStatus` is idempotent and `npm run test:legal-movement` asserts it.
+
+Keyed on chamber, number and jurisdiction through `billKey`. Not the title, which gets reworded
+between runs, and not the item's `id`, which embeds its position in the list — either would make
+the same bill look unseen tomorrow and report a move that never happened. `SB 110` and `S. 110` are
+different bills and cannot share a key. The congress is left out, so a bill reintroduced next
+congress is treated as the same one; that is the lesser error against re-flagging everything each
+January.
+
+Tracking runs on the **deduped** set, so the status recorded is the one the tab actually showed.
+Recording earlier would store bills that a later gate discarded, and the next run would report a
+move from a status no reader ever saw.
+
+**With no database it degrades to silence**, which is the dev preview's normal state — the section
+then behaves as it did before, showing each bill's stage without saying whether it moved. Any error
+returns no movements rather than failing the feed. There is no
+`assertSafeToMutateProductionData` call here on purpose: `lib/environment.ts` reserves that guard
+for irreversible writes and states that an upsert into a tracking table is recoverable.
+
+**Untested against a real database.** The comparison logic is covered by unit tests; the Postgres
+around it is verified only by types and by failing closed. There is no local Postgres and the
+production credentials were deliberately left alone, so the first real exercise of this table will
+be its first deployment to an environment that has one.
+
 ### Legal Landscape: why the Legislative Tracker stopped asking
 
 The other two sections ask a model what happened and then check the answer. That works because a
@@ -1219,6 +1268,7 @@ selector without adding its scopes here quietly restores a fifty-second cold loa
 | `research_search_cache` | `search-industry-reports.ts` |
 | `research_feed_cache` | `api/research/feed-reports` (auto-creates itself) |
 | `institution_watchlist` | `app/actions/institution-watchlist.ts` (auto-creates itself) |
+| `bill_status_history` | `app/actions/bill-status-tracking.ts` (auto-creates itself) |
 
 `institution_watchlist` holds FDIC institutions the team is tracking, keyed on `cert` alone. One
 shared list: the tool has a single shared password and no accounts, so there is exactly one team.

@@ -10,6 +10,54 @@ is it in now, and what is still open.
 
 ## 2026-09-30 (latest) — the Legislative Tracker was inventing its bills
 
+#### Addendum, same day — the tracker now tracks
+
+A question during review: how long do we collect for, and how long do we track for? The first
+answer was in the code — a rolling 180-day window for regulatory and enforcement, 400 days for
+legislation. The second was **nothing at all**, which nobody had noticed.
+
+There is no table for legal items and never was. The whole feed is a cache keyed to the calendar
+day with a 25-hour life, regenerated each morning by the cron, with the previous day orphaned and
+never read again. So the "Legislative Tracker" was a daily snapshot wearing the word tracker: it
+could say a bill was at "Passed House & Senate" and was structurally incapable of saying it had
+been in committee the week before — which is the one thing in that section a reader cannot get by
+opening the bill themselves.
+
+`bill_status_history` now holds one row per bill: the status last seen and the one before it.
+Deliberately not a full action history, because govtrack publishes that already and a second copy
+of a public record is a synchronisation problem bought for nothing. This only became possible this
+morning, incidentally: before federal bills came from the record they had no trustworthy status to
+compare against.
+
+Three decisions, all of which are about not overclaiming. A first sighting reports **no** movement
+rather than "new", because the table starts empty and the first run after deployment would
+otherwise flag every bill — and a bill introduced eight months ago is not news. A transition keeps
+showing until the bill moves again, so someone who checks weekly need not have been watching on
+the right morning. And re-running cannot consume a movement: the feed regenerates on a cron and
+again on demand, so if the second pass reported nothing then whether a reader saw a move would
+depend on which request they happened to make. `diffStatus` is idempotent and tested for exactly
+that.
+
+Keyed on chamber, number and jurisdiction, never on the title or the item id — titles get reworded
+between runs and the id embeds list position, so either would make the same bill look unseen
+tomorrow and report a move that never happened.
+
+**What is not verified.** The Postgres path is exercised by no test and no local run. There is no
+local database, and I left the production credentials alone rather than pointing anything at real
+data to try it. The comparison logic has eight tests; the storage around it rests on types and on
+failing closed — any error returns no movements rather than taking the feed down, and with no
+database at all the section reads exactly as it did before. The dev preview has no database, so
+**this feature cannot be reviewed there**; its first real exercise will be its first deployment to
+an environment that has one.
+
+The 400-day legislative window was left as it is, by decision. A bill whose last action is older
+than that drops off even while still being law, which is a known cost to revisit once tracking has
+produced some history to look at.
+
+---
+
+
+
 Found by reviewing `dev` before merging, not by a test. The reported symptom was mild — the Legal
 Landscape tab had "too wide of a pull for things we do not really use", with an OCC prohibition
 order against a named individual given as the example. Following that led somewhere worse.

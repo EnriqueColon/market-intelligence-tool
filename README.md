@@ -235,6 +235,7 @@ npm run test:legal-filter     # legal feed hygiene: collapsing repeats, and with
 npm run test:legal-relevance  # legal feed: the firm-operations bar, and the per-section windows
 npm run test:legal-bills      # legal feed: bill numbers, and the fabricated bills that reached the tab
 npm run test:legal-legislation # legal feed: federal bills read from the record, and companion-bill dedupe
+npm run test:legal-movement   # legal feed: what changed about a bill, and why re-running cannot consume it
 npm run test:legal-applicability # which institutions a rule covers, and the two CRE-concentration units
 npm run test:allowlist        # publisher allowlist, and what "all" covers
 npm run build                 # next build
