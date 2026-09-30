@@ -54,7 +54,9 @@ async function loadLens(tabLabel, cardHeading) {
   const tab = page.getByRole("tab", { name: tabLabel })
   if ((await tab.count()) === 0) {
     throw new Error(
-      `No "${tabLabel}" tab. Run against a non-production build, or add its key to ENABLED_TABS.`
+      `No "${tabLabel}" tab, and no ENABLED_TABS value will bring it back — both views were ` +
+        `removed from TAB_DEFS in market-intelligence-dashboard.tsx. This script cannot run ` +
+        `until one of them is surfaced somewhere again.`
     )
   }
   await tab.click()

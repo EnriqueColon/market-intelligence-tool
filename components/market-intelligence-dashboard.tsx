@@ -1,8 +1,8 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Briefcase, FileText, LineChart, LogOut, Newspaper, Scale, Users } from "lucide-react"
+import { FileText, LineChart, LogOut, Newspaper, Scale } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { LegalUpdates } from "@/components/legal-updates"
@@ -13,24 +13,18 @@ import { ArticleDigest } from "@/components/article-digest"
 import { IndustryOutlook } from "@/components/industry-outlook"
 import { MarketResearchFeed } from "@/components/market-research-feed"
 import { MarketPulseStrip } from "@/components/market-pulse-strip"
-import { ExecutiveBrief } from "@/components/lenses/executive-brief"
-import { UnderwriterWorkbench } from "@/components/lenses/underwriter-workbench"
 
 type TabValue =
   | "news"
   | "analytics"
   | "market-research"
   | "legal"
-  | "executive-brief"
-  | "workbench"
 
 export type EnabledTabs = {
   news: boolean
   marketAnalytics: boolean
   marketResearch: boolean
   legal: boolean
-  executiveBrief: boolean
-  workbench: boolean
 }
 
 /** Flags for content inside a tab, as opposed to the tabs themselves. */
@@ -41,20 +35,18 @@ export type DashboardFeatures = {
 /**
  * Tab order is fixed here so the bar and the content below cannot fall out of step.
  *
- * The last two were previously "lenses", revealed by picking a department from a header
- * dropdown that wrote a cookie. They are ordinary tabs now. The department was a preference
- * rather than an identity — one shared password, no accounts — so gating a view on it only
- * meant a view you could not find, and it pushed the department into the cache key of anything
- * downstream. As tabs they are gated by `ENABLED_TABS` like everything else, which is the one
- * mechanism this app uses for reachability.
+ * `components/lenses/` holds two further views — the Executive Brief and the Underwriter
+ * Workbench — that are deliberately **not** listed here and have no way in. They were reached
+ * by picking a department from a header dropdown, which was removed; adding them as tabs
+ * instead was tried and rejected, because the tool should not grow a destination for every
+ * analysis. Their calculators in `lib/scoring/` are still unit-tested. If they come back it
+ * should be inside a view people already open, not as another tab.
  */
 const TAB_DEFS = [
   { value: "news", flag: "news", label: "News", Icon: Newspaper },
   { value: "analytics", flag: "marketAnalytics", label: "Market Analytics", Icon: LineChart },
   { value: "market-research", flag: "marketResearch", label: "Market Research", Icon: FileText },
   { value: "legal", flag: "legal", label: "Legal Landscape", Icon: Scale },
-  { value: "executive-brief", flag: "executiveBrief", label: "Executive Brief", Icon: Briefcase },
-  { value: "workbench", flag: "workbench", label: "Underwriter Workbench", Icon: Users },
 ] as const satisfies ReadonlyArray<{ value: TabValue; flag: keyof EnabledTabs; label: string; Icon: typeof Newspaper }>
 
 /**
@@ -68,8 +60,6 @@ const TAB_GRID_COLS: Record<number, string> = {
   2: "grid-cols-2",
   3: "grid-cols-3",
   4: "grid-cols-4",
-  5: "grid-cols-5",
-  6: "grid-cols-6",
 }
 
 const TAB_TRIGGER_CLASS =
@@ -122,29 +112,10 @@ export function MarketIntelligenceDashboard({
   const keepMounted = (value: string) =>
     visitedTabs.has(value) ? ({ forceMount: true } as const) : {}
 
-  // Institution handed from a lens to the Market Analytics tab, which owns the
-  // profile drawer. Routed through here rather than duplicating the drawer into
-  // the lens, so the statistics and their cohort-relative percentiles stay
-  // computed in exactly one place.
-  const [focusCert, setFocusCert] = useState<string | null>(null)
-  const [focusMissedCert, setFocusMissedCert] = useState<string | null>(null)
-  const analyticsAvailable = availableTabs.includes("analytics")
-
-  const handleSelectInstitution = useCallback(
-    (cert: string) => {
-      setFocusMissedCert(null)
-      setFocusCert(cert)
-      setActiveTab("analytics")
-    },
-    []
-  )
-
-  const handleFocusResolved = useCallback((found: boolean) => {
-    setFocusCert((cert) => {
-      if (!found && cert) setFocusMissedCert(cert)
-      return null
-    })
-  }, [])
+  // `MarketAnalytics` still accepts `focusCert`/`onFocusResolved` to open its profile drawer on a
+  // given institution. Nothing hands it one any more: the only callers were the two views in
+  // `components/lenses/`, which are no longer reachable. The props are left optional on that
+  // component rather than removed, so a future caller does not have to rebuild the routing.
 
   useEffect(() => {
     if (!availableTabs.length) {
@@ -268,12 +239,7 @@ export function MarketIntelligenceDashboard({
                     FDIC data is quarterly and lagged by 1–2 quarters. Filter by United States or any state.
                   </p>
                 </div>
-                <MarketAnalytics
-                  level="national"
-                  showBankStressMap={features.bankStressMap}
-                  focusCert={focusCert}
-                  onFocusResolved={handleFocusResolved}
-                />
+                <MarketAnalytics level="national" showBankStressMap={features.bankStressMap} />
               </TabsContent>
             )}
 
@@ -287,36 +253,6 @@ export function MarketIntelligenceDashboard({
               </TabsContent>
             )}
 
-            {/*
-              Both keep handing a selected institution to Market Analytics, which owns the profile
-              drawer, rather than growing one of their own. That routing is unchanged by the move
-              from lens to tab.
-            */}
-            {enabledTabs.executiveBrief && (
-              <TabsContent
-                value="executive-brief"
-                className={`flex flex-col gap-[60px] ${TAB_CONTENT_CLASS}`}
-                {...keepMounted("executive-brief")}
-              >
-                <ExecutiveBrief
-                  onSelectInstitution={analyticsAvailable ? handleSelectInstitution : undefined}
-                  notFoundCert={focusMissedCert}
-                />
-              </TabsContent>
-            )}
-
-            {enabledTabs.workbench && (
-              <TabsContent
-                value="workbench"
-                className={`flex flex-col gap-[60px] ${TAB_CONTENT_CLASS}`}
-                {...keepMounted("workbench")}
-              >
-                <UnderwriterWorkbench
-                  onSelectInstitution={analyticsAvailable ? handleSelectInstitution : undefined}
-                  notFoundCert={focusMissedCert}
-                />
-              </TabsContent>
-            )}
           </Tabs>
         </main>
       )}

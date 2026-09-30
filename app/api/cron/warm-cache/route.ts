@@ -13,9 +13,6 @@ import { fetchMarketInsights } from "@/app/actions/fetch-insights"
 import { fetchPriceIndexData, fetchTransactionVolumeData } from "@/app/actions/fetch-cre-data"
 import { getScreeningPayload } from "@/app/actions/market-analytics-screening"
 import { getAnalyticsVisuals } from "@/app/actions/market-analytics-visuals"
-import { getExecutiveBrief } from "@/app/actions/executive-brief"
-import { getWorkbenchUniverse } from "@/app/actions/underwriter-workbench"
-import { isFeatureEnabled } from "@/lib/features"
 
 export const runtime = "nodejs"
 // 5 minutes — all tasks run concurrently so wall time is the slowest single task
@@ -108,28 +105,11 @@ export async function GET(request: Request) {
     warmWithLabel("visuals:national", () => getAnalyticsVisuals("National"), results),
     warmWithLabel("visuals:florida", () => getAnalyticsVisuals("Florida"), results),
 
-    // The Executive Brief and Underwriter Workbench tabs. Each pulls nine
-    // quarters for every institution the FDIC row cap allows, which is roughly
-    // fifty seconds cold — long enough that the first person to open either
-    // after a deploy would otherwise sit in front of a skeleton. Both are
-    // cached for six hours, so warming once per deploy plus the daily cron
-    // covers the working day.
-    //
-    // Only "National" is warmed because that is the only scope either tab is
-    // mounted with. If a scope selector is added, every scope it can produce
-    // has to be added here or the tool quietly regains a fifty-second cold load.
-    //
-    // Each is skipped where its tab is not enabled, which in production is both
-    // of them while they are still being built. Warming them there would spend
-    // a couple of minutes of FDIC calls per deploy filling a cache nothing can
-    // read. They are gated separately now that they are separate tabs — one can
-    // be turned on without paying for the other.
-    ...(isFeatureEnabled("executive-brief")
-      ? [warmWithLabel("executiveBrief:national", () => getExecutiveBrief("National"), results)]
-      : []),
-    ...(isFeatureEnabled("underwriter-workbench")
-      ? [warmWithLabel("workbench:national", () => getWorkbenchUniverse("National"), results)]
-      : []),
+    // The Executive Brief and Underwriter Workbench were warmed here. They are
+    // no longer reachable, so warming them would spend a couple of minutes of
+    // FDIC calls per deploy filling a cache nothing can read. If either is ever
+    // surfaced again it needs a warm entry, because each pulls nine quarters for
+    // every institution the row cap allows — roughly fifty seconds cold.
   ])
 
   const failed = Object.entries(results).filter(([, v]) => v !== "ok")
