@@ -8,7 +8,7 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
 | `main` | `9faaf35` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `e45845f` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `dev` | `3bec6d7` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 This table names the newest commit on each branch that **changes behaviour**; documentation-only
 commits sit on top of it and are deliberately not tracked here, because amending one rotates its
@@ -20,9 +20,10 @@ screening reduction, the Visual Analysis charts and quarter-keyed caching — fo
 tab-persistence fix on 09-10. The branches were level after the Legal Landscape source-verification
 work merged on 09-29, and **`dev` is now four commits ahead**: the per-section windows, CRE
 relevance gate and always-rendered sections, then the computed exposure counts, then the removal of
-the department model, then the removal of the two lens tabs.
+the department model, then the removal of the two lens tabs, then the matched peer cohort in the
+institution drawer.
 
-The newest commit changing application behaviour is **`e45845f`** on `dev`; in production it is
+The newest commit changing application behaviour is **`3bec6d7`** on `dev`; in production it is
 **`e5414c3`**, which stops the feed publishing items it cannot point at a real primary source for. The four legal commits are a set: `2384143`
 stops the feed rendering one development several times, `10fd202` withholds stale items, `8625c7c`
 stops it being stale in the first place, and `e5414c3` stops it inventing citations. **`10fd202`
@@ -102,6 +103,7 @@ git push --force-with-lease origin dev
 
 | Commit | Date | Why it is a safe target |
 | --- | --- | --- |
+| `e45845f` | 2026-09-30 | Last `dev` commit before the drawer's percentiles changed meaning. The only reason to come back here is reconciling a figure someone exported under the scope-wide comparison. |
 | `f40b8df` | 2026-09-30 | Last `dev` commit with the two views reachable, as tabs. Only useful if you intend to restore them as tabs, which has been rejected; prefer surfacing the analysis inside the institution drawer. |
 | `6789d45` | 2026-09-29 | Last `dev` commit **with** the department model, if the removal needs undoing without losing the Legal Landscape exposure counts. Reverting `f40b8df` is preferable to rolling back here, since the two are independent. |
 | `9faaf35` | 2026-09-29 | Current production. The Legal Landscape source-verification guard, before the per-section windows and the always-rendered sections landed on `dev`. Roll back here if the `dev` legal work turns out badly; the tab stays truthful, it just goes quiet out of session. |
@@ -150,6 +152,7 @@ the Market Participants tab.
 
 | Commit | Date | Summary |
 | --- | --- | --- |
+| `3bec6d7` | 09-30 | Ranks the institution profile drawer's Peer Positioning percentiles against a **matched peer cohort** instead of the whole selected scope. **This changes numbers users have already quoted**: every institution that can be ranked moves, by 26.6 percentile points on average for banks under $1bn in Texas and up to 86 points. Reverting restores figures dominated by asset size — defensible only if someone is reconciling against an old export, and `verify:peer-cohort` will fail on the reverted code because the percentiles stop moving. Also in here: the ordinal fix (the old code rendered "2th percentile"), and two guards in `lib/scoring/peer-cohort.ts` — a single-state universe can no longer describe its cohort as national, and an institution with absent loan figures is no longer matched on lending mix. `npm run test:peer-cohort`, `npm run verify:peer-cohort` against live FDIC, and `npm run verify:peer-positioning` which reads the rendered drawer in a browser. |
 | `e45845f` | 09-30 | Takes the Executive Brief and Underwriter Workbench out of `TAB_DEFS`, so the tab bar is the four it has always been and **no `ENABLED_TABS` value reaches either view**. Reverting restores two tabs that have now been rejected twice — read the Lenses section of `confluence.md` and Phase 2 of `docs/NEXT_VERSION_PLAN.md` before doing so. Nothing was deleted: both components, both server actions and the five `lib/scoring/` calculators remain, with 39 passing tests. Also removed, because they had no caller left, the dashboard's focus-institution routing and the two cron cache warms — a revert must restore the warms or the first visitor after a deploy waits roughly fifty seconds. Safe: production never rendered either view. |
 | `f40b8df` | 09-29 | Removes the department model whole: the header dropdown, the cookie, `lib/department.ts`, and `department_watchlist`. Executive Brief and Underwriter Workbench become ordinary tabs behind `executive-brief` and `underwriter-workbench`, gated independently. Storage becomes `institution_watchlist`, keyed on `cert` alone, carrying over any surviving rows; **the old table is not dropped**, so a revert still finds its data. Low risk to revert because nothing live was using it — `department_watchlist` had no writer anywhere in the codebase and `department-lenses` was off in production. **The load-bearing line is `export const dynamic = "force-dynamic"` in `app/page.tsx`.** The page was dynamic only as a side effect of calling `cookies()`; without that declaration it prerenders statically and `ENABLED_TABS` freezes into the build, so editing the variable in Vercel silently does nothing and a build without it ships no tabs at all. If you revert this commit, the `cookies()` call comes back and covers it again — but do not remove the declaration on its own. Adding a tab also means adding its count to `TAB_GRID_COLS`; Tailwind cannot see `grid-cols-${n}`. |
 | `6789d45` | 09-29 | Legal Landscape cards carry the institutions a rule actually hits, counted from FDIC call reports. **Read `lib/legal-applicability.ts` before touching any concentration test.** `ScreeningRow.creConcentration` is CRE over total loans and cannot exceed 100; `capitalRatios.creToTier1Tier2` is CRE over Tier 1 + Tier 2 capital, which is what the supervisory thresholds mean. Resolving a 300%-of-capital rule against the first matches nothing on every institution with no error — a confident zero that reads as a rule affecting no one. Safe to revert whole; the cards lose the exposure block and go back to ending at generated prose. **Do not move the join into `fetchLegalUpdates`** — the watchlist would enter a cache key (it was the department before `f40b8df`, it is the shared watchlist now), and the feed's daily cache and screening's quarter-keyed cache expire on different clocks. The Florida universe is a correctness choice, not a scope one: the national payload is capped at 10,000 rows and biased to large banks. `npm run test:legal-applicability` and `npm run verify:legal-applicability`, the latter against live FDIC data. |

@@ -459,6 +459,40 @@ its final frame, which for a crawl is one copy already scrolled off, so the stri
 start blank. The later rule therefore drops the animation outright, hides the `aria-hidden`
 duplicates and makes the rail scrollable by hand.
 
+### Peer Positioning in the institution drawer
+
+`components/institution-profile-drawer.tsx`. Percentiles are measured against a **matched peer
+cohort**, not against everything in the selected scope. The scope-wide version was the shipped
+behaviour until 2026-09-30 and it read as meaningful while saying very little: a $180m
+single-branch bank ranked against a set containing Truist is mostly being told about its own size.
+Measured on live call reports, switching to matched peers moves the CRE/Assets percentile for
+**every** institution that can be ranked — in Texas 346 of 352, by 26.6 points on average for banks
+under $1bn against 23.2 for larger ones, with a largest single shift of 86 points. The old figure
+was not slightly off.
+
+Four places render these percentiles — the drawer's own list, the copied snapshot, the comparison
+chart and the comparison table — and each previously re-derived the cohort inline. They now share
+`PEER_METRICS`, `percentileAmong` and `resolvePeers`, so they cannot drift apart.
+
+Three consequences are carried in the interface rather than hidden:
+
+- **The cohort is stated wherever a percentile appears**, including in the copied snapshot, because
+  that text ends up in credit memos and a percentile without its cohort is not a fact. The basis
+  differs per institution, so no single caption could describe it.
+- **Fewer than `MIN_COHORT` (8) peers renders "—"**, not a number resting on four institutions.
+  This fires most often for the *largest* institutions under a single-state scope, where there are
+  no eight in-state banks of comparable size, so the note says to switch the scope to United States
+  — which does give them a cohort. Verified: in Georgia every institution over $1bn falls into this
+  case.
+- **In compare mode each institution is ranked against its own peers**, so bars are not a shared
+  scale of institutions. Stated in the caption, because otherwise a taller bar reads as "larger".
+
+Two rendering details worth keeping. Percentiles use `percentileIn`'s midrank convention, shared
+with the Opportunity Score so two percentiles on one screen cannot disagree about ties. And
+`ordinal()` exists because the previous code appended a bare "th" and rendered "2th percentile" and
+"23th percentile" — which survived a clean build, 199 passing unit tests and a passing live-data
+script, and was caught only by `npm run verify:peer-positioning` reading the drawer.
+
 ### FDIC screening metrics
 
 Fields are requested in `lib/fdic-config.ts` and turned into `BankFinancialData` in
@@ -803,8 +837,19 @@ property of the population so a per-institution request could not compute it any
 through a list of names is the actual use, which a round trip per name would spoil. It is O(universe)
 per selection — fine at ~1,113, not fine at 4,400.
 
-**Peer cohort** (`lib/scoring/peer-cohort.ts`). Matched on size band, then geography, then CRE mix,
-relaxing **CRE mix first and geography second** when the cohort is thinner than `MIN_COHORT` (8).
+**Peer cohort** (`lib/scoring/peer-cohort.ts`). Used by the institution profile drawer in Market
+Analytics — see "Peer Positioning" under that tab — and formerly by the Underwriter Workbench.
+Matched on size band, then geography, then CRE mix, relaxing **CRE mix first and geography second**
+when the cohort is thinner than `MIN_COHORT` (8).
+
+Two guards exist because both failures render a confident, wrong number rather than an error.
+**Geography is only relaxable when dropping it actually admits more institutions**, tested
+structurally as `inGeography.length < inSize.length` rather than by asking the caller to declare
+its universe. A single-state universe — which is what the Market Analytics scope selector produces
+for any state — would otherwise produce a cohort describing itself as national while containing
+only that state's banks. And **an institution whose loan figures are absent is not matched on
+lending mix**: `creMixBand` never throws, so missing figures land in "little CRE", and
+`mixIsKnown` is what stops that default being reported as a criterion that was tested.
 **Size is never relaxed** — comparing a community bank to a money-centre bank on reserve coverage is
 arithmetically fine and analytically meaningless. Which criteria survived is returned as `criteria`
 and printed on the card, because a percentile against nine matched peers is a different claim from

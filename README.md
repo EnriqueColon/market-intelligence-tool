@@ -288,6 +288,16 @@ Some checks need live data rather than fixtures, because they are calibrations r
   request for history or one it answers with invented citations; run it after any edit to
   `lib/legal-updates-prompts.ts`, `lib/legal-updates-sources.ts` or `lib/legal-updates-sections.ts`,
   and more than once, since the output is probabilistic.
+- `npm run verify:peer-cohort [STATE=…]` — what the matched peer cohort does to the drawer's
+  percentiles on live call reports, against the scope-wide figure it replaced. Fails if the
+  percentiles barely move (the cohort is not being applied), if small institutions move *less* than
+  large ones (size was the axis the old comparison was dominated by, so that would be backwards), or
+  if any cohort describes itself as national inside a single-state universe.
+- `npm run verify:peer-positioning` — opens the institution drawer in a real browser and reads the
+  Peer Positioning block back. Needs a server: `npm start -- --port 3100` then
+  `BASE=http://localhost:3100 npm run verify:peer-positioning`. It caught "2th percentile" and
+  "23th percentile" surviving a clean build, 199 passing unit tests and a passing live-data check.
+  Uses Playwright directly, because the editor's browser tool cannot reach `localhost` here.
 - `npm run verify:legal-applicability` — applies the supervisory CRE thresholds to live Florida
   call reports and fails if they return implausible counts. This is what catches a concentration
   test wired to the wrong field: `creConcentration` is CRE over loans and caps at 100, so a

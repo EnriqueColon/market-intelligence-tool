@@ -8,7 +8,91 @@ is it in now, and what is still open.
 
 ---
 
-## 2026-09-30 (latest) — the two lenses leave the tab bar
+## 2026-09-30 (latest) — the drawer's percentiles start meaning something
+
+Two fixes taken from a production-issues list, only one of which was code. The legal feed's single
+180-day window was already fixed on `dev`, so that one shipped by merging. The other was live and
+unfixed: **the institution profile drawer ranked each bank against every institution in the
+selected scope.**
+
+That number looked fine, which is the whole problem. A percentile against the whole scope is
+dominated by size — a $180m single-branch bank measured against a set containing Truist is mostly
+being told how small it is — and nothing on screen said what the comparison was.
+`lib/scoring/peer-cohort.ts` had existed since Phase 1 to pick a defensible cohort and had never
+been wired to anything.
+
+### How wrong the old number was
+
+Worth recording because "misleading" could mean two points or eighty. On live call reports the
+CRE/Assets percentile moves for **every institution that can be ranked at all**: Texas 346 of 352,
+Georgia 108 of 112, Florida 78 of 78. Mean shift for banks under $1bn is 26.6 points in Texas
+against 23.2 for larger ones, and the largest single shift is 86 points. A bank that read as
+median read as top-decile once compared with banks like itself.
+
+The direction is the confirmation that matters. Small institutions move *more* than large ones,
+which is what must happen if size was the axis the old comparison was dominated by. If the change
+were cosmetic the smallest banks would be the least affected. `npm run verify:peer-cohort` asserts
+that relationship rather than leaving it as an argument.
+
+### Four call sites, now one implementation
+
+The drawer list, the copied snapshot, the comparison chart and the comparison table each
+re-derived the cohort inline from the `cohort` prop — four chances to disagree. They now share
+`PEER_METRICS`, `percentileAmong` and `resolvePeers`.
+
+Three consequences are carried in the interface instead of smoothed over. The cohort is stated
+wherever a percentile appears, **including the copied snapshot**, because that text ends up in
+credit memos and a percentile without its cohort is not a fact. Fewer than eight peers renders as
+an em dash rather than a number resting on four institutions — and since that mostly affects the
+*largest* banks under a single-state scope, the note says to switch the scope to United States,
+which does give them a cohort. And in compare mode each institution is ranked against its own
+peers, so the caption says the bars are not a shared scale, or a taller bar would read as "larger".
+
+### Two guards in the library, for failures that render rather than throw
+
+Wiring the drawer to a state-scoped universe exposed both.
+
+**Geography is only relaxable when dropping it admits more institutions**, tested structurally as
+`inGeography.length < inSize.length`. A single-state universe — what the scope selector produces
+for any state — would otherwise return a cohort describing itself as *national* while containing
+only that state's banks. Deliberately not a parameter the caller declares: a caller that gets the
+declaration wrong produces a confidently mislabelled percentile, which is the failure being
+prevented.
+
+**An institution with absent loan figures is not matched on lending mix.** `creMixBand` never
+throws, so missing figures land in "little CRE" — correct for a band lookup, wrong for cohort
+matching, because the bank would be filed with genuine consumer lenders and `criteria.creMix`
+would report a match that was never tested. `mixIsKnown` is the guard.
+
+### The bug that only rendered output could catch
+
+The drawer showed **"2th percentile"** and **"23th percentile"**. The old code appended a bare
+"th". That survived a clean build, 199 passing unit tests, and a live-data script that checked the
+numbers but never their formatting — the exact failure mode this repository keeps meeting. It was
+caught by `npm run verify:peer-positioning`, which opens the drawer in a real browser and reads the
+text back.
+
+That script exists because **the editor's browser tool still cannot reach `localhost`** — five
+sessions running. Playwright works fine, so the repo's own visual-verification pattern was the way
+through. This is the first session in four with actual rendered confirmation of a change, and it
+found a defect immediately, which is the argument for doing it every time.
+
+Verified: 199 unit tests across 15 suites (5 new), typecheck at 77 errors before and after with
+none in a touched file, build clean, `verify:peer-cohort` passing on Florida, Georgia and Texas,
+and the drawer read back in a browser.
+
+**Still open.** Unchanged: enforcement items are not matched by named institution to an FDIC cert;
+the legal applicability hit rate is 1–2 items per run; `institution_watchlist` has a reader and no
+writer. New: the Playwright run logs `net::ERR_ABORTED` on RSC prefetches and one
+`Unexpected token '<'`, which appear to be artefacts of the script pressing Escape mid-navigation
+rather than a product defect — worth confirming rather than assuming. The 77 pre-existing
+typecheck errors are unchanged and the build ignores them, so types are not currently protecting
+production. `peer-cohort`'s other consumers are the two unreachable views, so this is now the only
+live caller.
+
+---
+
+## 2026-09-30 — the two lenses leave the tab bar
 
 A correction to yesterday. Asked to remove "the dropdown that says executive, accounting,
 underwriting and the functionality that comes with it", I removed that — and then made the two
