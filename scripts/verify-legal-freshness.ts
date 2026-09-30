@@ -12,10 +12,15 @@
 
 import { readFileSync } from "node:fs"
 
+import { describeVerdict, verifyBill } from "../lib/legal-updates-bills"
 import { buildSectionPrompt } from "../lib/legal-updates-prompts"
 import { describeTest, normalizeApplicability } from "../lib/legal-applicability"
 import { dedupeByTitle, isStale } from "../lib/legal-updates-filter"
-import { isCreRelevant } from "../lib/legal-updates-relevance"
+import {
+  bearsOnFirmOperations,
+  isCreRelevant,
+  isIndividualAction,
+} from "../lib/legal-updates-relevance"
 import { LEGAL_SECTIONS, type LegalSection, windowFor } from "../lib/legal-updates-sections"
 import { checkSourceUrl } from "../lib/legal-updates-sources"
 
@@ -131,6 +136,8 @@ async function main() {
   let total = 0
   let withheld = 0
   let offTopic = 0
+  let individual = 0
+  let misattributed = 0
   let sourced = 0
   let fabricated = 0
   let scoped = 0
@@ -141,22 +148,41 @@ async function main() {
     for (const q of r.queries) console.log(`   searched: "${String(q).slice(0, 96)}"`)
 
     const verdicts = await Promise.all(r.items.map((it) => checkSourceUrl(it.url, r.section)))
+    const billVerdicts =
+      r.section === "legislative"
+        ? await Promise.all(r.items.map((it) => verifyBill(it, now)))
+        : r.items.map(() => undefined)
     const filterDays = windowFor(r.section).filterDays
     r.items.forEach((it, i) => {
       const old = isStale(it.date, now.getTime(), filterDays)
       const topical = isCreRelevant(it)
+      const person = isIndividualAction(it)
       total += 1
       if (old) withheld += 1
       if (!topical) offTopic += 1
+      if (person) individual += 1
       if (verdicts[i] === "ok") sourced += 1
       if (verdicts[i] === "dead") fabricated += 1
       const test = normalizeApplicability(it.applicability)
       if (test) scoped += 1
-      const flags = [old ? "OLD" : "IN", topical ? "CRE" : "OFF", verdicts[i].toUpperCase()]
+      // PERSON is printed separately from OFF because the two are worth different reactions: OFF
+      // means the term list did not recognise the subject, PERSON means it did and rejected it.
+      const flags = [
+        old ? "OLD" : "IN",
+        person ? "PERSON" : topical ? "CRE" : "OFF",
+        verdicts[i].toUpperCase(),
+      ]
       console.log(
         `   [${flags.join("|").padEnd(20)}] ${it.date ?? "(no date)"}  ${String(it.title).slice(0, 48)}`
       )
       if (verdicts[i] !== "ok") console.log(`             ${it.url ?? "(no url)"}`)
+      // Printed for every legislative item, kept or dropped. A fabricated bill is indistinguishable
+      // from a real one by eye; the authoritative title is the only thing that separates them.
+      if (billVerdicts[i]) {
+        const v = billVerdicts[i]!
+        if (v.status !== "ok") misattributed += 1
+        console.log(`             bill: ${describeVerdict(v)}`)
+      }
       // Printed in full because the failure mode here is a plausible threshold that misreads the
       // rule, and that is only visible by eye against the document we cited.
       if (test) console.log(`             scope: ${describeTest(test)}`)
@@ -172,16 +198,29 @@ async function main() {
     r.items.map((i) => ({ ...i, title: i.title ?? "", section: r.section }))
   )
   const surviving = dedupeByTitle(
-    all.filter((i) => !isStale(i.date, now.getTime(), windowFor(i.section).filterDays) && isCreRelevant(i))
+    all.filter(
+      (i) =>
+        !isStale(i.date, now.getTime(), windowFor(i.section).filterDays) &&
+        bearsOnFirmOperations(i)
+    )
   )
   const verified = await Promise.all(surviving.map((i) => checkSourceUrl(i.url, i.section)))
-  const rendered = surviving.filter((_, i) => verified[i] === "ok")
+  const sourcedItems = surviving.filter((_, i) => verified[i] === "ok")
+  // Legislation carries the extra identity check, exactly as collectSection applies it.
+  const billOk = await Promise.all(
+    sourcedItems.map(async (i) =>
+      i.section === "legislative" ? (await verifyBill(i, now)).status === "ok" : true
+    )
+  )
+  const rendered = sourcedItems.filter((_, i) => billOk[i])
 
   const withheldRatio = total ? withheld / total : 0
   const fabricatedRatio = total ? fabricated / total : 0
 
   console.log(`${withheld}/${total} older than their section's filter window (${(withheldRatio * 100).toFixed(0)}%)`)
   console.log(`${offTopic}/${total} with no clear bearing on commercial real estate`)
+  console.log(`${individual}/${total} are actions against an individual, not an institution`)
+  console.log(`${misattributed} legislative item(s) failed the bill-identity check`)
   console.log(`${sourced}/${total} backed by a primary source that loads`)
   console.log(`${fabricated}/${total} cite a URL that does not exist (${(fabricatedRatio * 100).toFixed(0)}%)`)
   // Informational rather than a gate. Most developments state no quantitative scope, so a low
@@ -196,6 +235,23 @@ async function main() {
   ).length
   if (leaked > 0) {
     console.error(`\nFAIL: ${leaked} item(s) would render without a verifiable source. The guard is leaking.`)
+    process.exit(1)
+  }
+  // The failure this was written for: a real bill number wearing an invented title. Four of these
+  // rendered on 2026-09-30 and every other gate passed them, so it is checked on what would ship
+  // rather than on the raw sample.
+  const leakedBills = (
+    await Promise.all(
+      rendered
+        .filter((i) => i.section === "legislative")
+        .map(async (i) => ({ item: i, verdict: await verifyBill(i, now) }))
+    )
+  ).filter((r) => r.verdict.status !== "ok")
+  if (leakedBills.length > 0) {
+    console.error(`\nFAIL: ${leakedBills.length} legislative item(s) would render misattributed:`)
+    for (const { item, verdict } of leakedBills) {
+      console.error(`  ${item.title} — ${describeVerdict(verdict)}`)
+    }
     process.exit(1)
   }
   if (rendered.length === 0) {

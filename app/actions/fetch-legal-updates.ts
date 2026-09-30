@@ -2,6 +2,7 @@
 
 import { unstable_cache } from "next/cache"
 import { type LegalApplicability, normalizeApplicability } from "@/lib/legal-applicability"
+import { keepVerifiedBills } from "@/lib/legal-updates-bills"
 import { dedupeByTitle, dropStaleItems } from "@/lib/legal-updates-filter"
 import { buildSectionPrompt } from "@/lib/legal-updates-prompts"
 import { partitionByRelevance } from "@/lib/legal-updates-relevance"
@@ -107,11 +108,11 @@ type SectionResult = {
   section: LegalSection
   kept: LegalItem[]
   /** Counts behind an empty section, so it can explain itself rather than simply vanishing. */
-  discarded: { stale: number; unverified: number; offTopic: number }
+  discarded: { stale: number; unverified: number; offTopic: number; misattributed: number }
 }
 
 async function collectSection(section: LegalSection, now: Date): Promise<SectionResult> {
-  const discarded = { stale: 0, unverified: 0, offTopic: 0 }
+  const discarded = { stale: 0, unverified: 0, offTopic: 0, misattributed: 0 }
   const { filterDays } = windowFor(section)
 
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -127,7 +128,17 @@ async function collectSection(section: LegalSection, now: Date): Promise<Section
     discarded.offTopic += topical.irrelevant.length
     discarded.unverified += verified.rejected.length
 
-    if (verified.kept.length > 0) return { section, kept: verified.kept, discarded }
+    // Legislation gets a second, stronger check. A loading URL says nothing here: congress.gov
+    // returns 403 to us and Florida's sites serve soft 404s, so the section had been accepting
+    // real bill numbers carrying invented titles. See `lib/legal-updates-bills.ts`.
+    let kept = verified.kept
+    if (section === "legislative") {
+      const bills = await keepVerifiedBills(kept, now)
+      discarded.misattributed += bills.rejected.length
+      kept = bills.kept
+    }
+
+    if (kept.length > 0) return { section, kept, discarded }
   }
 
   return { section, kept: [], discarded }
@@ -135,17 +146,18 @@ async function collectSection(section: LegalSection, now: Date): Promise<Section
 
 /** Reads as an answer rather than an error, because most of the time it is one. */
 function describeEmptySection(result: SectionResult): string | undefined {
-  const { stale, unverified, offTopic } = result.discarded
+  const { stale, unverified, offTopic, misattributed } = result.discarded
   const { filterDays } = windowFor(result.section)
 
-  if (stale + unverified + offTopic === 0) {
+  if (stale + unverified + offTopic + misattributed === 0) {
     return `No qualifying developments in the last ${filterDays} days.`
   }
 
   const reasons: string[] = []
   if (stale) reasons.push(`${stale} older than ${filterDays} days`)
-  if (offTopic) reasons.push(`${offTopic} without a clear bearing on commercial real estate`)
+  if (offTopic) reasons.push(`${offTopic} without a clear bearing on the firm's operations`)
   if (unverified) reasons.push(`${unverified} without a verifiable primary source`)
+  if (misattributed) reasons.push(`${misattributed} citing a bill number that is a different bill`)
 
   return `Nothing to report. Candidates were set aside: ${reasons.join("; ")}.`
 }
@@ -194,7 +206,7 @@ export async function fetchLegalUpdates(): Promise<LegalUpdatesResponse> {
   const day = newsCalendarDayET()
   return unstable_cache(
     async () => fetchLegalUpdatesImpl(),
-    ["legal-updates-v7", day],
+    ["legal-updates-v8", day],
     // 25h so the entry outlives the day and never expires just before the cron.
     { revalidate: 90000 }
   )()

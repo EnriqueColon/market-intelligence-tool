@@ -116,7 +116,9 @@ Return ONLY valid JSON:
   ]
 }`,
 
-  legislative: `You are a CRE legislative intelligence analyst. Find up to 5 Florida state bills or U.S. federal bills — fewer if that is all there is — with active legislative movement that affect commercial real estate, mortgage lending, foreclosure law, property rights, landlord/tenant regulations, property tax assessments, or CRE-related banking regulations.
+  legislative: `You are a CRE legislative intelligence analyst. Find up to 5 Florida state bills or U.S. federal bills — fewer if that is all there is — with active legislative movement that affect commercial real estate, commercial mortgage lending, foreclosure and receivership procedure, lien priority, distressed-debt or note sales, or bank CRE lending regulation.
+
+Scope is commercial. A bill about residential tenancy, homestead protection, affordable-housing funding or municipal zoning is out of scope even though it concerns property — those were removed after they crowded out the commercial items. Where a bill covers both, report it for what it does to commercial property or the credit secured on it.
 
 Prioritize bills that have passed a committee, received a floor vote, or been signed into law. Skip bills with no movement.
 
@@ -156,6 +158,8 @@ Return ONLY valid JSON:
 3. Major commercial real estate Chapter 11 bankruptcy filings (assets > $50M)
 4. Court-appointed receiverships on large CRE assets in Florida or nationally
 5. High-profile lender liability or foreclosure litigation with broad market implications
+
+Every item must concern an institution, a rule or a case — never one individual. Removal-and-prohibition orders, personal cease-and-desist orders and civil money penalties against a named person are out of scope regardless of what the underlying conduct involved: they decide whether one person may work in banking and change nothing about buying notes or working out loans. These are discarded before display, so including them only costs you one of your five slots.
 
 Report the most recent action in a matter, not the matter's origin.
 
