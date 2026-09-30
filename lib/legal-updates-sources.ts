@@ -68,6 +68,9 @@ const AUTHORITATIVE_HOSTS: Record<LegalSection, string[]> = {
     // Free mirror of PACER filings. Included because bankruptcy dockets are otherwise paywalled,
     // which previously left the model citing the PACER homepage as though it were a document.
     "courtlistener.com",
+    // FDIC announces its monthly enforcement decisions and orders through GovDelivery, the same
+    // way it announces Financial Institution Letters. Omitting it here rejected real bulletins.
+    "content.govdelivery.com",
   ],
 }
 
