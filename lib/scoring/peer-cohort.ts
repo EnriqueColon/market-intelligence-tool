@@ -40,6 +40,24 @@ export function sizeBand(totalAssets: number) {
   return SIZE_BANDS.find((b) => totalAssets >= b.min && totalAssets < b.max) ?? SIZE_BANDS[0]
 }
 
+/**
+ * Whether this institution's lending mix can be characterised at all.
+ *
+ * `creMixBand` deliberately never throws, so a bank reporting no loans lands in
+ * "little CRE" rather than dividing by zero. That default is right for a band
+ * lookup and wrong for cohort matching: an institution whose loan figures are
+ * simply absent would be filed alongside genuine consumer lenders and then
+ * ranked against them. Screening rows carry `totalLoans` optionally, so this is
+ * reachable with live data rather than hypothetical.
+ */
+export function mixIsKnown(candidate: Pick<PeerCandidate, "creLoans" | "totalLoans">): boolean {
+  return (
+    Number.isFinite(candidate.totalLoans) &&
+    candidate.totalLoans > 0 &&
+    Number.isFinite(candidate.creLoans)
+  )
+}
+
 export function creMixBand(creLoans: number, totalLoans: number) {
   const share = totalLoans > 0 ? creLoans / totalLoans : 0
   return MIX_BANDS.find((b) => share >= b.min && share < b.max) ?? MIX_BANDS[0]
@@ -109,12 +127,35 @@ export function selectPeers<T extends PeerCandidate>(
     return b.label === size.label
   })
   const inGeography = inSize.filter((c) => c.state === subject.state)
-  const inMix = inGeography.filter((c) => creMixBand(c.creLoans, c.totalLoans).label === mix.label)
+  // Peers whose lending mix is unknown are excluded from the mix-matched
+  // attempt rather than counted into whichever band their missing figures
+  // defaulted to. They remain eligible on the broader attempts, where mix is
+  // not being claimed.
+  const inMix = inGeography.filter(
+    (c) => mixIsKnown(c) && creMixBand(c.creLoans, c.totalLoans).label === mix.label
+  )
+
+  // Dropping geography is only a real relaxation when it actually admits more
+  // institutions. Given a single-state universe — which is what the Market
+  // Analytics scope selector produces for any state other than National —
+  // `inGeography` and `inSize` are the same institutions, so offering that
+  // step would widen nothing while making `description` claim a national
+  // cohort that does not exist. Tested structurally rather than by asking the
+  // caller to declare its universe, because a caller that gets the
+  // declaration wrong produces a confidently mislabelled percentile.
+  const geographyRelaxable = inGeography.length < inSize.length
 
   const attempts: { peers: T[]; criteria: CohortCriteria }[] = [
-    { peers: inMix, criteria: { size: true, geography: true, creMix: true } },
+    // Skipped entirely when the subject's own mix is unknown: matching on a
+    // band the subject was defaulted into would report a criterion as met that
+    // was never tested.
+    ...(mixIsKnown(subject)
+      ? [{ peers: inMix, criteria: { size: true, geography: true, creMix: true } }]
+      : []),
     { peers: inGeography, criteria: { size: true, geography: true, creMix: false } },
-    { peers: inSize, criteria: { size: true, geography: false, creMix: false } },
+    ...(geographyRelaxable
+      ? [{ peers: inSize, criteria: { size: true, geography: false, creMix: false } }]
+      : []),
   ]
   const chosen = attempts.find((a) => a.peers.length >= MIN_COHORT) ?? attempts[attempts.length - 1]
 
@@ -149,6 +190,9 @@ function describe(
   const parts = [`institutions with assets ${sizeLabel}`]
   if (criteria.geography && state) parts.push(`in ${titleCase(state)}`)
   if (criteria.creMix) parts.push(`that are also ${mixLabel}`)
+  // Only reachable when the universe spans states, which in this application
+  // means the national payload; `selectPeers` will not relax geography
+  // otherwise.
   if (!criteria.geography) parts.push("nationally")
   return parts.join(" ")
 }

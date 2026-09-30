@@ -37,6 +37,8 @@
     "verify:latest-quarter": "tsx scripts/verify-latest-quarter.ts",
     "verify:tab-persistence": "node scripts/verify-tab-persistence.mjs",
     "verify:legal-freshness": "tsx scripts/verify-legal-freshness.ts",
+    "verify:peer-positioning": "node scripts/verify-peer-positioning-visually.mjs",
+    "verify:peer-cohort": "tsx scripts/verify-peer-cohort.ts",
     "verify:legal-applicability": "tsx scripts/verify-legal-applicability.ts"
   },
   "dependencies": {

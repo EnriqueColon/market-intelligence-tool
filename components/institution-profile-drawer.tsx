@@ -18,6 +18,13 @@ import {
 } from "@/lib/format/metrics"
 import { getCreCapitalColor } from "@/lib/score-colors"
 import { computeCreMix } from "@/lib/fdic-cre"
+import {
+  MIN_COHORT,
+  percentileIn,
+  selectPeers,
+  type PeerCandidate,
+  type PeerCohort,
+} from "@/lib/scoring/peer-cohort"
 import { DefTerm } from "@/components/def-term"
 import { ChartTooltipRow, ChartTooltipShell } from "@/components/charts/chart-tooltip"
 import { CHART_SERIES, categoryTick, gridProps, numericTick } from "@/lib/chart-theme"
@@ -59,12 +66,6 @@ function formatDecimalPercent(value: number | undefined): string {
 function formatRatio(value: number | null | undefined): string {
   if (value === undefined || value === null || !Number.isFinite(value)) return "—"
   return formatMultipleMetric(value)
-}
-
-function percentileRank(value: number, sortedValues: number[]): number {
-  if (sortedValues.length === 0) return 0
-  const below = sortedValues.filter((v) => v < value).length
-  return Math.round((below / sortedValues.length) * 100)
 }
 
 export type InstitutionProfileRow = {
@@ -117,6 +118,116 @@ export type InstitutionProfileRow = {
     creConcentration?: number
     nplRatio?: number
   }>
+}
+
+/**
+ * Peer positioning is measured against a **matched cohort**, not the whole scope.
+ *
+ * Until 2026-09-30 every percentile in this drawer ranked the institution against every row in the
+ * selected scope. Such a number reads as meaningful while saying very little: a $180m
+ * single-branch bank ranked against a set that includes Truist is mostly being told about its own
+ * size. `lib/scoring/peer-cohort` narrows to the same asset band, state and lending mix, relaxing
+ * one axis at a time when the cohort is too thin.
+ *
+ * Two consequences this component carries rather than smooths over:
+ *
+ *  - **The cohort is stated wherever a percentile appears.** A percentile without its cohort is not
+ *    a fact, and the basis now differs per institution, so it cannot be left implicit in a caption.
+ *  - **A thin cohort renders as "—".** `percentileIn` returns null below `MIN_COHORT` peers instead
+ *    of a number resting on four institutions. Fewer figures, each of which means something.
+ */
+type PeerRow = PeerCandidate & { row: InstitutionProfileRow }
+
+function toPeerRow(row: InstitutionProfileRow): PeerRow {
+  return {
+    cert: row.id,
+    name: row.name,
+    state: row.state,
+    totalAssets: row.totalAssets,
+    // Absent loan figures pass through as NaN rather than being coerced to 0, so `mixIsKnown`
+    // reads them as unknown and drops the lending-mix criterion. A zero would instead have
+    // claimed a match on "little CRE" for an institution whose mix was never reported.
+    creLoans: row.creLoans ?? Number.NaN,
+    totalLoans: row.totalLoans ?? Number.NaN,
+    row,
+  }
+}
+
+function resolvePeers(
+  subject: InstitutionProfileRow,
+  universe: InstitutionProfileRow[]
+): { peers: InstitutionProfileRow[]; cohort: PeerCohort<PeerRow> } {
+  const cohort = selectPeers(toPeerRow(subject), universe.map(toPeerRow))
+  return { peers: cohort.peers.map((p) => p.row), cohort }
+}
+
+/**
+ * Where `value` sits among `peers` on one metric, 0–100, or null when too few peers report it.
+ *
+ * Peers missing the metric are filtered before the cohort-size test on purpose: eight peers of
+ * whom three report the figure is not an eight-peer ranking.
+ */
+function percentileAmong(
+  peers: InstitutionProfileRow[],
+  value: number | null | undefined,
+  metric: (r: InstitutionProfileRow) => number | null | undefined
+): number | null {
+  if (value == null || !Number.isFinite(value)) return null
+  const values = peers.map(metric).filter((v): v is number => v != null && Number.isFinite(v))
+  const ranked = percentileIn(values, value)
+  return ranked == null ? null : Math.round(ranked * 100)
+}
+
+/** Declared once so the four places that render percentiles cannot drift apart. */
+const PEER_METRICS: {
+  label: string
+  get: (r: InstitutionProfileRow) => number | null | undefined
+}[] = [
+  { label: "CRE / Assets", get: (r) => r.creConcentration },
+  { label: "NPL Ratio", get: (r) => r.nplRatio },
+  { label: "Net Income", get: (r) => r.netIncomeTTM },
+  { label: "NIM", get: (r) => r.nimLatest },
+]
+
+/**
+ * English ordinal suffix. The previous code appended a bare "th", which rendered "2th percentile"
+ * and "23th percentile" — caught by reading the drawer rather than by any test. These figures get
+ * pasted into credit memos, so they are worth getting right.
+ */
+function ordinal(n: number): string {
+  const mod100 = Math.abs(n) % 100
+  // 11th, 12th, 13th are the exceptions that a bare last-digit rule gets wrong.
+  if (mod100 >= 11 && mod100 <= 13) return `${n}th`
+  switch (Math.abs(n) % 10) {
+    case 1:
+      return `${n}st`
+    case 2:
+      return `${n}nd`
+    case 3:
+      return `${n}rd`
+    default:
+      return `${n}th`
+  }
+}
+
+function formatPercentile(value: number | null): string {
+  return value == null ? "—" : `${ordinal(value)} percentile`
+}
+
+/**
+ * Why a percentile is missing, so "—" is never just a shrug.
+ *
+ * The suggestion is the actionable half. This fires most often for the *largest* institutions in a
+ * single-state scope, where there are simply not eight in-state banks of comparable size — and
+ * switching the scope selector to United States does give them a cohort. Verified with
+ * `npm run verify:peer-cohort`: in Georgia every institution over $1bn falls into this case.
+ */
+function tooFewPeersNote(peerCount: number): string {
+  const shortfall =
+    peerCount === 0
+      ? "No institutions of comparable size in this scope"
+      : `Only ${peerCount} comparable institution${peerCount === 1 ? "" : "s"} in this scope — fewer than the ${MIN_COHORT} a percentile should rest on`
+  return `${shortfall}. Switch the scope to United States for a national cohort.`
 }
 
 type InstitutionProfileDrawerProps = {
@@ -246,6 +357,14 @@ export function InstitutionProfileDrawer({
 
   const displayRows = compareRows.length >= 1 ? compareRows : (row ? [row] : [])
   const rowForCopy = row ?? displayRows[0]
+
+  // One cohort per subject, computed once. Everything that renders a percentile for this
+  // institution reads from here, so the figure and the stated basis cannot disagree.
+  const peerGroup = useMemo(
+    () => (rowForCopy ? resolvePeers(rowForCopy, cohort) : null),
+    [rowForCopy, cohort]
+  )
+  const peers = peerGroup?.peers ?? []
   const buildSnapshot = useCallback((): string => {
     if (!rowForCopy) return ""
     const reportDateNorm = rowForCopy.reportDate ?? (asOfQuarter ? parseAsOfQuarterToDate(asOfQuarter) : "")
@@ -280,15 +399,10 @@ export function InstitutionProfileDrawer({
     const nimDelta = rowForCopy.nimDelta4Q != null ? formatDeltaPp(rowForCopy.nimDelta4Q) : "—"
     const earningsBuffer = rowForCopy.earningsBufferPct != null ? rowForCopy.earningsBufferPct.toFixed(1) : "—"
 
-    const creAssetsValues = cohort.map((r) => r.creConcentration).filter((v): v is number => v != null && Number.isFinite(v))
-    const nplValues = cohort.map((r) => r.nplRatio).filter((v): v is number => v != null && Number.isFinite(v))
-    const netIncomeValues = cohort.map((r) => r.netIncomeTTM).filter((v): v is number => v != null && Number.isFinite(v))
-    const nimValues = cohort.map((r) => r.nimLatest).filter((v): v is number => v != null && Number.isFinite(v))
-
-    const creAssetsPct = rowForCopy.creConcentration != null ? percentileRank(rowForCopy.creConcentration, creAssetsValues) : "—"
-    const nplPct = rowForCopy.nplRatio != null ? percentileRank(rowForCopy.nplRatio, nplValues) : "—"
-    const netIncomePct = rowForCopy.netIncomeTTM != null ? percentileRank(rowForCopy.netIncomeTTM, netIncomeValues) : "—"
-    const nimPct = rowForCopy.nimLatest != null ? percentileRank(rowForCopy.nimLatest, nimValues) : "—"
+    const creAssetsPct = percentileAmong(peers, rowForCopy.creConcentration, (r) => r.creConcentration)
+    const nplPct = percentileAmong(peers, rowForCopy.nplRatio, (r) => r.nplRatio)
+    const netIncomePct = percentileAmong(peers, rowForCopy.netIncomeTTM, (r) => r.netIncomeTTM)
+    const nimPct = percentileAmong(peers, rowForCopy.nimLatest, (r) => r.nimLatest)
 
     const lines = [
       `${rowForCopy.name} — Institution Snapshot (${asOfQuarter})`,
@@ -326,14 +440,20 @@ export function InstitutionProfileDrawer({
       "",
       "Peer Positioning:",
       "",
-      `CRE / Assets Percentile: ${creAssetsPct === "—" ? "—" : `${creAssetsPct}th`}`,
-      `NPL Ratio Percentile: ${nplPct === "—" ? "—" : `${nplPct}th`}`,
-      `Net Income Percentile: ${netIncomePct === "—" ? "—" : `${netIncomePct}th`}`,
-      `NIM Percentile: ${nimPct === "—" ? "—" : `${nimPct}th`}`,
+      // Copied text ends up in credit memos, so the cohort travels with the numbers. A percentile
+      // pasted without it is the misreading this section was changed to prevent.
+      `Cohort: ${peerGroup?.cohort.description ?? "—"} (${peers.length} institution${peers.length === 1 ? "" : "s"})`,
+      ...(peerGroup?.cohort.relaxationNote ? [peerGroup.cohort.relaxationNote] : []),
+      ...(peers.length < MIN_COHORT ? [tooFewPeersNote(peers.length)] : []),
+      "",
+      `CRE / Assets: ${formatPercentile(creAssetsPct)}`,
+      `NPL Ratio: ${formatPercentile(nplPct)}`,
+      `Net Income: ${formatPercentile(netIncomePct)}`,
+      `NIM: ${formatPercentile(nimPct)}`,
     ]
 
     return lines.join("\n")
-  }, [rowForCopy, cohort, asOfQuarter, fdicSnapshot])
+  }, [rowForCopy, peerGroup, peers, asOfQuarter, fdicSnapshot])
 
   const handleCopy = useCallback(async () => {
     const text = buildSnapshot()
@@ -482,11 +602,26 @@ export function InstitutionProfileDrawer({
                   <div>
                     <h4 className="text-xs font-semibold uppercase tracking-wide text-[#006D95] mb-2">Peer Positioning</h4>
                     <div className="space-y-1.5 text-sm text-slate-700">
-                      <p className="flex justify-between"><span className="text-slate-500"><DefTerm term="CRE / Assets">CRE / Assets</DefTerm></span><span className="font-medium tabular-nums">{rowForCopy.creConcentration != null ? `${percentileRank(rowForCopy.creConcentration, cohort.map((r) => r.creConcentration).filter((v): v is number => v != null && Number.isFinite(v)))}th` : "—"} percentile</span></p>
-                      <p className="flex justify-between"><span className="text-slate-500"><DefTerm term="NPL Ratio">NPL Ratio</DefTerm></span><span className="font-medium tabular-nums">{rowForCopy.nplRatio != null ? `${percentileRank(rowForCopy.nplRatio, cohort.map((r) => r.nplRatio).filter((v): v is number => v != null && Number.isFinite(v)))}th` : "—"} percentile</span></p>
-                      <p className="flex justify-between"><span className="text-slate-500"><DefTerm term="Net Income">Net Income</DefTerm></span><span className="font-medium tabular-nums">{rowForCopy.netIncomeTTM != null ? `${percentileRank(rowForCopy.netIncomeTTM, cohort.map((r) => r.netIncomeTTM).filter((v): v is number => v != null && Number.isFinite(v)))}th` : "—"} percentile</span></p>
-                      <p className="flex justify-between"><span className="text-slate-500"><DefTerm term="NIM">NIM</DefTerm></span><span className="font-medium tabular-nums">{rowForCopy.nimLatest != null ? `${percentileRank(rowForCopy.nimLatest, cohort.map((r) => r.nimLatest).filter((v): v is number => v != null && Number.isFinite(v)))}th` : "—"} percentile</span></p>
+                      {PEER_METRICS.map(({ label, get }) => (
+                        <p key={label} className="flex justify-between">
+                          <span className="text-slate-500"><DefTerm term={label}>{label}</DefTerm></span>
+                          <span className="font-medium tabular-nums">
+                            {formatPercentile(percentileAmong(peers, get(rowForCopy), get))}
+                          </span>
+                        </p>
+                      ))}
                     </div>
+                    {/*
+                      The basis sits with the figures rather than in a tooltip. It changes per
+                      institution — a bank in a thin asset band gets a different cohort from one in
+                      a crowded band — so there is no single caption that could describe it.
+                    */}
+                    <p className="mt-2 text-xs leading-relaxed text-slate-500">
+                      Against {peers.length} comparable {peers.length === 1 ? "institution" : "institutions"}
+                      {peerGroup ? `: ${peerGroup.cohort.description}` : ""}.
+                      {peers.length < MIN_COHORT ? ` ${tooFewPeersNote(peers.length)}` : ""}
+                      {peerGroup?.cohort.relaxationNote ? ` ${peerGroup.cohort.relaxationNote}` : ""}
+                    </p>
                   </div>
                 </>
               )}
@@ -517,27 +652,28 @@ function PeerPositioningComparisonChart({
     }))
   }, [rows])
 
+  // Each institution is ranked against **its own** peers, so a $200m bank and a $20bn bank on the
+  // same chart are each measured against banks like themselves. Ranking both against one cohort
+  // would make the taller bar mean "larger" rather than "more exposed", which is the confusion
+  // this whole change exists to remove. The consequence is that bars are not a shared scale of
+  // institutions — hence the caption, and hence the per-series cohort in the tooltip.
+  const peerGroups = useMemo(
+    () => new Map(rows.map((row) => [row.id, resolvePeers(row, cohort)])),
+    [rows, cohort]
+  )
+
   const chartData = useMemo(() => {
-    const creAssetsValues = cohort.map((r) => r.creConcentration).filter((v): v is number => v != null && Number.isFinite(v))
-    const nplValues = cohort.map((r) => r.nplRatio).filter((v): v is number => v != null && Number.isFinite(v))
-    const netIncomeValues = cohort.map((r) => r.netIncomeTTM).filter((v): v is number => v != null && Number.isFinite(v))
-    const nimValues = cohort.map((r) => r.nimLatest).filter((v): v is number => v != null && Number.isFinite(v))
-
-    const metricRows: Array<{ metric: string; valueForRow: (r: InstitutionProfileRow) => number | null }> = [
-      { metric: "CRE / Assets", valueForRow: (r) => (r.creConcentration != null ? percentileRank(r.creConcentration, creAssetsValues) : null) },
-      { metric: "NPL Ratio", valueForRow: (r) => (r.nplRatio != null ? percentileRank(r.nplRatio, nplValues) : null) },
-      { metric: "Net Income", valueForRow: (r) => (r.netIncomeTTM != null ? percentileRank(r.netIncomeTTM, netIncomeValues) : null) },
-      { metric: "NIM", valueForRow: (r) => (r.nimLatest != null ? percentileRank(r.nimLatest, nimValues) : null) },
-    ]
-
-    return metricRows.map(({ metric, valueForRow }) => {
-      const out: Record<string, string | number | null> = { metric }
+    return PEER_METRICS.map(({ label, get }) => {
+      const out: Record<string, string | number | null> = { metric: label }
       chartSeries.forEach((series) => {
-        out[series.key] = valueForRow(series.row)
+        const group = peerGroups.get(series.row.id)
+        out[series.key] = group
+          ? percentileAmong(group.peers, get(series.row), get)
+          : null
       })
       return out
     })
-  }, [cohort, chartSeries])
+  }, [peerGroups, chartSeries])
 
   if (rows.length === 0) return null
 
@@ -588,7 +724,12 @@ function PeerPositioningComparisonChart({
     <>
       <div className="rounded-lg border border-slate-200/80 bg-white p-4">
         <h4 className="text-xs font-semibold uppercase tracking-wide text-[#006D95] mb-1">Peer Positioning Comparison</h4>
-        <p className="text-xs text-slate-500 mb-3">Percentile ranking by metric across the selected cohort.</p>
+        <p className="text-xs text-slate-500 mb-3">
+          Percentile by metric, each institution against its own matched peers — same asset band,
+          state and lending mix where available. Bars are therefore not on a shared scale of
+          institutions: a higher bar means further from that bank&apos;s own peers, not larger.
+          A metric is blank where there are fewer than {MIN_COHORT} comparable institutions.
+        </p>
         <button
           type="button"
           className="w-full rounded-md border border-dashed border-slate-200 p-1 text-left transition hover:border-[#006D95]/40 cursor-zoom-in"
@@ -734,6 +875,15 @@ function ComparisonTable({
   getCreCapitalColor: (v: number | undefined) => string
   onRemove?: (id: string, reportDate?: string) => void
 }) {
+  // Memoised per institution rather than per cell: the four percentile rows plus the cohort row
+  // would otherwise each reselect peers from the whole scope for every column.
+  const peerGroupCache = useMemo(
+    () => new Map(rows.map((r) => [r.id, resolvePeers(r, cohort)])),
+    [rows, cohort]
+  )
+  const peerGroupFor = (r: InstitutionProfileRow) =>
+    peerGroupCache.get(r.id) ?? resolvePeers(r, cohort)
+
   const metricKeys: Array<{ key: string; fn: (r: InstitutionProfileRow) => string; section?: string }> = [
     { section: "Report", key: "Report", fn: (r) => formatQuarter(r.reportDate) },
     { section: "Location", key: "City, State", fn: (r) => `${r.city ?? "—"}, ${r.state ?? "—"}` },
@@ -762,10 +912,22 @@ function ComparisonTable({
     { key: "Net Income (TTM)", fn: (r) => r.netIncomeTTM != null ? formatMoney(r.netIncomeTTM) + (r.netIncomeYoYPct != null ? ` (YoY: ${r.netIncomeYoYPct >= 0 ? "+" : ""}${r.netIncomeYoYPct.toFixed(1)}%)` : "") : "—" },
     { key: "NIM", fn: (r) => r.nimLatest != null ? r.nimLatest.toFixed(2) + "%" + (r.nimDelta4Q != null ? ` (Δ4Q: ${r.nimDelta4Q >= 0 ? "+" : ""}${r.nimDelta4Q.toFixed(2)} pp)` : "") : "—" },
     { key: "Earnings Buffer", fn: (r) => r.earningsBufferPct != null ? r.earningsBufferPct.toFixed(1) + "%" : "—" },
-    { section: "Peer Positioning", key: "CRE / Assets", fn: (r) => r.creConcentration != null ? `${percentileRank(r.creConcentration, cohort.map((c) => c.creConcentration).filter((v): v is number => v != null && Number.isFinite(v)))}th percentile` : "—" },
-    { key: "NPL Ratio", fn: (r) => r.nplRatio != null ? `${percentileRank(r.nplRatio, cohort.map((c) => c.nplRatio).filter((v): v is number => v != null && Number.isFinite(v)))}th percentile` : "—" },
-    { key: "Net Income", fn: (r) => r.netIncomeTTM != null ? `${percentileRank(r.netIncomeTTM, cohort.map((c) => c.netIncomeTTM).filter((v): v is number => v != null && Number.isFinite(v)))}th percentile` : "—" },
-    { key: "NIM", fn: (r) => r.nimLatest != null ? `${percentileRank(r.nimLatest, cohort.map((c) => c.nimLatest).filter((v): v is number => v != null && Number.isFinite(v)))}th percentile` : "—" },
+    // Each column is ranked against that institution's own peers, so two columns side by side are
+    // answering "how does this bank sit among banks like it" rather than sharing one denominator.
+    // `Cohort` states the basis per column, because without it the rows below cannot be compared.
+    {
+      section: "Peer Positioning",
+      key: "Cohort",
+      fn: (r) => {
+        const group = peerGroupFor(r)
+        return `${group.peers.length} peer${group.peers.length === 1 ? "" : "s"} — ${group.cohort.description}`
+      },
+    },
+    ...PEER_METRICS.map(({ label, get }) => ({
+      key: label,
+      fn: (r: InstitutionProfileRow) =>
+        formatPercentile(percentileAmong(peerGroupFor(r).peers, get(r), get)),
+    })),
   ]
   let currentSection = ""
   return (

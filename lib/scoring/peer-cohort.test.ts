@@ -4,6 +4,7 @@ import {
   creMixBand,
   medianOf,
   MIN_COHORT,
+  mixIsKnown,
   percentileIn,
   selectPeers,
   sizeBand,
@@ -74,6 +75,60 @@ test("geography is dropped only after CRE mix", () => {
   // second were an afterthought.
   assert.match(cohort.relaxationNote!, /^Too few institutions this size in Florida/)
   assert.match(cohort.relaxationNote!, /CRE mix is unmatched\.$/)
+})
+
+test("an institution with no loan data is not matched on lending mix", () => {
+  // Its mix would default to "little CRE", which would rank it against genuine
+  // consumer lenders and report creMix as a criterion that was met.
+  const universe = Array.from({ length: 12 }, (_, i) =>
+    bank({ cert: `p${i}`, creLoans: 5e6, totalLoans: 400e6 })
+  )
+  const cohort = selectPeers(bank({ cert: "subject", creLoans: 0, totalLoans: 0 }), universe)
+  assert.equal(cohort.criteria.creMix, false)
+  assert.equal(cohort.peers.length, 12)
+  assert.doesNotMatch(cohort.description, /little CRE/)
+})
+
+test("peers with no loan data are kept out of the mix-matched cohort", () => {
+  const universe = [
+    ...Array.from({ length: 9 }, (_, i) => bank({ cert: `known${i}` })),
+    ...Array.from({ length: 5 }, (_, i) => bank({ cert: `blank${i}`, creLoans: 0, totalLoans: 0 })),
+  ]
+  const cohort = selectPeers(bank({ cert: "subject" }), universe)
+  assert.deepEqual(cohort.criteria, { size: true, geography: true, creMix: true })
+  assert.equal(cohort.peers.length, 9)
+  assert.ok(!cohort.peers.some((p) => p.cert.startsWith("blank")))
+})
+
+test("mixIsKnown rejects absent, zero and non-finite loan figures", () => {
+  assert.equal(mixIsKnown({ creLoans: 200e6, totalLoans: 400e6 }), true)
+  assert.equal(mixIsKnown({ creLoans: 0, totalLoans: 400e6 }), true)
+  assert.equal(mixIsKnown({ creLoans: 200e6, totalLoans: 0 }), false)
+  assert.equal(mixIsKnown({ creLoans: Number.NaN, totalLoans: 400e6 }), false)
+})
+
+test("a single-state universe is never described as a national cohort", () => {
+  // The Market Analytics scope selector produces exactly this: every row in
+  // one state. Relaxing geography here selects the same institutions, so a
+  // "nationally" claim would be false while looking authoritative.
+  const universe = [
+    bank({ cert: "fl1", creLoans: 20e6, totalLoans: 400e6 }),
+    bank({ cert: "fl2", creLoans: 20e6, totalLoans: 400e6 }),
+    bank({ cert: "fl3", creLoans: 20e6, totalLoans: 400e6 }),
+  ]
+  const cohort = selectPeers(bank({ cert: "subject" }), universe)
+  assert.equal(cohort.criteria.geography, true)
+  assert.doesNotMatch(cohort.description, /nationally/)
+  assert.match(cohort.description, /in Florida/)
+})
+
+test("a too-small single-state cohort cannot be quoted as a percentile", () => {
+  // The two guards have to agree: describing the cohort honestly is not enough
+  // if a number is still rendered against three institutions.
+  const universe = Array.from({ length: 3 }, (_, i) => bank({ cert: `fl${i}` }))
+  const cohort = selectPeers(bank({ cert: "subject" }), universe)
+  assert.ok(cohort.peers.length < MIN_COHORT)
+  assert.equal(percentileIn(cohort.peers.map((p) => p.totalAssets), 500e6), null)
 })
 
 test("size is never relaxed, even when that leaves too few peers", () => {
