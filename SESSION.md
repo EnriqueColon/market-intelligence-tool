@@ -10,6 +10,67 @@ is it in now, and what is still open.
 
 ## 2026-09-30 (latest) — the Legislative Tracker was inventing its bills
 
+#### Addendum, same day — the sources we were not actually using
+
+Prompted by a list of federal and Florida legal data sources, with a question about whether we were
+looking into them. We were not. The app fetched exactly one legal API, govtrack, which was not on
+the list. Everything on it — `federalregister.gov`, `govinfo.gov`, `regulations.gov`,
+`courtlistener.com`, `flsenate.gov`, `flrules.org` — was at most *allowlisted*: named in the prompt
+so the model may cite the domain, with a check that the URL loads. Never queried.
+
+Each one was probed rather than assumed. Federal Register, eCFR and CourtListener answer with no key
+at all; `api.congress.gov`, `api.govinfo.gov` and Open States all refuse without one; the govinfo
+bulk-data paths 500. Two findings were worth acting on.
+
+**`LEGISCAN_API_KEY` had been in `.env.local` since the project was set up and was read by nothing.**
+A deployment checklist listed it as required. `confluence.md` said it was unused and could be
+deleted from Vercel. Meanwhile Florida was the half of the Legislative Tracker that still asked a
+model to recall bill numbers, which is what produced `CS/HB 1353` and `HB 793`. The key worked on
+the first try. Florida bills now come from the record like the federal ones, with real statuses that
+feed the movement tracking built earlier today.
+
+**The Federal Register has an open API and the regulatory section was not using it.** Rulemaking is
+now taken from it directly. It is a supplement rather than a replacement, because the Federal
+Register carries rulemaking only and FDIC Financial Institution Letters, OCC bulletins and
+supervisory guidance — a large part of that section — never appear in it.
+
+The interesting problem was not plumbing. The relevance gate, tuned against items a model returns
+when asked about CRE, behaves differently when pointed at everything a legislature published: it
+kept 32 of 1,930 Florida bills, and most of them were fire-district and county bills whose official
+descriptions mention liens. So there are now two strictnesses. The terms are split by how selective
+they are, a title is read on all of them and a body only on the core ones, and residential subjects
+are excluded by title — which implements a decision taken this morning but only half applied, since
+five of the fifteen near-misses were housing bills that got in on "multifamily" in the body.
+
+Two structural exclusions were verified rather than assumed: Florida numbers local bills in the
+4000s (48 of 53 name a county or district), and the reviser's bills are titled exactly "Florida
+Statutes". Neither set contains anything CRE-relevant by title, so excluding them costs no item.
+
+**A reliability bug in yesterday's work turned up while probing.** govtrack answered its first
+request after an idle period in 28 seconds and the rest in a quarter of one. Production makes one
+cold request a day off the cron, so twelve parallel searches were racing a 15-second timeout the
+first of them was always going to lose — which empties the section. It failed safely and silently,
+which is the worse combination, because an empty Legislative Tracker reads as a quiet fortnight.
+Retrying does not help; the cold start is now paid once, on purpose, before the searches fan out.
+
+**What is not verified.** The Florida and Federal Register paths ran live and are in the verify
+script's output, so those are exercised. The `bill_status_history` writes from earlier today are
+still unexercised — there is no local database, and no production credential was touched. Movement
+will first be tested by its first deployment to an environment that has one.
+
+Left open deliberately: the enforcement section still renders empty, because the only items it
+returns are monthly digests and those are dropped as actions against individuals. Under the strict
+posture chosen this morning that is arguably correct, but it throws away a page that also contains
+institutional consent orders. It needs a decision rather than a patch.
+
+Also noted, not acted on: this repository's line endings are mostly **CRLF** — 161 `.ts` files
+against 33 — while the session rule warns about four specific files as though they were the
+exception. New files in `lib/` should be CRLF to match their neighbours, and the rule's list is out
+of date.
+
+
+
+
 #### Addendum, same day — the tracker now tracks
 
 A question during review: how long do we collect for, and how long do we track for? The first

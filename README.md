@@ -167,6 +167,9 @@ with almost no configuration.
 | **OpenFreeMap** | Basemap tiles for the stress map | Keyless | Map renders without a basemap |
 | **Census**, **FFIEC** | Analytics side panels | `CENSUS_API_KEY`, `FFIEC_USER_ID`, `FFIEC_TOKEN` | Sections report `configured: false` |
 | **Elementix** | Participants intel API | `ELEMENTIX_API_KEY` | Returns null; feeds orphaned UI |
+| **govtrack** | Federal bills for the Legislative Tracker, and the bill-identity check | Keyless | Federal legislation disappears from the tab rather than becoming unverified. Slow on its first request of the day — see Maintenance notes |
+| **Federal Register** | Rules and proposed rules for the Regulatory section | Keyless | That section falls back to the model alone, which it also uses anyway for FILs and bulletins |
+| **LegiScan** | Florida bills for the Legislative Tracker | `LEGISCAN_API_KEY` | Florida legislation is omitted and the feed says so in a note |
 
 `FRED_API_KEY` is **not needed** by the outlook, despite appearing in older documents. It is still
 read by `fetch-kpi-data.ts` and `fetch-cre-data.ts`, whose FRED paths return null without it.
@@ -236,6 +239,8 @@ npm run test:legal-relevance  # legal feed: the firm-operations bar, and the per
 npm run test:legal-bills      # legal feed: bill numbers, and the fabricated bills that reached the tab
 npm run test:legal-legislation # legal feed: federal bills read from the record, and companion-bill dedupe
 npm run test:legal-movement   # legal feed: what changed about a bill, and why re-running cannot consume it
+npm run test:legal-fedreg     # legal feed: Federal Register rules, and republication under two numbers
+npm run test:legal-florida    # legal feed: Florida bills, number formats, local and reviser bills
 npm run test:legal-applicability # which institutions a rule covers, and the two CRE-concentration units
 npm run test:allowlist        # publisher allowlist, and what "all" covers
 npm run build                 # next build
@@ -413,6 +418,26 @@ there and the item needs a content-level check like `lib/legal-updates-bills.ts`
 read `whyItMatters` — a field the prompt instructs the model to write about "relevance to
 distressed CRE debt investing" — so every item certified itself and the gate passed nearly
 everything. Judge on fields that describe the source, never on fields that argue for it.
+
+**A relevance rule is only as good as the base rate it was tuned against.** The same term list that
+worked on model-returned items, where most candidates are already on topic, kept 32 of 1,930
+Florida bills when pointed at an entire legislative session — mostly fire-district and county bills
+whose official descriptions mention liens in passing. Moving a filter from a narrow feed to a wide
+one is a behaviour change even when the filter does not change, so measure it against the wide feed
+before shipping. See `recordBearsOnFirmOperations` and the two strictnesses in `confluence.md`.
+
+**Check whether a key in `.env.local` is actually read before trusting a document that says it is
+not.** `LEGISCAN_API_KEY` sat in the environment from the start of the project. A deployment
+checklist listed it as required, this README and `confluence.md` recorded that nothing read it and
+that it could be deleted, and in the meantime the Legislative Tracker was asking a model to recall
+Florida bill numbers and rendering ones that do not exist. The key worked the first time it was
+tried. `rg -n LEGISCAN --glob '!node_modules'` is the whole check.
+
+**A timeout tuned to how fast a service answers while you are testing it is tuned to the wrong
+number.** govtrack answers its first request after an idle period in about 28 seconds and the rest
+in a quarter of one. Production makes exactly one cold request a day, off a cron, so a 15-second
+timeout failed every time in production and never once in testing. Retrying does not help; the
+cold start now gets paid once, deliberately, before the parallel searches begin.
 
 **Never use `process.env.NODE_ENV` to detect production.** Vercel sets it to `"production"` on
 preview builds too, so a dev deployment is indistinguishable from the live tool. Use

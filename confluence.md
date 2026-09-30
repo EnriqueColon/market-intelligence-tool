@@ -237,7 +237,7 @@ around it is verified only by types and by failing closed. There is no local Pos
 production credentials were deliberately left alone, so the first real exercise of this table will
 be its first deployment to an environment that has one.
 
-### Legal Landscape: why the Legislative Tracker stopped asking
+### Legal Landscape: what is taken from a record, and what is still asked for
 
 The other two sections ask a model what happened and then check the answer. That works because a
 regulator's page either exists or does not. For legislation it did not work at all, and the failure
@@ -264,9 +264,98 @@ it has no opportunity to invent one. govtrack rather than `api.congress.gov` bec
 API returns 403 without a key and this has to work with no new secret provisioned; govtrack was
 already on the legislative allowlist.
 
-Relevance is judged on the **authoritative title and nothing else**, and the cost is known:
-H.R. 10375 modernises the SBA 504 programme, which is commercial real estate lending, and no title
-of it says so. The alternative is letting the model judge, which is how invented items got in.
+**Florida is on the record too**, through `lib/legal-updates-florida.ts` and LegiScan. That key had
+been in the environment since the project was set up, listed as required in a deployment checklist
+and read by nothing — an earlier revision of this document recorded that it was unused. It is the
+reason Florida stayed the half of the section that invented numbers long after the federal half
+stopped.
+
+Two calls per session rather than a search: `getMasterList` returns every bill in a session with
+title, official description, status and last action, so nothing is missed because a search term did
+not happen to appear in it, and `getBill` is called only for the handful that survive the gate,
+to get the `state_link` that points at flsenate.gov. LegiScan's own domain is deliberately not
+allowlisted; the citation has to be the legislature's page.
+
+Bill numbers are converted on the way in. LegiScan writes `H0011`, Florida writes "HB 11", and so
+does flsenate.gov — which matters beyond presentation, because the identity guard reads the number
+back out of the rendered title and looks for it on the cited page in the form the page prints.
+
+**Rulemaking is on the record, as a supplement.** `lib/legal-updates-federal-register.ts` reads
+rules and proposed rules from the Federal Register API, which needs no key. This does not replace
+the regulatory prompt and is not meant to: the Federal Register carries rulemaking only, and the
+FDIC's Financial Institution Letters, OCC bulletins and supervisory guidance — a large part of what
+that section is for — never appear in it. So the record supplies what it has and the model still
+goes looking for the rest. Deduplication is by document number and then by title, because a rule is
+genuinely republished: "Real Estate Lending Escrow Accounts" appeared on 2026-05-19 under the
+Treasury Department and again on 2026-06-29 under Treasury and the Comptroller, two document
+numbers for one rule.
+
+**For legislation the model is a fallback, not a supplement.** Both jurisdictions now have a record,
+so asking as well would put one bill on the page twice under two spellings of its title —
+`dedupeByTitle` compares normalised text and does not match "SB 300 – Alternative Judicial Sales
+Procedures" against "SB 300: Alternative Judicial Sales". The prompt still runs when the records
+return nothing at all, and the identity guard still stands behind it.
+
+#### Two strictnesses, because the base rate differs
+
+`bearsOnFirmOperations` judges an item a model was asked to find. `recordBearsOnFirmOperations`
+judges one pulled out of everything a legislature or an agency published, and it is stricter,
+because the base rate is different and nothing else about the candidate is. A model asked for recent
+CRE developments returns a list that is mostly CRE, so a term appearing anywhere in it is good
+evidence. A sweep of 1,930 Florida bills with an action in the window contains about six that
+concern this firm, and at that base rate an incidental term is noise: gating on any term anywhere
+kept 32, most of them fire-district and county bills whose official descriptions mention liens.
+
+So the terms are split by **how selective they are**, not by what they mean. A core term names this
+world wherever it appears; an incidental term appears in a sentence about something else at least
+as often as not. Where the term appears then decides, because length is what makes a term
+unreliable: a title is a few words the publisher chose to say what the thing is about, so
+`bankrupt` in a title is almost always the subject — "Bankruptcy Threshold Adjustment Act" is real
+and it matters here — while a two-hundred-word abstract mentions liens on its way past. **A title is
+read on all the terms; a body only on the core ones.**
+
+The body can be read at all only because these sources publish their own abstracts. The Federal
+Register gives the agency's abstract and LegiScan the legislature's description. That is
+authoritative text rather than an argument, which is the distinction the whole gate rests on — see
+`describedBy` and the defect it was written to fix.
+
+Residential subjects are now excluded **by title**, which implements a decision already taken but
+only half applied. Dropping the residential terms from the relevance list stopped those items being
+admitted on their own subject, but not through a body mentioning something commercial in passing:
+five of fifteen otherwise-qualifying Florida bills were housing bills that reached the gate on
+"multifamily" or "construction loan" somewhere in their description, "Affordable Housing Property
+Tax Exemptions" among them. Title only, deliberately — a commercial foreclosure bill may well
+mention homestead exemptions in its text, and what puts an item out of scope is being *about*
+housing.
+
+One term had to be excluded as a phrase rather than qualified. `appraisal` is a real signal, and the
+Office of Personnel Management titles its staff-review rules "Performance Appraisal for the General
+Schedule". `performance appraisal` is therefore an excluded subject, which is narrower than
+rewriting the term.
+
+#### Two structural exclusions, verified rather than asserted
+
+Both are facts about what kind of bill something is, so they sit in `legal-updates-florida.ts`
+rather than in the relevance gate.
+
+Florida numbers its **local bills** in the 4000s — bills affecting one county, city or special
+district. Of the 53 in the 2026 regular session, 48 name a county, city, town, village or authority
+in the title. They reach the gate by accident, because the boilerplate describing a district's
+boundaries and taxing powers mentions assessments constituting a lien against industrial property,
+which is a core term meaning exactly what it says. The relevance gate cannot catch these and there
+is a test saying so; the numbering is what excludes them.
+
+The **reviser's bills** are titled exactly "Florida Statutes" — six of them in the 2026 session,
+adopting the year's statutes and deleting provisions that "have become inoperative by noncurrent
+repeal", which is a term match and not a change to anything.
+
+Checked across the whole window, neither set contains a single bill that is CRE-relevant by title,
+so excluding them costs no item that would otherwise have qualified.
+
+Relevance for federal bills is still judged on the **authoritative title and nothing else**, govtrack
+publishing no abstract, and the cost is known: H.R. 10375 modernises the SBA 504 programme, which is
+commercial real estate lending, and no title of it says so. The alternative is letting the model
+judge, which is how invented items got in.
 
 **Deduplication runs twice**, because a bill repeats for two reasons. It surfaces under several of
 the twelve searches; and the chambers move companion bills under one title, so the Bankruptcy
@@ -285,6 +374,24 @@ For federal items the guard should now always pass, since their identity came fr
 is kept because it is the invariant, and it is what would catch a regression in the sourcing path.
 It earns itself on Florida in ordinary runs — one live run dropped items citing `CS/HB 1353` and
 `HB 793` as bills that do not exist.
+
+#### govtrack is slow on its first request of the day, and that has to be waited out
+
+Measured: the first request after a period of idleness took **28 seconds**, and every request after
+it took a quarter of one. Production makes exactly one cold request a day, because the feed is
+generated by a daily cron, so the original arrangement raced twelve parallel searches against a
+15-second timeout that the first of them was always going to lose — and losing them all empties the
+section. The failure was safe (`keepVerifiedBills` drops what it cannot check) and invisible, which
+is the worse combination: an empty Legislative Tracker reads as a quiet fortnight.
+
+Retrying does not fix it. Four attempts at 20 seconds failed in a row before one allowed 60 seconds
+succeeded in 28. So `fetchFederalBills` now makes one cheap throwaway request first and waits up to
+35 seconds for it, and the searches that follow are warm. `verifyBill` gets 30 seconds and one
+retry, the retry being for a transient failure rather than a cold start, which no number of short
+retries will outlast.
+
+This is worth remembering for any other unofficial free API this feed comes to depend on. A
+timeout tuned to how fast a service answers when you are testing it is tuned to the wrong number.
 
 The legislative prompt is therefore **Florida-only**, and tells the model the number will be
 checked against the page, so a guessed number costs the slot and gains nothing.
@@ -1108,7 +1215,7 @@ Generated content is expensive, so nearly everything is cached for a day.
   | `market-analytics-visuals-v1` + scope | Derived chart series for the Visual Analysis panel |
   | `executive-brief-v4` + scope | Ranked change events and non-reporting institutions for the Executive Brief. **Never populated** — the view is unreachable and the cron no longer warms it |
   | `underwriter-workbench-v1` + scope | Latest-quarter rows for the whole scope, for the Underwriter Workbench. **Never populated**, as above |
-  | `legal-updates-v8` | Legal Landscape items: deduped, freshness-filtered, relevant to the firm's operations, source-verified, and — for legislation — checked against the bill record. Exposure counts are **not** in here, see `resolveLegalApplicability`. Bumped from `v7` because `v7` entries hold the fabricated bills and the Data Cache survives deploys |
+  | `legal-updates-v9` | Legal Landscape items: deduped, freshness-filtered, relevant to the firm's operations, source-verified, and — for legislation — checked against the bill record. Exposure counts are **not** in here, see `resolveLegalApplicability`. Bumped to `v9` when Florida bills and Federal Register rulemaking began coming from records and the item shape changed; `v7` entries hold the fabricated bills, and the Data Cache survives deploys |
 
   `market-analytics-report-data` is keyed by scope rather than by day and revalidates every six
   hours, since FDIC publishes quarterly. **Bump its version whenever the scoring changes**, or cached
@@ -1416,6 +1523,7 @@ Every variable referenced in code. Scope matters: `POSTGRES_URL` and `BLOB_READ_
 | `ADMIN_UPLOAD_TOKEN` | Cannot upload or delete reports |
 | `INGESTION_TOKEN` | Ingestion endpoint unavailable |
 | `ELEMENTIX_API_KEY` | Participants-intel API returns null (feeds orphaned UI — see §10) |
+| `LEGISCAN_API_KEY` | Legislative Tracker shows federal bills only; a feed note says so. Federal bills come from govtrack and the Federal Register, which need no key |
 | `CENSUS_API_KEY`, `FFIEC_USER_ID`, `FFIEC_TOKEN` | Corresponding analytics sections report `configured: false` |
 | `NEXT_PUBLIC_FDIC_API_KEY`, `FDIC_API_URL`, `FDIC_API_KEY` | All optional; anonymous FDIC access works today. Read by `lib/fdic-client.ts`, the single hardened path to the API (fallback host, timeout, 4xx short-circuit) shared by the analytics actions and the map |
 | `FRED_API_KEY` | **Not needed by the outlook**, which uses FRED's keyless CSV endpoint. Still read by `fetch-kpi-data.ts` and `fetch-cre-data.ts`, whose FRED paths return null without it (KPI then falls back to an AI-written narrative) |
@@ -1431,10 +1539,14 @@ Historical note: the project migrated OpenAI → Perplexity → Claude → OpenA
 `.env.local` but are **no longer read by any code**. `lib/claude.ts` no longer exists; comments
 elsewhere still mention Claude and are stale.
 
-`LEGISCAN_API_KEY` **is not read anywhere in the code**, despite having been listed as required in
-the old `DEPLOYMENT_CHECKLIST.md` (deleted 2026-08-24). The Legal tab is entirely OpenAI-generated,
-not LegiScan-sourced. It can be removed from Vercel. That checklist also omitted `APP_PASSWORD`,
-`COOKIE_SECRET`, `BLOB_READ_WRITE_TOKEN` and `DATA_ENVIRONMENT`, which is why this table replaced it.
+`LEGISCAN_API_KEY` **is now read**, by `lib/legal-updates-florida.ts`, and is what supplies the
+Florida half of the Legislative Tracker. For most of the project's life it was not: it was listed as
+required in the old `DEPLOYMENT_CHECKLIST.md` (deleted 2026-08-24), an earlier revision of this
+document said it could be removed from Vercel, and meanwhile Florida bills were being recalled by a
+model and invented. **Do not remove it.** Without it the Legislative Tracker shows federal bills
+only, and says so in a feed note rather than degrading quietly. That checklist also omitted
+`APP_PASSWORD`, `COOKIE_SECRET`, `BLOB_READ_WRITE_TOKEN` and `DATA_ENVIRONMENT`, which is why this
+table replaced it.
 
 ## 9. Build and tests
 

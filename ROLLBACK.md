@@ -8,7 +8,7 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
 | `main` | `9faaf35` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `4e92b49` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `dev` | `05b51f3` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 This table names the newest commit on each branch that **changes behaviour**; documentation-only
 commits sit on top of it and are deliberately not tracked here, because amending one rotates its
@@ -23,7 +23,7 @@ relevance gate and always-rendered sections, then the computed exposure counts, 
 the department model, then the removal of the two lens tabs, then the matched peer cohort in the
 institution drawer, then the Legal Landscape relevance gate and the bill-identity guard.
 
-The newest commit changing application behaviour is **`4e92b49`** on `dev`; in production it is
+The newest commit changing application behaviour is **`05b51f3`** on `dev`; in production it is
 **`e5414c3`**, which stops the feed publishing items it cannot point at a real primary source for. The four legal commits are a set: `2384143`
 stops the feed rendering one development several times, `10fd202` withholds stale items, `8625c7c`
 stops it being stale in the first place, and `e5414c3` stops it inventing citations. **`10fd202`
@@ -153,6 +153,7 @@ the Market Participants tab.
 
 | Commit | Date | Summary |
 | --- | --- | --- |
+| `05b51f3` | 09-30 | Takes **Florida bills from LegiScan and federal rulemaking from the Federal Register**, extending the govtrack correction to the last two places the feed asked a model for published facts. Also splits the relevance terms by how selective they are and adds a stricter gate for record-sourced items, because the old gate kept 32 of 1,930 Florida bills. And fixes a live reliability bug: govtrack's first request of the day takes ~28s against a 15s timeout, so the cold start is now paid once before the searches fan out. **Reverting loses real Florida bills and returns that half of the section to model recall**, where the identity guard drops it and the section goes half-empty rather than wrong. Cache key `v8` → `v9`; any revert must bump it again or the Data Cache serves whichever item shape was written last. **`LEGISCAN_API_KEY` is now load-bearing** — it was previously documented as safe to delete, and it is not. `npm run test:legal-florida`, `npm run test:legal-fedreg`, `npm run test:legal-relevance`, `npm run verify:legal-freshness`. |
 | `4e92b49` | 09-30 | Adds `content.govdelivery.com` to the **enforcement** host list, where the FDIC publishes its monthly enforcement decisions; it was already listed for regulatory. One line of data, no logic. **Reverting silently reinstates the rejection** — a real FDIC bulletin comes back as `unlisted`, which reads in the logs exactly like a fabricated URL. Nothing verifies this either way: the live run after it happened to cite `occ.gov` and `fdic.gov`, so no GovDelivery item was admitted or rejected. |
 | `c248b3d` | 09-30 | Adds `bill_status_history` so the Legislative Tracker reports what **changed** about a bill, not just its current stage. The table auto-creates on first use. **Safe to revert in isolation** — the feed degrades to exactly its previous behaviour, since the movement field is optional and absent movements render nothing. The table can be left in place after a revert; nothing else reads it. Note this is the least verified commit of the day: the comparison logic has tests, but the Postgres path has never run, here or anywhere. If movement never appears in production, check `POSTGRES_URL` is set before suspecting the logic. `npm run test:legal-movement`. |
 | `c992ace` | 09-30 | Takes **federal legislation from the congressional record** instead of from the model. `lib/legal-updates-legislation.ts` reads bills from govtrack and the model only writes prose for bills it is handed, so it is never asked for an identity it could invent. Also dedupes companion bills across chambers, and narrows the legislative prompt to Florida only. **Reverting returns the Legislative Tracker to model-recalled bills** — which, with `8ef34d3` still in place, means the guard drops them and the section goes empty rather than wrong. Reverting both together restores the fabricated bills. `npm run test:legal-legislation` and `npm run verify:legal-freshness`. |
