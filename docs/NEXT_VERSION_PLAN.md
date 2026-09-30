@@ -173,13 +173,26 @@ enormous — so trajectories now require an absolute materiality floor as well.
 
 ## Phase 2 — The task-shaped views
 
-**Status: Executive Brief and Underwriter Workbench built, neither finished; both off in
-production.** Built from existing components. The pre-existing tabs are untouched.
+**Status: built, unreachable, and the approach is rejected. Do not restore them as destinations.**
 
-**Amended 2026-09-29: these are tabs, not lenses.** They were "lenses" revealed by choosing a
-department and rendered above the tab bar; they are now ordinary tabs behind `executive-brief` and
-`underwriter-workbench`. The count of four came from the department list, so there is no longer a
-fixed target — a view gets built when there is a question worth building it for.
+Amended twice in two days, and the second amendment supersedes the first:
+
+- *2026-09-29* — the department was removed, so these stopped being "lenses" revealed by choosing a
+  department and became ordinary tabs.
+- *2026-09-30* — the tab entries were removed too. Nothing renders either view. The instruction was
+  to make the tool "more informative and actionable", not to add more places to go.
+
+**The lesson this phase actually produced.** The plan assumed the problem was that different people
+want different things, so it built a separate home view per group. Two mechanisms were tried for
+getting people there — a department dropdown, then a tab — and both were rejected for the same
+underlying reason: *a destination you have to decide to enter is one nobody enters.* The analysis
+was never the objection. Where it lived was.
+
+So the phase's output is five tested calculators in `lib/scoring/` and no surviving interface. If
+this work is revived, the target is the **institution profile drawer** — which people already open
+when they care about a bank, and which today shows only the current quarter and a percentile
+measured against the entire scope rather than a matched peer group. `peer-cohort.ts` already fixes
+that second problem and is not wired to it.
 
 - **Executive Brief** — **done.** `components/lenses/executive-brief.tsx` over
   `app/actions/executive-brief.ts`. Its own tab since 2026-09-29; previously rendered above the tab

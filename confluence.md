@@ -72,26 +72,33 @@ The same list also gates content *inside* a tab. `app/page.tsx` resolves those i
 object passed down to the dashboard, because `isFeatureEnabled()` reads server-only env and
 everything below it is a client component. The only entry is now `bank-stress-map`.
 
-**The Executive Brief and Underwriter Workbench are ordinary tabs**, keyed `executive-brief` and
-`underwriter-workbench`, and **off in production** while they are still being built — which is what
-let the corrected CRE definition, the capital-ratio fix and the FDIC column audit reach production
-without waiting for them. Turn either on by adding its key to `ENABLED_TABS` in Vercel; no code
-change is needed, and they are gated independently so one can be enabled without paying for the
-other's cache warm.
+**The Executive Brief and Underwriter Workbench are unreachable, by decision.** They are not in
+`TAB_DEFS`, so no `ENABLED_TABS` value renders them — a flag is not the mechanism holding them back
+and adding one will not help. `enabledTabs` carries four keys only.
 
-They were previously "lenses" revealed by choosing a department from a header dropdown that wrote a
-cookie, behind a single `department-lenses` flag. That was removed because the department was a
-preference and not an identity: the tool has one shared password and no accounts, so the cookie only
-decided which view you could find, while pushing a department value into the cache key of anything
-that read it. `app/api/cron/warm-cache/route.ts` now checks each tab's own flag before warming it,
-where it would otherwise spend a couple of minutes of FDIC calls per deploy filling a cache nothing
-can read.
+The history matters because the question has been settled twice in two days. They began as "lenses"
+revealed by choosing Executive / Accounting / Underwriting from a header dropdown that wrote a
+cookie, behind a `department-lenses` flag. The department went on 2026-09-29, because it was a
+preference and not an identity: one shared password, no accounts, so the cookie only decided which
+view you could find while pushing a department value into the cache key of anything that read it.
+They became ordinary tabs — and the tabs went on 2026-09-30, on the stated grounds that the tool
+should be more informative and actionable rather than grow more places to visit. A destination you
+have to decide to enter is one nobody enters, whether the door is a dropdown or a tab.
+
+What remains and what does not: the two components in `components/lenses/`, their server actions,
+and their five calculators in `lib/scoring/` are all still present, and the calculators still carry
+39 passing unit tests. Nothing calls any of it. The routing that handed an institution from either
+view to the Market Analytics drawer is also gone from the dashboard, though `MarketAnalytics` keeps
+its optional `focusCert` / `onFocusResolved` props so a future caller need not rebuild it.
+`app/api/cron/warm-cache/route.ts` no longer warms either, which it must regain if either is ever
+surfaced — each pulls nine quarters for every institution the row cap allows, roughly fifty seconds
+cold.
 
 The tab bar derives its column count from the number of enabled tabs, via `TAB_GRID_COLS`. It was
 previously hardcoded to `grid-cols-4`, so production — which runs three — rendered an empty fourth
 cell. The map is spelled out one class per count because Tailwind only ships classes it can see in
-the source; `grid-cols-${n}` compiles to nothing. **Adding a tab means adding its column count**,
-which is why the map runs to six.
+the source; `grid-cols-${n}` compiles to nothing. **Adding a tab means adding its column count**;
+the map runs to four, which is every tab that exists.
 
 | Tab | Feature key | What it shows |
 | --- | --- | --- |
@@ -99,11 +106,10 @@ which is why the map runs to six.
 | Market Analytics | `market-analytics` | FDIC bank financials with state filter, institution drawer and export (`market-analytics.tsx`); a Visual Analysis chart section (`market-analytics-visuals.tsx`); a Bank Stress Map behind `bank-stress-map`; plus a nested FRED/Census indicator panel (`market-research.tsx`) |
 | Market Research | `market-research` | Live publisher-by-publisher research feed with Postgres-backed archive (`market-research-feed.tsx`) and memo generation (`research-memo-modal.tsx`) |
 | Legal Landscape | `legal` | Three AI-generated sections — Regulatory Watch, Legislative Tracker, Enforcement & Litigation (`legal-updates.tsx`). Despite the name, no LegiScan data is involved |
-| Executive Brief | `executive-brief` | What moved and what needs a decision (`lenses/executive-brief.tsx`). Off in production; unfinished |
-| Underwriter Workbench | `underwriter-workbench` | One institution, verified figures, peer cohort (`lenses/underwriter-workbench.tsx`). Off in production; unfinished |
 
 Production currently runs `ENABLED_TABS=news,market-analytics,market-research` (plus `legal` where
-enabled) — confirm the live value in Vercel rather than trusting this line.
+enabled) — confirm the live value in Vercel rather than trusting this line. Those four are now the
+only tabs that exist, so the production bar and the local one no longer differ in composition.
 
 The news feeds merge all three geographies (national, Florida, Miami) into one list. The region
 selector was removed in `984a361`; the underlying per-region feeds still exist and are fetched
@@ -714,11 +720,19 @@ breaking ties.
 
 ### Lenses
 
-`components/lenses/`. A lens is an additive department-specific view: it renders **above** the tabs
-and removes nothing, so every existing tab stays reachable no matter which department is selected.
-Anything that replaces a tab is not a lens and does not belong here.
+> **Unreachable since 2026-09-30.** Nothing renders either of the two views below. The description
+> of how they behave is still accurate — the code is unchanged and still typechecks — but no user
+> can reach it, and no environment variable will change that. Read this section as a record of what
+> the code does, not of what the tool shows. The reasoning is under "The tab bar and feature flags"
+> above; the short version is that the analysis is wanted and the extra destination is not.
+>
+> Their calculators in `lib/scoring/` are still under test and still described below, which is the
+> part worth preserving. Anything reading this to revive the views should put the analysis inside
+> the institution profile drawer rather than restoring a tab.
 
-Two exist, of the four planned.
+`components/lenses/`. These began as additive department-specific views, rendering **above** the
+tabs so every existing tab stayed reachable whichever department was selected. The department
+mechanism was removed on 2026-09-29 and the tab entries the following day.
 
 #### Executive Brief
 
@@ -770,6 +784,11 @@ fails visibly rather than silently: `onFocusResolved(false)` makes the card expl
 institution is outside the analytics cohort. Rows are `<button>` elements so the list stays usable by
 keyboard; when the analytics tab is disabled, `onSelectInstitution` is omitted and rows render as
 plain text rather than as buttons that cannot work.
+
+The dashboard no longer supplies `onSelectInstitution`, `notFoundCert`, `focusCert` or
+`onFocusResolved` to anything, since the only two callers are unreachable. `MarketAnalytics` still
+accepts the last two as optional props, so the receiving half of the handoff is intact; the sending
+half would have to be rebuilt.
 
 #### Underwriter Workbench
 
@@ -900,8 +919,8 @@ Generated content is expensive, so nearly everything is cached for a day.
   | `market-analytics-report-data-v2` + scope | Full screening cohort with scores, for the PDF and Visual Analysis |
   | `market-analytics-screening-v1` + scope | Reduced, scored rows for the Market Analytics **tab** |
   | `market-analytics-visuals-v1` + scope | Derived chart series for the Visual Analysis panel |
-  | `executive-brief-v4` + scope | Ranked change events and non-reporting institutions for the Executive Brief |
-  | `underwriter-workbench-v1` + scope | Latest-quarter rows for the whole scope, for the Underwriter Workbench |
+  | `executive-brief-v4` + scope | Ranked change events and non-reporting institutions for the Executive Brief. **Never populated** — the view is unreachable and the cron no longer warms it |
+  | `underwriter-workbench-v1` + scope | Latest-quarter rows for the whole scope, for the Underwriter Workbench. **Never populated**, as above |
   | `legal-updates-v7` | Deduped, freshness-filtered, CRE-relevant, source-verified items for the Legal Landscape tab. Exposure counts are **not** in here — see `resolveLegalApplicability` |
 
   `market-analytics-report-data` is keyed by scope rather than by day and revalidates every six

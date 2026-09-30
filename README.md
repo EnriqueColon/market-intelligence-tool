@@ -75,10 +75,19 @@ that have already caused incidents.
 
 ### The views in `components/lenses/`
 
-`components/lenses/` holds two task-shaped views that are ordinary tabs like any other, off in
-production behind `executive-brief` and `underwriter-workbench` because they are unfinished. The
-directory keeps its name from when they were "lenses" revealed by choosing a department; the
-department was removed on 2026-09-29 and they are now simply tabs.
+`components/lenses/` holds two task-shaped views that **nothing renders**. There is no tab, no
+route and no feature flag that reaches them — setting `ENABLED_TABS` to name them does nothing,
+because they are not in `TAB_DEFS`.
+
+That is deliberate, and it is the second time the question has been answered. They were originally
+reached by picking a department from a header dropdown; the department was removed on 2026-09-29,
+they were made tabs instead, and the tabs were removed the following day. The objection both times
+was the same: the tool should not grow a separate destination for each piece of analysis, because a
+place you have to decide to visit is a place nobody visits.
+
+**Their calculators in `lib/scoring/` are still live and still unit-tested** — see
+"Retained analysis with no caller" below. If these views return it should be inside something people
+already open, such as the institution profile drawer, not as another tab.
 
 - **Executive Brief** — "what moved this quarter" in a couple of dozen lines rather than eleven
   hundred rows, plus the institutions that have stopped filing altogether.
@@ -86,9 +95,27 @@ department was removed on 2026-09-29 and they are now simply tabs.
   supervisory levels it currently sits near, and how large a loss on its CRE book it absorbs before
   reaching its capital floor.
 
-Both hand an institution to the Market Analytics profile drawer rather than rendering their own copy,
-because that view already owns the trends and the cohort its percentiles are measured against;
-`confluence.md` explains why that indirection is deliberate.
+Both used to hand an institution to the Market Analytics profile drawer rather than rendering their
+own copy. `MarketAnalytics` still accepts `focusCert` and `onFocusResolved` for that, and nothing
+passes them any more; they are left in place so a future caller does not have to rebuild the routing.
+
+### Retained analysis with no caller
+
+Five modules in `lib/scoring/` exist only to serve those two views and therefore have no caller
+either. They are kept rather than deleted because each encodes something that was expensive to get
+right and is recorded nowhere else, and their 39 unit tests keep them honest:
+
+| Module | What it works out |
+| --- | --- |
+| `institution-change.ts` | Which institutions crossed a supervisory or watch level, and which are deteriorating without having crossed anything. The only trend-over-time analysis in the codebase |
+| `cre-downside.ts` | How large a loss on the CRE book an institution absorbs before reaching its capital floor, handling risk-based and CBLR filers separately |
+| `peer-cohort.ts` | A defensible peer group by size, lending mix and geography, relaxed one axis at a time, reporting which criteria survived |
+| `workbench-analysis.ts` | Composes the three above |
+| `quarter.ts` | FDIC report-date arithmetic |
+
+Note the distinction from an orphaned *capability*: these are pure functions under test, not an
+unreachable write path like the department watchlist was. `app/actions/executive-brief.ts` and
+`app/actions/underwriter-workbench.ts` are also still present and uncalled.
 
 ---
 
@@ -515,7 +542,7 @@ sense against your source usually mean the build cache, not your code. Stop the 
 | To do this | Change this |
 | --- | --- |
 | Expose or hide a tab | `ENABLED_TABS` in Vercel. No code change |
-| Turn on the Executive Brief or Underwriter Workbench in production | Add `executive-brief` or `underwriter-workbench` to `ENABLED_TABS` in Vercel — independently, so one can go on without the other. The code is deployed but unreachable until you do; they are off because they are unfinished, not because they are broken |
+| Surface the Executive Brief or Underwriter Workbench again | **Not a flag change** — `ENABLED_TABS` cannot reach them, because they are not in `TAB_DEFS`. Adding them back as tabs has been rejected twice; prefer folding the analysis into the institution profile drawer. See "Lenses" above |
 | Add a feature flag inside a tab | Add the key to `ENABLED_TABS`, resolve it in `app/page.tsx`, pass it down as a prop — `isFeatureEnabled()` is server-only |
 | Add an FDIC column | Request the field in `lib/fdic-config.ts`, map it in `lib/fdic-data-transformer.ts`, then verify against the live API |
 | Show a new field in the Market Analytics tab | Add it to the row in `lib/analytics/screening.ts` — the browser only renders what that module sends. Then run `verify:screening-parity` and check the printed payload size still clears 2MB |
@@ -526,7 +553,7 @@ sense against your source usually mean the build cache, not your code. Stop the 
 | Change chart appearance | `lib/chart-theme.tsx`. Use colour literals, not CSS variables — the PDF renderer cannot resolve them |
 | Add a chart to both screen and PDF | Put it in `components/charts/analytics/`; both surfaces render the same component so they cannot drift |
 | Sign everyone out | Rotate `COOKIE_SECRET`. Only when you intend to |
-| Add a tab | Component plus its server action, then a `TAB_DEFS` entry, a `TabsContent` block and an `EnabledTabs` key in `market-intelligence-dashboard.tsx`, an `isFeatureEnabled()` call in `app/page.tsx`, and **a `TAB_GRID_COLS` entry for the new column count** — Tailwind cannot see `grid-cols-${n}` |
+| Add a tab | Component plus its server action, then a `TAB_DEFS` entry, a `TabsContent` block and an `EnabledTabs` key in `market-intelligence-dashboard.tsx`, an `isFeatureEnabled()` call in `app/page.tsx`, and **a `TAB_GRID_COLS` entry for the new column count** — Tailwind cannot see `grid-cols-${n}`. Consider first whether it belongs inside an existing tab; two views have now been removed from the tab bar for being destinations nobody visits |
 | Keep a new tab off the ~50s cold load | Warm it in `app/api/cron/warm-cache/route.ts` behind its own flag, and keep its `revalidate` under 24h, or the daily cron will always find it fresh and never refresh it |
 | Diagnose "the tool is slow" | Almost always cold caches. Check the latest `Warm Cache After Deploy` run in GitHub Actions |
 | Roll back | `ROLLBACK.md` |

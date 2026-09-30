@@ -8,7 +8,76 @@ is it in now, and what is still open.
 
 ---
 
-## 2026-09-29 (latest) — the department is gone; two lenses become two tabs
+## 2026-09-30 (latest) — the two lenses leave the tab bar
+
+A correction to yesterday. Asked to remove "the dropdown that says executive, accounting,
+underwriting and the functionality that comes with it", I removed that — and then made the two
+views it led to into tabs, because with the dropdown gone they had no way in and something had to
+be decided. That was further than the request went, and the follow-up was explicit: *"I do not want
+to make major changes to the actual tool — before making changes, make sure you understand what it
+is I am trying to accomplish."*
+
+So the tab bar is back to the four it has always had. The two views are **unreachable rather than
+disabled**, which is a stronger claim and was worth verifying rather than assuming: I served the
+page with `executive-brief` and `underwriter-workbench` both present in `ENABLED_TABS` and neither
+label rendered. No flag brings them back, because they are no longer in `TAB_DEFS`.
+
+### The reason, which is more useful than the change
+
+Two mechanisms were tried for reaching these views and both were rejected — a department dropdown,
+then a tab. The objection was never the analysis. It is that **a destination you have to decide to
+enter is one nobody enters.** Stated as an aim: the tool should get more informative and more
+actionable, not acquire more places to go. That reading is now recorded at the top of `TAB_DEFS`,
+in the Lenses section of `confluence.md` and in Phase 2 of `docs/NEXT_VERSION_PLAN.md`, because
+this is the second time it has been settled and the third attempt should find the answer already
+written down.
+
+### What was removed beyond the two tab entries
+
+Only things with no remaining caller. The dashboard's focus-institution routing —
+`handleSelectInstitution`, `focusCert`, `focusMissedCert`, `handleFocusResolved` — existed solely
+to hand an institution from either view to the Market Analytics drawer, and both senders are gone.
+`MarketAnalytics` keeps `focusCert` and `onFocusResolved` as optional props, so the *receiving* half
+of that handoff is intact and a future caller need not rebuild it. The two cron cache warms went
+too: they would spend a couple of minutes of FDIC calls per deploy filling a cache nothing can read.
+`TAB_GRID_COLS` drops back to four entries. `verify:lenses` would now fail with advice that cannot
+work — "add its key to `ENABLED_TABS`" — so its message says no flag will help.
+
+### What was kept, deliberately
+
+The two components, their two server actions, and five calculators in `lib/scoring/`:
+`institution-change` (which institutions crossed a supervisory or watch level, and which are
+deteriorating without crossing anything — the only trend-over-time analysis in the codebase),
+`cre-downside` (how large a CRE loss an institution absorbs before reaching its capital floor),
+`peer-cohort` (a defensible peer group rather than the whole scope), `workbench-analysis` and
+`quarter`. **39 passing unit tests**, and they are the reason keeping this is not the orphan
+anti-pattern the department watchlist was: a pure function under test is a library, not an
+unreachable write path that can silently drift.
+
+Two of them encode things that would be expensive to rediscover. `cre-downside` knows that CBLR
+filers report **zero** rather than null for risk-weighted assets — 24 of 86 in Florida — so a
+`!= null` guard puts a zero in a denominator, and it refuses the `0.75 × assets` proxy used
+elsewhere on the grounds that a fabricated denominator should not sit under a number quoted to a
+credit committee. That is the same species of trap as the CRE-units problem caught yesterday.
+
+Verified: 194 unit tests pass across all 15 suites, up from the 48 counted yesterday because this
+is the first session to run every suite rather than the ones nearby. Typecheck shows 77 errors both
+before and after the change, all pre-existing and none in a touched file. Build clean, `/` still
+renders dynamically, bundle down from 66.6 kB to 58.6 kB.
+
+**Still open.** Unchanged: enforcement items are not matched by named institution to an FDIC cert;
+the legal applicability hit rate is 1–2 items per run; `institution_watchlist` has a reader and no
+writer. Still no browser confirmation — the Cursor browser tool cannot reach `localhost` here, so
+the tab bar was verified by reading the served payload over curl. New: the institution profile
+drawer shows a percentile measured against **the entire selected scope**, which for a small bank
+means a comparison dominated by size — `peer-cohort.ts` exists to fix exactly that and is not wired
+to it. That is the most obvious next improvement and it needs no new tab. Also worth noting: there
+is no aggregate `npm test`, only 15 separate scripts, which is why suites have been missed before.
+**All of this is on `dev`.**
+
+---
+
+## 2026-09-29 — the department is gone; two lenses become two tabs
 
 "I don't like the department card approach. Let's go with something else." The decision taken was
 to remove **the mechanism as a whole** — the header dropdown, the cookie, and the per-department
