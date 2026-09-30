@@ -179,7 +179,12 @@ async function summariseRecords(
       // No search: the facts are supplied, and the only task left is explanation.
       webSearch: false,
     })
-    const summaries = parsed?.summaries
+    // The prompt asks for `{ "summaries": { ... } }`. The model drops the wrapper about half the
+    // time and returns the keys at the top level, which is a compliant answer to the question and
+    // used to be read as no answer at all — every Florida bill then rendered as its raw official
+    // description with no "why it matters", and nothing logged the reason.
+    const summaries =
+      parsed?.summaries && typeof parsed.summaries === "object" ? parsed.summaries : parsed
     if (!summaries || typeof summaries !== "object") return out
 
     for (const key of keys) {

@@ -116,11 +116,22 @@ export function normalizeRuleTitle(title: string): string {
  * genuinely republished — "Real Estate Lending Escrow Accounts" appeared on 2026-05-19 under the
  * Treasury Department and again on 2026-06-29 under Treasury and the Comptroller of the Currency,
  * two document numbers for one rule. The later publication wins, being the operative one.
+ *
+ * The abstract travels with the title, not the date. The republication of the escrow rule carried
+ * no abstract, and keeping the later record whole meant the tab read "No agency abstract was
+ * published for this rule" as the summary of a real OCC rule whose abstract was sitting on the
+ * earlier record. Whichever copy has one, the survivor gets it.
  */
 export function dedupeRules(rules: SourcedRule[]): SourcedRule[] {
   const keep = (map: Map<string, SourcedRule>, key: string, rule: SourcedRule) => {
     const existing = map.get(key)
-    if (!existing || rule.publicationDate > existing.publicationDate) map.set(key, rule)
+    if (!existing) {
+      map.set(key, rule)
+      return
+    }
+    const winner = rule.publicationDate > existing.publicationDate ? rule : existing
+    const loser = winner === rule ? existing : rule
+    map.set(key, winner.abstract ? winner : { ...winner, abstract: loser.abstract })
   }
 
   const byNumber = new Map<string, SourcedRule>()
@@ -237,7 +248,7 @@ export function buildRuleSummaryPrompt(rules: SourcedRule[]): string {
 ${list}
 
 For each one, write two things for a firm that buys and works out distressed commercial real estate debt:
-- "summary": 2-3 sentences in plain English on what the rule actually changes. Base this on the agency abstract above; do not introduce facts it does not contain.
+- "summary": 2-3 sentences in plain English on what the rule actually changes. Base this on the agency abstract above; do not introduce facts it does not contain. Where the abstract reads "(none published)", write from the title and type alone and never mention that an abstract is missing — the reader is looking at a rule, not at our data.
 - "whyItMatters": 1-2 sentences on the consequence for note purchases, workouts, foreclosures or REO. If the honest answer is that the effect is indirect or minimal, say that instead of inflating it.
 
 Where a rule's effect on commercial real estate is incidental, say so plainly. An item that explains why it is marginal is more useful than one that pretends otherwise.

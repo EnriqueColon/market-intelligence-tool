@@ -3,6 +3,7 @@ import { test } from "node:test"
 
 import {
   buildFloridaSummaryPrompt,
+  decodeEntities,
   describeFloridaFromRecord,
   isLocalBill,
   isReviserBill,
@@ -40,6 +41,31 @@ const sourced = (over: Partial<SourcedFloridaBill> = {}): SourcedFloridaBill => 
   chamber: "senate",
   sessionName: "2026 Regular Session",
   ...over,
+})
+
+test("HTML entities in the legislature's text are decoded, not rendered", () => {
+  // Live defect: HB 759 rendered "clerk&#39;s office" on the tab.
+  assert.equal(decodeEntities("clerk&#39;s office &amp; fees"), "clerk's office & fees")
+  assert.equal(decodeEntities("&quot;Florida Statutes&quot; &lt;2026&gt;"), '"Florida Statutes" <2026>')
+  assert.equal(decodeEntities("&#x27;quoted&#x27;"), "'quoted'")
+  // Something that only looks like an entity is left alone rather than eaten.
+  assert.equal(decodeEntities("AT&T &unknown; stays"), "AT&T &unknown; stays")
+})
+
+test("a master-list row's text arrives decoded", () => {
+  const c = toCandidate(
+    {
+      bill_id: 1,
+      number: "H0759",
+      title: "Court Fees",
+      description: "Increases service charges clerk of circuit court charges for clerk&#39;s office",
+      last_action: "Died in Rules &amp; Calendar",
+      last_action_date: "2026-03-13",
+    },
+    "2026 Regular Session"
+  )
+  assert.equal(c?.description, "Increases service charges clerk of circuit court charges for clerk's office")
+  assert.equal(c?.statusLabel, "Died in Rules & Calendar")
 })
 
 test("LegiScan's number becomes the form Florida prints", () => {

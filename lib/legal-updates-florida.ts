@@ -46,6 +46,27 @@ const STATUS_LABELS: Record<number, string> = {
 }
 
 /**
+ * LegiScan hands back the legislature's text with HTML entities still in it — "clerk&#39;s office"
+ * rendered literally on the tab. Only the handful of entities that actually appear in bill text;
+ * this is not a general HTML decoder and does not need to be.
+ */
+const NAMED_ENTITIES: Record<string, string> = {
+  amp: "&",
+  quot: '"',
+  apos: "'",
+  lt: "<",
+  gt: ">",
+  nbsp: " ",
+}
+
+export function decodeEntities(text: string): string {
+  return text
+    .replace(/&#(\d+);/g, (_, code: string) => String.fromCodePoint(Number(code)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex: string) => String.fromCodePoint(parseInt(hex, 16)))
+    .replace(/&([a-z]+);/gi, (match, name: string) => NAMED_ENTITIES[name.toLowerCase()] ?? match)
+}
+
+/**
  * LegiScan numbers Florida bills `H0011` and `S0274`; Florida itself writes "HB 11" and "SB 274",
  * and so does flsenate.gov. The conversion matters beyond presentation: the bill-identity guard
  * reads the number back out of the title and looks for it on the cited page, and it is looking for
@@ -120,7 +141,7 @@ export type FloridaCandidate = {
  */
 export function toCandidate(raw: MasterListBill, sessionName: string): FloridaCandidate | null {
   const displayNumber = raw.number ? toDisplayNumber(raw.number) : null
-  const title = raw.title?.trim()
+  const title = raw.title ? decodeEntities(raw.title).trim() : undefined
   const statusDate = (raw.last_action_date || raw.status_date)?.slice(0, 10)
   if (!displayNumber || !title || !statusDate || !raw.bill_id) return null
   if (isLocalBill(displayNumber) || isReviserBill(title)) return null
@@ -129,8 +150,8 @@ export function toCandidate(raw: MasterListBill, sessionName: string): FloridaCa
     billId: raw.bill_id,
     displayNumber,
     title,
-    description: raw.description?.trim() || undefined,
-    statusLabel: raw.last_action?.trim() || STATUS_LABELS[raw.status ?? 0] || "Introduced",
+    description: raw.description ? decodeEntities(raw.description).trim() || undefined : undefined,
+    statusLabel: raw.last_action ? decodeEntities(raw.last_action).trim() : STATUS_LABELS[raw.status ?? 0] || "Introduced",
     statusDate,
     chamber: displayNumber.startsWith("S") ? "senate" : "house",
     sessionName,
@@ -245,7 +266,10 @@ async function attachUrl(
     statusLabel: candidate.statusLabel,
     statusDate: candidate.statusDate,
     url,
-    description: candidate.description || data?.bill?.description?.trim() || undefined,
+    description:
+      candidate.description ||
+      (data?.bill?.description ? decodeEntities(data.bill.description).trim() : undefined) ||
+      undefined,
     chamber: candidate.chamber,
     sessionName: candidate.sessionName,
   }

@@ -85,6 +85,30 @@ test("one rule republished under two document numbers appears once, at the later
   assert.equal(deduped[0].publicationDate, "2026-06-29")
 })
 
+test("the abstract survives deduplication even when the later record lacks one", () => {
+  // Live defect: the 2026-06-29 republication of the escrow rule carried no abstract, and the tab
+  // summarised a real OCC rule as "No agency abstract was published for this rule".
+  const deduped = dedupeRules([
+    rule({ documentNumber: "2026-10036", publicationDate: "2026-05-19", abstract: "The OCC is issuing a final rule." }),
+    rule({ documentNumber: "2026-13000", publicationDate: "2026-06-29", abstract: undefined }),
+  ])
+  assert.equal(deduped.length, 1)
+  assert.equal(deduped[0].documentNumber, "2026-13000")
+  assert.equal(deduped[0].abstract, "The OCC is issuing a final rule.")
+})
+
+test("a later record with its own abstract keeps it", () => {
+  const deduped = dedupeRules([
+    rule({ documentNumber: "a", publicationDate: "2026-05-19", abstract: "Old wording." }),
+    rule({ documentNumber: "b", publicationDate: "2026-06-29", abstract: "Corrected wording." }),
+  ])
+  assert.equal(deduped[0].abstract, "Corrected wording.")
+})
+
+test("the prompt forbids the model from writing about a missing abstract", () => {
+  assert.match(buildRuleSummaryPrompt([rule({ abstract: undefined })]), /never mention that an abstract is missing/)
+})
+
 test("the same document reached by two searches appears once", () => {
   assert.equal(dedupeRules([rule(), rule(), rule()]).length, 1)
 })
