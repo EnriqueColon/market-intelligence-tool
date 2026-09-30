@@ -54,6 +54,25 @@ The 400-day legislative window was left as it is, by decision. A bill whose last
 than that drops off even while still being law, which is a known cost to revisit once tracking has
 produced some history to look at.
 
+#### Addendum, same day — one host list had a hole in it
+
+`content.govdelivery.com` was listed as an authoritative source for `regulatory` but not for
+`enforcement`. The FDIC publishes its monthly enforcement decisions there rather than on
+`fdic.gov`, so those bulletins were rejected as `unlisted` — and in the logs that rejection is
+indistinguishable from throwing out a fabricated URL, which is why it sat there unnoticed. Now
+listed for both.
+
+This fix is real but **not demonstrated**. The live run after it cited `occ.gov` and `fdic.gov`
+and produced no GovDelivery URL at all, so nothing was admitted that would have been rejected
+before. It removes a rejection that will happen the next time the model does cite the host.
+
+That same run surfaced something to decide separately: the two enforcement items were both monthly
+digests ("OCC Enforcement Actions for September 2026"), and both were dropped as actions against
+an individual, because a digest lists prohibition orders among everything else. Under the strict
+posture chosen this morning that is arguably right — a digest is not a specific institutional
+action — but the effect is that the enforcement section rendered empty. Worth a look before
+deciding it is correct.
+
 ---
 
 

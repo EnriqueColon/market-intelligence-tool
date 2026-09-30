@@ -320,6 +320,13 @@ document. Requiring only a listed host admits constructed URLs on the right doma
 `occ.treas.gov` is a live OCC host and is listed. `occ.ustreas.gov` is not and does not resolve;
 the model has produced both, which is precisely why the resolution check exists alongside the list.
 
+`content.govdelivery.com` is listed for both `regulatory` and `enforcement`. The FDIC announces
+Financial Institution Letters and its monthly enforcement decisions through GovDelivery rather than
+on `fdic.gov`, so a host list that omits it rejects the issuing body's own page as `unlisted`. It was
+listed for `regulatory` from the start and missing from `enforcement`, which is the kind of gap the
+per-section lists make easy to introduce and hard to notice: the rejection looks identical to the
+rejection of a fabricated URL.
+
 The prompts name the permitted domains, and must keep doing so — left to itself the model cites
 the commentary it found the item through, and the guard then discards a real development for want
 of a link. Naming them took provenance from 38% to 100% in testing.

@@ -8,7 +8,7 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
 | `main` | `9faaf35` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `c248b3d` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `dev` | `4e92b49` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 This table names the newest commit on each branch that **changes behaviour**; documentation-only
 commits sit on top of it and are deliberately not tracked here, because amending one rotates its
@@ -23,7 +23,7 @@ relevance gate and always-rendered sections, then the computed exposure counts, 
 the department model, then the removal of the two lens tabs, then the matched peer cohort in the
 institution drawer, then the Legal Landscape relevance gate and the bill-identity guard.
 
-The newest commit changing application behaviour is **`c248b3d`** on `dev`; in production it is
+The newest commit changing application behaviour is **`4e92b49`** on `dev`; in production it is
 **`e5414c3`**, which stops the feed publishing items it cannot point at a real primary source for. The four legal commits are a set: `2384143`
 stops the feed rendering one development several times, `10fd202` withholds stale items, `8625c7c`
 stops it being stale in the first place, and `e5414c3` stops it inventing citations. **`10fd202`
@@ -153,6 +153,7 @@ the Market Participants tab.
 
 | Commit | Date | Summary |
 | --- | --- | --- |
+| `4e92b49` | 09-30 | Adds `content.govdelivery.com` to the **enforcement** host list, where the FDIC publishes its monthly enforcement decisions; it was already listed for regulatory. One line of data, no logic. **Reverting silently reinstates the rejection** — a real FDIC bulletin comes back as `unlisted`, which reads in the logs exactly like a fabricated URL. Nothing verifies this either way: the live run after it happened to cite `occ.gov` and `fdic.gov`, so no GovDelivery item was admitted or rejected. |
 | `c248b3d` | 09-30 | Adds `bill_status_history` so the Legislative Tracker reports what **changed** about a bill, not just its current stage. The table auto-creates on first use. **Safe to revert in isolation** — the feed degrades to exactly its previous behaviour, since the movement field is optional and absent movements render nothing. The table can be left in place after a revert; nothing else reads it. Note this is the least verified commit of the day: the comparison logic has tests, but the Postgres path has never run, here or anywhere. If movement never appears in production, check `POSTGRES_URL` is set before suspecting the logic. `npm run test:legal-movement`. |
 | `c992ace` | 09-30 | Takes **federal legislation from the congressional record** instead of from the model. `lib/legal-updates-legislation.ts` reads bills from govtrack and the model only writes prose for bills it is handed, so it is never asked for an identity it could invent. Also dedupes companion bills across chambers, and narrows the legislative prompt to Florida only. **Reverting returns the Legislative Tracker to model-recalled bills** — which, with `8ef34d3` still in place, means the guard drops them and the section goes empty rather than wrong. Reverting both together restores the fabricated bills. `npm run test:legal-legislation` and `npm run verify:legal-freshness`. |
 | `8ef34d3` | 09-30 | Two Legal Landscape fixes. The relevance gate stops reading `whyItMatters`, a field the prompt tells the model to write about CRE relevance — so items no longer certify themselves; it also drops 1818(e) actions against individuals, anchors every term (bare `lien` matched "client" and "resilience"), and puts residential and land-use policy out of scope. Second and more important, `lib/legal-updates-bills.ts` checks that a cited bill **is the bill claimed**, because `checkSourceUrl` never verified anything on congress.gov: the host 403s everything and the guard reads 403 as "refused us, not absent". **This is the commit that stops fabricated legislation rendering** — do not revert it without reverting `c992ace` too, or the section keeps model-recalled bills with no identity check. Cache key `legal-updates-v7` → `v8`; any revert must bump it again or the Data Cache serves whichever shape was written last. `npm run test:legal-bills`, `npm run test:legal-relevance`. |
