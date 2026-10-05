@@ -14,7 +14,7 @@ deployment, and `main` is deployed automatically on push.
 | Production | `main` → https://market-intelligence-tool-gilt.vercel.app |
 | Development | `dev` → Vercel preview, no database, no Blob store |
 | Framework | Next.js 15.5.12 (App Router), React 18, TypeScript |
-| Runtime | Node 20.x |
+| Runtime | Node 24.x |
 | Host | Vercel |
 
 ---
@@ -194,7 +194,7 @@ Cron routes bypass the password gate and are protected by a bearer token instead
 
 ### Prerequisites
 
-Node 20.x and npm. Some ingestion scripts under `scripts/` are Python and are not needed to run the
+Node 24.x and npm. Some ingestion scripts under `scripts/` are Python and are not needed to run the
 app.
 
 ### Setup
@@ -440,6 +440,13 @@ number.** govtrack answers its first request after an idle period in about 28 se
 in a quarter of one. Production makes exactly one cold request a day, off a cron, so a 15-second
 timeout failed every time in production and never once in testing. Retrying does not help; the
 cold start now gets paid once, deliberately, before the parallel searches begin.
+
+**The Node version is pinned in `package.json` `engines`, and Vercel retires versions.** On
+2026-10-05 a push to `dev` failed before cloning finished: "Node.js Version 20.x is discontinued and
+must be upgraded." The pin had been `20.x` since the project began, and `main` carried the same one,
+so the next production deploy would have failed identically. Nothing in the code needed changing —
+local development had been on Node 24 for some time. When a build fails at that step the fix is the
+one line in `engines`, and it has to land on `main` as well as `dev`.
 
 **Never use `process.env.NODE_ENV` to detect production.** Vercel sets it to `"production"` on
 preview builds too, so a dev deployment is indistinguishable from the live tool. Use
