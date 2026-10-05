@@ -8,7 +8,28 @@ is it in now, and what is still open.
 
 ---
 
-## 2026-10-05, later afternoon (latest) — why every open of the tool was slow
+## 2026-10-05, 14:35 (latest) — the load fix is in production
+
+Bugbot reviewed the branch changes and found nothing. `main` fast-forwarded `4d1cf60` → `7f24131`,
+so `0aaf1b2` (the `/api/cron/measure-load` diagnostic) and `f72fbb4` (the News tab's data arriving
+in the page) are now live, and `main` and `dev` are level. Checked before the push: `main` had no
+commits `dev` lacked, and nothing in the diff was rewritten with CRLF line endings. The only type
+error in a changed file (`components/industry-outlook.tsx:132`) dates from March, and builds skip
+type errors anyway (`ignoreBuildErrors`).
+
+Still open: measure the before and after on the real production deployment
+(`/api/cron/measure-load` with the cron bearer, plus a timed load of the page), which should show
+the News tab with no skeletons on a warm day. If the page gets slower or renders wrong, revert
+`f72fbb4` alone. Steps 3 and 4 below are still not started.
+
+Trap: pushing from an agent shell fails with "could not read Password", because the GitHub CLI's
+active account is `RSronin09` and the remote belongs to `EnriqueColon`. Pass
+`gh auth token --user EnriqueColon` as the credential for that one push rather than switching
+accounts.
+
+---
+
+## 2026-10-05, later afternoon — why every open of the tool was slow
 
 Asked why the whole tool takes so long to load, every time, for everyone — not just the first
 visitor of the day. The architecture map said: the page is an empty shell, every box fetches its

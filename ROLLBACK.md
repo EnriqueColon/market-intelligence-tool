@@ -7,7 +7,7 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
-| `main` | `b2b08e9` | Production | https://market-intelligence-tool-gilt.vercel.app |
+| `main` | `f72fbb4` | Production | https://market-intelligence-tool-gilt.vercel.app |
 | `dev` | `f72fbb4` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 This table names the newest commit on each branch that **changes behaviour**; documentation-only
@@ -15,9 +15,11 @@ commits sit on top of it and are deliberately not tracked here, because amending
 SHA and the table then reads as stale when nothing has moved. Confirm with
 `git log --format='%h|%ci|%s'` rather than trusting the previous entry — this has drifted twice.
 
-**`dev` is one behavioural commit ahead as of 14:20 on 2026-10-05**: `f72fbb4`, which renders the
-News tab's data into the page on the server (with `0aaf1b2`, the load-timing diagnostic route,
-beneath it). Before that, **`main` and `dev` were level at `2425d4c` as of 13:20.** The afternoon's five
+**`main` and `dev` are level at `7f24131` as of 14:35 on 2026-10-05.** Production fast-forwarded
+`4d1cf60` → `7f24131`, taking `0aaf1b2` (the load-timing diagnostic route) and `f72fbb4` (the News
+tab's data rendered into the page on the server). `4d1cf60` / `b2b08e9` is the production state
+before them and the rollback target if the page misbehaves. Before that, **`main` and `dev` were
+level at `2425d4c` as of 13:20.** The afternoon's five
 behavioural commits went to production in one fast-forward (`75959a2` → `2425d4c`): `a01d2a5`,
 which admits the OCC's and FDIC's monthly enforcement roundups as single items and rewords the
 Legislative Tracker header; `da82d42`, which gives Federal Register cards their record facts and a
@@ -120,6 +122,7 @@ git push --force-with-lease origin dev
 
 | Commit | Date | Why it is a safe target |
 | --- | --- | --- |
+| `b2b08e9` | 2026-10-05 | Last production state before the News tab's data was rendered into the page (`f72fbb4`). Builds on Node 24. Revert `f72fbb4` alone in preference to rolling back here; it is self-contained. |
 | `8ef34d3` | 2026-09-30 | First `dev` commit at which the Legal Landscape tab cannot render a bill that is not the bill it names. Everything before this can. |
 | `e45845f` | 2026-09-30 | Last `dev` commit before the drawer's percentiles changed meaning. The only reason to come back here is reconciling a figure someone exported under the scope-wide comparison. |
 | `f40b8df` | 2026-09-30 | Last `dev` commit with the two views reachable, as tabs. Only useful if you intend to restore them as tabs, which has been rejected; prefer surfacing the analysis inside the institution drawer. |
@@ -174,8 +177,8 @@ to `4ca86dc`. It is kept as the record of what each commit does and what reverti
 
 | Commit | Date | Summary |
 | --- | --- | --- |
-| `f72fbb4` | 10-05 | **Not yet in production.** The page reads the pulse strip, Industry Outlook and six news feeds from the caches on the server (`app/services/initial-news-data.ts`, 2.5 s budget per read, abandoned reads kept alive with `after()`) and the News components take them as initial state, skipping their mount fetch. Cold caches fall back to the old client fetch. **Safe to revert in isolation**: every prop is optional and absent ones restore the previous behaviour exactly. If the page itself becomes slow, suspect this first and check `/api/cron/measure-load`. |
-| `0aaf1b2` | 10-05 | **Not yet in production.** Adds `/api/cron/measure-load`, a diagnostic that times each dashboard action twice and reports payload size. Behind the cron bearer; not scheduled; no effect on any page. |
+| `f72fbb4` | 10-05 | In production since 10-05 14:35. The page reads the pulse strip, Industry Outlook and six news feeds from the caches on the server (`app/services/initial-news-data.ts`, 2.5 s budget per read, abandoned reads kept alive with `after()`) and the News components take them as initial state, skipping their mount fetch. Cold caches fall back to the old client fetch. **Safe to revert in isolation**: every prop is optional and absent ones restore the previous behaviour exactly. If the page itself becomes slow, suspect this first and check `/api/cron/measure-load`. |
+| `0aaf1b2` | 10-05 | In production since 10-05 14:35. Adds `/api/cron/measure-load`, a diagnostic that times each dashboard action twice and reports payload size. Behind the cron bearer; not scheduled; no effect on any page. |
 | `b2b08e9` | 10-05 | In production since 10-05 13:20. Federal bill cards list the record (sponsor, cosponsors, committees, how each chamber passed it, last action, identical bill, report, text, CRS summary) from GPO's keyless bulk data in `lib/legal-updates-govinfo.ts`, and the model summarises the CRS summary, committee report and bill text into `details`, labelled with what was read (`LegalItem.detailsSource`, which also relabels Florida and roundup details). Removes the govtrack-only prompt from `lib/legal-updates-legislation.ts`. Cache key `v14`. Revert cost: federal cards back to four facts and no details; Florida and roundup details labelled "From the rule text" again. `npm run test:legal-govinfo`. |
 | `671a877` | 10-05 | In production since 10-05 13:20. Between Florida sessions, when every Florida bill on the Legislative Tracker is dead, a line above the cards says the session has ended, none has effect, and filing for next year opens in the autumn (`sectionContext.legislative`); a "Possible intent" block below the cards gives one record-derived sentence per dead bill on how far it got (`LegalItem.intent`, from `describeIntent`). Both self-clear once a live bill appears. Cache key `v13`. **Safe to revert in isolation**: the fields are optional and absent ones render nothing. `npm run test:legal-florida`. |
 | `a313d11` | 10-05 | In production since 10-05 13:20. Florida bill cards list the record (primary sponsors, filed, companion, last roll call, latest text, latest staff analysis) and the model summarises the staff analysis — a PDF read with `pdf-parse` through `lib/legal-updates-pdf.ts` — into `details`. Enforcement roundup pages are fetched after verification and the model reports what they list, one bullet per institutional action. Cache key `v12`. Revert cost: Florida cards back to a one-line description; roundup summaries back to the model's recollection of the page. |
