@@ -25,10 +25,18 @@ import {
   fetchFloridaBills,
 } from "@/lib/legal-updates-florida"
 import {
-  buildBillSummaryPrompt,
+  buildFederalBillSummaryPrompt,
+  describeBillRecord,
+  describeSourcesRead,
+  fetchBillRecord,
+  fetchBillSources,
+  hasSources,
+  type BillSources,
+} from "@/lib/legal-updates-govinfo"
+import {
+  currentCongress,
   describeFromRecord,
   fetchFederalBills,
-  type SourcedBill,
 } from "@/lib/legal-updates-legislation"
 import { buildSectionPrompt } from "@/lib/legal-updates-prompts"
 import { buildDigestDetailPrompt, fetchPageText, type DigestPage } from "@/lib/legal-updates-pages"
@@ -70,6 +78,11 @@ export type LegalItem = {
    * exactly as the source states them. Nothing here has been through a model.
    */
   record?: RecordFact[]
+  /**
+   * The label over `details`, naming what was read: "From the rule text", "From the staff
+   * analysis", "From the CRS summary and the bill text". Set by whichever collector read the text.
+   */
+  detailsSource?: string
   /**
    * For a bill that died: what its record says about its chances next session, in one sentence.
    * Procedural and checkable — the last roll call, where it died — never a guess at why.
@@ -158,9 +171,13 @@ async function querySection(section: LegalSection, now: Date): Promise<LegalItem
  * Federal legislation, built from the record and then given prose by the model.
  *
  * The identity of every item here — number, title, status, date, link — comes from govtrack and is
- * never round-tripped through the model. If the summary call fails, the item still renders on
- * `describeFromRecord`, because a real bill with a thin description is worth more than nothing and
- * far more than an invented one.
+ * never round-tripped through the model. The rest of the record — sponsor, cosponsors, committees,
+ * how it passed, the report, the text, the CRS summary — comes from GPO's bulk data by bill number,
+ * and the model is given the CRS summary, the report's explanatory sections and the text to
+ * condense into `details`. A bill whose record could not be fetched renders on govtrack's facts
+ * alone, and one for which nothing was read carries no details list: that list means something
+ * was read. If the summary call fails, the item still renders on `describeFromRecord`, because a
+ * real bill with a thin description is worth more than nothing and far more than an invented one.
  */
 async function collectFederalBills(now: Date, filterDays: number): Promise<LegalItem[]> {
   const bills = await fetchFederalBills(now, filterDays, (title) =>
@@ -168,10 +185,29 @@ async function collectFederalBills(now: Date, filterDays: number): Promise<Legal
   )
   if (bills.length === 0) return []
 
-  const prose = await summariseBills(bills)
+  const congress = currentCongress(now)
+  const records = new Map<string, RecordFact[]>()
+  const sources = new Map<string, BillSources>()
+  await Promise.all(
+    bills.map(async (bill) => {
+      const record = await fetchBillRecord(bill.displayNumber, congress)
+      if (!record) return
+      const facts = describeBillRecord(record)
+      if (facts.length > 0) records.set(bill.displayNumber, facts)
+      const read = await fetchBillSources(record)
+      if (hasSources(read)) sources.set(bill.displayNumber, read)
+    })
+  )
+
+  const prose = await summariseRecords(
+    buildFederalBillSummaryPrompt(bills, sources),
+    bills.map((b) => b.displayNumber),
+    3200
+  )
 
   return bills.map((bill, idx) => {
     const written = prose.get(bill.displayNumber)
+    const read = sources.get(bill.displayNumber)
     return {
       id: `legislative-${idx}-${bill.displayNumber.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`,
       section: "legislative" as const,
@@ -181,6 +217,9 @@ async function collectFederalBills(now: Date, filterDays: number): Promise<Legal
       jurisdiction: "Federal" as const,
       summary: written?.summary || describeFromRecord(bill),
       whyItMatters: written?.whyItMatters || "",
+      details: read ? written?.details : undefined,
+      detailsSource: read ? describeSourcesRead(read) : undefined,
+      record: records.get(bill.displayNumber),
       status: bill.statusLabel,
       url: bill.url,
     }
@@ -243,13 +282,6 @@ async function summariseRecords(
   return out
 }
 
-function summariseBills(bills: SourcedBill[]): Promise<Map<string, RecordProse>> {
-  return summariseRecords(
-    buildBillSummaryPrompt(bills),
-    bills.map((b) => b.displayNumber)
-  )
-}
-
 /**
  * Florida legislation, built from the record the same way as the federal side.
  *
@@ -295,6 +327,7 @@ async function collectFloridaBills(now: Date, filterDays: number): Promise<Legal
       summary: written?.summary || describeFloridaFromRecord(bill),
       whyItMatters: written?.whyItMatters || "",
       details: texts.has(bill.displayNumber) ? written?.details : undefined,
+      detailsSource: texts.has(bill.displayNumber) ? "From the staff analysis" : undefined,
       record: record.length > 0 ? record : undefined,
       intent: describeIntent(bill),
       status: bill.statusLabel,
@@ -336,6 +369,7 @@ async function readEnforcementPages(items: LegalItem[]): Promise<LegalItem[]> {
       summary: written.summary,
       whyItMatters: written.whyItMatters || item.whyItMatters,
       details: written.details,
+      detailsSource: "From the page",
     }
   })
 }
@@ -383,6 +417,7 @@ async function collectFederalRules(now: Date, filterDays: number): Promise<Legal
       // Only where the model was actually given the text; a list written from an abstract would
       // be the abstract restated as bullets, or worse, filled in.
       details: texts.has(rule.documentNumber) ? written?.details : undefined,
+      detailsSource: texts.has(rule.documentNumber) ? "From the rule text" : undefined,
       record: record.length > 0 ? record : undefined,
       status: rule.commentsCloseOn
         ? `Comments close ${rule.commentsCloseOn}`
@@ -579,7 +614,7 @@ export async function fetchLegalUpdates(): Promise<LegalUpdatesResponse> {
   const day = newsCalendarDayET()
   return unstable_cache(
     async () => fetchLegalUpdatesImpl(),
-    ["legal-updates-v13", day],
+    ["legal-updates-v14", day],
     // 25h so the entry outlives the day and never expires just before the cron.
     { revalidate: 90000 }
   )()

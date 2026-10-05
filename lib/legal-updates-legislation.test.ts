@@ -2,7 +2,6 @@ import assert from "node:assert/strict"
 import { test } from "node:test"
 
 import {
-  buildBillSummaryPrompt,
   dedupeBills,
   describeFromRecord,
   normalizeBillTitle,
@@ -130,19 +129,4 @@ test("the record alone produces a quotable description", () => {
 test("a missing sponsor does not leave a dangling sentence", () => {
   assert.equal(describeFromRecord(bill()).includes("Sponsored by"), false)
   assert.match(describeFromRecord(bill()), /Passed House & Senate \(President next\)\.$/)
-})
-
-test("the summary prompt supplies the facts and forbids changing them", () => {
-  const prompt = buildBillSummaryPrompt([bill(), bill({ displayNumber: "S. 5477", title: "Federal Receivership Fairness Act" })])
-  assert.match(prompt, /H\.R\. 7730: Bankruptcy Threshold Adjustment Act/)
-  assert.match(prompt, /S\. 5477: Federal Receivership Fairness Act/)
-  // The two instructions the whole design rests on.
-  assert.match(prompt, /do not restate, correct or change them, and do not add bills/)
-  assert.match(prompt, /keyed by bill number/)
-})
-
-test("the prompt does not ask for a search", () => {
-  // The facts are given. Any searching is an opportunity to introduce a bill nobody vouched for.
-  const prompt = buildBillSummaryPrompt([bill()])
-  assert.equal(/search/i.test(prompt), false)
 })

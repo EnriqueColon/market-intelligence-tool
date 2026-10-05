@@ -171,7 +171,7 @@ function LegalCard({
       {/* Points drawn from the document's own text. Present only when the text was actually read. */}
       {item.details && item.details.length > 0 && (
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">From the rule text</p>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{item.detailsSource ?? "From the rule text"}</p>
           <ul className="mt-1 space-y-1 text-sm text-slate-600 leading-relaxed">
             {item.details.map((point, i) => (
               <li key={i} className="flex gap-2">

@@ -12,8 +12,9 @@
  * is left with the one job it is actually good at — explaining what a real bill means for this firm
  * — and has no opportunity to invent an identity, because it is never asked for one.
  *
- * Florida is not covered. There is no open API for the Florida legislature, so those items are
- * still discovered and then verified against the cited page; see `verifyBill`.
+ * This module supplies identity and nothing more. What the record holds beyond that — sponsors,
+ * actions, the CRS summary, the text, the committee report — comes from `legal-updates-govinfo.ts`,
+ * and the prompt that asks for prose lives there with it. Florida is `legal-updates-florida.ts`.
  */
 
 export type SourcedBill = {
@@ -50,7 +51,7 @@ const SEARCH_QUERIES = [
 ]
 
 /** The 1st Congress convened in 1789 and each runs two years. */
-function currentCongress(now: Date): number {
+export function currentCongress(now: Date): number {
   return Math.floor((now.getFullYear() - 1789) / 2) + 1
 }
 
@@ -217,34 +218,4 @@ export async function fetchFederalBills(
 export function describeFromRecord(bill: SourcedBill): string {
   const sponsor = bill.sponsor ? ` Sponsored by ${bill.sponsor}.` : ""
   return `${bill.displayNumber}, ${bill.title}. Status as of ${bill.statusDate}: ${bill.statusLabel}.${sponsor}`
-}
-
-/**
- * Asks only for prose, and supplies the facts.
- *
- * The bills are given rather than searched for, so there is nothing to look up and no reason to
- * reach for the web. Keyed by bill number on the way back so a reordered or partial answer still
- * lands on the right bill.
- */
-export function buildBillSummaryPrompt(bills: SourcedBill[]): string {
-  const list = bills
-    .map((b) => `- ${b.displayNumber}: ${b.title} (status: ${b.statusLabel}, as of ${b.statusDate})`)
-    .join("\n")
-
-  return `These are real federal bills, taken from the legislative record. Their numbers, titles, statuses and dates are already confirmed — do not restate, correct or change them, and do not add bills.
-
-${list}
-
-For each one, write two things for a firm that buys and works out distressed commercial real estate debt:
-- "summary": 2-3 sentences in plain English on what the bill would actually do.
-- "whyItMatters": 1-2 sentences on the consequence for note purchases, workouts, foreclosures or REO. If the honest answer is that the effect is indirect or minimal, say that instead of inflating it.
-
-Where a bill's effect on commercial real estate is incidental, say so plainly. An item that explains why it is marginal is more useful than one that pretends otherwise.
-
-Return ONLY valid JSON, keyed by bill number exactly as written above:
-{
-  "summaries": {
-    "${bills[0]?.displayNumber ?? "H.R. 1234"}": { "summary": "...", "whyItMatters": "..." }
-  }
-}`
 }
