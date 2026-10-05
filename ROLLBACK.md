@@ -7,7 +7,7 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
-| `main` | `9faaf35` | Production | https://market-intelligence-tool-gilt.vercel.app |
+| `main` | `a36ff81` | Production | https://market-intelligence-tool-gilt.vercel.app |
 | `dev` | `a36ff81` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 This table names the newest commit on each branch that **changes behaviour**; documentation-only
@@ -15,19 +15,24 @@ commits sit on top of it and are deliberately not tracked here, because amending
 SHA and the table then reads as stale when nothing has moved. Confirm with
 `git log --format='%h|%ci|%s'` rather than trusting the previous entry — this has drifted twice.
 
-All of the Market Analytics performance work reached production on 2026-09-09 — the server-side
-screening reduction, the Visual Analysis charts and quarter-keyed caching — followed by the
-tab-persistence fix on 09-10. The branches were level after the Legal Landscape source-verification
-work merged on 09-29, and **`dev` is now four commits ahead**: the per-section windows, CRE
-relevance gate and always-rendered sections, then the computed exposure counts, then the removal of
-the department model, then the removal of the two lens tabs, then the matched peer cohort in the
-institution drawer, then the Legal Landscape relevance gate and the bill-identity guard.
+**The branches are level as of 2026-10-05.** `main` fast-forwarded from `9faaf35` to `4ca86dc`,
+taking everything from 09-29 to 10-05 in one release: the per-section windows and the always-rendered
+sections, the computed exposure counts, the removal of the department model and of the two lens
+tabs, the matched peer cohort in the institution drawer, then the week's Legal Landscape work — the
+relevance gate, the bill-identity guard, federal bills from govtrack, Florida bills from LegiScan,
+rulemaking from the Federal Register, bill status tracking — and the Node 24 pin without which none
+of it could have been deployed.
 
-The newest commit changing application behaviour is **`a36ff81`** on `dev`; in production it is
-**`e5414c3`**, which stops the feed publishing items it cannot point at a real primary source for. The four legal commits are a set: `2384143`
-stops the feed rendering one development several times, `10fd202` withholds stale items, `8625c7c`
-stops it being stale in the first place, and `e5414c3` stops it inventing citations. **`10fd202`
-alone renders an empty tab** — it was briefly live that way.
+The newest commit changing application behaviour is **`a36ff81`** on both branches. The previous
+production state was `9faaf35`, and it is **no longer a clean rollback target**: it carries the
+Node 20 pin and Vercel will refuse to build it. See the `a36ff81` row below.
+
+Two things in this release are seeing a database for the first time in production.
+`bill_status_history` creates itself on first use and reports nothing on first sighting, so the
+Legislative Tracker will show no movement on day one by design; movement appears once a tracked
+bill's status changes between runs. If it never appears, check `POSTGRES_URL` before suspecting the
+logic. And the first Legal Landscape load after the deploy is slow on purpose — it pays govtrack's
+cold start once — and then cached for the day.
 
 This table had drifted before this session: it named `8844bea` as production when `main` was
 actually at `996efa9`, and listed three commits as dev-only that had already shipped. Verify with
@@ -107,7 +112,8 @@ git push --force-with-lease origin dev
 | `e45845f` | 2026-09-30 | Last `dev` commit before the drawer's percentiles changed meaning. The only reason to come back here is reconciling a figure someone exported under the scope-wide comparison. |
 | `f40b8df` | 2026-09-30 | Last `dev` commit with the two views reachable, as tabs. Only useful if you intend to restore them as tabs, which has been rejected; prefer surfacing the analysis inside the institution drawer. |
 | `6789d45` | 2026-09-29 | Last `dev` commit **with** the department model, if the removal needs undoing without losing the Legal Landscape exposure counts. Reverting `f40b8df` is preferable to rolling back here, since the two are independent. |
-| `9faaf35` | 2026-09-29 | Current production. The Legal Landscape source-verification guard, before the per-section windows and the always-rendered sections landed on `dev`. Roll back here if the `dev` legal work turns out badly; the tab stays truthful, it just goes quiet out of session. |
+| `a36ff81` | 2026-10-05 | **Current production.** The first commit Vercel will build at all, Node 20 having been retired; everything below it in this table needs `a36ff81` cherry-picked on top before it can be deployed again. |
+| `9faaf35` | 2026-09-29 | Production from 09-29 to 10-05. The Legal Landscape source-verification guard, before the per-section windows and the always-rendered sections. **Will not build as-is** — carries the Node 20 pin. If the 10-05 legal work turns out badly, roll back here *with* `a36ff81` cherry-picked, and the tab stays truthful but goes quiet out of session. |
 | `e5414c3` | 2026-09-29 | Newest behavioural commit. The Legal Landscape feed deduped, freshness-filtered, date-aware and source-verified; nothing outside that tab is touched, so it is a safe target for unrelated work. |
 | `8625c7c` | 2026-09-29 | **Known-bad: publishes fabricated legislation and enforcement actions.** Dates are current but citations are invented — consent orders against banks that do not exist. Do not roll back to this point; go to `e5414c3`. |
 | `10fd202` | 2026-09-29 | **Known-bad: renders an empty Legal Landscape tab.** The staleness filter without the prompt fix, so every item the model returns is withheld. Do not roll back to this point; go to `8625c7c` or past `2384143`. |
@@ -149,7 +155,10 @@ the Market Participants tab.
 
 ---
 
-## Dev branch commits (not yet in production)
+## Dev branch commits
+
+Everything in this table reached production on 2026-10-05 in the fast-forward to `4ca86dc`. It is
+kept as the record of what each commit does and what reverting it costs.
 
 | Commit | Date | Summary |
 | --- | --- | --- |
