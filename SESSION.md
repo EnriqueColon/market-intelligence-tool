@@ -106,8 +106,32 @@ Noticed, not touched: `app/api/research/summarize-report/route.ts` calls `pdf-pa
 v1 default export, which v2 (installed) does not have — `tsc` flags it and the route's fast path
 cannot be working. Separate concern, separate fix.
 
-Open: CourtListener still answers anonymously and is still unused. Federal bills from govtrack
-have no text route without a key (congress.gov 403, govinfo 401); their cards show the record only.
+**Federal bill cards, the last thin ones, now show the record and the bill** (`b2b08e9`, on `dev`).
+Asked whether the three federal bills could carry more than number, title, status and sponsor. The
+open item below this entry had said no: no text route without a key. That was true of the APIs —
+congress.gov's answers 403 and govinfo's 401 — and not of GPO's bulk data, which is open and
+turned out to carry more than LegiScan does for Florida: the record (`BILLSTATUS`), every text
+version (`BILLS`), the committee report (`CRPT`), and the Congressional Research Service's summary
+of the bill inside the record, which is the federal counterpart of the Florida staff analysis.
+`lib/legal-updates-govinfo.ts` reads all four by bill number; govtrack is left to do what it did,
+find the bills. The record line now says how a bill passed as well as that it did — H.R. 7730
+"House 2026-09-16 (voice vote, under suspension); Senate 2026-09-28 (unanimous consent)" — and
+links the report, the text and the CRS summary. The model is handed whichever of the three exist,
+named, and asked for details from them alone. Live on the three bills showing: H.R. 7730 had all
+three (92-word CRS summary, 2,346 words of report, 390 of text); S. 5477 and H.R. 9670 had only
+their text, which is the usual state of a bill that has not moved; every spot-checked figure — the
+$7.5M and $2.75M limits, new IRC §6874, the $250,000 exemption, the effective-date clause — traces
+to the document. S. 5477 turns out to be an Internal Revenue Code amendment, which its title does
+not say and its card now does. The first version of the XML reader listed "Judiciary Committee;
+Markup By; Referred To" as three committees and lost every text version, because the record nests
+`<item>` inside `<item>` and a non-greedy match closes at the inner one; a depth-counting block
+matcher replaced it and the test fixture keeps the nesting. The card's label over the details is
+now a field, `detailsSource`, so Florida reads "From the staff analysis" and roundups "From the
+page" rather than everything reading "From the rule text". The govtrack-only prompt is gone;
+the record-aware one supersedes it. 16 new tests; cache key `v14`; `next build` passes.
+
+Open: CourtListener still answers anonymously and is still unused. Federal bills have no "possible
+intent" line yet; the record would support one (manner of passage, cosponsor count) if wanted.
 
 ---
 

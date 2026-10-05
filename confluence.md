@@ -105,7 +105,7 @@ the map runs to four, which is every tab that exists.
 | News | `news` | Industry Outlook / Key Signals memo (`industry-outlook.tsx`), Industry-Specific News (`public-mentions.tsx`), General Finance News (`investing-business-mentions.tsx`), and an on-demand Article Digest (`article-digest.tsx`) |
 | Market Analytics | `market-analytics` | FDIC bank financials with state filter, institution drawer and export (`market-analytics.tsx`); a Visual Analysis chart section (`market-analytics-visuals.tsx`); a Bank Stress Map behind `bank-stress-map`; plus a nested FRED/Census indicator panel (`market-research.tsx`) |
 | Market Research | `market-research` | Live publisher-by-publisher research feed with Postgres-backed archive (`market-research-feed.tsx`) and memo generation (`research-memo-modal.tsx`) |
-| Legal Landscape | `legal` | Three sections — Regulatory Watch, Legislative Tracker, Enforcement & Litigation (`legal-updates.tsx`) — drawn from the Federal Register, govtrack and LegiScan where a record exists, and from a model with web search where it does not |
+| Legal Landscape | `legal` | Three sections — Regulatory Watch, Legislative Tracker, Enforcement & Litigation (`legal-updates.tsx`) — drawn from the Federal Register, govtrack and GPO bulk data, and LegiScan where a record exists, and from a model with web search where it does not |
 
 Production currently runs `ENABLED_TABS=news,market-analytics,market-research` (plus `legal` where
 enabled) — confirm the live value in Vercel rather than trusting this line. Those four are now the
@@ -297,6 +297,42 @@ and the model is handed those facts and asked only for prose. It is never asked 
 it has no opportunity to invent one. govtrack rather than `api.congress.gov` because the official
 API returns 403 without a key and this has to work with no new secret provisioned; govtrack was
 already on the legislative allowlist.
+
+**A federal bill's card shows the record, then the bill's own account of itself, then the model** —
+the same three layers as a rule and a Florida bill, from `lib/legal-updates-govinfo.ts`. govtrack
+supplies identity and nothing more; the rest comes from the Government Publishing Office's bulk
+data, which needs no key. (The note that federal bills had "no text route without a key" was true
+of congress.gov's API and govinfo's API, both of which refuse anonymous calls. GPO's bulk files
+are a different thing and open.) Three files are read by bill number. `BILLSTATUS` is the record:
+sponsor and cosponsor count, committees, every action, related and identical bills, policy area and
+subject terms, each text version, any committee report, and the Congressional Research Service's
+summary where CRS has written one. `BILLS` is the text of the latest version. `CRPT` is the
+committee report, where the bill was reported.
+
+The record line lists the sponsor ("Rep. Ben Cline [R-VA-6]"), cosponsors, introduction date,
+committees, how each chamber passed it where it did — `describePassage` reads the clerks' phrasings
+and reports the manner, "House 2026-09-16 (voice vote, under suspension); Senate 2026-09-28
+(unanimous consent)", because suspension and unanimous consent are the routes for bills nobody
+objects to and that is worth knowing — the last action, the identical bill in the other chamber,
+the report, the text and the CRS summary, the last three linked. `describeBillRecord` builds it
+and nothing in it has been through a model. The record nests the same tag inside itself (an
+`<item>` for a committee holds `<item>`s for its activities), which is why the XML is read with a
+depth-counting block matcher and not a regular expression; the first version used one and listed
+"Judiciary Committee; Markup By; Referred To" as three committees.
+
+The model is given whichever of three sources exist, named: the CRS summary (the Library of
+Congress's plain-English statement of what the bill does — the federal counterpart of a Florida
+staff analysis), the committee report's explanatory sections (`selectReportText` takes "Purpose and
+Summary" through the committee's votes and stops at "Committee Oversight Findings", after which a
+report is budget statements and the statute as amended; capped at 2,500 words), and the text
+itself (`billXmlToText` keeps the official title and the sections, dropping the metadata and the
+form; capped at 3,000 words). It is asked for `details` from that material alone and told to leave
+the list empty where nothing was given. A bill that has not moved usually has no CRS summary and no
+report — two of the three live on 2026-10-05 had only their text — and its text is short enough to
+be read whole. The card's label over the details names what was read: "From the CRS summary, the
+committee report and the bill text". That label is `LegalItem.detailsSource`, set by each
+collector, so Florida cards read "From the staff analysis", rules "From the rule text" and
+roundups "From the page".
 
 **Florida is on the record too**, through `lib/legal-updates-florida.ts` and LegiScan. That key had
 been in the environment since the project was set up, listed as required in a deployment checklist
@@ -1347,7 +1383,7 @@ Generated content is expensive, so nearly everything is cached for a day.
   | `market-analytics-visuals-v1` + scope | Derived chart series for the Visual Analysis panel |
   | `executive-brief-v4` + scope | Ranked change events and non-reporting institutions for the Executive Brief. **Never populated** — the view is unreachable and the cron no longer warms it |
   | `underwriter-workbench-v1` + scope | Latest-quarter rows for the whole scope, for the Underwriter Workbench. **Never populated**, as above |
-  | `legal-updates-v13` | Legal Landscape items: deduped, freshness-filtered, relevant to the firm's operations, source-verified, and — for legislation — checked against the bill record. Exposure counts are **not** in here, see `resolveLegalApplicability`. Bumped to `v13` when Florida items gained `intent` and the response gained `sectionContext`; `v12` when Florida bills gained record facts and staff-analysis details and enforcement roundups began to be read from their pages; `v11` when Federal Register items gained `record` facts and `details` from the full text (item shape changed); `v10` when monthly enforcement roundups began to be admitted; `v9` when Florida bills and Federal Register rulemaking began coming from records; `v7` entries hold the fabricated bills, and the Data Cache survives deploys |
+  | `legal-updates-v14` | Legal Landscape items: deduped, freshness-filtered, relevant to the firm's operations, source-verified, and — for legislation — checked against the bill record. Exposure counts are **not** in here, see `resolveLegalApplicability`. Bumped to `v14` when federal bills gained record facts and details from GPO bulk data and items gained `detailsSource`; `v13` when Florida items gained `intent` and the response gained `sectionContext`; `v12` when Florida bills gained record facts and staff-analysis details and enforcement roundups began to be read from their pages; `v11` when Federal Register items gained `record` facts and `details` from the full text (item shape changed); `v10` when monthly enforcement roundups began to be admitted; `v9` when Florida bills and Federal Register rulemaking began coming from records; `v7` entries hold the fabricated bills, and the Data Cache survives deploys |
 
   `market-analytics-report-data` is keyed by scope rather than by day and revalidates every six
   hours, since FDIC publishes quarterly. **Bump its version whenever the scoring changes**, or cached
