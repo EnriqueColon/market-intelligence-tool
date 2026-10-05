@@ -13,6 +13,7 @@ import { ArticleDigest } from "@/components/article-digest"
 import { IndustryOutlook } from "@/components/industry-outlook"
 import { MarketResearchFeed } from "@/components/market-research-feed"
 import { MarketPulseStrip } from "@/components/market-pulse-strip"
+import type { InitialNewsData } from "@/app/services/initial-news-data"
 
 type TabValue =
   | "news"
@@ -80,9 +81,12 @@ const TAB_CONTENT_CLASS = "animate-in fade-in duration-300 data-[state=inactive]
 export function MarketIntelligenceDashboard({
   enabledTabs,
   features = { bankStressMap: false },
+  initialNews,
 }: {
   enabledTabs: EnabledTabs
   features?: DashboardFeatures
+  /** What the server already read from the caches; each component fetches whatever is missing. */
+  initialNews?: InitialNewsData
 }) {
   const router = useRouter()
   const [loggingOut, setLoggingOut] = useState(false)
@@ -164,7 +168,7 @@ export function MarketIntelligenceDashboard({
         </div>
       </header>
 
-      <MarketPulseStrip />
+      <MarketPulseStrip initialTiles={initialNews?.pulse} />
 
       {availableTabs.length > 0 && (
         <main className="mx-auto w-full max-w-[1100px] px-5 py-12 md:px-[20px]">
@@ -189,12 +193,12 @@ export function MarketIntelligenceDashboard({
 
             {enabledTabs.news && (
               <TabsContent value="news" className={TAB_CONTENT_CLASS} {...keepMounted("news")}>
-                <IndustryOutlook />
+                <IndustryOutlook initialText={initialNews?.outlook} />
                 <div>
-                  <PublicMentions />
+                  <PublicMentions initialByLevel={initialNews?.publicMentions} />
                 </div>
                 <div>
-                  <InvestingBusinessMentions />
+                  <InvestingBusinessMentions initialByLevel={initialNews?.investingNews} />
                 </div>
                 <div>
                   <ArticleDigest />

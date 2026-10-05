@@ -51,9 +51,19 @@ const cache = new Map<string, MergedItem[]>()
 const inflight = new Map<string, Promise<MergedItem[]>>()
 const CACHE_VERSION = "investing_news:v2"
 
-export function InvestingBusinessMentions() {
-  const [news, setNews] = useState<MergedItem[]>([])
-  const [loading, setLoading] = useState(true)
+/**
+ * `initialByLevel` is what the server read from the three per-level caches while rendering the
+ * page. With it the list renders in the HTML and nothing is fetched on mount; the module cache is
+ * filled from it so a remount behaves as it would after a fetch.
+ */
+export function InvestingBusinessMentions({ initialByLevel }: { initialByLevel?: Record<Level, PublicMentionItem[]> } = {}) {
+  const [news, setNews] = useState<MergedItem[]>(() => {
+    if (!initialByLevel) return []
+    const merged = mergeAllLevels(LEVELS.map((level) => ({ level, items: initialByLevel[level] ?? [] })))
+    if (merged.length > 0) cache.set(`all:${CACHE_VERSION}`, merged)
+    return merged
+  })
+  const [loading, setLoading] = useState(!initialByLevel)
   const [note, setNote] = useState<string | undefined>()
   const [selected, setSelected] = useState<(NewsSummaryInput & { level?: Level }) | null>(null)
   const [summaryOpen, setSummaryOpen] = useState(false)

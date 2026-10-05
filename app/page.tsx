@@ -2,6 +2,7 @@ import {
   MarketIntelligenceDashboard,
   type EnabledTabs,
 } from "@/components/market-intelligence-dashboard"
+import { readInitialNewsData } from "@/app/services/initial-news-data"
 import { isFeatureEnabled } from "@/lib/features"
 
 /**
@@ -32,5 +33,12 @@ export default async function Page() {
     bankStressMap: isFeatureEnabled("bank-stress-map"),
   }
 
-  return <MarketIntelligenceDashboard enabledTabs={enabledTabs} features={features} />
+  // The default tab's data travels with the page when the caches have it — see
+  // `app/services/initial-news-data.ts` for why, and for what happens when they do not. The pulse
+  // strip sits above every tab, so it is read whether or not News is on.
+  const initialNews = await readInitialNewsData()
+
+  return (
+    <MarketIntelligenceDashboard enabledTabs={enabledTabs} features={features} initialNews={initialNews} />
+  )
 }

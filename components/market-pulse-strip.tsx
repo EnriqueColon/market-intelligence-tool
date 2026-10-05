@@ -134,16 +134,17 @@ function useCrawlGeometry(itemCount: number) {
 /**
  * Measured market conditions, above the tabs and visible on every screen.
  *
- * Loaded from the client rather than the server component so the shell paints
- * immediately: the underlying FRED requests are allowed up to six seconds each,
- * and the dashboard should never wait on them.
+ * Arrives with the page when the server found it in the cache (`initialTiles`); otherwise loaded
+ * from the client, so that the FRED requests — allowed up to six seconds each — never hold the
+ * shell. The server read gives up well before that; see `app/services/initial-news-data.ts`.
  */
-export function MarketPulseStrip() {
-  const [tiles, setTiles] = useState<PulseTile[] | null>(null)
+export function MarketPulseStrip({ initialTiles }: { initialTiles?: PulseTile[] } = {}) {
+  const [tiles, setTiles] = useState<PulseTile[] | null>(initialTiles?.length ? initialTiles : null)
   const [failed, setFailed] = useState(false)
   const { railRef, sequenceRef, copies, durationSeconds } = useCrawlGeometry(tiles?.length ?? 0)
 
   useEffect(() => {
+    if (initialTiles?.length) return
     let active = true
     fetchMarketPulse()
       .then((result) => {

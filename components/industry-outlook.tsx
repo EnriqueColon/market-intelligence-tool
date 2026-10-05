@@ -66,9 +66,14 @@ async function generateIndustryOutlookOnce(): Promise<string | null> {
   }
 }
 
-export function IndustryOutlook() {
-  const [data, setData] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
+/**
+ * `initialText` is the outlook the server read from the cache while rendering the page; with it,
+ * nothing is fetched. It is kept in the session cache like a fetched one, so a tab that loses the
+ * prop (client-side navigation back to the page) still has it.
+ */
+export function IndustryOutlook({ initialText }: { initialText?: string } = {}) {
+  const [data, setData] = useState<string | null>(initialText ?? null)
+  const [loading, setLoading] = useState(!initialText)
   const [error, setError] = useState(false)
 
   const cleanLine = (line: string) =>
@@ -232,6 +237,17 @@ export function IndustryOutlook() {
   }, [])
 
   useEffect(() => {
+    if (initialText) {
+      if (!isFallbackMemo(initialText)) {
+        industryOutlookMemoryCache = { day: newsCalendarDayET(), text: initialText }
+        try {
+          sessionStorage.setItem(outlookSessionKey(), initialText)
+        } catch {
+          /* private mode or quota; the memory cache is enough */
+        }
+      }
+      return
+    }
     let mounted = true
     async function load() {
       const synced = readOutlookFromSession()
