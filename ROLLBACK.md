@@ -8,7 +8,7 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
 | `main` | `9faaf35` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `a91bfe1` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `dev` | `a36ff81` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 This table names the newest commit on each branch that **changes behaviour**; documentation-only
 commits sit on top of it and are deliberately not tracked here, because amending one rotates its
@@ -23,7 +23,7 @@ relevance gate and always-rendered sections, then the computed exposure counts, 
 the department model, then the removal of the two lens tabs, then the matched peer cohort in the
 institution drawer, then the Legal Landscape relevance gate and the bill-identity guard.
 
-The newest commit changing application behaviour is **`a91bfe1`** on `dev`; in production it is
+The newest commit changing application behaviour is **`a36ff81`** on `dev`; in production it is
 **`e5414c3`**, which stops the feed publishing items it cannot point at a real primary source for. The four legal commits are a set: `2384143`
 stops the feed rendering one development several times, `10fd202` withholds stale items, `8625c7c`
 stops it being stale in the first place, and `e5414c3` stops it inventing citations. **`10fd202`
@@ -153,6 +153,7 @@ the Market Participants tab.
 
 | Commit | Date | Summary |
 | --- | --- | --- |
+| `a36ff81` | 10-05 | Pins Node **24.x** in `engines`; Vercel has retired 20 and refused to build `fe1cee1`. **Do not revert past this** — any commit with the `20.x` pin will fail to build on Vercel, which also means `main` as it stands today cannot be redeployed from a fresh build. If production must be rolled back to a pre-10-05 commit, cherry-pick this one onto it first. |
 | `a91bfe1` | 09-30 | **One relevance gate** — a heading read on every term, a body only on the core ones — replacing the two-gate arrangement `05b51f3` introduced a few hours earlier, after the model path admitted a stablecoin proposal on "capital requirements" in its body. Also restricts Federal Register rulemaking to the financial regulators (OCC, FDIC, Fed, CFPB, FHFA, HUD, Treasury, NCUA), which is what removed a Farm Credit Administration rule. **Reverting readmits both** and nothing else; safe in isolation. `npm run test:legal-relevance`, `npm run verify:legal-freshness`. |
 | `c22b06a` | 09-30 | Three rendering fixes in the record-sourced items: the model's `summaries` wrapper is optional on the way back (its absence had every Florida bill rendering as raw description with no "why it matters"), LegiScan HTML entities are decoded, and a deduped Federal Register rule inherits the abstract from whichever copy has one. **Safe to revert in isolation**, at the cost of those three defects reappearing. `npm run test:legal-florida`, `npm run test:legal-fedreg`. |
 | `05b51f3` | 09-30 | Takes **Florida bills from LegiScan and federal rulemaking from the Federal Register**, extending the govtrack correction to the last two places the feed asked a model for published facts. Also splits the relevance terms by how selective they are and adds a stricter gate for record-sourced items, because the old gate kept 32 of 1,930 Florida bills. And fixes a live reliability bug: govtrack's first request of the day takes ~28s against a 15s timeout, so the cold start is now paid once before the searches fan out. **Reverting loses real Florida bills and returns that half of the section to model recall**, where the identity guard drops it and the section goes half-empty rather than wrong. Cache key `v8` → `v9`; any revert must bump it again or the Data Cache serves whichever item shape was written last. **`LEGISCAN_API_KEY` is now load-bearing** — it was previously documented as safe to delete, and it is not. `npm run test:legal-florida`, `npm run test:legal-fedreg`, `npm run test:legal-relevance`, `npm run verify:legal-freshness`. |

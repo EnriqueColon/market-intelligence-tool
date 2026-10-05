@@ -8,7 +8,23 @@ is it in now, and what is still open.
 
 ---
 
-## 2026-09-30 (latest) — the Legislative Tracker was inventing its bills
+## 2026-10-05 (latest) — the dev build would not start
+
+The push of `fe1cee1` to `dev` on 09-30 never built: Vercel refused it before cloning finished,
+because `engines.node` was `20.x` and Node 20 has been retired. The pin dated from the start of the
+project. `main` carried the same one, so the production deploy that would have followed the review
+would have failed identically — a useful thing to have discovered on the preview.
+
+One line changed, to `24.x`. No code moved: local development had been on Node 24 for some time,
+and every build and every test run of the previous week had been under it. Pushed as `a36ff81`.
+
+Everything from 09-30 is still waiting on the preview review before it merges. Still open: the
+enforcement section rendering empty because the monthly digests are dropped as individual actions,
+and the "bills with active movement" header over five bills that died in March.
+
+---
+
+## 2026-09-30 — the Legislative Tracker was inventing its bills
 
 #### Addendum, same day — the sources we were not actually using
 
