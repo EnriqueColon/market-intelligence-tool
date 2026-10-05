@@ -17,7 +17,12 @@ commits `dev` lacked, and nothing in the diff was rewritten with CRLF line endin
 error in a changed file (`components/industry-outlook.tsx:132`) dates from March, and builds skip
 type errors anyway (`ignoreBuildErrors`).
 
-Still open: measure the before and after on the real production deployment
+**Next session (2026-10-06): check the visuals in the Market Analytics tab.** The plan is to go
+through each chart and confirm it renders and shows the right figures. Start from
+`components/market-analytics-visuals.tsx`, `components/charts/analytics/` and
+`components/market-analytics-report-view.tsx`.
+
+Also still open: measure the before and after on the real production deployment
 (`/api/cron/measure-load` with the cron bearer, plus a timed load of the page), which should show
 the News tab with no skeletons on a warm day. If the page gets slower or renders wrong, revert
 `f72fbb4` alone. Steps 3 and 4 below are still not started.
