@@ -18,6 +18,8 @@ import {
 import {
   buildFloridaSummaryPrompt,
   describeFloridaFromRecord,
+  describeFloridaRecord,
+  fetchFloridaAnalysisText,
   fetchFloridaBills,
 } from "@/lib/legal-updates-florida"
 import {
@@ -27,8 +29,11 @@ import {
   type SourcedBill,
 } from "@/lib/legal-updates-legislation"
 import { buildSectionPrompt } from "@/lib/legal-updates-prompts"
+import { buildDigestDetailPrompt, fetchPageText, type DigestPage } from "@/lib/legal-updates-pages"
+import { pdfToText } from "@/lib/legal-updates-pdf"
 import {
   bearsOnFirmOperations,
+  isEnforcementDigest,
   partitionByRelevance,
 } from "@/lib/legal-updates-relevance"
 import {
@@ -248,13 +253,25 @@ async function collectFloridaBills(now: Date, filterDays: number): Promise<Legal
   )
   if (bills.length === 0) return []
 
+  // The legislature's own staff analysis, where one was published, so the model condenses what
+  // nonpartisan staff wrote about the bill rather than a one-line description of it.
+  const texts = new Map<string, string>()
+  await Promise.all(
+    bills.map(async (bill) => {
+      const text = await fetchFloridaAnalysisText(bill, pdfToText)
+      if (text) texts.set(bill.displayNumber, text)
+    })
+  )
+
   const prose = await summariseRecords(
-    buildFloridaSummaryPrompt(bills),
-    bills.map((b) => b.displayNumber)
+    buildFloridaSummaryPrompt(bills, texts),
+    bills.map((b) => b.displayNumber),
+    3200
   )
 
   return bills.map((bill, idx) => {
     const written = prose.get(bill.displayNumber)
+    const record = describeFloridaRecord(bill)
     return {
       id: `legislative-fl-${idx}-${bill.displayNumber.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`,
       section: "legislative" as const,
@@ -264,8 +281,47 @@ async function collectFloridaBills(now: Date, filterDays: number): Promise<Legal
       jurisdiction: "Florida" as const,
       summary: written?.summary || describeFloridaFromRecord(bill),
       whyItMatters: written?.whyItMatters || "",
+      details: texts.has(bill.displayNumber) ? written?.details : undefined,
+      record: record.length > 0 ? record : undefined,
       status: bill.statusLabel,
       url: bill.url,
+    }
+  })
+}
+
+/**
+ * Reads the roundup pages the Enforcement section cites, and replaces what the model recalled
+ * about each with what the page says.
+ *
+ * Only for items that are a regulator's monthly roundup, and only after source verification has
+ * confirmed the page exists. The model found the page; it did not read it, and a summary written
+ * from recall of a page that lists orders by name is the one place in this feed where a wrong
+ * institution could be named. A page that cannot be read leaves its item as it was.
+ */
+async function readEnforcementPages(items: LegalItem[]): Promise<LegalItem[]> {
+  const digests = items.filter((item) => item.url && isEnforcementDigest(item))
+  if (digests.length === 0) return items
+
+  const pages: DigestPage[] = []
+  await Promise.all(
+    digests.map(async (item) => {
+      const text = await fetchPageText(item.url as string)
+      if (text) pages.push({ key: item.id, title: item.title, date: item.date, text })
+    })
+  )
+  if (pages.length === 0) return items
+
+  const prose = await summariseRecords(buildDigestDetailPrompt(pages), pages.map((p) => p.key), 2400)
+  if (prose.size === 0) return items
+
+  return items.map((item) => {
+    const written = prose.get(item.id)
+    if (!written || !written.summary) return item
+    return {
+      ...item,
+      summary: written.summary,
+      whyItMatters: written.whyItMatters || item.whyItMatters,
+      details: written.details,
     }
   })
 }
@@ -395,7 +451,11 @@ async function collectSection(section: LegalSection, now: Date): Promise<Section
       kept = bills.kept
     }
 
-    if (kept.length > 0) return { section, kept, discarded }
+    if (kept.length > 0) {
+      // Enforcement has no record to draw from, but the roundup pages it cites can be read.
+      if (section === "enforcement") kept = await readEnforcementPages(kept)
+      return { section, kept, discarded }
+    }
   }
 
   return { section, kept: [], discarded }
@@ -497,7 +557,7 @@ export async function fetchLegalUpdates(): Promise<LegalUpdatesResponse> {
   const day = newsCalendarDayET()
   return unstable_cache(
     async () => fetchLegalUpdatesImpl(),
-    ["legal-updates-v11", day],
+    ["legal-updates-v12", day],
     // 25h so the entry outlives the day and never expires just before the cron.
     { revalidate: 90000 }
   )()

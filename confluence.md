@@ -105,7 +105,7 @@ the map runs to four, which is every tab that exists.
 | News | `news` | Industry Outlook / Key Signals memo (`industry-outlook.tsx`), Industry-Specific News (`public-mentions.tsx`), General Finance News (`investing-business-mentions.tsx`), and an on-demand Article Digest (`article-digest.tsx`) |
 | Market Analytics | `market-analytics` | FDIC bank financials with state filter, institution drawer and export (`market-analytics.tsx`); a Visual Analysis chart section (`market-analytics-visuals.tsx`); a Bank Stress Map behind `bank-stress-map`; plus a nested FRED/Census indicator panel (`market-research.tsx`) |
 | Market Research | `market-research` | Live publisher-by-publisher research feed with Postgres-backed archive (`market-research-feed.tsx`) and memo generation (`research-memo-modal.tsx`) |
-| Legal Landscape | `legal` | Three AI-generated sections — Regulatory Watch, Legislative Tracker, Enforcement & Litigation (`legal-updates.tsx`). Despite the name, no LegiScan data is involved |
+| Legal Landscape | `legal` | Three sections — Regulatory Watch, Legislative Tracker, Enforcement & Litigation (`legal-updates.tsx`) — drawn from the Federal Register, govtrack and LegiScan where a record exists, and from a model with web search where it does not |
 
 Production currently runs `ENABLED_TABS=news,market-analytics,market-research` (plus `legal` where
 enabled) — confirm the live value in Vercel rather than trusting this line. Those four are now the
@@ -191,6 +191,24 @@ out of a roundup ("OCC Enforcement Action Against United Texas Bank") is not a r
 judged on its own terms, so a BSA/AML order is still off topic and a prohibition order is still
 about a person. The asymmetry is deliberate: the page is the section's own subject, and what it
 contains that month is for the reader to see there rather than for a term list to guess at.
+
+**A roundup's page is read, not recalled.** The model finds the page and cites it; it does not read
+it, and its summary of a page it had not read was what the model remembered of it at search time —
+"highlights the OCC's commitment to maintaining integrity in the banking sector". Once source
+verification has confirmed the page exists, `readEnforcementPages` fetches it, `htmlToText`
+(`lib/legal-updates-pages.ts`) keeps the `<main>` region with each list item on its own line, and
+the model is asked — `buildDigestDetailPrompt` — to say what the page lists and nothing else: a
+summary with counts and the institutions named, one `details` bullet per action against an
+institution (type of order, institution, city and state, the deficiency), and a "why it matters"
+that is allowed to say there is nothing here for a note buyer. Individuals are counted and never
+named, inside the list as outside it. The FDIC's releases give counts by type of order and link to
+a separate list rather than naming institutions; the prompt tells the model to report the counts
+and point at the list rather than guess. The OCC's pages run to a few hundred words; the cap is
+3,000. Live, the OCC's July page yielded six institutional lines — one cease-and-desist and four
+terminations of earlier orders, which is the kind of thing a lender's workout team wants to know
+about a counterparty bank — and September's yielded the honest "two prohibition orders against
+former employees; nothing here bearing on note purchases". A page that cannot be read leaves the
+item as the model wrote it.
 
 **Every term is anchored.** Bare substrings are not a style preference here: `lien` matched
 "client", "clients", "resilience" and "salient", and `tenant` matched "lieutenant" — four false
@@ -291,6 +309,29 @@ title, official description, status and last action, so nothing is missed becaus
 not happen to appear in it, and `getBill` is called only for the handful that survive the gate,
 to get the `state_link` that points at flsenate.gov. LegiScan's own domain is deliberately not
 allowlisted; the citation has to be the legislature's page.
+
+**A Florida bill's card shows the record, then the staff analysis, then the model** — the same
+three layers as a Federal Register rule, from the same `getBill` call that had been used for the
+link alone. The record line lists the primary sponsors ("Rep. David Smith (R, HD-038)"; a committee
+sponsor by its name — co-sponsors are left out, Florida bills carry a dozen), the filing date, the
+companion bill in the other chamber, the last roll call with its tally, the latest text version
+and the latest staff analysis, the last two linked to flsenate.gov. The roll call is the fact that
+most often changes the reading of a dead bill: HB 759 "Died in Rules", and passed the House 114–0
+first. `describeFloridaRecord` builds the line and nothing in it has been through a model.
+
+The staff analysis is what the model is given to summarise, where there is one. Florida's
+nonpartisan committee staff write one at each committee stop — effect of the bill, present
+situation, fiscal impact, the committee's vote — and it is the legislature's own plain-English
+account, so it stands to a one-sentence official description as a rule's "Description of the Final
+Rule" stands to its abstract. LegiScan files them under `supplements` with the type mislabelled
+"Veto Letter"; `selectLatestAnalysis` goes by the title "Analysis" and the `/Analyses/` path. They
+are PDFs, so `fetchFloridaAnalysisText` takes a parser as an argument — `lib/legal-updates-pdf.ts`
+wraps `pdf-parse`, which is already a dependency, and the Florida module stays import-free for the
+test runner. The House's PDFs repeat a navigation line on every page and open with a storage name;
+`cleanAnalysisText` drops both and keeps everything else, the analysis already being the distilled
+form. Capped at 5,000 words. A bill that never reached a committee has no analysis — three of the
+five live bills, all of which died unheard — and its card carries no `details`, by design: the list
+is discarded for any bill whose analysis was not read, so a details block means it was.
 
 Bill numbers are converted on the way in. LegiScan writes `H0011`, Florida writes "HB 11", and so
 does flsenate.gov — which matters beyond presentation, because the identity guard reads the number
@@ -1284,7 +1325,7 @@ Generated content is expensive, so nearly everything is cached for a day.
   | `market-analytics-visuals-v1` + scope | Derived chart series for the Visual Analysis panel |
   | `executive-brief-v4` + scope | Ranked change events and non-reporting institutions for the Executive Brief. **Never populated** — the view is unreachable and the cron no longer warms it |
   | `underwriter-workbench-v1` + scope | Latest-quarter rows for the whole scope, for the Underwriter Workbench. **Never populated**, as above |
-  | `legal-updates-v11` | Legal Landscape items: deduped, freshness-filtered, relevant to the firm's operations, source-verified, and — for legislation — checked against the bill record. Exposure counts are **not** in here, see `resolveLegalApplicability`. Bumped to `v11` when Federal Register items gained `record` facts and `details` from the full text (item shape changed); `v10` when monthly enforcement roundups began to be admitted; `v9` when Florida bills and Federal Register rulemaking began coming from records; `v7` entries hold the fabricated bills, and the Data Cache survives deploys |
+  | `legal-updates-v12` | Legal Landscape items: deduped, freshness-filtered, relevant to the firm's operations, source-verified, and — for legislation — checked against the bill record. Exposure counts are **not** in here, see `resolveLegalApplicability`. Bumped to `v12` when Florida bills gained record facts and staff-analysis details and enforcement roundups began to be read from their pages; `v11` when Federal Register items gained `record` facts and `details` from the full text (item shape changed); `v10` when monthly enforcement roundups began to be admitted; `v9` when Florida bills and Federal Register rulemaking began coming from records; `v7` entries hold the fabricated bills, and the Data Cache survives deploys |
 
   `market-analytics-report-data` is keyed by scope rather than by day and revalidates every six
   hours, since FDIC publishes quarterly. **Bump its version whenever the scoring changes**, or cached

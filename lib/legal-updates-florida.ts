@@ -13,6 +13,12 @@
  * searches, and it cannot miss a bill because a search term did not happen to appear in it. The
  * per-bill call is made only for the handful that survive the gate, because only they need a
  * citation — `state_link`, which points at flsenate.gov.
+ *
+ * That per-bill call returns far more than the link: sponsors, the full action history, every
+ * roll call, the companion bill, each text version, and the legislature's own staff analyses.
+ * For a while only the link was used. The record facts now come from the rest of it, and the
+ * staff analysis — nonpartisan committee staff explaining what the bill does, in prose — is what
+ * the model is handed to summarise, in place of a one-sentence official description.
  */
 
 export type SourcedFloridaBill = {
@@ -29,6 +35,18 @@ export type SourcedFloridaBill = {
   description?: string
   chamber: "senate" | "house"
   sessionName: string
+  /** As a reader would name them: "Rep. David Smith (R, HD-038)"; a committee sponsor by its name. */
+  sponsors: string[]
+  /** Date of the first recorded action, which Florida calls "Filed". */
+  filedOn?: string
+  /** The same-as bill in the other chamber, as Florida prints it: "SB 532". */
+  companion?: string
+  /** The most recent roll call, which says how far the bill actually got. */
+  lastVote?: { description: string; yea: number; nay: number; date: string; passed: boolean }
+  /** The latest text version, linked to the legislature's own copy. */
+  latestText?: { type: string; date: string; url: string }
+  /** The latest staff analysis, linked. Florida publishes one per committee stop. */
+  analysis?: { description: string; date: string; url: string }
 }
 
 /**
@@ -232,34 +250,116 @@ export async function fetchFloridaCandidates(
   return perSession.flat()
 }
 
-type BillDetail = {
+type Sponsor = {
+  name?: string
+  role?: string
+  party?: string
+  district?: string
+  committee_sponsor?: number
+  sponsor_type_id?: number
+  sponsor_order?: number
+}
+type HistoryRow = { date?: string; action?: string }
+type Vote = { date?: string; desc?: string; yea?: number; nay?: number; passed?: number }
+type SameAs = { type?: string; sast_bill_number?: string }
+type TextVersion = { date?: string; type?: string; state_link?: string; url?: string }
+type Supplement = { date?: string; type?: string; title?: string; description?: string; state_link?: string; url?: string }
+
+export type BillDetail = {
   state_link?: string
   url?: string
   status?: number
   status_date?: string
   description?: string
+  sponsors?: Sponsor[]
+  history?: HistoryRow[]
+  votes?: Vote[]
+  sasts?: SameAs[]
+  texts?: TextVersion[]
+  supplements?: Supplement[]
+}
+
+/** "Rep. David Smith (R, HD-038)"; a committee sponsor is named as the committee. */
+export function describeSponsor(s: Sponsor): string | null {
+  const name = s.name?.trim()
+  if (!name) return null
+  if (s.committee_sponsor) return name
+  const role = s.role?.trim()
+  const tags = [s.party?.trim(), s.district?.trim()].filter(Boolean).join(", ")
+  return `${role ? `${role}. ` : ""}${name}${tags ? ` (${tags})` : ""}`
 }
 
 /**
- * The citation, fetched only for bills that survived the gate.
- *
- * `state_link` is the legislature's own page and is what the tab cites; it is also on the
- * legislative allowlist, which LegiScan's own domain is not. A bill without one is dropped rather
- * than cited to LegiScan, because the point of this section is to point at the record itself.
+ * Primary sponsors only, in the legislature's order. Florida bills routinely carry a dozen
+ * co-sponsors; a reader wants to know who brought it, not who signed on.
  */
-async function attachUrl(
-  apiKey: string,
-  candidate: FloridaCandidate,
-  timeoutMs: number
-): Promise<SourcedFloridaBill | null> {
-  const data = (await getJson(
-    `https://api.legiscan.com/?key=${encodeURIComponent(apiKey)}&op=getBill&id=${candidate.billId}`,
-    timeoutMs
-  )) as { bill?: BillDetail } | null
+export function describeSponsors(sponsors: Sponsor[] | undefined, limit = 3): string[] {
+  const primary = (sponsors ?? []).filter((s) => (s.sponsor_type_id ?? 1) === 1)
+  const chosen = primary.length > 0 ? primary : (sponsors ?? [])
+  return chosen
+    .slice()
+    .sort((a, b) => (a.sponsor_order ?? 0) - (b.sponsor_order ?? 0))
+    .map(describeSponsor)
+    .filter((s): s is string => s !== null)
+    .slice(0, limit)
+}
 
-  const url = data?.bill?.state_link?.trim()
+/** The most recent roll call, or nothing where the bill never came to a vote. */
+export function selectLastVote(votes: Vote[] | undefined): SourcedFloridaBill["lastVote"] {
+  const dated = (votes ?? []).filter((v) => v.date && v.desc && typeof v.yea === "number" && typeof v.nay === "number")
+  if (dated.length === 0) return undefined
+  const last = dated.slice().sort((a, b) => (a.date as string).localeCompare(b.date as string)).pop() as Vote
+  return {
+    description: decodeEntities(last.desc as string).trim(),
+    yea: last.yea as number,
+    nay: last.nay as number,
+    date: (last.date as string).slice(0, 10),
+    passed: last.passed === 1,
+  }
+}
+
+/** The latest version of the bill text, cited to the legislature's own copy where there is one. */
+export function selectLatestText(texts: TextVersion[] | undefined): SourcedFloridaBill["latestText"] {
+  const usable = (texts ?? []).filter((t) => t.date && (t.state_link || t.url))
+  if (usable.length === 0) return undefined
+  const last = usable.slice().sort((a, b) => (a.date as string).localeCompare(b.date as string)).pop() as TextVersion
+  return {
+    type: last.type?.trim() || "Text",
+    date: (last.date as string).slice(0, 10),
+    url: (last.state_link || last.url) as string,
+  }
+}
+
+/**
+ * The latest staff analysis. LegiScan files Florida's analyses under a mislabelled `type`
+ * ("Veto Letter") but titles them "Analysis" and links them under `/Analyses/` on flsenate.gov;
+ * either mark is accepted and the type is ignored.
+ */
+export function selectLatestAnalysis(supplements: Supplement[] | undefined): SourcedFloridaBill["analysis"] {
+  const analyses = (supplements ?? []).filter(
+    (s) => s.date && (s.state_link || s.url) && (/^analysis$/i.test(s.title?.trim() ?? "") || /\/Analyses\//i.test(s.state_link ?? ""))
+  )
+  if (analyses.length === 0) return undefined
+  const last = analyses.slice().sort((a, b) => (a.date as string).localeCompare(b.date as string)).pop() as Supplement
+  return {
+    description: decodeEntities(last.description?.trim() || "Staff analysis"),
+    date: (last.date as string).slice(0, 10),
+    url: (last.state_link || last.url) as string,
+  }
+}
+
+/** "SB 532" from LegiScan's `S532`, for the same-as bill in the other chamber. */
+export function selectCompanion(sasts: SameAs[] | undefined): string | undefined {
+  const same = (sasts ?? []).find((s) => /same as/i.test(s.type ?? "") && s.sast_bill_number)
+  return same ? toDisplayNumber(same.sast_bill_number as string) ?? undefined : undefined
+}
+
+/** The record turned into a sourced bill; pure, so it can be tested against a captured response. */
+export function toSourcedFloridaBill(candidate: FloridaCandidate, bill: BillDetail | undefined): SourcedFloridaBill | null {
+  const url = bill?.state_link?.trim()
   if (!url) return null
 
+  const filed = (bill?.history ?? []).find((h) => h.date)
   return {
     displayNumber: candidate.displayNumber,
     title: candidate.title,
@@ -268,11 +368,36 @@ async function attachUrl(
     url,
     description:
       candidate.description ||
-      (data?.bill?.description ? decodeEntities(data.bill.description).trim() : undefined) ||
+      (bill?.description ? decodeEntities(bill.description).trim() : undefined) ||
       undefined,
     chamber: candidate.chamber,
     sessionName: candidate.sessionName,
+    sponsors: describeSponsors(bill?.sponsors),
+    filedOn: filed?.date?.slice(0, 10),
+    companion: selectCompanion(bill?.sasts),
+    lastVote: selectLastVote(bill?.votes),
+    latestText: selectLatestText(bill?.texts),
+    analysis: selectLatestAnalysis(bill?.supplements),
   }
+}
+
+/**
+ * The citation and the rest of the record, fetched only for bills that survived the gate.
+ *
+ * `state_link` is the legislature's own page and is what the tab cites; it is also on the
+ * legislative allowlist, which LegiScan's own domain is not. A bill without one is dropped rather
+ * than cited to LegiScan, because the point of this section is to point at the record itself.
+ */
+async function attachDetail(
+  apiKey: string,
+  candidate: FloridaCandidate,
+  timeoutMs: number
+): Promise<SourcedFloridaBill | null> {
+  const data = (await getJson(
+    `https://api.legiscan.com/?key=${encodeURIComponent(apiKey)}&op=getBill&id=${candidate.billId}`,
+    timeoutMs
+  )) as { bill?: BillDetail } | null
+  return toSourcedFloridaBill(candidate, data?.bill)
 }
 
 export function selectRelevantFloridaBills(
@@ -305,8 +430,90 @@ export async function fetchFloridaBills(
 
   const candidates = await fetchFloridaCandidates(apiKey, now, windowDays, timeoutMs)
   const relevant = selectRelevantFloridaBills(candidates, isRelevant, limit)
-  const withUrls = await Promise.all(relevant.map((c) => attachUrl(apiKey, c, timeoutMs)))
+  const withUrls = await Promise.all(relevant.map((c) => attachDetail(apiKey, c, timeoutMs)))
   return withUrls.filter((b): b is SourcedFloridaBill => b !== null)
+}
+
+// ── Staff analysis ─────────────────────────────────────────────────────────────
+
+/**
+ * How much of an analysis the model is given, in words. Florida's run to eight or ten pages and
+ * three to five thousand words, so this is rarely reached; it exists for the one that is not.
+ */
+export const ANALYSIS_WORD_CAP = 5_000
+
+/**
+ * The analysis as the model should see it. The House's PDFs repeat a navigation line on every
+ * page ("JUMP TO SUMMARY ANALYSIS RELEVANT INFORMATION BILL HISTORY") and open with a storage
+ * name; neither is the analysis. Everything else is kept — these documents are already the
+ * distilled form, so unlike a Federal Register rule there is no section to prefer.
+ */
+export function cleanAnalysisText(text: string): string {
+  return text
+    .replace(/\0/g, "")
+    .split("\n")
+    .map((line) => line.replace(/[ \t\u00a0]+/g, " ").trim())
+    .filter((line) => line.length > 0)
+    .filter((line) => !/^JUMP TO\b/i.test(line))
+    .filter((line) => !/^STORAGE NAME:/i.test(line))
+    .filter((line) => !/^DATE: \d{1,2}\/\d{1,2}\/\d{4}\s*\d*$/i.test(line))
+    .join("\n")
+}
+
+function truncateWords(s: string, limit: number): string {
+  const words = s.split(/\s+/).filter(Boolean)
+  if (words.length <= limit) return s.trim()
+  return words.slice(0, limit).join(" ") + " […]"
+}
+
+/**
+ * The staff analysis as text, or undefined when there is none or it cannot be read.
+ *
+ * The analysis is a PDF on flsenate.gov. Turning a PDF into text needs a parser, and this module
+ * stays import-free so the test runner can load it, so the parser is passed in: the action
+ * supplies one and a test supplies a stub. A failure here leaves the bill on its official
+ * description, which is where it was before this existed.
+ */
+export async function fetchFloridaAnalysisText(
+  bill: SourcedFloridaBill,
+  pdfToText: (bytes: Uint8Array) => Promise<string>,
+  timeoutMs = 20_000,
+  cap = ANALYSIS_WORD_CAP
+): Promise<string | undefined> {
+  if (!bill.analysis) return undefined
+  try {
+    const res = await fetch(bill.analysis.url, {
+      headers: { "user-agent": "Mozilla/5.0 (compatible; MarketIntelligenceTool/1.0)" },
+      signal: AbortSignal.timeout(timeoutMs),
+      cache: "no-store",
+    })
+    if (!res.ok) return undefined
+    const text = cleanAnalysisText(await pdfToText(new Uint8Array(await res.arrayBuffer())))
+    return text.length > 0 ? truncateWords(text, cap) : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * The record's own facts about a bill, as a reader would cite them. Nothing here has been through
+ * a model. The shape matches `RecordFact` in the Federal Register module; declared structurally
+ * so this file keeps no imports.
+ */
+export function describeFloridaRecord(bill: SourcedFloridaBill): Array<{ label: string; value: string; url?: string }> {
+  const facts: Array<{ label: string; value: string; url?: string }> = []
+  if (bill.sponsors.length > 0) facts.push({ label: bill.sponsors.length > 1 ? "Sponsors" : "Sponsor", value: bill.sponsors.join("; ") })
+  if (bill.filedOn) facts.push({ label: "Filed", value: bill.filedOn })
+  if (bill.companion) facts.push({ label: "Companion", value: bill.companion })
+  if (bill.lastVote) {
+    facts.push({
+      label: "Last vote",
+      value: `${bill.lastVote.description}: ${bill.lastVote.yea}–${bill.lastVote.nay}${bill.lastVote.passed ? "" : ", failed"} (${bill.lastVote.date})`,
+    })
+  }
+  if (bill.latestText) facts.push({ label: "Text", value: `${bill.latestText.type} (${bill.latestText.date})`, url: bill.latestText.url })
+  if (bill.analysis) facts.push({ label: "Staff analysis", value: `${bill.analysis.description} (${bill.analysis.date})`, url: bill.analysis.url })
+  return facts
 }
 
 /** What the item says before a model has seen it. Everything here is the bill's own. */
@@ -315,21 +522,29 @@ export function describeFloridaFromRecord(bill: SourcedFloridaBill): string {
   return `${bill.displayNumber}, ${bill.title} (${bill.sessionName}). Status as of ${bill.statusDate}: ${bill.statusLabel}.`
 }
 
-/** Asks only for prose, and supplies the facts. Keyed by bill number on the way back. */
-export function buildFloridaSummaryPrompt(bills: SourcedFloridaBill[]): string {
+/**
+ * Asks only for prose, and supplies the facts. Keyed by bill number on the way back.
+ *
+ * Where a bill's staff analysis was fetched, that is what the model is given to condense, and it
+ * is asked for the specifics a one-line description leaves out. Where only the description is
+ * available the ask is narrower, and the details list is to be left empty rather than filled.
+ */
+export function buildFloridaSummaryPrompt(bills: SourcedFloridaBill[], texts: Map<string, string> = new Map()): string {
   const list = bills
-    .map(
-      (b) =>
-        `- ${b.displayNumber} [${b.sessionName}, status: ${b.statusLabel}, as of ${b.statusDate}]: ${b.title}\n  Official description: ${b.description || "(none published)"}`
-    )
-    .join("\n")
+    .map((b) => {
+      const head = `- ${b.displayNumber} [${b.sessionName}, status: ${b.statusLabel}, as of ${b.statusDate}]: ${b.title}\n  Official description: ${b.description || "(none published)"}`
+      const text = texts.get(b.displayNumber)
+      return text ? `${head}\n  Legislative staff analysis:\n"""\n${text}\n"""` : head
+    })
+    .join("\n\n")
 
   return `These are real Florida bills, taken from the legislative record. Their numbers, titles, statuses and dates are already confirmed — do not restate, correct or change them, and do not add bills.
 
 ${list}
 
-For each one, write two things for a firm that buys and works out distressed commercial real estate debt in Florida:
-- "summary": 2-3 sentences in plain English on what the bill would actually do. Base this on the official description above; do not introduce facts it does not contain.
+For each one, write three things for a firm that buys and works out distressed commercial real estate debt in Florida:
+- "summary": 2-3 sentences in plain English on what the bill would actually do. Base this on the official description and, where given, the staff analysis; do not introduce facts they do not contain.
+- "details": where a staff analysis is given, 3 to 5 bullet points, each one sentence of at most 30 words, stating the specific things the analysis says: what the bill changes in current law, who it applies to, any amounts, thresholds or dates, the fiscal impact the analysis reports, and how committees voted. Use the analysis's own terms. Where no analysis is given, return an empty list; never fill it from memory. Where the analysis is marked as cut short ("[…]"), say nothing about what it does not cover.
 - "whyItMatters": 1-2 sentences on the consequence for note purchases, workouts, foreclosures or REO. If the honest answer is that the effect is indirect or minimal, say that instead of inflating it.
 
 A bill that died in committee still matters if it signals where the legislature is heading, but say plainly that it did not pass.
@@ -337,7 +552,7 @@ A bill that died in committee still matters if it signals where the legislature 
 Return ONLY valid JSON, keyed by bill number exactly as written above:
 {
   "summaries": {
-    "${bills[0]?.displayNumber ?? "SB 300"}": { "summary": "...", "whyItMatters": "..." }
+    "${bills[0]?.displayNumber ?? "SB 300"}": { "summary": "...", "details": ["...", "..."], "whyItMatters": "..." }
   }
 }`
 }

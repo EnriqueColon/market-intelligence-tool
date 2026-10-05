@@ -169,7 +169,7 @@ with almost no configuration.
 | **Elementix** | Participants intel API | `ELEMENTIX_API_KEY` | Returns null; feeds orphaned UI |
 | **govtrack** | Federal bills for the Legislative Tracker, and the bill-identity check | Keyless | Federal legislation disappears from the tab rather than becoming unverified. Slow on its first request of the day — see Maintenance notes |
 | **Federal Register** | Rules and proposed rules for the Regulatory section, with each rule's record facts and full text | Keyless | That section falls back to the model alone, which it also uses anyway for FILs and bulletins |
-| **LegiScan** | Florida bills for the Legislative Tracker | `LEGISCAN_API_KEY` | Florida legislation is omitted and the feed says so in a note |
+| **LegiScan** | Florida bills for the Legislative Tracker — sponsors, votes, text versions and the staff analyses (PDFs on flsenate.gov, read with `pdf-parse`) | `LEGISCAN_API_KEY` | Florida legislation is omitted and the feed says so in a note |
 
 `FRED_API_KEY` is **not needed** by the outlook, despite appearing in older documents. It is still
 read by `fetch-kpi-data.ts` and `fetch-cre-data.ts`, whose FRED paths return null without it.
@@ -240,7 +240,8 @@ npm run test:legal-bills      # legal feed: bill numbers, and the fabricated bil
 npm run test:legal-legislation # legal feed: federal bills read from the record, and companion-bill dedupe
 npm run test:legal-movement   # legal feed: what changed about a bill, and why re-running cannot consume it
 npm run test:legal-fedreg     # legal feed: Federal Register rules, corrections, and full-text section selection
-npm run test:legal-florida    # legal feed: Florida bills, number formats, local and reviser bills
+npm run test:legal-florida    # legal feed: Florida bills, number formats, local and reviser bills, the rest of the record, staff analyses
+npm run test:legal-pages      # legal feed: reading the enforcement roundup pages the model cites
 npm run test:legal-applicability # which institutions a rule covers, and the two CRE-concentration units
 npm run test:allowlist        # publisher allowlist, and what "all" covers
 npm run build                 # next build

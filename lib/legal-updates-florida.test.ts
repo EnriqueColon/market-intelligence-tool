@@ -3,14 +3,24 @@ import { test } from "node:test"
 
 import {
   buildFloridaSummaryPrompt,
+  cleanAnalysisText,
   decodeEntities,
   describeFloridaFromRecord,
+  describeFloridaRecord,
+  describeSponsors,
+  fetchFloridaAnalysisText,
   isLocalBill,
   isReviserBill,
+  selectCompanion,
+  selectLastVote,
+  selectLatestAnalysis,
+  selectLatestText,
   selectRelevantFloridaBills,
   selectSessions,
   toCandidate,
   toDisplayNumber,
+  toSourcedFloridaBill,
+  type BillDetail,
   type FloridaCandidate,
   type SourcedFloridaBill,
 } from "./legal-updates-florida.ts"
@@ -40,8 +50,38 @@ const sourced = (over: Partial<SourcedFloridaBill> = {}): SourcedFloridaBill => 
   description: "Revising procedures for judicial sales in foreclosure actions.",
   chamber: "senate",
   sessionName: "2026 Regular Session",
+  sponsors: [],
   ...over,
 })
+
+/** Shape taken from LegiScan's live `getBill` response for HB 759, trimmed to what is read. */
+const DETAIL: BillDetail = {
+  state_link: "https://www.flsenate.gov/Session/Bill/2026/759",
+  description: "Court Fees; Revising service charges…",
+  sponsors: [
+    { name: "Justice Budget Subcommittee", role: "Rep", committee_sponsor: 1, sponsor_type_id: 1, sponsor_order: 1 },
+    { name: "David Smith", role: "Rep", party: "R", district: "HD-038", committee_sponsor: 0, sponsor_type_id: 1, sponsor_order: 2 },
+    { name: "Daniel Alvarez", role: "Rep", party: "R", district: "HD-069", committee_sponsor: 0, sponsor_type_id: 2, sponsor_order: 3 },
+  ],
+  history: [
+    { date: "2025-12-12", action: "Filed" },
+    { date: "2026-01-05", action: "Referred to Civil Justice & Claims Subcommittee" },
+    { date: "2026-03-13", action: "Died in Rules" },
+  ],
+  votes: [
+    { date: "2026-01-14", desc: "House Civil Justice &amp; Claims Subcommittee", yea: 17, nay: 0, passed: 1 },
+    { date: "2026-02-25", desc: "House: Third Reading RCS#600", yea: 114, nay: 0, passed: 1 },
+  ],
+  sasts: [{ type: "Same As", sast_bill_number: "S532" }],
+  texts: [
+    { date: "2025-12-12", type: "Introduced", state_link: "https://www.flsenate.gov/Session/Bill/2026/759/BillText/Filed/PDF" },
+    { date: "2026-01-22", type: "Comm Sub", state_link: "https://www.flsenate.gov/Session/Bill/2026/759/BillText/c1/PDF" },
+  ],
+  supplements: [
+    { date: "2026-01-12", type: "Veto Letter", title: "Analysis", description: "Civil Justice &amp; Claims Subcommittee (Post-Meeting)", state_link: "https://www.flsenate.gov/Session/Bill/2026/759/Analyses/h0759.CIV.PDF" },
+    { date: "2026-01-22", type: "Veto Letter", title: "Analysis", description: "Justice Budget Subcommittee (Post-Meeting)", state_link: "https://www.flsenate.gov/Session/Bill/2026/759/Analyses/h0759c.JUB.PDF" },
+  ],
+}
 
 test("HTML entities in the legislature's text are decoded, not rendered", () => {
   // Live defect: HB 759 rendered "clerk&#39;s office" on the tab.
@@ -233,4 +273,116 @@ test("the prompt requires a bill that died to be described as having died", () =
   // Most of what survives the gate over a full window is legislation that failed, and a summary
   // that reads as though it were law would be the most damaging thing this section could print.
   assert.match(buildFloridaSummaryPrompt([sourced()]), /say plainly that it did not pass/)
+})
+
+// ── The rest of the record ─────────────────────────────────────────────────────
+
+test("primary sponsors are named as a reader would, co-sponsors are not", () => {
+  // HB 759 carries ten sponsors; two are primary and one of those is a committee.
+  assert.deepEqual(describeSponsors(DETAIL.sponsors), ["Justice Budget Subcommittee", "Rep. David Smith (R, HD-038)"])
+  assert.deepEqual(describeSponsors(undefined), [])
+})
+
+test("the last roll call is the one that says how far the bill got", () => {
+  // Live: HB 759 passed the House 114–0 and then died in Senate Rules. The vote is the story.
+  const vote = selectLastVote(DETAIL.votes)
+  assert.deepEqual(vote, { description: "House: Third Reading RCS#600", yea: 114, nay: 0, date: "2026-02-25", passed: true })
+  assert.equal(selectLastVote([]), undefined)
+})
+
+test("the latest text, companion and analysis are picked out and cited to flsenate", () => {
+  assert.deepEqual(selectLatestText(DETAIL.texts), {
+    type: "Comm Sub",
+    date: "2026-01-22",
+    url: "https://www.flsenate.gov/Session/Bill/2026/759/BillText/c1/PDF",
+  })
+  assert.equal(selectCompanion(DETAIL.sasts), "SB 532")
+  // LegiScan mislabels Florida's analyses as "Veto Letter"; the title and the path say what they are.
+  assert.deepEqual(selectLatestAnalysis(DETAIL.supplements), {
+    description: "Justice Budget Subcommittee (Post-Meeting)",
+    date: "2026-01-22",
+    url: "https://www.flsenate.gov/Session/Bill/2026/759/Analyses/h0759c.JUB.PDF",
+  })
+})
+
+test("a sourced bill carries the whole record, and still needs the legislature's link", () => {
+  const bill = toSourcedFloridaBill(candidate({ displayNumber: "HB 759", title: "Court Fees", chamber: "house" }), DETAIL)!
+  assert.equal(bill.url, "https://www.flsenate.gov/Session/Bill/2026/759")
+  assert.equal(bill.filedOn, "2025-12-12")
+  assert.equal(bill.companion, "SB 532")
+  assert.equal(bill.lastVote?.yea, 114)
+  assert.equal(bill.analysis?.date, "2026-01-22")
+  assert.equal(toSourcedFloridaBill(candidate(), { ...DETAIL, state_link: undefined }), null)
+  assert.equal(toSourcedFloridaBill(candidate(), undefined), null)
+})
+
+test("the record's facts are listed as a reader would cite them", () => {
+  const bill = toSourcedFloridaBill(candidate({ displayNumber: "HB 759", title: "Court Fees", chamber: "house" }), DETAIL)!
+  assert.deepEqual(
+    describeFloridaRecord(bill).map((f) => [f.label, f.value]),
+    [
+      ["Sponsors", "Justice Budget Subcommittee; Rep. David Smith (R, HD-038)"],
+      ["Filed", "2025-12-12"],
+      ["Companion", "SB 532"],
+      ["Last vote", "House: Third Reading RCS#600: 114–0 (2026-02-25)"],
+      ["Text", "Comm Sub (2026-01-22)"],
+      ["Staff analysis", "Justice Budget Subcommittee (Post-Meeting) (2026-01-22)"],
+    ]
+  )
+  assert.equal(describeFloridaRecord(bill).find((f) => f.label === "Text")?.url, DETAIL.texts![1].state_link)
+  assert.deepEqual(describeFloridaRecord(sourced()), [], "a bare record has no facts to list")
+})
+
+test("a failed vote says so", () => {
+  const facts = describeFloridaRecord(
+    sourced({ lastVote: { description: "Senate: Third Reading", yea: 10, nay: 28, date: "2026-03-01", passed: false } })
+  )
+  assert.equal(facts[0].value, "Senate: Third Reading: 10–28, failed (2026-03-01)")
+})
+
+test("the House's page furniture is not part of the analysis", () => {
+  // Shape taken from pdf-parse's output for h0759c.JUB.PDF.
+  const raw = [
+    "STORAGE NAME: h0759c.JUB",
+    "DATE: 1/22/2026 1",
+    "FLORIDA HOUSE OF REPRESENTATIVES",
+    "BILL ANALYSIS",
+    "SUMMARY",
+    "Effect of the Bill:",
+    "HB 759 increases certain service charges which the Clerks of the Circuit Court may impose.",
+    "JUMP TO SUMMARY ANALYSIS RELEVANT INFORMATION BILL HISTORY",
+    "ANALYSIS",
+    "EFFECT OF THE BILL:",
+  ].join("\n")
+  const cleaned = cleanAnalysisText(raw)
+  assert.doesNotMatch(cleaned, /JUMP TO/)
+  assert.doesNotMatch(cleaned, /STORAGE NAME/)
+  assert.doesNotMatch(cleaned, /^DATE: 1\/22/m)
+  assert.match(cleaned, /HB 759 increases certain service charges/)
+  assert.match(cleaned, /EFFECT OF THE BILL:/)
+})
+
+test("the analysis is fetched through the parser it is given, and a bill without one gets nothing", async () => {
+  const noAnalysis = sourced()
+  assert.equal(await fetchFloridaAnalysisText(noAnalysis, async () => "never called"), undefined)
+  // A parser that throws leaves the bill on its description rather than failing the section.
+  const withAnalysis = sourced({ analysis: { description: "Judiciary", date: "2026-02-10", url: "https://www.flsenate.gov/Session/Bill/2026/300/Analyses/x.PDF" } })
+  const original = globalThis.fetch
+  globalThis.fetch = (async () => new Response(new Uint8Array([37, 80, 68, 70]), { status: 200 })) as typeof fetch
+  try {
+    assert.equal(await fetchFloridaAnalysisText(withAnalysis, async () => { throw new Error("bad pdf") }), undefined)
+    assert.equal(await fetchFloridaAnalysisText(withAnalysis, async () => "STORAGE NAME: x\nThe bill does a thing."), "The bill does a thing.")
+  } finally {
+    globalThis.fetch = original
+  }
+})
+
+test("the prompt carries the analysis when there is one, and asks for details only then", () => {
+  const texts = new Map([["SB 300", "SUMMARY\nEffect of the Bill:\nThe bill revises judicial sales."]])
+  const prompt = buildFloridaSummaryPrompt([sourced(), sourced({ displayNumber: "HB 1", title: "Other" })], texts)
+  assert.match(prompt, /Legislative staff analysis:/)
+  assert.match(prompt, /The bill revises judicial sales\./)
+  assert.match(prompt, /Where no analysis is given, return an empty list; never fill it from memory/)
+  const second = prompt.slice(prompt.indexOf("- HB 1"))
+  assert.doesNotMatch(second, /Legislative staff analysis/)
 })
