@@ -8,14 +8,17 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
 | `main` | `a36ff81` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `a36ff81` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `dev` | `a01d2a5` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 This table names the newest commit on each branch that **changes behaviour**; documentation-only
 commits sit on top of it and are deliberately not tracked here, because amending one rotates its
 SHA and the table then reads as stale when nothing has moved. Confirm with
 `git log --format='%h|%ci|%s'` rather than trusting the previous entry — this has drifted twice.
 
-**The branches are level as of 2026-10-05.** `main` fast-forwarded from `9faaf35` to `4ca86dc`,
+**`dev` is one behavioural commit ahead as of the afternoon of 2026-10-05**: `a01d2a5`, which
+admits the OCC's and FDIC's monthly enforcement roundups as single items and rewords the
+Legislative Tracker header. Reverting it restores an Enforcement section with nothing from either
+regulator. Before that, `main` fast-forwarded from `9faaf35` to `4ca86dc`,
 taking everything from 09-29 to 10-05 in one release: the per-section windows and the always-rendered
 sections, the computed exposure counts, the removal of the department model and of the two lens
 tabs, the matched peer cohort in the institution drawer, then the week's Legal Landscape work — the
@@ -23,7 +26,8 @@ relevance gate, the bill-identity guard, federal bills from govtrack, Florida bi
 rulemaking from the Federal Register, bill status tracking — and the Node 24 pin without which none
 of it could have been deployed.
 
-The newest commit changing application behaviour is **`a36ff81`** on both branches. The previous
+The newest commit changing application behaviour is **`a01d2a5`** on `dev` and **`a36ff81`** in
+production. The previous
 production state was `9faaf35`, and it is **no longer a clean rollback target**: it carries the
 Node 20 pin and Vercel will refuse to build it. See the `a36ff81` row below.
 
@@ -157,11 +161,12 @@ the Market Participants tab.
 
 ## Dev branch commits
 
-Everything in this table reached production on 2026-10-05 in the fast-forward to `4ca86dc`. It is
-kept as the record of what each commit does and what reverting it costs.
+Everything in this table from `a36ff81` down reached production on 2026-10-05 in the fast-forward
+to `4ca86dc`. It is kept as the record of what each commit does and what reverting it costs.
 
 | Commit | Date | Summary |
 | --- | --- | --- |
+| `a01d2a5` | 10-05 | **Not yet in production.** Admits a regulator's monthly enforcement roundup ("OCC Enforcement Actions for July 2026") as one item, bypassing the topic and individual-action gates that had dropped every one of them; tells the Enforcement prompt to report roundups whole and name no individual; cache key `v10`. Also rewords the Legislative Tracker header from "with active movement" to "this session". Revert cost: the Enforcement section loses everything from the OCC and FDIC again. |
 | `a36ff81` | 10-05 | Pins Node **24.x** in `engines`; Vercel has retired 20 and refused to build `fe1cee1`. **Do not revert past this** — any commit with the `20.x` pin will fail to build on Vercel, which also means `main` as it stands today cannot be redeployed from a fresh build. If production must be rolled back to a pre-10-05 commit, cherry-pick this one onto it first. |
 | `a91bfe1` | 09-30 | **One relevance gate** — a heading read on every term, a body only on the core ones — replacing the two-gate arrangement `05b51f3` introduced a few hours earlier, after the model path admitted a stablecoin proposal on "capital requirements" in its body. Also restricts Federal Register rulemaking to the financial regulators (OCC, FDIC, Fed, CFPB, FHFA, HUD, Treasury, NCUA), which is what removed a Farm Credit Administration rule. **Reverting readmits both** and nothing else; safe in isolation. `npm run test:legal-relevance`, `npm run verify:legal-freshness`. |
 | `c22b06a` | 09-30 | Three rendering fixes in the record-sourced items: the model's `summaries` wrapper is optional on the way back (its absence had every Florida bill rendering as raw description with no "why it matters"), LegiScan HTML entities are decoded, and a deduped Federal Register rule inherits the abstract from whichever copy has one. **Safe to revert in isolation**, at the cost of those three defects reappearing. `npm run test:legal-florida`, `npm run test:legal-fedreg`. |

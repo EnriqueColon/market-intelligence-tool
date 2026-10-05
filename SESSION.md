@@ -8,7 +8,43 @@ is it in now, and what is still open.
 
 ---
 
-## 2026-10-05 (latest) — the dev build would not start
+## 2026-10-05, afternoon (latest) — the enforcement section was dropping its own subject
+
+Shipped the morning's work to production first: `main` fast-forwarded `9faaf35` → `4ca86dc`, the
+first release since 09-29. `ROLLBACK.md` now records that `9faaf35` will no longer build (Node 20
+pin) and needs `a36ff81` cherry-picked before it can be a target.
+
+Then the two items left open last week, both on `dev` as `a01d2a5`, not yet in production.
+
+**Monthly enforcement roundups now render.** The description carried forward from 09-30 — "dropped
+as individual actions" — turned out to be half the story. Three live runs: the model found and
+correctly cited the OCC's July and June pages and the FDIC's August page, and every one failed the
+*topic* gate too, because a roundup's title names a month rather than a subject. The individual
+gate caught about half of them on top of that. Either way the section had nothing from either
+regulator while a bank receivership rendered beside the gap. `isEnforcementDigest` recognises the
+form (a month name with "enforcement actions", title only) and `bearsOnFirmOperations` admits it
+before asking anything else; the Enforcement prompt now tells the model to report a roundup as one
+item under the regulator's own title, summarise the page as a whole and name no individual. Three
+runs after the change: September and July OCC roundups and the FDIC August roundup all render,
+verified against the real pages. A single action the model pulls out of a roundup is still judged
+as the action it is. Cache key bumped to `v10`.
+
+The third post-change run returned five fabrications ("XYZ Mall", "ABC Office Tower") and the
+source guard dropped all five, which is that guard doing its job and nothing to do with this
+change. Worth knowing when reading the preview: the section can be empty on a bad run, then
+retried once.
+
+**The Legislative Tracker header** no longer promises "active movement" over bills that died in
+March; it says "this session". One line in `components/legal-updates.tsx`.
+
+Open: the roundups' "why it matters" is generic ("highlights the OCC's commitment to integrity").
+The model has nothing specific to say about a page it is told not to pick an action out of, and
+the field may be better suppressed for digests than written. Decide after seeing it on the
+preview. CourtListener still answers anonymously and is still unused.
+
+---
+
+## 2026-10-05, morning — the dev build would not start
 
 The push of `fe1cee1` to `dev` on 09-30 never built: Vercel refused it before cloning finished,
 because `engines.node` was `20.x` and Node 20 has been retired. The pin dated from the start of the
@@ -18,9 +54,8 @@ would have failed identically — a useful thing to have discovered on the previ
 One line changed, to `24.x`. No code moved: local development had been on Node 24 for some time,
 and every build and every test run of the previous week had been under it. Pushed as `a36ff81`.
 
-Everything from 09-30 is still waiting on the preview review before it merges. Still open: the
-enforcement section rendering empty because the monthly digests are dropped as individual actions,
-and the "bills with active movement" header over five bills that died in March.
+Everything from 09-30 was reviewed on the preview and merged to production the same afternoon;
+see the entry above.
 
 ---
 
