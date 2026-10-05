@@ -516,6 +516,61 @@ export function describeFloridaRecord(bill: SourcedFloridaBill): Array<{ label: 
   return facts
 }
 
+// ── Dead bills ─────────────────────────────────────────────────────────────────
+
+/**
+ * Florida's clerks record a bill that was still in committee when the session ended as "Died in
+ * <committee>"; a bill the sponsor pulled is "Withdrawn from consideration". Neither has any
+ * effect, and neither can move again — it would have to be refiled as a new bill.
+ */
+export function isDeadStatus(status: string | undefined): boolean {
+  return /^died\b|withdrawn from consideration|^failed\b|^vetoed\b/i.test(status?.trim() ?? "")
+}
+
+/**
+ * A line for the section when every Florida bill on it is dead, which is the state of the
+ * Legislative Tracker for roughly half of every year. Florida's regular session runs sixty days
+ * in the spring; filing for the next one opens in the autumn. Without this the section reads as
+ * five live bills, and a reader has to open each one to learn that none of them is.
+ */
+export function describeFloridaSessionState(
+  items: Array<{ status?: string; date: string }>
+): string | undefined {
+  if (items.length === 0 || !items.every((i) => isDeadStatus(i.status))) return undefined
+  const year = Math.max(...items.map((i) => Number(i.date.slice(0, 4)) || 0))
+  if (!year) return undefined
+  return `The Florida Legislature's ${year} session has ended, and every Florida bill below lapsed with it; none has any effect. Filing for the ${year + 1} session usually opens in the autumn, and new bills appear here as they are filed.`
+}
+
+/**
+ * What a dead bill's record says about its chances next time, in one sentence a reader can check.
+ *
+ * Written from the record alone — the last roll call, where it died, when it was filed, its
+ * companion — because the honest signal is procedural: a bill that passed a chamber 114–0 and died
+ * in the other chamber's Rules committee is a different thing from one that was filed and never
+ * heard, and the record states which. Nothing is said about *why* it died; the record does not
+ * know and neither do we.
+ */
+export function describeIntent(bill: SourcedFloridaBill): string | undefined {
+  if (!isDeadStatus(bill.statusLabel)) return undefined
+  const where = bill.statusLabel.trim().replace(/^Died/, "died").replace(/^Withdrawn/, "withdrawn")
+  const chamber = bill.chamber === "senate" ? "Senate" : "House"
+  const companion = bill.companion ? ` Companion ${bill.companion} in the other chamber.` : ""
+  const vote = bill.lastVote
+
+  if (vote && vote.passed && /third reading|floor|^(house|senate):/i.test(vote.description)) {
+    return `Passed the ${chamber} ${vote.yea}–${vote.nay} on ${vote.date}, then ${where}. A bill that clears one chamber is commonly refiled.${companion}`
+  }
+  if (vote && vote.passed) {
+    return `Cleared ${vote.description} ${vote.yea}–${vote.nay} on ${vote.date}, then ${where}.${companion}`
+  }
+  if (vote) {
+    return `Failed in ${vote.description} ${vote.yea}–${vote.nay} on ${vote.date}.${companion}`
+  }
+  const filed = bill.filedOn ? `Filed ${bill.filedOn}; ` : ""
+  return `${filed}${where} without a hearing or a vote.${companion}`
+}
+
 /** What the item says before a model has seen it. Everything here is the bill's own. */
 export function describeFloridaFromRecord(bill: SourcedFloridaBill): string {
   if (bill.description) return bill.description

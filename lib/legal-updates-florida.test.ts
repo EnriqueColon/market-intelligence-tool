@@ -7,7 +7,10 @@ import {
   decodeEntities,
   describeFloridaFromRecord,
   describeFloridaRecord,
+  describeFloridaSessionState,
+  describeIntent,
   describeSponsors,
+  isDeadStatus,
   fetchFloridaAnalysisText,
   isLocalBill,
   isReviserBill,
@@ -385,4 +388,44 @@ test("the prompt carries the analysis when there is one, and asks for details on
   assert.match(prompt, /Where no analysis is given, return an empty list; never fill it from memory/)
   const second = prompt.slice(prompt.indexOf("- HB 1"))
   assert.doesNotMatch(second, /Legislative staff analysis/)
+})
+
+// ── Dead bills ─────────────────────────────────────────────────────────────────
+
+test("the clerk's phrasings for a bill that lapsed are recognised", () => {
+  for (const s of ["Died in Rules", "Died in Judiciary Committee", "Indefinitely postponed and withdrawn from consideration", "Failed", "Vetoed by Governor"]) {
+    assert.ok(isDeadStatus(s), s)
+  }
+  for (const s of ["Introduced", "Engrossed", "Chapter No. 2026-207", "Referred to Judiciary", undefined]) {
+    assert.equal(isDeadStatus(s), false, String(s))
+  }
+})
+
+test("the section is told when every Florida bill on it is dead, and not otherwise", () => {
+  const note = describeFloridaSessionState([
+    { status: "Died in Rules", date: "2026-03-13" },
+    { status: "Died in Judiciary", date: "2026-03-13" },
+  ])
+  assert.match(note ?? "", /2026 session has ended/)
+  assert.match(note ?? "", /Filing for the 2027 session usually opens in the autumn/)
+  assert.equal(describeFloridaSessionState([{ status: "Died in Rules", date: "2026-03-13" }, { status: "Introduced", date: "2026-09-20" }]), undefined)
+  assert.equal(describeFloridaSessionState([]), undefined)
+})
+
+test("a dead bill's intent line is written from its record, and says how far it got", () => {
+  // HB 759 passed the House 114–0 and died in Senate Rules — the strongest signal a dead bill gives.
+  const passedHouse = toSourcedFloridaBill(candidate({ displayNumber: "HB 759", title: "Court Fees", chamber: "house" }), DETAIL)!
+  assert.equal(
+    describeIntent(passedHouse),
+    "Passed the House 114–0 on 2026-02-25, then died in Rules. A bill that clears one chamber is commonly refiled. Companion SB 532 in the other chamber."
+  )
+  // Cleared a committee only.
+  assert.equal(
+    describeIntent(sourced({ statusLabel: "Died in Judiciary Committee", lastVote: { description: "House Civil Justice & Claims Subcommittee", yea: 14, nay: 3, date: "2026-01-29", passed: true } })),
+    "Cleared House Civil Justice & Claims Subcommittee 14–3 on 2026-01-29, then died in Judiciary Committee."
+  )
+  // Never heard.
+  assert.equal(describeIntent(sourced({ filedOn: "2025-10-28" })), "Filed 2025-10-28; died in Rules without a hearing or a vote.")
+  // A live bill has no intent line; its status is the story.
+  assert.equal(describeIntent(sourced({ statusLabel: "Referred to Judiciary" })), undefined)
 })

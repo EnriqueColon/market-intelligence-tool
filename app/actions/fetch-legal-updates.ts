@@ -19,6 +19,8 @@ import {
   buildFloridaSummaryPrompt,
   describeFloridaFromRecord,
   describeFloridaRecord,
+  describeFloridaSessionState,
+  describeIntent,
   fetchFloridaAnalysisText,
   fetchFloridaBills,
 } from "@/lib/legal-updates-florida"
@@ -69,6 +71,11 @@ export type LegalItem = {
    */
   record?: RecordFact[]
   /**
+   * For a bill that died: what its record says about its chances next session, in one sentence.
+   * Procedural and checkable — the last roll call, where it died — never a guess at why.
+   */
+  intent?: string
+  /**
    * What the document says about its own scope, if anything. Resolved against FDIC data by
    * `resolveLegalApplicability` at render time rather than here — see that action for why the
    * join is deliberately outside this cache.
@@ -92,6 +99,12 @@ export type LegalUpdatesResponse = {
    * anything had happened, and it read like an error rather than an answer.
    */
   sectionNotes: Partial<Record<LegalSection, string>>
+  /**
+   * A line shown above a section's items when the items need framing — the Legislative Tracker
+   * between Florida sessions, when every bill on it is dead. Distinct from `sectionNotes`, which
+   * explain an empty section.
+   */
+  sectionContext?: Partial<Record<LegalSection, string>>
 }
 
 // ── OpenAI fetch ───────────────────────────────────────────────────────────────
@@ -283,6 +296,7 @@ async function collectFloridaBills(now: Date, filterDays: number): Promise<Legal
       whyItMatters: written?.whyItMatters || "",
       details: texts.has(bill.displayNumber) ? written?.details : undefined,
       record: record.length > 0 ? record : undefined,
+      intent: describeIntent(bill),
       status: bill.statusLabel,
       url: bill.url,
     }
@@ -541,6 +555,13 @@ async function fetchLegalUpdatesImpl(): Promise<LegalUpdatesResponse> {
     sectionNotes[result.section] = describeEmptySection(result)
   }
 
+  // Between Florida sessions the Tracker's Florida side is entirely bills that lapsed in March,
+  // and without saying so it reads as five live bills.
+  const sectionContext: Partial<Record<LegalSection, string>> = {}
+  const floridaBills = allItems.filter((i) => i.section === "legislative" && i.jurisdiction === "Florida")
+  const sessionState = describeFloridaSessionState(floridaBills)
+  if (sessionState) sectionContext.legislative = sessionState
+
   if (allItems.length === 0 && collected.every((c) => c.discarded.stale + c.discarded.unverified + c.discarded.offTopic === 0)) {
     notes.push("No legal intelligence items returned. Check OpenAI API key and quota.")
   }
@@ -550,6 +571,7 @@ async function fetchLegalUpdatesImpl(): Promise<LegalUpdatesResponse> {
     generatedAt: new Date().toISOString(),
     notes,
     sectionNotes,
+    sectionContext,
   }
 }
 
@@ -557,7 +579,7 @@ export async function fetchLegalUpdates(): Promise<LegalUpdatesResponse> {
   const day = newsCalendarDayET()
   return unstable_cache(
     async () => fetchLegalUpdatesImpl(),
-    ["legal-updates-v12", day],
+    ["legal-updates-v13", day],
     // 25h so the entry outlives the day and never expires just before the cron.
     { revalidate: 90000 }
   )()

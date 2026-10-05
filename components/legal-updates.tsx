@@ -10,6 +10,7 @@ import {
   Building2,
   ExternalLink,
   Gavel,
+  Info,
   Landmark,
   Scale,
   ShieldAlert,
@@ -194,6 +195,40 @@ function LegalCard({
       )}
 
       {exposure && <ExposureBlock exposure={exposure} scope={exposureScope} />}
+    </Card>
+  )
+}
+
+// ── Possible intent ────────────────────────────────────────────────────────────
+
+/**
+ * What the bills that died say about the next session, read from their records.
+ *
+ * Shown once below the list rather than on each card, because it is a different kind of
+ * statement: the cards say what a bill would do, this says how far it got. Each line is
+ * procedural — the last roll call, where it died — and checkable against the linked record.
+ */
+function IntentNotes({ items }: { items: LegalItem[] }) {
+  const dead = items.filter((item) => item.intent)
+  if (dead.length === 0) return null
+
+  return (
+    <Card className="border-violet-100 bg-violet-50/40 p-4 space-y-2">
+      <div>
+        <p className="text-xs font-semibold text-violet-900">Possible intent</p>
+        <p className="text-xs text-violet-800/80 leading-relaxed">
+          What the bills that died suggest about the next session. Signals only — none of these has any legal effect, and the record says how far each got, not why it stopped.
+        </p>
+      </div>
+      <ul className="space-y-1.5">
+        {dead.map((item) => (
+          <li key={item.id} className="text-xs text-slate-700 leading-relaxed">
+            <span className="font-medium text-slate-800">{item.title}</span>
+            <span className="text-slate-400"> — </span>
+            {item.intent}
+          </li>
+        ))}
+      </ul>
     </Card>
   )
 }
@@ -516,6 +551,14 @@ export function LegalUpdates() {
                   <p className="text-xs text-slate-400 hidden sm:block ml-1">— {section.description}</p>
                 </div>
 
+                {/* Framing the section needs before its items are read — between sessions, that every bill below is dead. */}
+                {items.length > 0 && data.sectionContext?.[section.key] && (
+                  <div className="flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                    <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-slate-400" />
+                    <p className="text-xs text-slate-600 leading-relaxed">{data.sectionContext[section.key]}</p>
+                  </div>
+                )}
+
                 {items.length > 0 ? (
                   <div className="space-y-3">
                     {items.map((item) => (
@@ -527,6 +570,7 @@ export function LegalUpdates() {
                         exposureScope={exposureScope}
                       />
                     ))}
+                    <IntentNotes items={items} />
                   </div>
                 ) : (
                   <SectionEmptyState
