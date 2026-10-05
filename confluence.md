@@ -1370,6 +1370,35 @@ carries the colour. The former `demotiles.maplibre.org` style has no state bound
 
 Generated content is expensive, so nearly everything is cached for a day.
 
+### How the page loads, and why the News tab arrives already filled
+
+`app/page.tsx` is `force-dynamic` and renders the dashboard, a client component. Until 2026-10-05
+it rendered an empty shell and every box on the default tab fetched its own data in a `useEffect`
+after hydration: the browser woke the function for the page, downloaded ~600 KB of script, then
+made eight server-action calls — pulse strip, Industry Outlook, three Public Mentions feeds, three
+Investing feeds — each waking the function again to read a cache that answers in under a
+millisecond. On a warm day the whole wait was delivery, not computation, and it was paid on every
+open. Measured on 2026-10-05: a production function wakes in ~1.7 s and answers warm in ~0.27 s;
+every News action returns from a warm cache in 0 ms; the largest payload in the tool is 112 KB.
+
+`app/services/initial-news-data.ts` now reads those eight caches on the server while the page
+renders and hands the results to the dashboard as `initialNews`. Each read is raced against a
+2.5-second budget (`INITIAL_READ_BUDGET_MS`): a hit goes into the HTML, a miss is abandoned and the
+component fetches on mount exactly as before, so the page is never held for regeneration and the
+worst case is the old behaviour. Abandoned reads are kept alive past the response with `after()`,
+so a cold render still fills the cache for the next visitor. The feeds are all-three-levels-or-
+nothing, because a partial set would have the component refetch everything. Components take the
+data as initial state (`initialTiles`, `initialText`, `initialByLevel`) and skip their mount fetch
+when they have it; the Outlook and the two mentions components also seed their module and session
+caches from it so a remount behaves as it would after a fetch. Locally on a production build: warm
+page ~20 ms with the strip, the outlook and 76 headlines in the HTML and no skeletons; cold page
+2.6 s with the strip and placeholders; 87 ms once the reads had landed. The HTML is ~520 KB
+uncompressed because the data now travels in it. Other tabs still fetch on first visit.
+
+`/api/cron/measure-load` (behind the cron bearer, not scheduled) times every dashboard action
+twice and reports payload size against the Data Cache's 2 MB entry limit; it is how the figures
+above were produced and is the before/after instrument for further work on load time.
+
 - **Server:** `unstable_cache` keyed by a version string plus the current Eastern-time day.
   **Bumping the version string is how you force regeneration in production** — the standard tool
   after fixing prompt or pipeline behaviour.

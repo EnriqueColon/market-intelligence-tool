@@ -180,8 +180,10 @@ read by `fetch-kpi-data.ts` and `fetch-cre-data.ts`, whose FRED paths return nul
 ```
 Browser
   └─ middleware.ts ......... password gate (auth_token cookie vs COOKIE_SECRET)
-      └─ app/page.tsx ...... server component; resolves ENABLED_TABS into a features object
-          └─ dashboard ..... client components
+      └─ app/page.tsx ...... server component; resolves ENABLED_TABS; reads the News tab's
+          │                    caches (app/services/initial-news-data.ts, 2.5 s budget) so the
+          │                    default tab arrives in the HTML rather than one round trip later
+          └─ dashboard ..... client components; fetch only what the page did not carry
               ├─ Server Actions (app/actions/*) ──► external APIs
               │      └─ unstable_cache, keyed by version + Eastern-time day
               └─ Route Handlers (app/api/*) ─────► Postgres / Blob / map data

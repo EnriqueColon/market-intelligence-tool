@@ -8,7 +8,46 @@ is it in now, and what is still open.
 
 ---
 
-## 2026-10-05, afternoon (latest) — the enforcement section was dropping its own subject
+## 2026-10-05, later afternoon (latest) — why every open of the tool was slow
+
+Asked why the whole tool takes so long to load, every time, for everyone — not just the first
+visitor of the day. The architecture map said: the page is an empty shell, every box fetches its
+own data after the JavaScript loads, nearly all of it through day-keyed `unstable_cache`. Two
+theories: the overnight warm cron failing (would be slow mornings only) or structural delivery
+cost (slow always). The user's answer — slow every time — pointed at the second.
+
+**Measured before changing anything** (`0aaf1b2`, `/api/cron/measure-load`, behind the cron
+bearer, not scheduled: runs every dashboard action twice and reports payload size). On a fresh
+local production build every action regenerated once — Outlook 26 s, each Public Mentions feed
+12 s, Legal 12 s, Research 13 s, screening 5 s — and then returned in 0 ms on every later call.
+Payloads are tiny, 5–112 KB against the Data Cache's 2 MB entry limit, so the "cache silently
+failing" theory is dead. On production, an unauthenticated hit to a function (401 after boot)
+measured the cold start at 1.7 s and warm at 0.27 s. So on a warm day the lag was entirely
+delivery: wake the function for the page, download ~600 KB of script, eight calls back, each
+waking the function again to read a cache that answers instantly.
+
+**The News tab now arrives in the page** (`f72fbb4`, on `dev`). `app/services/initial-news-data.ts`
+reads the pulse strip, the Industry Outlook and the six news feeds on the server while the page
+renders, each raced against a 2.5 s budget: a warm cache goes into the HTML, a cold one is left to
+the component's existing client fetch, and abandoned reads are kept alive with `after()` so a cold
+render still fills the cache. The four News components take the data as initial state and skip
+their mount fetch when they have it; nothing about a miss changed. Locally, production build with
+preview flags: warm page 20 ms with the strip, the outlook and 76 headlines in the HTML and zero
+skeletons; cold page 2.6 s with the strip and placeholders; 87 ms once the reads landed. HTML is
+~520 KB uncompressed now that the data travels in it. One harness trap found on the way: a local
+`next start` reports "production" with no `ENABLED_TABS` and renders no tabs at all; run it with
+`VERCEL_ENV=preview` to see them.
+
+Not yet measured on Vercel itself: the dev preview hostname is not derivable from here and the
+Vercel MCP needs a browser login, so the before/after on the real deployment is the next thing to
+do once the preview URL is to hand. Steps 3 and 4 of the plan — cache the uncached pieces (pulse
+strip in the warm cron, legal exposure counts folded into the feed, the analytics quarter probe off
+the critical path) and serve stale-while-revalidating instead of expiring at midnight — are not
+started.
+
+---
+
+## 2026-10-05, afternoon — the enforcement section was dropping its own subject
 
 Shipped the morning's work to production first: `main` fast-forwarded `9faaf35` → `4ca86dc`, the
 first release since 09-29. `ROLLBACK.md` now records that `9faaf35` will no longer build (Node 20
