@@ -8,19 +8,19 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
 | `main` | `a36ff81` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `da82d42` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `dev` | `a313d11` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 This table names the newest commit on each branch that **changes behaviour**; documentation-only
 commits sit on top of it and are deliberately not tracked here, because amending one rotates its
 SHA and the table then reads as stale when nothing has moved. Confirm with
 `git log --format='%h|%ci|%s'` rather than trusting the previous entry — this has drifted twice.
 
-**`dev` is two behavioural commits ahead as of the afternoon of 2026-10-05**: `a01d2a5`, which
+**`dev` is three behavioural commits ahead as of the afternoon of 2026-10-05**: `a01d2a5`, which
 admits the OCC's and FDIC's monthly enforcement roundups as single items and rewords the
-Legislative Tracker header, and `da82d42`, which gives Federal Register cards their record facts
-and a summary of the rule's own text. Reverting the first restores an Enforcement section with
-nothing from either regulator; reverting the second restores cards summarised from a 70-word
-abstract, and the escrow rule rendering under its correction's date. Before that, `main` fast-forwarded from `9faaf35` to `4ca86dc`,
+Legislative Tracker header; `da82d42`, which gives Federal Register cards their record facts and a
+summary of the rule's own text; and `a313d11`, which does the same for Florida bills (record from
+`getBill`, staff analysis as the text) and reads the enforcement roundup pages instead of recalling
+them. They are a set and revert cleanly in reverse order. Before that, `main` fast-forwarded from `9faaf35` to `4ca86dc`,
 taking everything from 09-29 to 10-05 in one release: the per-section windows and the always-rendered
 sections, the computed exposure counts, the removal of the department model and of the two lens
 tabs, the matched peer cohort in the institution drawer, then the week's Legal Landscape work — the
@@ -28,7 +28,7 @@ relevance gate, the bill-identity guard, federal bills from govtrack, Florida bi
 rulemaking from the Federal Register, bill status tracking — and the Node 24 pin without which none
 of it could have been deployed.
 
-The newest commit changing application behaviour is **`da82d42`** on `dev` and **`a36ff81`** in
+The newest commit changing application behaviour is **`a313d11`** on `dev` and **`a36ff81`** in
 production. The previous
 production state was `9faaf35`, and it is **no longer a clean rollback target**: it carries the
 Node 20 pin and Vercel will refuse to build it. See the `a36ff81` row below.
@@ -168,6 +168,7 @@ to `4ca86dc`. It is kept as the record of what each commit does and what reverti
 
 | Commit | Date | Summary |
 | --- | --- | --- |
+| `a313d11` | 10-05 | **Not yet in production.** Florida bill cards list the record (primary sponsors, filed, companion, last roll call, latest text, latest staff analysis) and the model summarises the staff analysis — a PDF read with `pdf-parse` through `lib/legal-updates-pdf.ts` — into `details`. Enforcement roundup pages are fetched after verification and the model reports what they list, one bullet per institutional action. Cache key `v12`. Revert cost: Florida cards back to a one-line description; roundup summaries back to the model's recollection of the page. |
 | `da82d42` | 10-05 | **Not yet in production.** Federal Register cards list the record's own facts (action, citation, CFR parts, docket, RIN, pages, correction, PDF) and the model summarises the rule's explanatory text — selected by section, capped at 6,000 words — into a summary and up to five `details`, instead of paraphrasing the abstract. Corrections (`C1-…`) yield to the document they correct. Cache key `v11`. Revert cost: thinner cards; the escrow rule goes back to rendering under its correction's date. |
 | `a01d2a5` | 10-05 | **Not yet in production.** Admits a regulator's monthly enforcement roundup ("OCC Enforcement Actions for July 2026") as one item, bypassing the topic and individual-action gates that had dropped every one of them; tells the Enforcement prompt to report roundups whole and name no individual; cache key `v10`. Also rewords the Legislative Tracker header from "with active movement" to "this session". Revert cost: the Enforcement section loses everything from the OCC and FDIC again. |
 | `a36ff81` | 10-05 | Pins Node **24.x** in `engines`; Vercel has retired 20 and refused to build `fe1cee1`. **Do not revert past this** — any commit with the `20.x` pin will fail to build on Vercel, which also means `main` as it stands today cannot be redeployed from a fresh build. If production must be rolled back to a pre-10-05 commit, cherry-pick this one onto it first. |

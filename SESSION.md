@@ -57,10 +57,38 @@ Also found on the way: the escrow rule had been rendering under its *correction'
 beat the rule it corrects. Corrections now yield to their original, which carries "Corrected
 2026-06-29" with a link.
 
-Open: the roundups' "why it matters" is generic ("highlights the OCC's commitment to integrity").
-The model has nothing specific to say about a page it is told not to pick an action out of, and
-the field may be better suppressed for digests than written. Decide after seeing it on the
-preview. CourtListener still answers anonymously and is still unused.
+**The same treatment for Florida bills and the enforcement roundups** (`a313d11`, on `dev`). Asked
+whether the rule cards' change had reached the other sections — it had not — and then asked to do
+the two that were within reach.
+
+Florida: the `getBill` call that had been made for the flsenate link alone also returns sponsors,
+the full action history, every roll call, the companion bill, each text version and the staff
+analyses. The card's record line now lists primary sponsors, filing date, companion, last roll call
+with tally, latest text and latest analysis, the last two linked. The roll call is what most often
+changes the reading of a dead bill — HB 759 "Died in Rules" after passing the House 114–0. The
+staff analysis, Florida's nonpartisan committee account of what a bill does, is fetched (PDF, via
+`pdf-parse`, already a dependency; parser passed in so the module stays import-free) and handed to
+the model for `details`. Live: two of five bills have one — the three that died unheard never got a
+committee stop — and theirs came back with fiscal figures and committee tallies traceable to the
+document. 9.4k input tokens for all five.
+
+Enforcement: the roundup items the model finds are now *read*. After source verification,
+`readEnforcementPages` fetches each roundup page, `htmlToText` keeps the main region one list item
+per line, and the model is asked to report what the page lists — one bullet per institutional
+action, individuals counted and never named, and a "why it matters" permitted to say there is
+nothing here. That closes the open item below about generic "why it matters": the OCC's September
+page now reads "two prohibition orders against former employees; nothing here bearing on note
+purchases", and July's lists the cease-and-desist and four terminations by institution. The FDIC's
+releases give counts and link to a separate list; the model reports the counts and points at it.
+
+Cache key `v12`. 86 `tsc` errors before and after, all pre-existing; `next build` passes.
+
+Noticed, not touched: `app/api/research/summarize-report/route.ts` calls `pdf-parse` through its
+v1 default export, which v2 (installed) does not have — `tsc` flags it and the route's fast path
+cannot be working. Separate concern, separate fix.
+
+Open: CourtListener still answers anonymously and is still unused. Federal bills from govtrack
+have no text route without a key (congress.gov 403, govinfo 401); their cards show the record only.
 
 ---
 
