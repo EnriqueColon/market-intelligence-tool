@@ -176,6 +176,22 @@ without any attempt to classify names — which would misfile institutions named
 founders. The conduct behind such an order often involved the CRE book, and it is still a ruling
 about one person's employability, so topic alone must not carry it.
 
+**A regulator's monthly roundup is admitted as one item, on its own.** The OCC and FDIC announce
+most enforcement actions only this way — "OCC Enforcement Actions for July 2026", "FDIC Makes
+Public August Enforcement Actions" — one page per month listing every order, and there is no
+per-action release behind it to cite instead. Judged as an ordinary item a roundup fails both
+questions above for reasons unrelated to its contents: its title names a month rather than a
+subject, and its summary almost always mentions that month's prohibition order. Live, that dropped
+every roundup the model found and correctly cited, and the section had nothing from either
+regulator. `isEnforcementDigest` recognises the form — a month name together with "enforcement
+actions", in the title only — and `bearsOnFirmOperations` passes it before asking anything else.
+The Enforcement prompt tells the model to report each roundup as one item under the regulator's own
+title, summarise the page as a whole, and name no individual. A single action the model has pulled
+out of a roundup ("OCC Enforcement Action Against United Texas Bank") is not a roundup and is
+judged on its own terms, so a BSA/AML order is still off topic and a prohibition order is still
+about a person. The asymmetry is deliberate: the page is the section's own subject, and what it
+contains that month is for the reader to see there rather than for a term list to guess at.
+
 **Every term is anchored.** Bare substrings are not a style preference here: `lien` matched
 "client", "clients", "resilience" and "salient", and `tenant` matched "lieutenant" — four false
 positives in fifteen sample .gov headlines. `default` is qualified (`loan default`, `payment
@@ -1229,7 +1245,7 @@ Generated content is expensive, so nearly everything is cached for a day.
   | `market-analytics-visuals-v1` + scope | Derived chart series for the Visual Analysis panel |
   | `executive-brief-v4` + scope | Ranked change events and non-reporting institutions for the Executive Brief. **Never populated** — the view is unreachable and the cron no longer warms it |
   | `underwriter-workbench-v1` + scope | Latest-quarter rows for the whole scope, for the Underwriter Workbench. **Never populated**, as above |
-  | `legal-updates-v9` | Legal Landscape items: deduped, freshness-filtered, relevant to the firm's operations, source-verified, and — for legislation — checked against the bill record. Exposure counts are **not** in here, see `resolveLegalApplicability`. Bumped to `v9` when Florida bills and Federal Register rulemaking began coming from records and the item shape changed; `v7` entries hold the fabricated bills, and the Data Cache survives deploys |
+  | `legal-updates-v10` | Legal Landscape items: deduped, freshness-filtered, relevant to the firm's operations, source-verified, and — for legislation — checked against the bill record. Exposure counts are **not** in here, see `resolveLegalApplicability`. Bumped to `v10` when monthly enforcement roundups began to be admitted and the Enforcement prompt changed; `v9` when Florida bills and Federal Register rulemaking began coming from records; `v7` entries hold the fabricated bills, and the Data Cache survives deploys |
 
   `market-analytics-report-data` is keyed by scope rather than by day and revalidates every six
   hours, since FDIC publishes quarterly. **Bump its version whenever the scoring changes**, or cached

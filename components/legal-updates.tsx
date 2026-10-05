@@ -39,7 +39,7 @@ const SECTIONS = [
   {
     key: "legislative" as const,
     label: "Legislative Tracker",
-    description: "Florida and federal bills with active movement affecting foreclosure, lending, property rights, and CRE",
+    description: "Florida and federal bills this session affecting foreclosure, lending, property rights, and CRE",
     Icon: BookOpen,
     color: "text-violet-600",
     badgeClass: "bg-violet-50 text-violet-700 border-violet-200",

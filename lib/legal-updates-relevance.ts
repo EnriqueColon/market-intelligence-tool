@@ -147,6 +147,31 @@ const INDIVIDUAL_ACTION_TERMS = [
 const INDIVIDUAL_ACTION_PATTERN = new RegExp(INDIVIDUAL_ACTION_TERMS.join("|"), "i")
 
 /**
+ * The OCC and FDIC do not announce enforcement actions one at a time. Each publishes a monthly
+ * roundup — "OCC Enforcement Actions for July 2026", "FDIC Makes Public August Enforcement
+ * Actions" — listing every consent order, civil money penalty and prohibition order of the month
+ * on one page. The page is the record; there is no per-action release behind it to cite instead.
+ *
+ * Read as an item, a roundup fails both gates below for reasons that have nothing to do with what
+ * is on the page. Its title names a month, not a subject, so it is never on topic by its own words;
+ * and its summary almost always mentions a prohibition order, because almost every month has one,
+ * so it reads as an action against a person. Live, that left the section with nothing from the
+ * regulators at all — three runs, every roundup dropped — while the model had found and cited the
+ * real pages.
+ *
+ * A month name alongside "enforcement actions" is what a roundup title has that a single action's
+ * does not ("OCC Enforcement Action Against United Texas Bank" has neither). The match is on the
+ * title only, where the publisher named the thing.
+ */
+const MONTHS =
+  "(january|february|march|april|may|june|july|august|september|october|november|december)"
+
+const ENFORCEMENT_DIGEST_PATTERN = new RegExp(
+  `\\b${MONTHS}\\b.*\\benforcement actions\\b|\\benforcement actions\\b.*\\b${MONTHS}\\b`,
+  "i"
+)
+
+/**
  * Subjects ruled out of scope, matched against the title only.
  *
  * Dropping the residential terms from the relevance list stopped those items being *admitted* on
@@ -186,6 +211,11 @@ export type RelevanceCandidate = {
   status?: string
 }
 
+/** True for a regulator's monthly enforcement roundup, which is admitted as one item on its own. */
+export function isEnforcementDigest(item: RelevanceCandidate): boolean {
+  return ENFORCEMENT_DIGEST_PATTERN.test(item.title || "")
+}
+
 /** True for an action against a named individual rather than an institution or a rule. */
 export function isIndividualAction(item: RelevanceCandidate): boolean {
   return INDIVIDUAL_ACTION_PATTERN.test(describedBy(item))
@@ -217,9 +247,14 @@ export function isCreRelevant(item: RelevanceCandidate): boolean {
 /**
  * The single question the feed acts on: would this change how the firm operates?
  *
- * On topic and about an institution, a rule or a case — not about one person's licence.
+ * On topic and about an institution, a rule or a case — not about one person's licence. A
+ * regulator's monthly roundup passes on its own: it is the section's own subject, published by the
+ * primary regulator, and the only form in which most bank enforcement actions are ever announced.
+ * What it contains that month is for the reader to see on the page; the feed does not pretend to
+ * know, and the summary is written to say what the page is, not to pick an action out of it.
  */
 export function bearsOnFirmOperations(item: RelevanceCandidate): boolean {
+  if (isEnforcementDigest(item)) return true
   return isCreRelevant(item) && !isIndividualAction(item)
 }
 

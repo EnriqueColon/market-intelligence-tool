@@ -4,6 +4,7 @@ import { test } from "node:test"
 import {
   bearsOnFirmOperations,
   isCreRelevant,
+  isEnforcementDigest,
   isIndividualAction,
   partitionByRelevance,
 } from "./legal-updates-relevance.ts"
@@ -272,4 +273,54 @@ test("the status is read as a heading", () => {
     }),
     true
   )
+})
+
+test("a regulator's monthly roundup is admitted as one item on its own", () => {
+  // Live, three runs in a row: every roundup the model found and correctly cited was dropped.
+  // The title names a month rather than a subject, and the summary leads with that month's
+  // prohibition order because almost every month has one. Neither says anything about the page.
+  const occ = {
+    title: "OCC Enforcement Actions for June 2026",
+    status: "Enforcement Actions Announced",
+    summary:
+      "The OCC announced enforcement actions for June 2026, including an Order of Prohibition against a former Senior Mortgage Lending Officer at Quontic Bank.",
+  }
+  assert.ok(isEnforcementDigest(occ))
+  assert.ok(isIndividualAction(occ), "the summary alone still reads as an action against a person")
+  assert.equal(isCreRelevant(occ), false, "and nothing in it is on topic by its own words")
+  assert.ok(bearsOnFirmOperations(occ), "but the roundup passes as the section's own subject")
+
+  // The FDIC puts the month first.
+  assert.ok(isEnforcementDigest({ title: "FDIC Makes Public August Enforcement Actions" }))
+  assert.ok(
+    isEnforcementDigest({
+      title: "FDIC Releases List of Enforcement Actions Taken in September 2026",
+    })
+  )
+})
+
+test("a single action is not a roundup, and is judged on its own terms", () => {
+  // The same month's page, split by the model into one item per action. Each is judged as the
+  // action it is: a BSA/AML order is off topic, a prohibition order is about a person.
+  assert.equal(isEnforcementDigest({ title: "OCC Enforcement Action Against United Texas Bank" }), false)
+  assert.equal(
+    bearsOnFirmOperations({
+      title: "OCC Enforcement Action Against United Texas Bank",
+      status: "Cease and Desist Order Issued",
+      summary: "Deficiencies in its Bank Secrecy Act/anti-money laundering compliance program.",
+    }),
+    false
+  )
+  assert.equal(
+    bearsOnFirmOperations({
+      title: "OCC Enforcement Action Against Quontic Bank",
+      status: "Order of Prohibition Issued",
+      summary: "Order of Prohibition against a former Senior Mortgage Lending Officer.",
+    }),
+    false
+  )
+  // A month in the title is not enough without the roundup's own phrase.
+  assert.equal(isEnforcementDigest({ title: "Open Chapter 11 Cases in Minnesota as of October 2, 2026" }), false)
+  // "May" is a month and a verb; the roundup phrase must be there too.
+  assert.equal(isEnforcementDigest({ title: "Bank may face enforcement over CRE concentration" }), false)
 })

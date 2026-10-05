@@ -165,6 +165,8 @@ Return ONLY valid JSON:
 
 Every item must concern an institution, a rule or a case — never one individual. Removal-and-prohibition orders, personal cease-and-desist orders and civil money penalties against a named person are out of scope regardless of what the underlying conduct involved: they decide whether one person may work in banking and change nothing about buying notes or working out loans. These are discarded before display, so including them only costs you one of your five slots.
 
+The OCC and FDIC announce most actions only in a monthly roundup ("OCC Enforcement Actions for July 2026", "FDIC Makes Public August Enforcement Actions"). Report each roundup as one item, titled as the regulator titled it, dated to its release. Summarise the page as a whole — how many actions, and which institutions received consent orders or cease-and-desist orders — and name no individual: a roundup is not an action against a person even when the page lists prohibition orders. Do not split a roundup into one item per action.
+
 Report the most recent action in a matter, not the matter's origin.
 
 For each item include:

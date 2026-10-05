@@ -26,6 +26,7 @@ import { dedupeByTitle, isStale } from "../lib/legal-updates-filter"
 import {
   bearsOnFirmOperations,
   isCreRelevant,
+  isEnforcementDigest,
   isIndividualAction,
 } from "../lib/legal-updates-relevance"
 import { LEGAL_SECTIONS, type LegalSection, windowFor } from "../lib/legal-updates-sections"
@@ -222,6 +223,7 @@ async function main() {
     const filterDays = windowFor(r.section).filterDays
     r.items.forEach((it, i) => {
       const old = isStale(it.date, now.getTime(), filterDays)
+      const digest = isEnforcementDigest(it)
       const topical = isCreRelevant(it)
       const person = isIndividualAction(it)
       total += 1
@@ -234,9 +236,10 @@ async function main() {
       if (test) scoped += 1
       // PERSON is printed separately from OFF because the two are worth different reactions: OFF
       // means the term list did not recognise the subject, PERSON means it did and rejected it.
+      // DIGEST is a regulator's monthly roundup, admitted whatever the other two would have said.
       const flags = [
         old ? "OLD" : "IN",
-        person ? "PERSON" : topical ? "CRE" : "OFF",
+        digest ? "DIGEST" : person ? "PERSON" : topical ? "CRE" : "OFF",
         verdicts[i].toUpperCase(),
       ]
       console.log(
