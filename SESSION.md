@@ -37,6 +37,26 @@ retried once.
 **The Legislative Tracker header** no longer promises "active movement" over bills that died in
 March; it says "this session". One line in `components/legal-updates.tsx`.
 
+**Rule cards now show the record and summarise the rule, not its abstract** (`da82d42`, on `dev`).
+Asked how we knew the escrow-rule summary was true, the honest answer was: the facts are the
+Federal Register's, the prose is the model paraphrasing a 70-word agency abstract, and the tool had
+never read the rule. The same API call that gives the title gives the action line, citation, CFR
+parts amended, docket, RIN, page count and the official PDF, all of which were being discarded; the
+card now lists them under the source line, untouched by any model. And every document has a
+plain-text version, so `selectRuleText` takes its explanatory sections — "Description of the Final
+Rule", "Overview of the Proposal", Introduction, Background, not the administrative boilerplate or
+the regulatory text — capped at 6,000 words, and the model is given that to condense into a summary
+and up to five `details`, with the list discarded for any rule whose text was not fetched. The
+contents-list and restarting-numeral traps in the Federal Register's plain text were found by
+testing against seven live documents, 8k to 116k words; both are handled and tested. Live on the
+escrow rule: eight record facts, 6,016 words selected, five details, every spot-checked point
+traced to the text, 9k input tokens. Cache key `v11`.
+
+Also found on the way: the escrow rule had been rendering under its *correction's* date and text.
+`C1-2026-10036` is a one-page typo fix with no abstract; the later-date-wins dedupe had let it
+beat the rule it corrects. Corrections now yield to their original, which carries "Corrected
+2026-06-29" with a link.
+
 Open: the roundups' "why it matters" is generic ("highlights the OCC's commitment to integrity").
 The model has nothing specific to say about a page it is told not to pick an action out of, and
 the field may be better suppressed for digests than written. Decide after seeing it on the
