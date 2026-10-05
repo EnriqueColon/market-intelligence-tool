@@ -14,6 +14,13 @@ Shipped the morning's work to production first: `main` fast-forwarded `9faaf35` 
 first release since 09-29. `ROLLBACK.md` now records that `9faaf35` will no longer build (Node 20
 pin) and needs `a36ff81` cherry-picked before it can be a target.
 
+**Released at 13:20**: everything below went to production in one fast-forward, `75959a2` →
+`2425d4c`, after review on the preview. `main` and `dev` are level. The five behavioural commits
+(`a01d2a5`, `da82d42`, `a313d11`, `671a877`, `b2b08e9`) are a set that reverts cleanly in reverse
+order; `a36ff81` is the production state before them. First Legal Landscape load after the deploy
+pays govtrack's cold start and now also GPO's, the Federal Register's and flsenate.gov's fetches,
+then is cached for the day under `legal-updates-v14`.
+
 Then the two items left open last week, both on `dev` as `a01d2a5`, not yet in production.
 
 **Monthly enforcement roundups now render.** The description carried forward from 09-30 — "dropped

@@ -7,7 +7,7 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
-| `main` | `a36ff81` | Production | https://market-intelligence-tool-gilt.vercel.app |
+| `main` | `b2b08e9` | Production | https://market-intelligence-tool-gilt.vercel.app |
 | `dev` | `b2b08e9` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 This table names the newest commit on each branch that **changes behaviour**; documentation-only
@@ -15,15 +15,17 @@ commits sit on top of it and are deliberately not tracked here, because amending
 SHA and the table then reads as stale when nothing has moved. Confirm with
 `git log --format='%h|%ci|%s'` rather than trusting the previous entry — this has drifted twice.
 
-**`dev` is five behavioural commits ahead as of the afternoon of 2026-10-05**: `a01d2a5`, which
-admits the OCC's and FDIC's monthly enforcement roundups as single items and rewords the
+**`main` and `dev` are level at `2425d4c` as of 13:20 on 2026-10-05.** The afternoon's five
+behavioural commits went to production in one fast-forward (`75959a2` → `2425d4c`): `a01d2a5`,
+which admits the OCC's and FDIC's monthly enforcement roundups as single items and rewords the
 Legislative Tracker header; `da82d42`, which gives Federal Register cards their record facts and a
 summary of the rule's own text; `a313d11`, which does the same for Florida bills (record from
 `getBill`, staff analysis as the text) and reads the enforcement roundup pages instead of recalling
 them; `671a877`, which tells the Legislative Tracker to say when the Florida session has ended
 and what each dead bill's record signals; and `b2b08e9`, which gives federal bill cards their
 record, text, report and CRS summary from GPO bulk data. They are a set and revert cleanly in
-reverse order. Before that, `main` fast-forwarded from `9faaf35` to `4ca86dc`,
+reverse order; `a36ff81` (the Node 24 pin) is the last production state before them and builds.
+Earlier the same day, `main` fast-forwarded from `9faaf35` to `4ca86dc`,
 taking everything from 09-29 to 10-05 in one release: the per-section windows and the always-rendered
 sections, the computed exposure counts, the removal of the department model and of the two lens
 tabs, the matched peer cohort in the institution drawer, then the week's Legal Landscape work — the
@@ -31,8 +33,7 @@ relevance gate, the bill-identity guard, federal bills from govtrack, Florida bi
 rulemaking from the Federal Register, bill status tracking — and the Node 24 pin without which none
 of it could have been deployed.
 
-The newest commit changing application behaviour is **`b2b08e9`** on `dev` and **`a36ff81`** in
-production. The previous
+The newest commit changing application behaviour is **`b2b08e9`**, on both branches. The previous
 production state was `9faaf35`, and it is **no longer a clean rollback target**: it carries the
 Node 20 pin and Vercel will refuse to build it. See the `a36ff81` row below.
 
@@ -171,11 +172,11 @@ to `4ca86dc`. It is kept as the record of what each commit does and what reverti
 
 | Commit | Date | Summary |
 | --- | --- | --- |
-| `b2b08e9` | 10-05 | **Not yet in production.** Federal bill cards list the record (sponsor, cosponsors, committees, how each chamber passed it, last action, identical bill, report, text, CRS summary) from GPO's keyless bulk data in `lib/legal-updates-govinfo.ts`, and the model summarises the CRS summary, committee report and bill text into `details`, labelled with what was read (`LegalItem.detailsSource`, which also relabels Florida and roundup details). Removes the govtrack-only prompt from `lib/legal-updates-legislation.ts`. Cache key `v14`. Revert cost: federal cards back to four facts and no details; Florida and roundup details labelled "From the rule text" again. `npm run test:legal-govinfo`. |
-| `671a877` | 10-05 | **Not yet in production.** Between Florida sessions, when every Florida bill on the Legislative Tracker is dead, a line above the cards says the session has ended, none has effect, and filing for next year opens in the autumn (`sectionContext.legislative`); a "Possible intent" block below the cards gives one record-derived sentence per dead bill on how far it got (`LegalItem.intent`, from `describeIntent`). Both self-clear once a live bill appears. Cache key `v13`. **Safe to revert in isolation**: the fields are optional and absent ones render nothing. `npm run test:legal-florida`. |
-| `a313d11` | 10-05 | **Not yet in production.** Florida bill cards list the record (primary sponsors, filed, companion, last roll call, latest text, latest staff analysis) and the model summarises the staff analysis — a PDF read with `pdf-parse` through `lib/legal-updates-pdf.ts` — into `details`. Enforcement roundup pages are fetched after verification and the model reports what they list, one bullet per institutional action. Cache key `v12`. Revert cost: Florida cards back to a one-line description; roundup summaries back to the model's recollection of the page. |
-| `da82d42` | 10-05 | **Not yet in production.** Federal Register cards list the record's own facts (action, citation, CFR parts, docket, RIN, pages, correction, PDF) and the model summarises the rule's explanatory text — selected by section, capped at 6,000 words — into a summary and up to five `details`, instead of paraphrasing the abstract. Corrections (`C1-…`) yield to the document they correct. Cache key `v11`. Revert cost: thinner cards; the escrow rule goes back to rendering under its correction's date. |
-| `a01d2a5` | 10-05 | **Not yet in production.** Admits a regulator's monthly enforcement roundup ("OCC Enforcement Actions for July 2026") as one item, bypassing the topic and individual-action gates that had dropped every one of them; tells the Enforcement prompt to report roundups whole and name no individual; cache key `v10`. Also rewords the Legislative Tracker header from "with active movement" to "this session". Revert cost: the Enforcement section loses everything from the OCC and FDIC again. |
+| `b2b08e9` | 10-05 | In production since 10-05 13:20. Federal bill cards list the record (sponsor, cosponsors, committees, how each chamber passed it, last action, identical bill, report, text, CRS summary) from GPO's keyless bulk data in `lib/legal-updates-govinfo.ts`, and the model summarises the CRS summary, committee report and bill text into `details`, labelled with what was read (`LegalItem.detailsSource`, which also relabels Florida and roundup details). Removes the govtrack-only prompt from `lib/legal-updates-legislation.ts`. Cache key `v14`. Revert cost: federal cards back to four facts and no details; Florida and roundup details labelled "From the rule text" again. `npm run test:legal-govinfo`. |
+| `671a877` | 10-05 | In production since 10-05 13:20. Between Florida sessions, when every Florida bill on the Legislative Tracker is dead, a line above the cards says the session has ended, none has effect, and filing for next year opens in the autumn (`sectionContext.legislative`); a "Possible intent" block below the cards gives one record-derived sentence per dead bill on how far it got (`LegalItem.intent`, from `describeIntent`). Both self-clear once a live bill appears. Cache key `v13`. **Safe to revert in isolation**: the fields are optional and absent ones render nothing. `npm run test:legal-florida`. |
+| `a313d11` | 10-05 | In production since 10-05 13:20. Florida bill cards list the record (primary sponsors, filed, companion, last roll call, latest text, latest staff analysis) and the model summarises the staff analysis — a PDF read with `pdf-parse` through `lib/legal-updates-pdf.ts` — into `details`. Enforcement roundup pages are fetched after verification and the model reports what they list, one bullet per institutional action. Cache key `v12`. Revert cost: Florida cards back to a one-line description; roundup summaries back to the model's recollection of the page. |
+| `da82d42` | 10-05 | In production since 10-05 13:20. Federal Register cards list the record's own facts (action, citation, CFR parts, docket, RIN, pages, correction, PDF) and the model summarises the rule's explanatory text — selected by section, capped at 6,000 words — into a summary and up to five `details`, instead of paraphrasing the abstract. Corrections (`C1-…`) yield to the document they correct. Cache key `v11`. Revert cost: thinner cards; the escrow rule goes back to rendering under its correction's date. |
+| `a01d2a5` | 10-05 | In production since 10-05 13:20. Admits a regulator's monthly enforcement roundup ("OCC Enforcement Actions for July 2026") as one item, bypassing the topic and individual-action gates that had dropped every one of them; tells the Enforcement prompt to report roundups whole and name no individual; cache key `v10`. Also rewords the Legislative Tracker header from "with active movement" to "this session". Revert cost: the Enforcement section loses everything from the OCC and FDIC again. |
 | `a36ff81` | 10-05 | Pins Node **24.x** in `engines`; Vercel has retired 20 and refused to build `fe1cee1`. **Do not revert past this** — any commit with the `20.x` pin will fail to build on Vercel, which also means `main` as it stands today cannot be redeployed from a fresh build. If production must be rolled back to a pre-10-05 commit, cherry-pick this one onto it first. |
 | `a91bfe1` | 09-30 | **One relevance gate** — a heading read on every term, a body only on the core ones — replacing the two-gate arrangement `05b51f3` introduced a few hours earlier, after the model path admitted a stablecoin proposal on "capital requirements" in its body. Also restricts Federal Register rulemaking to the financial regulators (OCC, FDIC, Fed, CFPB, FHFA, HUD, Treasury, NCUA), which is what removed a Farm Credit Administration rule. **Reverting readmits both** and nothing else; safe in isolation. `npm run test:legal-relevance`, `npm run verify:legal-freshness`. |
 | `c22b06a` | 09-30 | Three rendering fixes in the record-sourced items: the model's `summaries` wrapper is optional on the way back (its absence had every Florida bill rendering as raw description with no "why it matters"), LegiScan HTML entities are decoded, and a deduped Federal Register rule inherits the abstract from whichever copy has one. **Safe to revert in isolation**, at the cost of those three defects reappearing. `npm run test:legal-florida`, `npm run test:legal-fedreg`. |
