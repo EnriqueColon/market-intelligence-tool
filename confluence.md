@@ -333,6 +333,26 @@ form. Capped at 5,000 words. A bill that never reached a committee has no analys
 five live bills, all of which died unheard — and its card carries no `details`, by design: the list
 is discarded for any bill whose analysis was not read, so a details block means it was.
 
+**Between sessions the Tracker says so, and says what the dead bills signal.** Florida's regular
+session runs sixty days in the spring and filing for the next one opens in the autumn, so for
+roughly half of every year every Florida bill the Tracker can show is one that lapsed in March —
+"Died in Judiciary" is the clerk's phrase for a bill still sitting in that committee when the
+session ended. Shown as five cards with a status, they read as five live bills. Two things are
+added, both from the record and neither through a model. `describeFloridaSessionState` returns a
+line for the top of the section when *every* Florida bill on it is dead (`isDeadStatus`: "Died in
+…", "Withdrawn from consideration", "Failed", "Vetoed"): the session has ended, none of these has
+effect, filing for next year's session usually opens in the autumn. It travels as
+`sectionContext.legislative`, distinct from `sectionNotes` because it frames a section that has
+items rather than explaining one that has none, and `legal-updates.tsx` renders it above the cards.
+And `describeIntent` writes one sentence per dead bill on how far it got — the last roll call with
+its tally, where it died, the companion — rendered once below the cards as a "Possible intent"
+block, framed as signals with no legal effect. The lines are procedural on purpose: HB 759 "Passed
+the House 114–0 on 2026-02-25, then died in Rules; a bill that clears one chamber is commonly
+refiled" is a different thing from SB 300 "Filed 2025-10-28; died in Judiciary without a hearing or
+a vote", and the record states which. It says nothing about *why* a bill stopped, because the
+record does not know. A live bill carries no intent line; its status is the story. Both disappear
+on their own once a bill with a live status enters the list, which is what the autumn filing will do.
+
 Bill numbers are converted on the way in. LegiScan writes `H0011`, Florida writes "HB 11", and so
 does flsenate.gov — which matters beyond presentation, because the identity guard reads the number
 back out of the rendered title and looks for it on the cited page in the form the page prints.
@@ -588,8 +608,10 @@ pins it to January 1, so "Fall 2026" becomes 2026-01-01 — early enough to with
 the tab rendered only sections that had items, so an emptied Legislative Tracker left no trace
 beyond a note at the top of the page, which read as an error rather than an answer. The action now
 returns `sectionNotes` keyed by section alongside the feed-wide `notes`, and `legal-updates.tsx`
-renders the matching note inside the section's own dashed placeholder. Keep the two apart: `notes`
-is for feed-wide faults such as a missing API key, `sectionNotes` is for an ordinary quiet section.
+renders the matching note inside the section's own dashed placeholder. Keep the three apart: `notes`
+is for feed-wide faults such as a missing API key, `sectionNotes` is for an ordinary quiet section,
+and `sectionContext` is a line above a section that *has* items but needs framing before they are
+read — today only the Legislative Tracker between Florida sessions, see above.
 
 The placeholder distinguishes two cases that previously looked identical — the feed found nothing,
 or the reader's own jurisdiction filter hid what it found. When the feed found nothing it names
@@ -1325,7 +1347,7 @@ Generated content is expensive, so nearly everything is cached for a day.
   | `market-analytics-visuals-v1` + scope | Derived chart series for the Visual Analysis panel |
   | `executive-brief-v4` + scope | Ranked change events and non-reporting institutions for the Executive Brief. **Never populated** — the view is unreachable and the cron no longer warms it |
   | `underwriter-workbench-v1` + scope | Latest-quarter rows for the whole scope, for the Underwriter Workbench. **Never populated**, as above |
-  | `legal-updates-v12` | Legal Landscape items: deduped, freshness-filtered, relevant to the firm's operations, source-verified, and — for legislation — checked against the bill record. Exposure counts are **not** in here, see `resolveLegalApplicability`. Bumped to `v12` when Florida bills gained record facts and staff-analysis details and enforcement roundups began to be read from their pages; `v11` when Federal Register items gained `record` facts and `details` from the full text (item shape changed); `v10` when monthly enforcement roundups began to be admitted; `v9` when Florida bills and Federal Register rulemaking began coming from records; `v7` entries hold the fabricated bills, and the Data Cache survives deploys |
+  | `legal-updates-v13` | Legal Landscape items: deduped, freshness-filtered, relevant to the firm's operations, source-verified, and — for legislation — checked against the bill record. Exposure counts are **not** in here, see `resolveLegalApplicability`. Bumped to `v13` when Florida items gained `intent` and the response gained `sectionContext`; `v12` when Florida bills gained record facts and staff-analysis details and enforcement roundups began to be read from their pages; `v11` when Federal Register items gained `record` facts and `details` from the full text (item shape changed); `v10` when monthly enforcement roundups began to be admitted; `v9` when Florida bills and Federal Register rulemaking began coming from records; `v7` entries hold the fabricated bills, and the Data Cache survives deploys |
 
   `market-analytics-report-data` is keyed by scope rather than by day and revalidates every six
   hours, since FDIC publishes quarterly. **Bump its version whenever the scoring changes**, or cached

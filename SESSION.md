@@ -83,6 +83,25 @@ releases give counts and link to a separate list; the model reports the counts a
 
 Cache key `v12`. 86 `tsc` errors before and after, all pre-existing; `next build` passes.
 
+**The Tracker now says the session is over, and what the dead bills signal** (`671a877`, on `dev`).
+Asked what "Died in Judiciary" meant, and then whether a dead bill was any use to a reader: it is
+the clerk's phrase for a bill still in that committee when the session ended on 13 March, and all
+five Florida bills on the section are in that state, which the five cards did not convey. Asked
+for a note saying filing for 2027 usually opens in the autumn, and a "possible intent" section
+below the bills. Both come from the record, no model. `describeFloridaSessionState` writes the
+note when every Florida bill is dead — session year from the items' dates, so it reads "2026 has
+ended … filing for the 2027 session usually opens in the autumn" without a hard-coded year — and
+it travels as a new `sectionContext` field, kept apart from `sectionNotes` because it frames a
+section that has items. `describeIntent` writes one sentence per dead bill from its last roll
+call, where it died and its companion, and the component lists them once below the cards under
+"Possible intent", labelled as signals with no legal effect. Live, the five lines split exactly as
+the record does: HB 759 passed the House 114–0 then died in Senate Rules, HB 1423 cleared a
+subcommittee 14–3 then died in Judiciary, and HB 1227, SB 300 and SB 956 were filed and never
+heard. Nothing is said about why; the record does not know. Both blocks vanish on their own when a
+live bill enters the list. LegiScan has no 2027 session yet — newest is "2026 Sixth Special
+Session" — so this is what the Florida half will show until filing opens. Cache key `v13`; three
+new tests; `next build` passes.
+
 Noticed, not touched: `app/api/research/summarize-report/route.ts` calls `pdf-parse` through its
 v1 default export, which v2 (installed) does not have — `tsc` flags it and the route's fast path
 cannot be working. Separate concern, separate fix.
