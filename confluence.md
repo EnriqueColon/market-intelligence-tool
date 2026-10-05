@@ -302,9 +302,48 @@ the regulatory prompt and is not meant to: the Federal Register carries rulemaki
 FDIC's Financial Institution Letters, OCC bulletins and supervisory guidance — a large part of what
 that section is for — never appear in it. So the record supplies what it has and the model still
 goes looking for the rest. Deduplication is by document number and then by title, because a rule is
-genuinely republished: "Real Estate Lending Escrow Accounts" appeared on 2026-05-19 under the
-Treasury Department and again on 2026-06-29 under Treasury and the Comptroller, two document
-numbers for one rule.
+genuinely republished: "Real Estate Lending Escrow Accounts" appeared on 2026-05-19 and again on
+2026-06-29, two document numbers for one rule. **The second was a correction**, and a correction
+yields to its original. `C1-2026-10036` is a one-page notice fixing a typographical error, with no
+abstract and 197 words of text; letting the later date win put a real OCC rule up under the
+correction's date with the correction's text as the thing to read. The record says which documents
+are corrections (`correction_of`), so the original wins outright and carries "Corrected 2026-06-29"
+with a link. A correction that arrives alone — its original outside the search window — has its
+original fetched by number.
+
+#### A rule's card shows the record, then the text, then the model
+
+Three layers, each weaker than the one above it, and the card says which is which.
+
+**The record's facts** are listed under the source line exactly as the Federal Register states
+them: the agency's action line ("Final rule"), the citation (91 FR 29340), the CFR parts amended
+("12 CFR Parts 34 and 160"), docket, RIN, page count, correction date and the official govinfo PDF.
+`describeRuleRecord` builds the list and nothing in it has been through a model; it cannot be wrong
+in the way prose can. The same API call that returns the title returns all of it, so this costs
+nothing.
+
+**The rule's own explanatory text** is what the model is given to summarise, in place of the
+abstract. Every Federal Register document has a plain-text version (`raw_text_url`), and
+`selectRuleText` takes the parts of it that explain the rule: the sections headed "Description of
+the Final Rule", "Overview of the Proposal", "Section-by-Section …" or "Changes to …" first, then
+Introduction and Background, then anything else that is not procedure — the Paperwork Reduction
+Act, Regulatory Flexibility Act and Administrative Law sections every rule carries are left out, as
+is the regulatory text from "List of Subjects" on. Capped at 6,000 words, which is nine thousand
+tokens and a fraction of a cent per rule. The Federal Register's text has a table of contents that
+repeats every heading and sub-sections whose Roman numerals restart ("1. BMA transactions" nested
+three deep prints as "I. BMA transactions"); `splitRuleSections` takes the body to begin at the
+first heading already seen and accepts a body heading only when its numeral is the next expected.
+Measuring the gap between headings did not work — the contents list carries lettered sub-entries
+that run to paragraphs. Tested against seven live documents from 8 to 116 thousand words.
+
+**The model's prose** is a summary, a "why it matters", and — only where the text was fetched — a
+list of up to five `details`: who the rule covers, what it requires or permits, the thresholds,
+amounts and dates, and what the agency said to the comments it received. The prompt tells it to
+return an empty list where no text is given and never to fill it from memory, and the action
+discards the list anyway for any rule whose text it did not have, so a `details` block on a card
+means the model read the document. It is still the model's reading: the spot checks on the escrow
+rule traced every point to the text, but the card labels the list "From the rule text" and puts
+the PDF one click away for a reason.
 
 **For legislation the model is a fallback, not a supplement.** Both jurisdictions now have a record,
 so asking as well would put one bill on the page twice under two spellings of its title —
@@ -1245,7 +1284,7 @@ Generated content is expensive, so nearly everything is cached for a day.
   | `market-analytics-visuals-v1` + scope | Derived chart series for the Visual Analysis panel |
   | `executive-brief-v4` + scope | Ranked change events and non-reporting institutions for the Executive Brief. **Never populated** — the view is unreachable and the cron no longer warms it |
   | `underwriter-workbench-v1` + scope | Latest-quarter rows for the whole scope, for the Underwriter Workbench. **Never populated**, as above |
-  | `legal-updates-v10` | Legal Landscape items: deduped, freshness-filtered, relevant to the firm's operations, source-verified, and — for legislation — checked against the bill record. Exposure counts are **not** in here, see `resolveLegalApplicability`. Bumped to `v10` when monthly enforcement roundups began to be admitted and the Enforcement prompt changed; `v9` when Florida bills and Federal Register rulemaking began coming from records; `v7` entries hold the fabricated bills, and the Data Cache survives deploys |
+  | `legal-updates-v11` | Legal Landscape items: deduped, freshness-filtered, relevant to the firm's operations, source-verified, and — for legislation — checked against the bill record. Exposure counts are **not** in here, see `resolveLegalApplicability`. Bumped to `v11` when Federal Register items gained `record` facts and `details` from the full text (item shape changed); `v10` when monthly enforcement roundups began to be admitted; `v9` when Florida bills and Federal Register rulemaking began coming from records; `v7` entries hold the fabricated bills, and the Data Cache survives deploys |
 
   `market-analytics-report-data` is keyed by scope rather than by day and revalidates every six
   hours, since FDIC publishes quarterly. **Bump its version whenever the scoring changes**, or cached

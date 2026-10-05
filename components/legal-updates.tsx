@@ -136,11 +136,50 @@ function LegalCard({
         {item.source && (
           <p className="text-xs text-slate-500 mt-0.5">{item.source}</p>
         )}
+        {/* The record's own facts, as the source states them. Nothing here is written by a model. */}
+        {item.record && item.record.length > 0 && (
+          <dl className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500">
+            {item.record.map((fact) => (
+              <div key={fact.label} className="inline-flex items-baseline gap-1">
+                <dt className="font-medium text-slate-400">{fact.label}</dt>
+                <dd className="text-slate-600">
+                  {fact.url ? (
+                    <a
+                      href={fact.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline decoration-slate-300 underline-offset-2 hover:text-[#006D95]"
+                    >
+                      {fact.value}
+                    </a>
+                  ) : (
+                    fact.value
+                  )}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        )}
       </div>
 
       {/* Summary */}
       {item.summary && (
         <p className="text-sm text-slate-600 leading-relaxed">{item.summary}</p>
+      )}
+
+      {/* Points drawn from the document's own text. Present only when the text was actually read. */}
+      {item.details && item.details.length > 0 && (
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">From the rule text</p>
+          <ul className="mt-1 space-y-1 text-sm text-slate-600 leading-relaxed">
+            {item.details.map((point, i) => (
+              <li key={i} className="flex gap-2">
+                <span aria-hidden="true" className="mt-[7px] h-1 w-1 flex-shrink-0 rounded-full bg-slate-400" />
+                <span>{point}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       {/* Why It Matters callout */}

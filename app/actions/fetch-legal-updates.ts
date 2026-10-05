@@ -10,7 +10,10 @@ import {
   buildRuleSummaryPrompt,
   describeAgencies,
   describeRuleFromRecord,
+  describeRuleRecord,
   fetchFederalRules,
+  fetchRuleText,
+  type RecordFact,
 } from "@/lib/legal-updates-federal-register"
 import {
   buildFloridaSummaryPrompt,
@@ -49,6 +52,17 @@ export type LegalItem = {
   whyItMatters: string
   status?: string
   url?: string
+  /**
+   * Specific points drawn from the document's own text — who it covers, what it requires, which
+   * numbers and dates. Present only where the full text was fetched and the model was given it;
+   * never written from the abstract alone, and never from memory.
+   */
+  details?: string[]
+  /**
+   * The record's own facts about the document — citation, CFR parts amended, docket, length —
+   * exactly as the source states them. Nothing here has been through a model.
+   */
+  record?: RecordFact[]
   /**
    * What the document says about its own scope, if anything. Resolved against FDIC data by
    * `resolveLegalApplicability` at render time rather than here — see that action for why the
@@ -163,18 +177,21 @@ async function collectFederalBills(now: Date, filterDays: number): Promise<Legal
  * than derived so a model that invents a key, reorders the list or answers for only some of it
  * still lands each summary on the right item — and anything it added is ignored.
  */
+type RecordProse = { summary: string; whyItMatters: string; details?: string[] }
+
 async function summariseRecords(
   prompt: string,
-  keys: string[]
-): Promise<Map<string, { summary: string; whyItMatters: string }>> {
-  const out = new Map<string, { summary: string; whyItMatters: string }>()
+  keys: string[],
+  maxTokens = 1600
+): Promise<Map<string, RecordProse>> {
+  const out = new Map<string, RecordProse>()
   try {
     const parsed = await callOpenAiJson({
       system: "Return ONLY valid JSON. Do not add, rename or renumber the items you are given.",
       user: prompt,
       tier: "fast",
       temperature: 0.1,
-      maxTokens: 1600,
+      maxTokens,
       // No search: the facts are supplied, and the only task left is explanation.
       webSearch: false,
     })
@@ -189,10 +206,17 @@ async function summariseRecords(
     for (const key of keys) {
       const entry = (summaries as Record<string, unknown>)[key]
       if (!entry || typeof entry !== "object") continue
-      const { summary, whyItMatters } = entry as Record<string, unknown>
+      const { summary, whyItMatters, details } = entry as Record<string, unknown>
+      const points = Array.isArray(details)
+        ? details
+            .filter((d): d is string => typeof d === "string" && d.trim().length > 0)
+            .map((d) => d.trim())
+            .slice(0, 6)
+        : []
       out.set(key, {
         summary: typeof summary === "string" ? summary.trim() : "",
         whyItMatters: typeof whyItMatters === "string" ? whyItMatters.trim() : "",
+        details: points.length > 0 ? points : undefined,
       })
     }
   } catch {
@@ -201,9 +225,7 @@ async function summariseRecords(
   return out
 }
 
-function summariseBills(
-  bills: SourcedBill[]
-): Promise<Map<string, { summary: string; whyItMatters: string }>> {
+function summariseBills(bills: SourcedBill[]): Promise<Map<string, RecordProse>> {
   return summariseRecords(
     buildBillSummaryPrompt(bills),
     bills.map((b) => b.displayNumber)
@@ -259,13 +281,26 @@ async function collectFederalRules(now: Date, filterDays: number): Promise<Legal
   const rules = await fetchFederalRules(now, filterDays, bearsOnFirmOperations)
   if (rules.length === 0) return []
 
+  // The document's own explanatory text, so the model condenses the rule rather than the
+  // abstract of the rule. A fetch that fails leaves that rule on its abstract, as before.
+  const texts = new Map<string, string>()
+  await Promise.all(
+    rules.map(async (rule) => {
+      const text = await fetchRuleText(rule)
+      if (text) texts.set(rule.documentNumber, text)
+    })
+  )
+
   const prose = await summariseRecords(
-    buildRuleSummaryPrompt(rules),
-    rules.map((r) => r.documentNumber)
+    buildRuleSummaryPrompt(rules, texts),
+    rules.map((r) => r.documentNumber),
+    // Five rules, each with a summary, up to five points and a consequence.
+    3200
   )
 
   return rules.map((rule, idx) => {
     const written = prose.get(rule.documentNumber)
+    const record = describeRuleRecord(rule)
     return {
       id: `regulatory-fr-${idx}-${rule.documentNumber}`,
       section: "regulatory" as const,
@@ -275,6 +310,10 @@ async function collectFederalRules(now: Date, filterDays: number): Promise<Legal
       jurisdiction: "Federal" as const,
       summary: written?.summary || describeRuleFromRecord(rule),
       whyItMatters: written?.whyItMatters || "",
+      // Only where the model was actually given the text; a list written from an abstract would
+      // be the abstract restated as bullets, or worse, filled in.
+      details: texts.has(rule.documentNumber) ? written?.details : undefined,
+      record: record.length > 0 ? record : undefined,
       status: rule.commentsCloseOn
         ? `Comments close ${rule.commentsCloseOn}`
         : rule.effectiveOn
@@ -458,7 +497,7 @@ export async function fetchLegalUpdates(): Promise<LegalUpdatesResponse> {
   const day = newsCalendarDayET()
   return unstable_cache(
     async () => fetchLegalUpdatesImpl(),
-    ["legal-updates-v10", day],
+    ["legal-updates-v11", day],
     // 25h so the entry outlives the day and never expires just before the cron.
     { revalidate: 90000 }
   )()
