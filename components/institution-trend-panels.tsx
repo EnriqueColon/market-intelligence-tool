@@ -245,7 +245,54 @@ function CapitalStrip({ points }: { points: TrendPoint[] }) {
   )
 }
 
-export function InstitutionTrendPanels({ trend }: { trend: InstitutionTrend }) {
+export type TrendReading = { text: string; source: "model" | "fallback"; note?: string }
+
+/**
+ * The analyst reading under the panels. `undefined` while loading, `null`
+ * when nothing could be produced. Figures in a model reading have been checked
+ * against the table before it reaches here (see institution-trend-narrative).
+ */
+function AnalystReading({ reading }: { reading: TrendReading | null | undefined }) {
+  if (reading === null) return null
+  return (
+    <div className="rounded-md border border-slate-200/80 bg-white px-3 py-2">
+      <div className="flex items-baseline justify-between gap-2">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Analyst reading</p>
+        {reading && (
+          <p className="text-[10px] text-slate-500" title={reading.note}>
+            {reading.source === "model" ? "Generated from the eight quarters above; every figure checked against them" : "From the signals above"}
+          </p>
+        )}
+      </div>
+      {reading === undefined ? (
+        <div className="mt-2 space-y-1.5" aria-busy="true" aria-label="Loading reading">
+          <div className="h-3 w-full animate-pulse rounded bg-slate-100" />
+          <div className="h-3 w-11/12 animate-pulse rounded bg-slate-100" />
+          <div className="h-3 w-4/5 animate-pulse rounded bg-slate-100" />
+        </div>
+      ) : (
+        <div className="mt-1.5 space-y-2 text-sm leading-relaxed text-slate-700">
+          {reading.text
+            .split(/\n{2,}/)
+            .map((para) => para.trim())
+            .filter(Boolean)
+            .map((para, i) => (
+              <p key={i}>{para}</p>
+            ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export function InstitutionTrendPanels({
+  trend,
+  reading,
+}: {
+  trend: InstitutionTrend
+  /** Omit to render no reading block; `undefined` shows the loading state. */
+  reading?: TrendReading | null
+}) {
   const { points, verdict, leverageOnly } = trend
   return (
     <div className="@container space-y-2">
@@ -260,6 +307,7 @@ export function InstitutionTrendPanels({ trend }: { trend: InstitutionTrend }) {
         ))}
         <CapitalStrip points={points} />
       </div>
+      <AnalystReading reading={reading} />
       <p className="text-[11px] text-slate-500">
         Last {points.length} quarter{points.length === 1 ? "" : "s"} of Call Report data for this institution, newest at right.
         {leverageOnly

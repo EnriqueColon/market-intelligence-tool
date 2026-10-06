@@ -7,6 +7,13 @@ import { fetchAcquisitionsBy } from "@/app/services/fdic-structure-events"
 import { describeAcquisition, type StructureEvent } from "@/lib/fdic-structure-events"
 import type { CohortWatch } from "@/lib/analytics/cohort-watch"
 import { buildInstitutionTrend, type InstitutionTrend } from "@/lib/analytics/institution-trend"
+import {
+  NARRATIVE_SYSTEM,
+  buildNarrativeUserPrompt,
+  checkNarrative,
+  fallbackNarrative,
+} from "@/lib/analytics/institution-trend-narrative"
+import { callOpenAi, getOpenAiApiKey } from "@/lib/openai"
 import { fetchFDICData } from "@/lib/fdic-client"
 import { FDIC_ENDPOINTS, FDIC_FIELDS } from "@/lib/fdic-config"
 import { transformFinancialData } from "@/lib/fdic-data-transformer"
@@ -102,6 +109,15 @@ function trendWindowFilter(): string {
  */
 export async function getInstitutionTrend(cert: string): Promise<InstitutionTrendResult> {
   if (!cert) return { ok: false, error: "No institution selected." }
+  try {
+    return { ok: true, trend: await loadInstitutionTrend(cert) }
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Unable to load the institution's history." }
+  }
+}
+
+/** Cached per CERT and published quarter; throws rather than caching a failure. */
+async function loadInstitutionTrend(cert: string): Promise<InstitutionTrend> {
   const quarter = await getLatestFdicQuarter()
   const cached = unstable_cache(
     async () => {
@@ -120,9 +136,65 @@ export async function getInstitutionTrend(cert: string): Promise<InstitutionTren
     ["institution-trend-v1", cert, quarter],
     { revalidate: WATCH_REVALIDATE_SECONDS }
   )
+  return cached()
+}
+
+export type InstitutionTrendNarrative = {
+  text: string
+  /** `model` passed the figure check; `fallback` is built from the signals alone. */
+  source: "model" | "fallback"
+  /** Why the model's answer was not used, when it was not. */
+  note?: string
+}
+
+/**
+ * The analyst reading under the trend panels. The model sees only the eight
+ * quarters the panels plot; its answer is shown only if every figure in it is
+ * one from that table (`checkNarrative`), otherwise the deterministic reading
+ * built from the signals is shown instead. Cached per CERT and quarter for a
+ * week; a fallback produced by a model failure is not cached, so the next
+ * open tries again.
+ */
+export async function getInstitutionTrendNarrative(cert: string): Promise<InstitutionTrendNarrative | null> {
+  if (!cert) return null
+  let trend: InstitutionTrend
   try {
-    return { ok: true, trend: await cached() }
+    trend = await loadInstitutionTrend(cert)
+  } catch {
+    return null
+  }
+  if (trend.points.length < 2) return { text: fallbackNarrative(trend), source: "fallback" }
+  if (!getOpenAiApiKey()) {
+    return { text: fallbackNarrative(trend), source: "fallback", note: "No model configured." }
+  }
+  const quarter = await getLatestFdicQuarter()
+  const cached = unstable_cache(
+    async (): Promise<InstitutionTrendNarrative> => {
+      const text = await callOpenAi({
+        system: NARRATIVE_SYSTEM,
+        user: buildNarrativeUserPrompt(trend),
+        // One short, checked, week-cached call per bank: worth the full model.
+        // The mini tier misread a 0.7% allowance as "above the 1% screen".
+        model: process.env.OPENAI_TREND_MODEL?.trim() || "gpt-4.1",
+        temperature: 0.2,
+        maxTokens: 450,
+        timeoutMs: 30_000,
+      })
+      const check = checkNarrative(text, trend)
+      if (!check.ok) {
+        // Cache the fallback too: the same table will draw the same slip
+        // again, and the reader should not wait on it twice.
+        return { text: fallbackNarrative(trend), source: "fallback", note: `Model reading withheld — ${check.reason}.` }
+      }
+      return { text, source: "model" }
+    },
+    ["institution-trend-narrative-v1", cert, quarter],
+    { revalidate: WATCH_REVALIDATE_SECONDS }
+  )
+  try {
+    return await cached()
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : "Unable to load the institution's history." }
+    const message = error instanceof Error ? error.message : "model call failed"
+    return { text: fallbackNarrative(trend), source: "fallback", note: `Model reading unavailable — ${message}.` }
   }
 }

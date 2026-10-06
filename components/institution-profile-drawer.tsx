@@ -7,7 +7,9 @@ import { fetchNoncurrentDebugSnapshot } from "@/app/actions/fetch-fdic-data"
 import {
   getInstitutionHistory,
   getInstitutionTrend,
+  getInstitutionTrendNarrative,
   type InstitutionHistory,
+  type InstitutionTrendNarrative,
   type InstitutionTrendResult,
 } from "@/app/actions/market-analytics-watch"
 import { InstitutionTrendPanels, InstitutionTrendSkeleton } from "@/components/institution-trend-panels"
@@ -301,6 +303,8 @@ export function InstitutionProfileDrawer({
   const [fdicSnapshot, setFdicSnapshot] = useState<NoncurrentDebugSnapshot | null>(null)
   const [history, setHistory] = useState<InstitutionHistory | null>(null)
   const [trend, setTrend] = useState<InstitutionTrendResult | null>(null)
+  // `undefined` while the model is writing; `null` when nothing could be produced.
+  const [reading, setReading] = useState<InstitutionTrendNarrative | null | undefined>(undefined)
 
   const primaryRow = row ?? compareRows[0]
 
@@ -308,6 +312,7 @@ export function InstitutionProfileDrawer({
   // as the corporate history below. `null` while loading.
   useEffect(() => {
     setTrend(null)
+    setReading(undefined)
     if (!primaryRow) return
     let active = true
     getInstitutionTrend(primaryRow.id)
@@ -317,6 +322,15 @@ export function InstitutionProfileDrawer({
       })
       .catch((error: unknown) => {
         if (active) setTrend({ ok: false, error: error instanceof Error ? error.message : "Unable to load the trend." })
+      })
+    // The reading is a model call on top of the same cached quarters; it
+    // arrives after the panels and must never block them.
+    getInstitutionTrendNarrative(primaryRow.id)
+      .then((result) => {
+        if (active) setReading(result)
+      })
+      .catch(() => {
+        if (active) setReading(null)
       })
     return () => {
       active = false
@@ -623,7 +637,7 @@ export function InstitutionProfileDrawer({
                     {trend == null ? (
                       <InstitutionTrendSkeleton />
                     ) : trend.ok ? (
-                      <InstitutionTrendPanels trend={trend.trend} />
+                      <InstitutionTrendPanels trend={trend.trend} reading={reading} />
                     ) : (
                       <p className="text-xs text-slate-500">Trend unavailable: {trend.error}</p>
                     )}

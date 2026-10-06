@@ -61,6 +61,8 @@ export type CallOpenAiOptions = {
    * gpt-4.1-mini and gpt-4o-mini return 400 for `filters`.
    */
   searchFilterModel?: string
+  /** Exact model, overriding the tier. For call sites whose output is checked and cached. */
+  model?: string
   timeoutMs?: number
 }
 
@@ -251,7 +253,11 @@ export async function callOpenAi(options: CallOpenAiOptions): Promise<string> {
   }
 
   const unrestricted = () =>
-    postResponses(apiKey, buildBody(modelForTier(tier), webSearch ? [{ type: "web_search" }] : undefined), timeoutMs)
+    postResponses(
+      apiKey,
+      buildBody(options.model?.trim() || modelForTier(tier), webSearch ? [{ type: "web_search" }] : undefined),
+      timeoutMs
+    )
 
   if (!restrictSearch) return unrestricted()
 
