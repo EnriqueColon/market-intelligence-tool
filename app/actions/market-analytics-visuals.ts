@@ -37,7 +37,7 @@ export async function getAnalyticsVisuals(scope: string): Promise<AnalyticsVisua
   const quarter = await getLatestFdicQuarter()
   const cached = unstable_cache(
     () => computeVisuals(scope),
-    ["market-analytics-visuals-v1", scope, quarter],
+    ["market-analytics-visuals-v2", scope, quarter],
     { revalidate: VISUALS_REVALIDATE_SECONDS }
   )
   try {

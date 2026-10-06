@@ -8,6 +8,7 @@ import {
   type DispersionStats,
 } from "@/lib/opportunity-score-dispersion"
 import type { BankFinancialData } from "@/lib/fdic-data-transformer"
+import { headlineQuarter, pickHeadlineFiling } from "@/lib/analytics/headline-filing"
 import {
   computeOpportunityDistributions,
   computeOpportunityScore,
@@ -144,6 +145,10 @@ export async function buildExportData(scope: string): Promise<ExportData> {
     new Set(regionFinancials.map((item) => item.reportDate).filter(Boolean))
   ) as string[]
   const sortedQuarterDates = lastQuarterDates.sort((a, b) => (a < b ? 1 : -1)).slice(0, 8)
+  // The quarter every row in the cohort reports for. An institution without a
+  // filing for it — failed, merged, or late — is held out below rather than
+  // carried on an older filing under a current heading.
+  const headline = headlineQuarter(regionFinancials)
 
   const filteredFinancials = regionFinancials.filter((item) => {
     if (sortedQuarterDates.length > 0 && item.reportDate && !sortedQuarterDates.includes(item.reportDate)) return false
@@ -158,13 +163,9 @@ export async function buildExportData(scope: string): Promise<ExportData> {
 
   const rows: ExportRow[] = []
   grouped.forEach((items) => {
-    const sorted = [...items].sort((a, b) => {
-      const aDate = a.reportDate ? Date.parse(a.reportDate) : 0
-      const bDate = b.reportDate ? Date.parse(b.reportDate) : 0
-      return bDate - aDate
-    })
-    const latest = sorted[0]
-    const byDate = new Map(sorted.map((e) => [e.reportDate ?? "", e]))
+    const latest = pickHeadlineFiling(items, headline)
+    if (!latest) return
+    const byDate = new Map(items.map((e) => [e.reportDate ?? "", e]))
     const q3 = sortedQuarterDates[3]
     const niCurrent4 = sortedQuarterDates.slice(0, 4).map((d) => byDate.get(d)?.netIncome)
     const hasAll4 = niCurrent4.length === 4 && niCurrent4.every((v) => v != null && Number.isFinite(v))
@@ -266,14 +267,13 @@ export async function buildExportData(scope: string): Promise<ExportData> {
     sortedRows.map((r) => ({ row: r, value: r.capitalRatios?.creToEquity ?? null }))
   )
 
-  const latestById = new Map<string, BankFinancialData>()
-  filteredFinancials.forEach((item) => {
-    const existing = latestById.get(item.id)
-    const existingDate = existing?.reportDate ? Date.parse(existing.reportDate) : 0
-    const nextDate = item.reportDate ? Date.parse(item.reportDate) : 0
-    if (!existing || nextDate > existingDate) latestById.set(item.id, item)
+  // KPIs describe the same cohort as the rows: one headline-quarter filing per
+  // institution, nothing carried forward from an older quarter.
+  const latest: BankFinancialData[] = []
+  grouped.forEach((items) => {
+    const filing = pickHeadlineFiling(items, headline)
+    if (filing) latest.push(filing)
   })
-  const latest = Array.from(latestById.values())
   const average = (values: number[]) =>
     values.length > 0 ? values.reduce((sum, v) => sum + v, 0) / values.length : 0
 

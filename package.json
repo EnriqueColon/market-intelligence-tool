@@ -18,6 +18,7 @@
     "test:institution-change": "node --test --experimental-strip-types lib/scoring/institution-change.test.ts",
     "test:fdic-cre": "node --test --experimental-strip-types lib/fdic-cre.test.ts",
     "test:fdic-loan-quality": "node --test --experimental-strip-types lib/fdic-loan-quality.test.ts",
+    "test:headline-filing": "node --test --experimental-strip-types lib/analytics/headline-filing.test.ts",
     "audit:fdic-columns": "node scripts/audit-fdic-columns.mjs",
     "test:quarter": "node --test --experimental-strip-types lib/scoring/quarter.test.ts",
     "test:peer-cohort": "node --test --experimental-strip-types lib/scoring/peer-cohort.test.ts",

@@ -47,7 +47,7 @@ const REPORT_DATA_REVALIDATE_SECONDS = 60 * 60 * 6
 export async function buildReportData(scope: string): Promise<ReportData> {
   const cached = unstable_cache(
     () => computeReportData(scope),
-    ["market-analytics-report-data-v2", scope],
+    ["market-analytics-report-data-v3", scope],
     { revalidate: REPORT_DATA_REVALIDATE_SECONDS }
   )
   return cached()
