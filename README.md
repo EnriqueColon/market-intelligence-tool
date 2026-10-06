@@ -232,6 +232,7 @@ npm run test:opportunity-score # cohort scoring, including outlier compression
 npm run test:institution-change # threshold crossings, deterioration trends, brief ranking
 npm run test:fdic-cre         # what counts as CRE, and what must never be added to it
 npm run test:fdic-loan-quality # NPL, noncurrent, reserve and past-due denominators and units
+npm run test:headline-filing  # which filing represents a bank in the charts and exports, and who is held out
 npm run test:quarter          # FDIC report-date arithmetic
 npm run test:peer-cohort      # workbench peer selection, and what it refuses to relax
 npm run test:cre-downside     # the capital scenario, on both regulatory capital regimes

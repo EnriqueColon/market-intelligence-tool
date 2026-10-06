@@ -8,7 +8,45 @@ is it in now, and what is still open.
 
 ---
 
-## 2026-10-05, 14:35 (latest) — the load fix is in production
+## 2026-10-06, morning (latest) — the charts were ranking a bank that no longer exists
+
+Walked through the Market Analytics tab — where every figure comes from and how it is computed —
+and then looked hard at one: the CRE-to-Capital Ranking's leader, Community B&T West Georgia at
+710.3% CRE/(T1+T2). The figure is arithmetically right (CRE $25.8M against Tier 1 + Tier 2 of
+$3.6M, Tier 1 having fallen from $18.5M to $0.47M in a single quarter) but the bank failed on
+1 May 2026 (FDIC failure record, Anchor Bank acquirer, $97M estimated cost to the DIF). It was
+on the chart because the report path kept each institution's last filing even when that filing
+predated the quarter the rest of the page reports — the screening table already refused that, so
+the two halves of the tab disagreed about who was in the cohort. FDIC records 370 institutions
+going inactive inside the 27-month data window (236 mergers, 9 failures), each a candidate to
+linger in the charts and exports on its final filing.
+
+Found a second bug alongside it: `buildExportData` chose "latest" by sorting on
+`Date.parse(reportDate)`, and FDIC dates are `YYYYMMDD`, which `Date.parse` cannot read. The
+comparator was `NaN`, the sort a no-op, and a shrinking bank was represented by its
+largest-asset quarter. The same `NaN` comparison fed the KPI averages.
+
+**Fixed on `dev` (`7aab24f`).** `lib/analytics/headline-filing.ts` holds the rule: an institution
+is in the report cohort only if it filed for the headline quarter, represented by that filing;
+applied to the rows and to the KPIs, with five tests (`npm run test:headline-filing`). Verified
+against live FDIC data: Florida table and report cohorts now match exactly (85 and 85, no
+mismatch either way); Georgia drops 141 → 125 and Touchmark National reads 386.8% from the right
+quarter instead of 467.7% from an older one. Cache keys bumped so the stale series recompute.
+Not in production.
+
+Two findings from the walkthrough are **still open**, deliberately left alone: the Capital
+Sensitivity Matrix x-axis, its tooltip and the drawer percentiles are labelled "CRE / Assets" but
+plot `creConcentration`, which is CRE ÷ loans (the glossary defines the two as distinct); and the
+FHFA/FRED block's Florida selector fetches Miami-Dade data but always renders the national
+series (`market-research.tsx` L245).
+
+Trap: `npx tsx` scripts that import `@/app/actions/*` must be plain `.ts` with an async `main()`
+— top-level `await` fails under the CJS output and `.mts` cannot see the CJS named exports.
+`tsx` also cannot create its IPC pipe inside the sandbox; run it with full permissions.
+
+---
+
+## 2026-10-05, 14:35 — the load fix is in production
 
 Bugbot reviewed the branch changes and found nothing. `main` fast-forwarded `4d1cf60` → `7f24131`,
 so `0aaf1b2` (the `/api/cron/measure-load` diagnostic) and `f72fbb4` (the News tab's data arriving
@@ -17,10 +55,7 @@ commits `dev` lacked, and nothing in the diff was rewritten with CRLF line endin
 error in a changed file (`components/industry-outlook.tsx:132`) dates from March, and builds skip
 type errors anyway (`ignoreBuildErrors`).
 
-**Next session (2026-10-06): check the visuals in the Market Analytics tab.** The plan is to go
-through each chart and confirm it renders and shows the right figures. Start from
-`components/market-analytics-visuals.tsx`, `components/charts/analytics/` and
-`components/market-analytics-report-view.tsx`.
+The Market Analytics visuals check planned here was done on 2026-10-06; see the entry above.
 
 Also still open: measure the before and after on the real production deployment
 (`/api/cron/measure-load` with the cron bearer, plus a timed load of the page), which should show

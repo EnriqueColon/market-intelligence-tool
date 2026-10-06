@@ -923,6 +923,23 @@ nothing. An institution that did not file for the quarter the tab is headed with
 than shown with a stale figure under a current date, which is why the KPI institution count can
 exceed the row count.
 
+**The report path applies the same rule.** `buildExportData` — the start of the Visual Analysis
+charts, the ZIP and PDF exports and the analyst narrative — keeps an institution only if it filed
+for the headline quarter, and represents it by that filing (`lib/analytics/headline-filing.ts`).
+A bank that failed, was absorbed, or simply filed late is held out of the charts and exports exactly
+as it is held out of the table, so for a given scope the two halves of the tab describe the same
+cohort; `npm run test:headline-filing` covers the rule. This matters most for the capital charts: a
+failing bank's final filing shows a capital base near zero, so without the rule it leads the
+CRE-to-Capital ranking under a current heading for up to 27 months after it has ceased to exist.
+The FDIC's `/institutions` `ACTIVE` flag is deliberately not consulted — the filing itself is the
+evidence of being in business, and it needs no second request.
+
+The same place used to choose each institution's "latest" filing with `Date.parse` on the FDIC
+report date. FDIC dates are `YYYYMMDD`, which `Date.parse` cannot read, so the comparison was
+`NaN` and the sort left the API's asset-descending order in place: a shrinking bank was
+represented by whichever quarter its balance sheet was largest. Compare report dates as
+normalised `YYYYMMDD` strings, never as parsed dates.
+
 The row that reaches the browser carries **only fields something renders**. The capital *dollar*
 inputs (`RBCT1J`, `RBCT2`, `RWAJ`, equity) exist solely to produce `capitalRatios` and stay on the
 server, as do the `CapitalRatios` internals and three of the five values each trend quarter used to
@@ -1321,11 +1338,13 @@ were previously inline in `market-analytics-report-view.tsx` and reachable only 
 report.
 
 `market-analytics-visuals.tsx` deliberately calls `buildReportData` — the same server action the PDF
-uses — rather than reading the dashboard's `screeningTable`. Both now carry real scores, but the two
-cohorts differ: the table takes a single capped page while `buildReportData` paginates fully, so
-nationally they rank against different populations. `buildReportData` is cached for six hours under a
-versioned key, which removed most of that loading delay; national payloads may exceed the 2MB
-data-cache entry limit, in which case Next skips the write and only smaller scopes benefit.
+uses — rather than reading the dashboard's `screeningTable`. Both carry real scores and both admit
+only institutions that filed for the headline quarter, so for a state scope the two cohorts are
+identical (Florida: 85 and 85). Nationally they still differ in one way: the table takes a single
+capped page while `buildReportData` paginates fully, so they rank against different populations.
+`buildReportData` is cached for six hours under a versioned key, which removed most of that loading
+delay; national payloads may exceed the 2MB data-cache entry limit, in which case Next skips the
+write and only smaller scopes benefit.
 
 `singleLineTick` exists because Recharts wraps long category labels onto a second line that overlaps
 the row beneath, which makes a twenty-row ranking unreadable.
@@ -1407,9 +1426,9 @@ above were produced and is the before/after instrument for further work on load 
   | --- | --- |
   | `industry-outlook-shared-v12` | The generated memo |
   | `industry-outlook-verified-metrics-v1` | Fetched FRED/FDIC figures |
-  | `market-analytics-report-data-v2` + scope | Full screening cohort with scores, for the PDF and Visual Analysis |
+  | `market-analytics-report-data-v3` + scope | Full screening cohort with scores, for the PDF and Visual Analysis |
   | `market-analytics-screening-v1` + scope | Reduced, scored rows for the Market Analytics **tab** |
-  | `market-analytics-visuals-v1` + scope | Derived chart series for the Visual Analysis panel |
+  | `market-analytics-visuals-v2` + scope | Derived chart series for the Visual Analysis panel |
   | `executive-brief-v4` + scope | Ranked change events and non-reporting institutions for the Executive Brief. **Never populated** — the view is unreachable and the cron no longer warms it |
   | `underwriter-workbench-v1` + scope | Latest-quarter rows for the whole scope, for the Underwriter Workbench. **Never populated**, as above |
   | `legal-updates-v14` | Legal Landscape items: deduped, freshness-filtered, relevant to the firm's operations, source-verified, and — for legislation — checked against the bill record. Exposure counts are **not** in here, see `resolveLegalApplicability`. Bumped to `v14` when federal bills gained record facts and details from GPO bulk data and items gained `detailsSource`; `v13` when Florida items gained `intent` and the response gained `sectionContext`; `v12` when Florida bills gained record facts and staff-analysis details and enforcement roundups began to be read from their pages; `v11` when Federal Register items gained `record` facts and `details` from the full text (item shape changed); `v10` when monthly enforcement roundups began to be admitted; `v9` when Florida bills and Federal Register rulemaking began coming from records; `v7` entries hold the fabricated bills, and the Data Cache survives deploys |
