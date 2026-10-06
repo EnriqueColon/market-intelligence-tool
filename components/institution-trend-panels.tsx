@@ -20,7 +20,7 @@ import type { CapitalCategory } from "@/lib/scoring/capital-category"
 type SeriesKey = Exclude<keyof TrendPoint, "quarter" | "label" | "capital">
 
 type Series = { key: SeriesKey; name: string }
-type Reference = { value: number; label: string; tone?: "warn" | "limit" }
+type Reference = { value: number; label: string; tone?: "warn" | "limit"; labelPosition?: "insideTopRight" | "insideBottomRight" }
 
 type PanelSpec = {
   title: string
@@ -42,7 +42,7 @@ const PANELS: PanelSpec[] = [
       { key: "nplPct", name: "Nonaccrual ÷ loans" },
     ],
     references: [
-      { value: 2, label: "2%", tone: "warn" },
+      { value: 2, label: "2%", tone: "warn", labelPosition: "insideBottomRight" },
       { value: 5, label: "5%", tone: "limit" },
     ],
     worseWhen: "higher",
@@ -57,8 +57,8 @@ const PANELS: PanelSpec[] = [
       { key: "totalRbcPct", name: "Total RBC ratio" },
     ],
     references: [
-      { value: 5, label: "5% lev. well", tone: "warn" },
-      { value: 4, label: "4% lev. adequate", tone: "limit" },
+      { value: 5, label: "5% leverage, well", tone: "warn" },
+      { value: 4, label: "4% adequate", tone: "limit", labelPosition: "insideBottomRight" },
     ],
     worseWhen: "lower",
     unit: "%",
@@ -72,7 +72,7 @@ const PANELS: PanelSpec[] = [
     ],
     references: [
       { value: 300, label: "300% CRE screen", tone: "limit" },
-      { value: 100, label: "100% construction screen", tone: "warn" },
+      { value: 100, label: "100% construction screen", tone: "warn", labelPosition: "insideBottomRight" },
     ],
     worseWhen: "higher",
     unit: "%",
@@ -158,7 +158,7 @@ function TrendPanel({ spec, points }: { spec: PanelSpec; points: TrendPoint[] })
           ))}
         </p>
       </div>
-      <ResponsiveContainer width="100%" height={128} debounce={0}>
+      <ResponsiveContainer width="100%" height={150} debounce={0}>
         <LineChart data={points} margin={{ top: 10, right: 8, bottom: 0, left: -18 }}>
           <CartesianGrid {...gridProps} vertical={false} />
           <XAxis
@@ -166,7 +166,7 @@ function TrendPanel({ spec, points }: { spec: PanelSpec; points: TrendPoint[] })
             tick={{ ...numericTick, fontSize: 9 }}
             tickLine={false}
             axisLine={false}
-            interval={0}
+            minTickGap={14}
             tickFormatter={(label: string) => label.replace(/^Q(\d) 20(\d\d)$/, "Q$1'$2")}
           />
           <YAxis
@@ -192,7 +192,12 @@ function TrendPanel({ spec, points }: { spec: PanelSpec; points: TrendPoint[] })
               strokeDasharray="4 3"
               strokeOpacity={0.7}
               ifOverflow="extendDomain"
-              label={{ value: ref.label, position: "insideTopRight", fontSize: 9, fill: REFERENCE_STROKE[ref.tone ?? "warn"] }}
+              label={{
+                value: ref.label,
+                position: ref.labelPosition ?? "insideTopRight",
+                fontSize: 9,
+                fill: REFERENCE_STROKE[ref.tone ?? "warn"],
+              }}
             />
           ))}
           {series.map((s, i) => (
@@ -243,13 +248,13 @@ function CapitalStrip({ points }: { points: TrendPoint[] }) {
 export function InstitutionTrendPanels({ trend }: { trend: InstitutionTrend }) {
   const { points, verdict, leverageOnly } = trend
   return (
-    <div className="space-y-2">
+    <div className="@container space-y-2">
       <div className={`rounded-md border px-3 py-2 ${VERDICT_TONE[verdict.tone]}`}>
         <p className="text-sm">
           <span className="font-semibold">{verdict.heading}.</span> {verdict.text}
         </p>
       </div>
-      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-2 @xl:grid-cols-2 @4xl:grid-cols-3">
         {PANELS.map((spec) => (
           <TrendPanel key={spec.title} spec={spec} points={points} />
         ))}
@@ -268,11 +273,11 @@ export function InstitutionTrendPanels({ trend }: { trend: InstitutionTrend }) {
 
 export function InstitutionTrendSkeleton() {
   return (
-    <div className="space-y-2" aria-busy="true" aria-label="Loading trend">
+    <div className="@container space-y-2" aria-busy="true" aria-label="Loading trend">
       <div className="h-9 animate-pulse rounded-md bg-slate-100" />
-      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-2 @xl:grid-cols-2 @4xl:grid-cols-3">
         {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="h-[170px] animate-pulse rounded-md bg-slate-100" />
+          <div key={i} className="h-[192px] animate-pulse rounded-md bg-slate-100" />
         ))}
       </div>
     </div>

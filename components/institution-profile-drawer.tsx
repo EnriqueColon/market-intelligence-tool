@@ -559,7 +559,7 @@ export function InstitutionProfileDrawer({
 
   return (
     <Dialog open={!!row || compareRows.length > 0} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="w-[96vw] max-w-6xl max-h-[90vh] overflow-y-auto p-6">
+      <DialogContent className="w-[96vw] sm:max-w-6xl max-h-[90vh] overflow-y-auto p-6">
         <DialogHeader className="flex flex-row flex-wrap items-start justify-between gap-3 pr-8">
           <DialogTitle className="text-lg font-semibold text-slate-800">
             Compare institutions
@@ -847,7 +847,7 @@ function PeerPositioningComparisonChart({
         <p className="mt-2 text-[11px] text-slate-500">Click chart to expand</p>
       </div>
       <Dialog open={isExpanded} onOpenChange={setIsExpanded}>
-        <DialogContent className="w-[96vw] max-w-[1200px] h-[90vh] p-4 sm:p-6">
+        <DialogContent className="w-[96vw] sm:max-w-[1200px] h-[90vh] p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle>Peer Positioning Comparison</DialogTitle>
           </DialogHeader>
