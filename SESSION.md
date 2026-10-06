@@ -90,6 +90,28 @@ to `institution-trend-v2` and `institution-trend-narrative-v2`. Tests 11.
 `main` fast-forwarded `8391d1c` → `ad24c30` at 10:50, taking all six of the day's behavioural
 commits. `main` and `dev` are level.
 
+**Found after the release, decision pending — the tab's two cohorts.** The user asked why
+Tioga-Franklin Savings Bank (CERT 33802, Pennsylvania, $68M in assets) leads the CRE-to-Capital
+Ranking at 821.9% yet is absent from "Jump to institution…". Not a bug in the data: the charts, PDF
+and ZIP are built from the full national cohort (4,313 institutions, four FDIC pages), while the
+screening table — and with it the dropdown, the drawer and Cohort Changes — comes from a single
+10,000-row page, which nationally is the largest 1,116 institutions (floor about $1.07B, Crescent
+Bank). The cap exists because the finished table must sit under the Data Cache's 2 MB per-item
+limit (1,116 rows is 1.26 MB; 4,313 would be about 5 MB). That limit is the same on every Vercel
+plan — the user asked whether Pro would fix it; it would not. Florida has no gap (85 = 85). The
+only place the cap is disclosed is the "Institutions Screened" caption; the chart says nothing.
+
+The fix discussed and left for the user to decide on: build the table from the same full pull the
+charts use (the warm cron already pays for it weekly); score every bank against all 4,313 rather
+than 1,116 — the visible consequence, every percentile score shifts once; and store the result in
+asset-band chunks each under 2 MB, fetched in parallel and merged on the client. Two decisions the
+user has not yet made: whether the table *shows* all 4,313 by default or keeps an asset filter
+defaulting to "over $1B" with one click to all (recommended); and whether Cohort Changes'
+Deteriorating list, which over 4,313 would fill with small thrifts, should rank by signal then size
+(recommended). Roughly a day's work; nothing has been started. Interim alternatives if the full fix
+is declined: a caption on the ranking stating its cohort, and/or opening the drawer by CERT for any
+bank in the full cohort using the per-CERT trend fetch that now exists.
+
 Still open: the first production look at the Cohort Changes card and the drawer, with their
 caches cold — the warm cron covers the watch for National and Florida, but trend and reading are
 per bank and fill on first click (about 1 s for the panels, 2–3 s more for the reading). Possible second cut: a dashed peer-median line per
