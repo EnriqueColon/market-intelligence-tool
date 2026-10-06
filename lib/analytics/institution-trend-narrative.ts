@@ -38,6 +38,13 @@ function cell(point: TrendPoint, col: Column): string {
   return typeof v === "number" ? v.toFixed(col.decimals) : "—"
 }
 
+/** "Elizabethton, Tennessee" — whatever of city and state the filing carries, or "" if neither. */
+export function locationOf(trend: Pick<InstitutionTrend, "city" | "state">): string {
+  const city = trend.city?.trim() ? displayName(trend.city) : ""
+  const state = trend.state?.trim() ? displayName(trend.state) : ""
+  return [city, state].filter(Boolean).join(", ")
+}
+
 /** "COMMUNITY B&T WEST GEORGIA" → "Community B&T West Georgia". Tokens with "&" stay upper-case. */
 export function displayName(raw: string): string {
   return raw
@@ -93,12 +100,14 @@ Rules:
 - Flag anomalies as such: a single-quarter earnings figure far from the others is "a one-off gain or a data issue", not a trend.
 - If the CET1 and total RBC columns are blank, the bank files under the Community Bank Leverage Ratio and reports only leverage; say that once.
 - Mention a published screen only where the "Screens" list says the bank is across it, and only as that list states it; do not compare figures to screens yourself. Ceilings, where higher is worse: 300% CRE to capital, 100% construction to capital, 2% and 5% noncurrent loans. Floors, where lower is worse: 1% allowance to loans, 5% leverage for well capitalised.
-- No headings, bullets, bold, or preamble. Do not restate the bank's name more than once. Do not speculate about events outside the table (closures, mergers, enforcement); the most you may say is what a pattern "looks like".
+- Open by naming the bank and its location exactly as given ("Citizens Bank of Elizabethton, Tennessee, …" or "Citizens Bank (Elizabethton, Tennessee) …"): there are many banks with the same name, and the reader must know which one this is. Do not restate the name or location after that.
+- No headings, bullets, bold, or preamble. Do not speculate about events outside the table (closures, mergers, enforcement); the most you may say is what a pattern "looks like".
 - British spelling: capitalised, not capitalized.`
 
 export function buildNarrativeUserPrompt(trend: InstitutionTrend): string {
+  const where = locationOf(trend)
   const lines = [
-    `Bank: ${displayName(trend.name)} (FDIC CERT ${trend.cert}).`,
+    `Bank: ${displayName(trend.name)}${where ? `, ${where}` : ""} (FDIC CERT ${trend.cert}).`,
     `Quarters: ${trend.points.length}, oldest first. All values are percent.`,
     trend.leverageOnly ? "Files under the Community Bank Leverage Ratio: no risk-based ratios reported." : "",
     "",
@@ -190,10 +199,14 @@ export function checkNarrative(text: string, trend: InstitutionTrend): Narrative
  */
 export function fallbackNarrative(trend: InstitutionTrend): string {
   const { points, verdict, leverageOnly } = trend
-  if (points.length < 2) return verdict.text
+  if (points.length < 2) {
+    const where = locationOf(trend)
+    return `${displayName(trend.name)}${where ? ` (${where})` : ""}: ${verdict.text}`
+  }
   const first = points[0]
   const last = points[points.length - 1]
-  const parts: string[] = [`${verdict.heading}: ${verdict.text}`]
+  const where = locationOf(trend)
+  const parts: string[] = [`${displayName(trend.name)}${where ? ` (${where})` : ""} — ${verdict.heading.toLowerCase()}: ${verdict.text}`]
   const move = (label: string, a: number | null, b: number | null, d = 2) =>
     a != null && b != null ? `${label} ${a.toFixed(d)}% to ${b.toFixed(d)}%` : null
   const moves = [

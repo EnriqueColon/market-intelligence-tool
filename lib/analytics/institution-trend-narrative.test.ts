@@ -33,6 +33,8 @@ function point(label: string, over: Partial<TrendPoint> = {}): TrendPoint {
 const trend: InstitutionTrend = {
   cert: "25796",
   name: "COMMUNITY B&T WEST GEORGIA",
+  city: "BREMEN",
+  state: "GEORGIA",
   leverageOnly: false,
   points: [
     point("Q4 2025", { noncurrentPct: 10.15, leveragePct: 6.7, creToCapitalPct: 117.17, roaPct: 1.73, capital: { category: "adequate", label: "Adequately capitalised" } }),
@@ -89,7 +91,7 @@ test("allowed figures include the published screens and floor/ceiling roundings"
 
 test("the fallback reading uses only the verdict and first-to-last moves", () => {
   const text = fallbackNarrative(trend)
-  assert.match(text, /^Deteriorating: Capital category fell/)
+  assert.match(text, /^Community B&T West Georgia \(Bremen, Georgia\) — deteriorating: Capital category fell/)
   assert.match(text, /Over Q4 2025–Q1 2026: noncurrent loans 10\.15% to 17\.28%; leverage 6\.70% to 0\.16%; CRE to capital 117% to 710%; ROA 1\.73% to -6\.88%\./)
   assert.deepEqual(checkNarrative(text, trend), { ok: true })
 })
@@ -107,5 +109,11 @@ test("screen flags are computed per quarter with the right direction, and names 
   assert.match(flags, /- allowance below the 1% floor: no quarter/)
   assert.match(flags, /- leverage below 5% \(well capitalised\): Q1 2026/)
   assert.equal(displayName("COMMUNITY B&T WEST GEORGIA"), "Community B&T West Georgia")
-  assert.match(buildNarrativeUserPrompt(trend), /Bank: Community B&T West Georgia/)
+  assert.match(buildNarrativeUserPrompt(trend), /Bank: Community B&T West Georgia, Bremen, Georgia \(FDIC CERT 25796\)/)
+})
+
+test("the prompt and fallback still work when the filing carries no location", () => {
+  const bare = { ...trend, city: undefined, state: undefined }
+  assert.match(buildNarrativeUserPrompt(bare), /Bank: Community B&T West Georgia \(FDIC CERT 25796\)/)
+  assert.match(fallbackNarrative(bare), /^Community B&T West Georgia — deteriorating:/)
 })

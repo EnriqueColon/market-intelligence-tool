@@ -131,9 +131,21 @@ async function loadInstitutionTrend(cert: string): Promise<InstitutionTrend> {
       if (response.error) throw new Error(response.error)
       const rows = transformFinancialData(response.data ?? []).map(toInput)
       if (rows.length === 0) throw new Error(`No FDIC filings for CERT ${cert} in the last 27 months.`)
-      return buildInstitutionTrend(cert, rows)
+      const trend = buildInstitutionTrend(cert, rows)
+      // /financials truncates CITY to sixteen characters ("PALM BEACH GARDE");
+      // the institution record has the full name. Best effort: the filing's
+      // city stands if this call fails.
+      const record = await fetchFDICData<{ CITY?: string; STNAME?: string }>(FDIC_ENDPOINTS.institutions, {
+        filters: { CERT: cert },
+        fields: ["CERT", "CITY", "STNAME"],
+        limit: 1,
+      }).catch(() => null)
+      const head = record?.data?.[0]
+      if (head?.CITY) trend.city = head.CITY
+      if (head?.STNAME) trend.state = head.STNAME
+      return trend
     },
-    ["institution-trend-v1", cert, quarter],
+    ["institution-trend-v2", cert, quarter],
     { revalidate: WATCH_REVALIDATE_SECONDS }
   )
   return cached()
@@ -188,7 +200,7 @@ export async function getInstitutionTrendNarrative(cert: string): Promise<Instit
       }
       return { text, source: "model" }
     },
-    ["institution-trend-narrative-v1", cert, quarter],
+    ["institution-trend-narrative-v2", cert, quarter],
     { revalidate: WATCH_REVALIDATE_SECONDS }
   )
   try {

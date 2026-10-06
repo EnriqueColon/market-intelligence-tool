@@ -62,6 +62,9 @@ export type TrendVerdict = {
 export type InstitutionTrend = {
   cert: string
   name: string
+  /** Head-office city and state from the newest filing, so a reader knows which Citizens Bank this is. */
+  city?: string
+  state?: string
   /** Oldest first, at most eight. */
   points: TrendPoint[]
   verdict: TrendVerdict
@@ -155,9 +158,12 @@ export function buildInstitutionTrend(cert: string, rows: TrendInputRow[]): Inst
   const kept = ordered.map((q) => byQuarter.get(q)!)
   const trendPoints = kept.map(toPoint)
   const leverageOnly = trendPoints.every((p) => p.cet1Pct == null && p.totalRbcPct == null)
+  const newest = kept[kept.length - 1] ?? rows[0]
   return {
     cert,
-    name: kept[kept.length - 1]?.name ?? rows[0]?.name ?? "",
+    name: newest?.name ?? "",
+    city: newest?.city || undefined,
+    state: newest?.state || undefined,
     points: trendPoints,
     verdict: verdictFor(kept, trendPoints),
     leverageOnly,
