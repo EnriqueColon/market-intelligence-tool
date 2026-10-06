@@ -103,7 +103,7 @@ the map runs to four, which is every tab that exists.
 | Tab | Feature key | What it shows |
 | --- | --- | --- |
 | News | `news` | Industry Outlook / Key Signals memo (`industry-outlook.tsx`), Industry-Specific News (`public-mentions.tsx`), General Finance News (`investing-business-mentions.tsx`), and an on-demand Article Digest (`article-digest.tsx`) |
-| Market Analytics | `market-analytics` | FDIC bank financials with state filter, institution drawer and export (`market-analytics.tsx`); a Visual Analysis chart section (`market-analytics-visuals.tsx`); a Bank Stress Map behind `bank-stress-map`; plus a nested FRED/Census indicator panel (`market-research.tsx`) |
+| Market Analytics | `market-analytics` | FDIC bank financials with state filter, institution drawer and export (`market-analytics.tsx`); a Cohort Changes card — deteriorating institutions and exits (`market-analytics-watch.tsx`); a Visual Analysis chart section (`market-analytics-visuals.tsx`); a Bank Stress Map behind `bank-stress-map`; plus a nested FRED/Census indicator panel (`market-research.tsx`) |
 | Market Research | `market-research` | Live publisher-by-publisher research feed with Postgres-backed archive (`market-research-feed.tsx`) and memo generation (`research-memo-modal.tsx`) |
 | Legal Landscape | `legal` | Three sections — Regulatory Watch, Legislative Tracker, Enforcement & Litigation (`legal-updates.tsx`) — drawn from the Federal Register, govtrack and GPO bulk data, and LegiScan where a record exists, and from a model with web search where it does not |
 
@@ -876,6 +876,78 @@ its final frame, which for a crawl is one copy already scrolled off, so the stri
 start blank. The later rule therefore drops the animation outright, hides the `aria-hidden`
 duplicates and makes the rail scrollable by hand.
 
+### Cohort Changes: who is deteriorating, and who has left
+
+`components/market-analytics-watch.tsx`, fed by `getCohortWatch(scope)` in
+`app/actions/market-analytics-watch.ts`. Sits between the Cohort Summary and the charts. The table
+is a snapshot — it can say a bank is stressed, not that it is becoming stressed — and because it
+admits only banks that filed for the headline quarter it has nothing to say about a bank that just
+failed or merged. Both matter to someone looking for business: a bank that is slipping is an
+opportunity before it is a headline, and a bank that has gone means its loan book and branches now
+belong to somebody else.
+
+The computation is pure, in `lib/analytics/cohort-watch.ts`, over the same nine quarters the
+screening table fetches (`app/services/cohort-watch.ts` does the fetching). Two lists:
+
+**Deteriorating.** Headline-quarter filers with at least one adverse signal, ranked by urgency and
+capped at twelve. Three kinds of signal, in descending weight: a **capital-category downgrade**
+(`lib/scoring/capital-category.ts`, below); a **threshold crossing** from
+`lib/scoring/institution-change.ts` — the 300% CRE-to-capital and 100% construction-to-capital
+supervisory screens outrank the working conventions (2% and 5% noncurrent, 1% reserve coverage,
+8% capital); and a **trajectory**, three or more consecutive adverse quarters in a metric that is
+already material. Each row shows the bank's current capital category as a badge and up to three
+signal sentences, and opens the institution drawer on click (every row is a headline filer, so the
+handoff to `screeningTable` cannot miss). A crossing whose two displayed values round to the same
+figure ("fell below 1%, at 1.00% from 1.00%") is suppressed as a rounding artefact.
+
+**Exits.** Institutions present in the FDIC data whose newest filing predates the headline quarter
+by at most two quarters (`EXIT_WINDOW_QUARTERS`); older gaps are counted in the caption but not
+listed. Each exit carries *why*, from three FDIC structure endpoints in order of richness
+(`app/services/fdic-structure-events.ts`, shaped by `lib/fdic-structure-events.ts`):
+
+| Endpoint | Found by | Gives |
+| --- | --- | --- |
+| `/failures` | `CERT` | Failure date, resolution type (`PI` = purchase & assumption, insured deposits), assuming institution and its city, deposits and assets at failure, the FDIC's estimated cost to the Deposit Insurance Fund and its as-of date |
+| `/history` | `OUT_CERT` — the event is filed under the **acquirer's** CERT | Change code and description (211 failure, 223 merger without assistance, 240 voluntary closing…), effective date, acquirer |
+| `/institutions` | `CERT` | `ACTIVE`, `ENDEFYMD`, `CHANGEC1`: the fallback when `/history` has not caught up, which it had not a week after two Florida banks closed on 30 September |
+
+CERTs are batched forty at a time with a parenthesised OR list — `lib/fdic-client.ts` now wraps
+array filters in parentheses so the alternatives bind before the `AND` joining other keys. A bank
+with no record on any endpoint is reported as "stopped filing; no structure event recorded yet",
+which is usually a late filer. Failures sort first, then voluntary closings, then mergers, then by
+assets. The sentence for a failure reads, for example: *Failed 1 May 2026; purchase and assumption,
+insured deposits by Anchor Bank (Palm Beach Gardens, FL). $296.4M deposits, $305.7M assets,
+estimated cost to the insurance fund $97.3M (32% of assets).*
+
+**Capital categories** (`lib/scoring/capital-category.ts`) are the regulators' Prompt Corrective
+Action bands — well, adequately, under-, significantly under-, critically undercapitalised — at the
+published 12 CFR 324.403 thresholds (well capitalised: total risk-based ≥ 10%, Tier 1 ≥ 8%,
+CET1 ≥ 6.5%, leverage ≥ 5%). A bank must clear every ratio to sit in a band, so the weakest ratio
+binds and is reported as such. Equity ÷ assets ≤ 2% is critically undercapitalised regardless.
+CBLR filers report their risk-based ratios as zero and are classified on leverage alone, with the
+basis stated. The screening row now carries `capitalCategory` (key bumped to
+`market-analytics-screening-v2`) so the drawer can show it; the watch computes it per quarter to
+detect downgrades. Community B&T West Georgia classified as critically undercapitalised on its
+March 2026 filing (leverage 0.16%) and was closed on 1 May.
+
+**Caching.** `market-analytics-watch-v1` + scope + published quarter, seven days — the same
+discipline as the screening table. Only successes are cached. The warm cron warms National and
+Florida. Payloads are 8–14 KB. Nationally the FDIC row cap applies, so the watch covers the largest
+~1,000 institutions, and the caption says so.
+
+**The institution drawer** gained two things from the same work: a **Capital Category** line in
+Structural Exposure, with the binding ratio and a CBLR note; and a **Corporate History** block
+listing acquisitions the bank has made, from `/history` by `ACQ_CERT` (`getInstitutionHistory`,
+cached per CERT and quarter). A bank in the drawer is by construction a going concern, so the events
+that can have happened *to* it are the ones where it absorbed somebody else — Anchor Bank's drawer
+lists Community B&T West Georgia (from the FDIC as receiver, 1 May 2026) and Home Federal Bank of
+Hollywood (2021).
+
+The Executive Brief (`app/actions/executive-brief.ts`) computed much of the Deteriorating list for a
+view nobody can reach; it is untouched, and `confluence.md`'s note on its unreachability stands.
+Cohort Changes is the same information surfaced where people already are, which is the decision
+that retired the brief as a destination.
+
 ### Peer Positioning in the institution drawer
 
 `components/institution-profile-drawer.tsx`. Percentiles are measured against a **matched peer
@@ -1427,7 +1499,9 @@ above were produced and is the before/after instrument for further work on load 
   | `industry-outlook-shared-v12` | The generated memo |
   | `industry-outlook-verified-metrics-v1` | Fetched FRED/FDIC figures |
   | `market-analytics-report-data-v3` + scope | Full screening cohort with scores, for the PDF and Visual Analysis |
-  | `market-analytics-screening-v1` + scope | Reduced, scored rows for the Market Analytics **tab** |
+  | `market-analytics-screening-v2` + scope | Reduced, scored rows for the Market Analytics **tab**, now with `capitalCategory` |
+  | `market-analytics-watch-v1` + scope | Cohort Changes: deteriorating institutions and exits with their FDIC structure records |
+  | `institution-history-v1` + CERT | Acquisitions a bank has made, for the drawer's Corporate History |
   | `market-analytics-visuals-v2` + scope | Derived chart series for the Visual Analysis panel |
   | `executive-brief-v4` + scope | Ranked change events and non-reporting institutions for the Executive Brief. **Never populated** — the view is unreachable and the cron no longer warms it |
   | `underwriter-workbench-v1` + scope | Latest-quarter rows for the whole scope, for the Underwriter Workbench. **Never populated**, as above |

@@ -8,7 +8,50 @@ is it in now, and what is still open.
 
 ---
 
-## 2026-10-06, morning (latest) — the charts were ranking a bank that no longer exists
+## 2026-10-06, mid-morning (latest) — Cohort Changes: who is slipping, who has gone, and why
+
+Asked how to get the West Georgia story — closed 1 May, FDIC receiver, sold to Anchor Bank, $97M
+cost to the insurance fund, capital gone in a quarter — for every bank. Everything in that paragraph
+but one phrase turned out to live in three FDIC endpoints (`/failures`, `/history`, `/institutions`)
+plus the quarters we already fetch, and two of the building blocks already existed unused:
+`lib/scoring/institution-change.ts` (crossings and trajectories, feeding the unreachable Executive
+Brief) and `bank-failure-monitor.tsx` (rendered by nothing). Offered three options; the user chose
+all of them.
+
+**Built on `dev` (`45d2934`).** A **Cohort Changes** card between the Cohort Summary and the charts,
+`components/market-analytics-watch.tsx` over `lib/analytics/cohort-watch.ts` (pure) and
+`app/services/cohort-watch.ts` (fetch). *Deteriorating*: headline-quarter filers with a Prompt
+Corrective Action capital-category downgrade (`lib/scoring/capital-category.ts`, published
+12 CFR 324.403 thresholds, weakest ratio binds, CBLR filers on leverage alone), a threshold
+crossing, or a three-quarter adverse trend; ranked, capped at twelve, rows open the drawer.
+*Exits*: banks that filed in the quarter before but not for the latest, each with why — failure
+record (resolution type, acquirer, deposits/assets at failure, estimated DIF cost), merger with
+acquirer from `/history` by `OUT_CERT`, or the `/institutions` inactive record as fallback when
+`/history` has not caught up (two Florida banks closed 30 September had no history row a week
+later; `/institutions` already said code 240, voluntary closing). The drawer gained a Capital
+Category line and a Corporate History block (acquisitions by `ACQ_CERT`).
+
+Verified against live FDIC data: Georgia lists West Georgia's failure exactly as the user quoted it,
+plus seven mergers (Synovus into Pinnacle among them) and one late filer; Florida lists FineMark's
+merger into Commerce Bank and the two voluntary closings; National runs in 6 s on a 13 KB payload,
+253 of ~1,000 capped institutions showing a signal. Anchor Bank's history returns both its
+acquisitions. Tests: capital-category 8, structure-events 10, institution-change still 14. Build
+passes. **Not seen in a browser** — the tab mounts lazily behind the News tab and the local check
+cannot log in without typing the password — so the first look at the card is on the dev preview.
+
+Along the way: `lib/fdic-client.ts` now parenthesises array filters (an OR list followed by an AND
+was mis-grouped before; no caller had passed an array); `institution-change.ts` suppresses a
+crossing whose two displayed values are identical; the screening row carries `capitalCategory`
+(key `market-analytics-screening-v2`); the warm cron warms the watch for National and Florida.
+
+Still open: the "CRE / Assets" label on the Capital Sensitivity Matrix and drawer (value is
+CRE ÷ loans); the FHFA/FRED Florida selector; `bank-failure-monitor.tsx` and the Executive Brief
+remain unreferenced and could now be deleted. Both 10-06 commits await a look on the dev preview
+before going to production.
+
+---
+
+## 2026-10-06, morning — the charts were ranking a bank that no longer exists
 
 Walked through the Market Analytics tab — where every figure comes from and how it is computed —
 and then looked hard at one: the CRE-to-Capital Ranking's leader, Community B&T West Georgia at

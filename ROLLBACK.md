@@ -8,16 +8,18 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
 | `main` | `f72fbb4` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `7aab24f` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `dev` | `45d2934` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 This table names the newest commit on each branch that **changes behaviour**; documentation-only
 commits sit on top of it and are deliberately not tracked here, because amending one rotates its
 SHA and the table then reads as stale when nothing has moved. Confirm with
 `git log --format='%h|%ci|%s'` rather than trusting the previous entry — this has drifted twice.
 
-**`dev` is one behavioural commit ahead of `main` as of 2026-10-06: `7aab24f`**, which keeps
+**`dev` is two behavioural commits ahead of `main` as of 2026-10-06: `7aab24f`**, which keeps
 failed and merged banks out of the Market Analytics charts and exports and reads each bank's
-headline-quarter filing rather than its largest-asset one. Not yet in production. Before it,
+headline-quarter filing rather than its largest-asset one, **and `45d2934`**, the Cohort Changes
+card (deteriorating institutions, exits with FDIC structure records, capital categories in the
+drawer). Neither is in production. Before them,
 **`main` and `dev` were level at `7f24131` as of 14:35 on 2026-10-05.** Production fast-forwarded
 `4d1cf60` → `7f24131`, taking `0aaf1b2` (the load-timing diagnostic route) and `f72fbb4` (the News
 tab's data rendered into the page on the server). `4d1cf60` / `b2b08e9` is the production state
@@ -180,6 +182,7 @@ to `4ca86dc`. It is kept as the record of what each commit does and what reverti
 
 | Commit | Date | Summary |
 | --- | --- | --- |
+| `45d2934` | 10-06 | **On `dev` only.** Cohort Changes card between the Cohort Summary and the charts: Deteriorating (capital-category downgrades at PCA thresholds, threshold crossings, multi-quarter trends; rows open the drawer) and Exits (who stopped filing and why, from FDIC `/failures`, `/history` and `/institutions`). Drawer gains Capital Category and Corporate History. Screening row gains `capitalCategory` (key → `market-analytics-screening-v2`); FDIC client parenthesises array filters; rounding-artefact crossings suppressed in `institution-change.ts`; warm cron warms the watch. **Revertable in isolation** — a new card and two drawer blocks; reverting restores the previous tab exactly, though the screening key stays bumped. |
 | `7aab24f` | 10-06 | **On `dev` only.** The report cohort (Visual Analysis charts, ZIP/PDF exports, analyst narrative) keeps an institution only if it filed for the headline quarter and represents it by that filing (`lib/analytics/headline-filing.ts`), the rule the screening table already applied. Removes failed and absorbed banks — Community B&T West Georgia, failed 1 May 2026, had led the CRE-to-Capital ranking at 710% on its final Q1 filing — and fixes a `Date.parse(YYYYMMDD)` → `NaN` sort that represented shrinking banks by their largest-asset quarter (Touchmark National 467.7% → 386.8%). Also feeds the KPI averages. Cache keys `market-analytics-report-data-v3`, `market-analytics-visuals-v2`. **Safe to revert in isolation**; reverting restores the stale cohort, nothing else. |
 | `f72fbb4` | 10-05 | In production since 10-05 14:35. The page reads the pulse strip, Industry Outlook and six news feeds from the caches on the server (`app/services/initial-news-data.ts`, 2.5 s budget per read, abandoned reads kept alive with `after()`) and the News components take them as initial state, skipping their mount fetch. Cold caches fall back to the old client fetch. **Safe to revert in isolation**: every prop is optional and absent ones restore the previous behaviour exactly. If the page itself becomes slow, suspect this first and check `/api/cron/measure-load`. |
 | `0aaf1b2` | 10-05 | In production since 10-05 14:35. Adds `/api/cron/measure-load`, a diagnostic that times each dashboard action twice and reports payload size. Behind the cron bearer; not scheduled; no effect on any page. |

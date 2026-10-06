@@ -159,7 +159,7 @@ with almost no configuration.
 | Service | Used for | Auth | If unavailable |
 | --- | --- | --- | --- |
 | **OpenAI** (Responses API) | Outlook memo, article briefs, report summaries, legal feed | `OPENAI_API_KEY` | Every AI feature fails; the outlook serves a measured-figures fallback memo |
-| **FDIC** BankFind API | Bank financials, screening, stress map | Keyless (optional `FDIC_API_KEY`) | Analytics and map empty; hardened behind `lib/fdic-client.ts` |
+| **FDIC** BankFind API | Bank financials, screening, stress map; `/history`, `/failures` and `/institutions` for who failed, merged or closed and who acquired them | Keyless (optional `FDIC_API_KEY`) | Analytics and map empty; hardened behind `lib/fdic-client.ts` |
 | **FRED** | Verified market metrics, Market Pulse strip | **Keyless CSV endpoint** for the outlook | Pulse strip renders nothing rather than a placeholder |
 | **Google News RSS** + publisher RSS | News feeds | Keyless | Falls back to GDELT |
 | **GDELT DOC 2.0** | News fallback when RSS yields under 15 items | Keyless | Feeds thin out |
@@ -233,6 +233,8 @@ npm run test:institution-change # threshold crossings, deterioration trends, bri
 npm run test:fdic-cre         # what counts as CRE, and what must never be added to it
 npm run test:fdic-loan-quality # NPL, noncurrent, reserve and past-due denominators and units
 npm run test:headline-filing  # which filing represents a bank in the charts and exports, and who is held out
+npm run test:capital-category # Prompt Corrective Action bands at the published thresholds, CBLR filers on leverage alone
+npm run test:structure-events # FDIC failure, merger and closing records shaped into exit sentences
 npm run test:quarter          # FDIC report-date arithmetic
 npm run test:peer-cohort      # workbench peer selection, and what it refuses to relax
 npm run test:cre-downside     # the capital scenario, on both regulatory capital regimes
