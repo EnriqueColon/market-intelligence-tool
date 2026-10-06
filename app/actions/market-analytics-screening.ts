@@ -40,7 +40,7 @@ export async function getScreeningPayload(scope: string): Promise<ScreeningResul
   const quarter = await getLatestFdicQuarter()
   const cached = unstable_cache(
     () => computeScreening(scope),
-    ["market-analytics-screening-v1", scope, quarter],
+    ["market-analytics-screening-v2", scope, quarter],
     { revalidate: SCREENING_REVALIDATE_SECONDS }
   )
   try {

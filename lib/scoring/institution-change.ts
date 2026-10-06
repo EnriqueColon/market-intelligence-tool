@@ -184,6 +184,9 @@ export function detectChanges(observations: QuarterObservation[]): InstitutionCh
 
     for (const threshold of spec.thresholds) {
       if (!crossed(spec, threshold.value, previous.value, latest.value)) continue
+      // A crossing that the display cannot show — "fell below 1%, at 1.00%
+      // from 1.00%" — is a rounding artefact at the threshold, not an event.
+      if (spec.format(latest.value) === spec.format(previous.value)) continue
       const direction = spec.adverse === "rising" ? "rose above" : "fell below"
       changes.push({
         kind: "crossing",

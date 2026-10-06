@@ -40,6 +40,7 @@ import {
   type InstitutionProfileRow,
 } from "@/components/institution-profile-drawer"
 import { MarketAnalyticsVisuals } from "@/components/market-analytics-visuals"
+import { MarketAnalyticsWatch } from "@/components/market-analytics-watch"
 
 // MapLibre plus its stylesheet is a large dependency that touches `window` on
 // import, so the map is loaded on demand rather than bundled into every session.
@@ -596,6 +597,18 @@ export function MarketAnalytics({
           {KPI_EXPLANATION_NARRATIVE}
         </p>
       </Card>
+
+      {!reportMode && (
+        <MarketAnalyticsWatch
+          scope={reportScope}
+          asOfQuarter={asOfQuarter}
+          onSelectInstitution={(cert) => {
+            const match = screeningTable.find((r) => r.id === cert)
+            if (match) setSelectedInstitution(match)
+            else toast({ title: "Not in the screening table", description: "This institution is outside the current cohort." })
+          }}
+        />
+      )}
 
       {!reportMode && <MarketAnalyticsVisuals scope={reportScope} asOfQuarter={asOfQuarter} />}
 

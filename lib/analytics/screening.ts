@@ -40,6 +40,7 @@ import {
 } from "@/lib/scoring/opportunity-score"
 import { computeEarningsRanges, computeEarningsScore } from "@/lib/scoring/earnings-score"
 import { computeVulnerabilityScore } from "@/lib/scoring/vulnerability-score"
+import { classifyCapital, type CapitalCategory } from "@/lib/scoring/capital-category"
 
 /**
  * Row cap for the tab's single-page FDIC fetch. Eight to ten quarters per
@@ -68,6 +69,15 @@ export type ScreeningCapitalRatios = {
   creToEquity: number | null
   constructionToTier1Tier2: number | null
   multifamilyToTier1Tier2: number | null
+}
+
+/** Prompt Corrective Action band for the latest quarter; see `lib/scoring/capital-category.ts`. */
+export type ScreeningCapitalCategory = {
+  category: CapitalCategory
+  label: string
+  /** The ratio holding the bank in this band, e.g. "leverage 3.80%". */
+  binding: string
+  basis: "risk-based" | "leverage-only"
 }
 
 export type ScreeningRow = {
@@ -108,6 +118,7 @@ export type ScreeningRow = {
   earningsScore: number
   vulnerabilityScore: number
   capitalRatios?: ScreeningCapitalRatios
+  capitalCategory?: ScreeningCapitalCategory
   trend: ScreeningTrendPoint[]
 }
 
@@ -319,6 +330,20 @@ export function buildScreeningPayload(
     const earningsBufferPct =
       netIncomeTTM != null && creLoansLatest > 0 ? (netIncomeTTM / creLoansLatest) * 100 : null
 
+    const classified = classifyCapital({
+      leverageRatio: latest.leverageRatio,
+      tier1RbcRatio: latest.tier1RbcRatio,
+      totalRbcRatio: latest.totalRbcRatio,
+      cet1Ratio: latest.cet1Ratio,
+      equityToAssetsPct:
+        latest.totalEquityDollars != null && latest.totalAssets > 0
+          ? (latest.totalEquityDollars / latest.totalAssets) * 100
+          : null,
+    })
+    const capitalCategory: ScreeningCapitalCategory | undefined = classified
+      ? { category: classified.category, label: classified.label, binding: classified.binding, basis: classified.basis }
+      : undefined
+
     rows.push({
       id: latest.id,
       name: latest.name,
@@ -339,6 +364,7 @@ export function buildScreeningPayload(
       loansToDeposits: latest.loansToDeposits,
       cet1Ratio: latest.cet1Ratio,
       leverageRatio: latest.leverageRatio,
+      capitalCategory,
       totalUnusedCommitments: latest.totalUnusedCommitments,
       creUnusedCommitments: latest.creUnusedCommitments,
       constructionLoans: latest.constructionLoans,

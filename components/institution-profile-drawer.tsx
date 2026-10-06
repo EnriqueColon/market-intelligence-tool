@@ -4,7 +4,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Copy, X } from "lucide-react"
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 import { fetchNoncurrentDebugSnapshot } from "@/app/actions/fetch-fdic-data"
+import { getInstitutionHistory, type InstitutionHistory } from "@/app/actions/market-analytics-watch"
 import type { NoncurrentDebugSnapshot } from "@/lib/noncurrent-debug"
+import { formatEventDate } from "@/lib/fdic-structure-events"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -28,6 +30,22 @@ import {
 import { DefTerm } from "@/components/def-term"
 import { ChartTooltipRow, ChartTooltipShell } from "@/components/charts/chart-tooltip"
 import { CHART_SERIES, categoryTick, gridProps, numericTick } from "@/lib/chart-theme"
+
+function capitalCategoryTone(category?: "well" | "adequate" | "under" | "significant" | "critical"): string {
+  switch (category) {
+    case "well":
+      return "text-emerald-700"
+    case "adequate":
+      return "text-amber-700"
+    case "under":
+      return "text-orange-700"
+    case "significant":
+    case "critical":
+      return "text-red-700"
+    default:
+      return "text-slate-700"
+  }
+}
 
 function formatDeltaPp(value: number | null | undefined, decimals = 2): string {
   if (value == null || !Number.isFinite(value)) return "—"
@@ -88,6 +106,13 @@ export type InstitutionProfileRow = {
     creToEquity: number | null
     constructionToTier1Tier2: number | null
     multifamilyToTier1Tier2: number | null
+  }
+  /** Prompt Corrective Action band for the latest quarter; see `lib/scoring/capital-category.ts`. */
+  capitalCategory?: {
+    category: "well" | "adequate" | "under" | "significant" | "critical"
+    label: string
+    binding: string
+    basis: "risk-based" | "leverage-only"
   }
   totalUnusedCommitments?: number
   creUnusedCommitments?: number
@@ -268,8 +293,28 @@ export function InstitutionProfileDrawer({
 }: InstitutionProfileDrawerProps) {
   const lastLoggedRef = useRef<string | null>(null)
   const [fdicSnapshot, setFdicSnapshot] = useState<NoncurrentDebugSnapshot | null>(null)
+  const [history, setHistory] = useState<InstitutionHistory | null>(null)
 
   const primaryRow = row ?? compareRows[0]
+
+  // Corporate history is one small cached FDIC call per institution, fetched
+  // when the drawer opens on a single bank. Cleared on change so a previous
+  // bank's acquisitions can never show under the next one's name.
+  useEffect(() => {
+    setHistory(null)
+    if (!primaryRow) return
+    let active = true
+    getInstitutionHistory(primaryRow.id)
+      .then((result) => {
+        if (active && result.cert === primaryRow.id) setHistory(result)
+      })
+      .catch(() => {
+        if (active) setHistory({ cert: primaryRow.id, acquisitions: [] })
+      })
+    return () => {
+      active = false
+    }
+  }, [primaryRow?.id])
   useEffect(() => {
     if (!primaryRow) {
       setFdicSnapshot(null)
@@ -588,7 +633,25 @@ export function InstitutionProfileDrawer({
                       <p className="flex justify-between"><span className="text-slate-500"><DefTerm term="Total UC">Total UC</DefTerm></span><span className="font-medium tabular-nums">{rowForCopy.totalUnusedCommitments != null ? formatAssets(rowForCopy.totalUnusedCommitments) : "—"}</span></p>
                       <p className="flex justify-between"><span className="text-slate-500"><DefTerm term="CRE UC">CRE UC</DefTerm></span><span className="font-medium tabular-nums">{rowForCopy.creUnusedCommitments != null ? formatAssets(rowForCopy.creUnusedCommitments) : "—"}</span></p>
                       <p className="flex justify-between"><span className="text-slate-500"><DefTerm term="Capital">Capital</DefTerm></span><span className="font-medium tabular-nums">{rowForCopy.cet1Ratio != null && rowForCopy.cet1Ratio !== 0 ? rowForCopy.cet1Ratio.toFixed(1) + "% (CET1)" : rowForCopy.leverageRatio != null ? rowForCopy.leverageRatio.toFixed(1) + "% (Leverage)" : "—"}</span></p>
+                      <p className="flex justify-between gap-4"><span className="text-slate-500"><DefTerm term="Capital Category">Capital Category</DefTerm></span><span className={`font-medium text-right ${capitalCategoryTone(rowForCopy.capitalCategory?.category)}`}>{rowForCopy.capitalCategory ? rowForCopy.capitalCategory.label : "—"}{rowForCopy.capitalCategory ? <span className="block text-[11px] font-normal text-slate-500">binding: {rowForCopy.capitalCategory.binding}{rowForCopy.capitalCategory.basis === "leverage-only" ? "; leverage only (CBLR filer)" : ""}</span> : null}</span></p>
                     </div>
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-semibold uppercase tracking-wide text-[#006D95] mb-2">Corporate History</h4>
+                    {history == null || history.cert !== rowForCopy.id ? (
+                      <p className="text-xs text-slate-500">Loading FDIC structure records…</p>
+                    ) : history.acquisitions.length === 0 ? (
+                      <p className="text-xs text-slate-600">No acquisitions on record with the FDIC.</p>
+                    ) : (
+                      <ul className="space-y-1.5 text-sm text-slate-700">
+                        {history.acquisitions.map((a, i) => (
+                          <li key={`${a.absorbedCert ?? i}-${a.date}`} className="flex gap-3">
+                            <span className="shrink-0 tabular-nums text-xs text-slate-500 pt-0.5 w-24">{formatEventDate(a.date)}</span>
+                            <span className="text-xs leading-relaxed">{a.description}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
                   <div>
                     <h4 className="text-xs font-semibold uppercase tracking-wide text-[#006D95] mb-2">Earnings</h4>

@@ -37,8 +37,10 @@ const SKIP_CACHE_LIMIT = 5000
 export function buildFilterString(filters: Record<string, any>): string {
   return Object.entries(filters)
     .map(([key, value]) => {
+      // Parenthesised so the alternatives bind before the AND joining other
+      // keys; query_string gives AND the higher precedence otherwise.
       if (Array.isArray(value)) {
-        return value.map((v) => `${key}:"${String(v).replace(/"/g, '\\"')}"`).join(" OR ")
+        return `(${value.map((v) => `${key}:"${String(v).replace(/"/g, '\\"')}"`).join(" OR ")})`
       }
       // Handle Elasticsearch date range (e.g. REPDTE:[2024-01-01 TO *])
       if (typeof value === "string" && /^\[.*\s+TO\s+/.test(value)) {

@@ -58,6 +58,11 @@ export const METRIC_DEFINITIONS: Record<string, MetricDef> = {
     howCalculated: "CET1 if reported; else Leverage ratio (Tier 1 ÷ assets).",
     whyValuable: "Ensures consistent capital comparison across institutions with different reporting.",
   },
+  "Capital Category": {
+    definition: "The regulators' Prompt Corrective Action band for the latest quarter: well, adequately, under-, significantly under- or critically undercapitalised.",
+    howCalculated: "Each reported ratio is tested against the published thresholds (12 CFR 324.403: well capitalised needs total risk-based ≥ 10%, Tier 1 ≥ 8%, CET1 ≥ 6.5%, leverage ≥ 5%) and the weakest ratio decides. Equity ÷ assets ≤ 2% is critically undercapitalised regardless. CBLR filers report no risk-based ratios and are classified on leverage alone.",
+    whyValuable: "The category, not the ratio, is what triggers supervisory action — restricted dividends, a capital plan, or closure. A bank that drops a band has changed status, not just a number.",
+  },
   "ROA": {
     definition: "Return on assets. Net income as a share of total assets.",
     howCalculated: "Net income ÷ total assets × 100 (FDIC ROA).",

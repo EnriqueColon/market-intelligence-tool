@@ -13,6 +13,7 @@ import { fetchMarketInsights } from "@/app/actions/fetch-insights"
 import { fetchPriceIndexData, fetchTransactionVolumeData } from "@/app/actions/fetch-cre-data"
 import { getScreeningPayload } from "@/app/actions/market-analytics-screening"
 import { getAnalyticsVisuals } from "@/app/actions/market-analytics-visuals"
+import { getCohortWatch } from "@/app/actions/market-analytics-watch"
 
 export const runtime = "nodejs"
 // 5 minutes — all tasks run concurrently so wall time is the slowest single task
@@ -104,6 +105,11 @@ export async function GET(request: Request) {
     // is the check.
     warmWithLabel("visuals:national", () => getAnalyticsVisuals("National"), results),
     warmWithLabel("visuals:florida", () => getAnalyticsVisuals("Florida"), results),
+
+    // Cohort Changes (deteriorating institutions and exits): the same FDIC
+    // round trip as the screening table plus a few structure-record requests.
+    warmWithLabel("watch:national", () => getCohortWatch("National"), results),
+    warmWithLabel("watch:florida", () => getCohortWatch("Florida"), results),
 
     // The Executive Brief and Underwriter Workbench were warmed here. They are
     // no longer reachable, so warming them would spend a couple of minutes of
