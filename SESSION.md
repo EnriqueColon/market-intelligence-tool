@@ -12,7 +12,8 @@ is it in now, and what is still open.
 
 The Cohort Changes list says *that* a bank is slipping; the user asked whether clicking a bank
 could show *how*, as line graphs over the last eight quarters. Discussed first, then built the
-recommended shape on `dev` (`24b2947`).
+recommended shape on `dev` (`24b2947`), then fixed its layout (`6d5169d`) after the user's first
+look on the preview showed six panels crushed into a narrow dialog.
 
 **What changed.** The institution drawer now opens with an **Eight-Quarter Trend** block above
 Structural Exposure (single-bank view only): a one-line verdict — *Deteriorating*, *Watch* or
@@ -44,8 +45,18 @@ Anchor Bank reads *Stable* with the CBLR leverage-only note; Madison County Comm
 unchanged. Build passes. Recharts 3 draws nothing under `renderToStaticMarkup`, which is why the
 harness bundles for the browser rather than rendering on the server.
 
-Still open: the user has not yet seen `7aab24f`, `45d2934` or `24b2947` on the dev preview; all
-three await that before going to production. Possible second cut: a dashed peer-median line per
+**The layout fix found an old bug.** The drawer's `DialogContent` asks for `max-w-6xl`, but the
+base component's `sm:max-w-lg` is a media-query rule and wins on every desktop viewport, so the
+drawer — comparison table, peer chart and all — has been rendering 512px wide, and the trend grid,
+sized by *viewport* breakpoints, put three columns into it. `6d5169d` prefixes both dialog widths
+with `sm:` so they outrank the base, and sizes the trend grid with Tailwind container queries
+(`@container`, `@xl:grid-cols-2`, `@4xl:grid-cols-3`) so it reads the drawer's width: one column at
+512px, three 350px columns at the drawer's real ~1100px. Panels are taller, x-axis ticks thin out
+(`minTickGap`) and the paired reference labels sit on opposite sides of their lines. Verified at
+both widths in the esbuild harness; the user's next look on the preview is the confirmation.
+
+Still open: `7aab24f`, `45d2934`, `24b2947` and `6d5169d` await the user's review on the dev
+preview before going to production. Possible second cut: a dashed peer-median line per
 panel from the matched cohort. Unchanged: the "CRE / Assets" label (value is CRE ÷ loans); the
 FHFA/FRED Florida selector; `bank-failure-monitor.tsx` and the Executive Brief unreferenced.
 

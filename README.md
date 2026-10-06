@@ -412,6 +412,12 @@ scripts/        One-off and ingestion scripts (TypeScript and Python)
 
 ### Traps that have already caused incidents
 
+**A bare `max-w-*` on `DialogContent` loses to the base component's `sm:max-w-lg`.** The base
+class is a media-query rule and wins on every desktop viewport, so the institution drawer asked for
+`max-w-6xl` and rendered 512px wide from the day it was written until `6d5169d`. Write dialog
+widths as `sm:max-w-6xl`, and size anything inside a dialog with container queries (`@container`,
+`@xl:grid-cols-2`), not viewport breakpoints — the dialog is narrower than the page.
+
 **"The URL loads" is not verification on every host.** The Legal Landscape source guard treats a
 403 as "the host refused us, not that the page is absent", which is correct for a rate-limiting
 regulator and meant **no congress.gov URL was ever checked** — the host is behind Cloudflare and

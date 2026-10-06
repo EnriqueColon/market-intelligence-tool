@@ -8,7 +8,7 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
 | `main` | `f72fbb4` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `24b2947` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `dev` | `6d5169d` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 This table names the newest commit on each branch that **changes behaviour**; documentation-only
 commits sit on top of it and are deliberately not tracked here, because amending one rotates its
@@ -19,8 +19,10 @@ SHA and the table then reads as stale when nothing has moved. Confirm with
 failed and merged banks out of the Market Analytics charts and exports and reads each bank's
 headline-quarter filing rather than its largest-asset one, **`45d2934`**, the Cohort Changes
 card (deteriorating institutions, exits with FDIC structure records, capital categories in the
-drawer), **and `24b2947`**, the eight-quarter trend panels at the top of the institution drawer.
-None is in production. Before them,
+drawer), **`24b2947`**, the eight-quarter trend panels at the top of the institution drawer, **and
+`6d5169d`**, which makes the drawer actually render at its declared width (it had been 512px on
+desktop since the dialog was introduced) and sizes the trend grid by container. None is in
+production. Before them,
 **`main` and `dev` were level at `7f24131` as of 14:35 on 2026-10-05.** Production fast-forwarded
 `4d1cf60` → `7f24131`, taking `0aaf1b2` (the load-timing diagnostic route) and `f72fbb4` (the News
 tab's data rendered into the page on the server). `4d1cf60` / `b2b08e9` is the production state
@@ -183,6 +185,7 @@ to `4ca86dc`. It is kept as the record of what each commit does and what reverti
 
 | Commit | Date | Summary |
 | --- | --- | --- |
+| `6d5169d` | 10-06 | **On `dev` only.** Institution drawer and expanded peer chart dialogs gain `sm:` on their max-widths so they outrank the base `DialogContent`'s `sm:max-w-lg` — the drawer had rendered at 512px on every desktop viewport. Trend grid switches to container queries (`@xl` / `@4xl`), taller panels, thinned ticks, reference labels separated. **Revertable in isolation**, but reverting restores the 512px drawer, which is the bug. |
 | `24b2947` | 10-06 | **On `dev` only.** Eight-Quarter Trend block at the top of the institution drawer: verdict line (Deteriorating / Watch / Stable from the Cohort Changes detector), five line panels with supervisory thresholds as reference lines, PCA capital-category strip. One FDIC call per CERT on open, cached `institution-trend-v1` + CERT + quarter. Exports `toInput` from `app/services/cohort-watch.ts` with ROA/NIM/nonaccrual added. **Revertable in isolation** — a new block, a new action, a new lib; nothing existing changes meaning. |
 | `45d2934` | 10-06 | **On `dev` only.** Cohort Changes card between the Cohort Summary and the charts: Deteriorating (capital-category downgrades at PCA thresholds, threshold crossings, multi-quarter trends; rows open the drawer) and Exits (who stopped filing and why, from FDIC `/failures`, `/history` and `/institutions`). Drawer gains Capital Category and Corporate History. Screening row gains `capitalCategory` (key → `market-analytics-screening-v2`); FDIC client parenthesises array filters; rounding-artefact crossings suppressed in `institution-change.ts`; warm cron warms the watch. **Revertable in isolation** — a new card and two drawer blocks; reverting restores the previous tab exactly, though the screening key stays bumped. |
 | `7aab24f` | 10-06 | **On `dev` only.** The report cohort (Visual Analysis charts, ZIP/PDF exports, analyst narrative) keeps an institution only if it filed for the headline quarter and represents it by that filing (`lib/analytics/headline-filing.ts`), the rule the screening table already applied. Removes failed and absorbed banks — Community B&T West Georgia, failed 1 May 2026, had led the CRE-to-Capital ranking at 710% on its final Q1 filing — and fixes a `Date.parse(YYYYMMDD)` → `NaN` sort that represented shrinking banks by their largest-asset quarter (Touchmark National 467.7% → 386.8%). Also feeds the KPI averages. Cache keys `market-analytics-report-data-v3`, `market-analytics-visuals-v2`. **Safe to revert in isolation**; reverting restores the stale cohort, nothing else. |

@@ -967,7 +967,11 @@ any quarter is left out of its panel rather than drawn flat; short histories dra
 Quarters are de-duplicated by `YYYYMMDD` and the newest eight kept, oldest first.
 
 **Panels.** Five, sharing an x-axis of quarters, bank as solid lines, published thresholds as
-dashed reference lines (not peer medians — there is no peer line in this cut):
+dashed reference lines (not peer medians — there is no peer line in this cut). The grid is sized
+by **container queries** (`@container` on the block; `@xl:grid-cols-2`, `@4xl:grid-cols-3`), not
+viewport breakpoints: the drawer is narrower than the page, and viewport-based columns over-count.
+At the drawer's full width (`sm:max-w-6xl`, ~1100px inside) that is three 350px columns; it drops
+to one below 576px.
 
 | Panel | Series | Reference lines |
 | --- | --- | --- |
