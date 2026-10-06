@@ -943,6 +943,61 @@ that can have happened *to* it are the ones where it absorbed somebody else — 
 lists Community B&T West Georgia (from the FDIC as receiver, 1 May 2026) and Home Federal Bank of
 Hollywood (2021).
 
+### Eight-Quarter Trend: how a bank got here
+
+The first block in the institution drawer when a single bank is open, above Structural Exposure.
+Cohort Changes says *that* a bank is slipping; this shows *how*, over its last eight Call Report
+quarters. `components/institution-trend-panels.tsx` over `lib/analytics/institution-trend.ts`
+(pure), fed by `getInstitutionTrend(cert)` in `app/actions/market-analytics-watch.ts`.
+
+**Data.** One FDIC `/financials` call for that CERT — `REPDTE` over the last 27 months, about
+nine rows, the same window the screening table uses — transformed by `transformFinancialData` and
+the watch's row adapter (`toInput` in `app/services/cohort-watch.ts`, now exported with ROA, net
+interest margin and nonaccrual added). Fetched when the drawer opens, not carried on the screening
+row: eight quarters of a dozen metrics for a thousand banks would not fit under the 2 MB Data Cache
+ceiling, and a single bank's history is a sub-second call that caches by itself. Cached
+`institution-trend-v1` + CERT + published quarter, seven days; only successes are cached. The
+drawer clears the block on bank change so one bank's history can never show under another's name.
+
+**Shape.** Every value is in percent points whatever the FDIC publishes it as, so the panels share
+one formatter. A missing ratio is `null`, never zero: a CBLR filer reports no risk-based ratios,
+and a zero would plot a capital collapse that did not happen. When no quarter reports a risk-based
+ratio the capital panel draws leverage alone and the caption says why. A series with no values in
+any quarter is left out of its panel rather than drawn flat; short histories draw short lines.
+Quarters are de-duplicated by `YYYYMMDD` and the newest eight kept, oldest first.
+
+**Panels.** Five, sharing an x-axis of quarters, bank as solid lines, published thresholds as
+dashed reference lines (not peer medians — there is no peer line in this cut):
+
+| Panel | Series | Reference lines |
+| --- | --- | --- |
+| Credit quality | Noncurrent ÷ loans, nonaccrual ÷ loans | 2%, 5% |
+| Capital | Leverage, CET1, total risk-based | 5% and 4% leverage (PCA well / adequate) |
+| CRE exposure | CRE ÷ (T1+T2), construction ÷ (T1+T2) | 300%, 100% (2006 interagency screens) |
+| Reserves | Allowance ÷ loans | 1% |
+| Earnings | ROA, net interest margin | 0% ROA |
+
+Panels whose values are all non-negative anchor the y-axis at zero so a fall reads as a fall; the
+earnings panel floats because ROA goes negative. Each panel's header shows the latest value per
+series, and its footer says which direction is worse. A sixth cell is the **capital category
+strip**: one coloured block per quarter from `classifyCapital` (green well → amber adequate →
+orange under → red significant → dark red critical, grey for not reported).
+
+**Verdict.** One line above the panels, from the same detector Cohort Changes uses
+(`watchInstitution` over the eight quarters), so the two cannot disagree. *Deteriorating* (red)
+when there is a capital-category downgrade, or a supervisory crossing corroborated by at least one
+other signal; *Watch* (amber) for any other signal, including a lone crossing at a well-capitalised
+bank; *Stable* (green) when no signal fires, with the span stated; *Too little history* when fewer
+than two quarters are on file. The first two signal sentences are joined with semicolons and the
+rest counted. Community B&T West Georgia reads: *Deteriorating. Capital category fell from
+adequately capitalised to critically undercapitalised (equity to assets 1.31%); CRE to capital rose
+above the 300% supervisory screen, at 710% from 117%; and 1 more signal* — and its strip runs
+Well → Adequate → Under → Adequate → Critical.
+
+`npm run test:institution-trend` covers the shaping and verdict; it runs under `tsx` rather than
+the bare Node runner because the module reaches `capital-category`, `quarter` and `cohort-watch`
+through `@/` imports.
+
 The Executive Brief (`app/actions/executive-brief.ts`) computed much of the Deteriorating list for a
 view nobody can reach; it is untouched, and `confluence.md`'s note on its unreachability stands.
 Cohort Changes is the same information surfaced where people already are, which is the decision
@@ -1502,6 +1557,7 @@ above were produced and is the before/after instrument for further work on load 
   | `market-analytics-screening-v2` + scope | Reduced, scored rows for the Market Analytics **tab**, now with `capitalCategory` |
   | `market-analytics-watch-v1` + scope | Cohort Changes: deteriorating institutions and exits with their FDIC structure records |
   | `institution-history-v1` + CERT | Acquisitions a bank has made, for the drawer's Corporate History |
+  | `institution-trend-v1` + CERT | Eight quarters of ratios, capital categories and the verdict, for the drawer's Eight-Quarter Trend |
   | `market-analytics-visuals-v2` + scope | Derived chart series for the Visual Analysis panel |
   | `executive-brief-v4` + scope | Ranked change events and non-reporting institutions for the Executive Brief. **Never populated** — the view is unreachable and the cron no longer warms it |
   | `underwriter-workbench-v1` + scope | Latest-quarter rows for the whole scope, for the Underwriter Workbench. **Never populated**, as above |

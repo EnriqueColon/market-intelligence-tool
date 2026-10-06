@@ -8,7 +8,50 @@ is it in now, and what is still open.
 
 ---
 
-## 2026-10-06, mid-morning (latest) — Cohort Changes: who is slipping, who has gone, and why
+## 2026-10-06, late morning (latest) — eight quarters in the drawer: how a bank got here
+
+The Cohort Changes list says *that* a bank is slipping; the user asked whether clicking a bank
+could show *how*, as line graphs over the last eight quarters. Discussed first, then built the
+recommended shape on `dev` (`24b2947`).
+
+**What changed.** The institution drawer now opens with an **Eight-Quarter Trend** block above
+Structural Exposure (single-bank view only): a one-line verdict — *Deteriorating*, *Watch* or
+*Stable* — then five small line charts (credit quality: noncurrent and nonaccrual ÷ loans; capital:
+leverage, CET1, total risk-based; CRE exposure: CRE and construction ÷ (T1+T2); reserves:
+allowance ÷ loans; earnings: ROA and net interest margin), each with the published supervisory
+thresholds as dashed reference lines, and a Prompt Corrective Action capital-category strip, one
+cell per quarter. The verdict reuses the Cohort Changes signal detector (`watchInstitution`), so
+the sentence in the drawer agrees with the list that sent the reader there; *Deteriorating* is
+reserved for a capital downgrade or a supervisory crossing corroborated by a second signal, a lone
+crossing at a well-capitalised bank being *Watch*. No peer line in this cut.
+
+Data is one FDIC `/financials` call per CERT when the drawer opens, cached per CERT and published
+quarter for a week (`institution-trend-v1`), so the screening payload — already near the 2 MB
+Data Cache ceiling — is untouched. Shaping is pure in `lib/analytics/institution-trend.ts`
+(every value in percent points; missing ratios `null`, never zero, so a CBLR filer's absent
+risk-based ratios do not draw a capital collapse); the chart is
+`components/institution-trend-panels.tsx`; the action is `getInstitutionTrend` in
+`app/actions/market-analytics-watch.ts`. `app/services/cohort-watch.ts` now exports its row
+adapter with ROA, NIM and nonaccrual added.
+
+**Verified** against live FDIC data and rendered in a browser via a `/tmp` esbuild harness (the
+app itself still cannot be logged into from the tool): Community B&T West Georgia reads
+*Deteriorating* — the strip runs Well → Adequate → Under → Adequate → **Critical** and the capital
+panel shows leverage falling from 8.8% to 0.16%, three quarters before regulators closed it;
+Anchor Bank reads *Stable* with the CBLR leverage-only note; Madison County Community Bank reads
+*Watch* on a single construction crossing (111% from 89%). Tests: `test:institution-trend` 10
+(runs under `tsx`, since the module uses `@/` imports); institution-change and capital-category
+unchanged. Build passes. Recharts 3 draws nothing under `renderToStaticMarkup`, which is why the
+harness bundles for the browser rather than rendering on the server.
+
+Still open: the user has not yet seen `7aab24f`, `45d2934` or `24b2947` on the dev preview; all
+three await that before going to production. Possible second cut: a dashed peer-median line per
+panel from the matched cohort. Unchanged: the "CRE / Assets" label (value is CRE ÷ loans); the
+FHFA/FRED Florida selector; `bank-failure-monitor.tsx` and the Executive Brief unreferenced.
+
+---
+
+## 2026-10-06, mid-morning — Cohort Changes: who is slipping, who has gone, and why
 
 Asked how to get the West Georgia story — closed 1 May, FDIC receiver, sold to Anchor Bank, $97M
 cost to the insurance fund, capital gone in a quarter — for every bank. Everything in that paragraph

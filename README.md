@@ -235,6 +235,7 @@ npm run test:fdic-loan-quality # NPL, noncurrent, reserve and past-due denominat
 npm run test:headline-filing  # which filing represents a bank in the charts and exports, and who is held out
 npm run test:capital-category # Prompt Corrective Action bands at the published thresholds, CBLR filers on leverage alone
 npm run test:structure-events # FDIC failure, merger and closing records shaped into exit sentences
+npm run test:institution-trend # eight-quarter drawer trend: units, CBLR nulls, verdict tone (runs under tsx: uses @/ imports)
 npm run test:quarter          # FDIC report-date arithmetic
 npm run test:peer-cohort      # workbench peer selection, and what it refuses to relax
 npm run test:cre-downside     # the capital scenario, on both regulatory capital regimes
