@@ -953,10 +953,13 @@ quarters. `components/institution-trend-panels.tsx` over `lib/analytics/institut
 **Data.** One FDIC `/financials` call for that CERT — `REPDTE` over the last 27 months, about
 nine rows, the same window the screening table uses — transformed by `transformFinancialData` and
 the watch's row adapter (`toInput` in `app/services/cohort-watch.ts`, now exported with ROA, net
-interest margin and nonaccrual added). Fetched when the drawer opens, not carried on the screening
+interest margin and nonaccrual added), plus one `/institutions` call for the head-office city and
+state: `/financials` truncates `CITY` to sixteen characters ("PALM BEACH GARDE"), and the reading
+below must name the bank's location in full because the FDIC has five banks called Citizens Bank
+in Tennessee alone. The institution call is best effort; the filing's city stands if it fails. Fetched when the drawer opens, not carried on the screening
 row: eight quarters of a dozen metrics for a thousand banks would not fit under the 2 MB Data Cache
 ceiling, and a single bank's history is a sub-second call that caches by itself. Cached
-`institution-trend-v1` + CERT + published quarter, seven days; only successes are cached. The
+`institution-trend-v2` + CERT + published quarter, seven days; only successes are cached. The
 drawer clears the block on bank change so one bank's history can never show under another's name.
 
 **Shape.** Every value is in percent points whatever the FDIC publishes it as, so the panels share
@@ -1009,7 +1012,8 @@ the panels plot, formatted as a pipe table with the PCA category per quarter; a 
 saying which quarters sit on the adverse side of each published threshold (2% and 5% noncurrent,
 300% CRE and 100% construction to capital as ceilings; 1% allowance and 5% leverage as floors),
 computed in code because the mini model got these comparisons backwards; the CBLR flag; and the
-automated verdict. It is asked for at most two paragraphs and 140 words that explain what is
+automated verdict. It is asked for at most two paragraphs and 140 words that open by naming the
+bank and its city and state exactly as given, without repeating them after, and explain what is
 driving each move — a CRE-to-capital jump with flat lending is a shrinking denominator; an
 improvement that reverses is temporary; a single-quarter earnings outlier is "a one-off gain or a
 data issue" — quoting figures to one decimal and never rounding to a convenient number.
@@ -1018,11 +1022,12 @@ The reply is shown only if `checkNarrative` passes: every number in it must be a
 some rounding (floor, ceiling, 0–2 decimals), a quarter or year label, one of the five screen
 values, or an integer of twenty or less; no markdown; under 1.4× the word limit. A trailing-zero
 trim applies only to fractional parts, so `400` is not accepted as the count `4`. A failed reply is
-replaced by `fallbackNarrative` — the verdict sentence plus first-to-last moves in noncurrent
-loans, leverage, CRE to capital and ROA — and the block's caption says "From the signals above"
+replaced by `fallbackNarrative` — "Citizens Bank (Elizabethton, Tennessee) — deteriorating:" plus
+the verdict sentence and first-to-last moves in noncurrent loans, leverage, CRE to capital and
+ROA — and the block's caption says "From the signals above"
 rather than "Generated from the eight quarters above; every figure checked against them".
 
-Cached `institution-trend-narrative-v1` + CERT + published quarter, seven days, including a
+Cached `institution-trend-narrative-v2` + CERT + published quarter, seven days, including a
 fallback that resulted from a failed check (the same table draws the same slip); a fallback from
 a model *error* is not cached. The call uses `OPENAI_TREND_MODEL` or `gpt-4.1` through a new
 per-call `model` option on `callOpenAi`. With no `OPENAI_API_KEY` the fallback is shown with the
@@ -1588,8 +1593,8 @@ above were produced and is the before/after instrument for further work on load 
   | `market-analytics-screening-v2` + scope | Reduced, scored rows for the Market Analytics **tab**, now with `capitalCategory` |
   | `market-analytics-watch-v1` + scope | Cohort Changes: deteriorating institutions and exits with their FDIC structure records |
   | `institution-history-v1` + CERT | Acquisitions a bank has made, for the drawer's Corporate History |
-  | `institution-trend-v1` + CERT | Eight quarters of ratios, capital categories and the verdict, for the drawer's Eight-Quarter Trend |
-  | `institution-trend-narrative-v1` + CERT | The figure-checked analyst reading under the trend panels, or its fallback |
+  | `institution-trend-v2` + CERT | Eight quarters of ratios, capital categories, city/state and the verdict, for the drawer's Eight-Quarter Trend |
+  | `institution-trend-narrative-v2` + CERT | The figure-checked analyst reading under the trend panels, or its fallback |
   | `market-analytics-visuals-v2` + scope | Derived chart series for the Visual Analysis panel |
   | `executive-brief-v4` + scope | Ranked change events and non-reporting institutions for the Executive Brief. **Never populated** — the view is unreachable and the cron no longer warms it |
   | `underwriter-workbench-v1` + scope | Latest-quarter rows for the whole scope, for the Underwriter Workbench. **Never populated**, as above |

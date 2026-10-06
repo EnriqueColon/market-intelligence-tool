@@ -78,8 +78,16 @@ option on `callOpenAi` — one short, checked, week-cached call per bank is wort
 After those, West Georgia, Anchor Bank and Madison County all read correctly in 2–3 s and
 120–140 words. Tests: `test:trend-narrative` 10.
 
-Still open: `7aab24f`, `45d2934`, `24b2947`, `6d5169d` and `38b688a` await the user's review on
-the dev preview before going to production. Possible second cut: a dashed peer-median line per
+**Location in the reading (`7a3f80e`).** The user's next ask: a Citizens Bank reading must say
+*which* Citizens Bank. The FDIC has five in Tennessee alone. The trend now carries city and state
+from the newest filing, and because `/financials` truncates `CITY` to sixteen characters ("PALM
+BEACH GARDE") the cached load also reads the `/institutions` record for the full name. The prompt
+requires the opening sentence to name the bank and location as given and not repeat them; the
+fallback leads with "Citizens Bank (Elizabethton, Tennessee) — deteriorating: …". Cache keys bumped
+to `institution-trend-v2` and `institution-trend-narrative-v2`. Tests 11.
+
+Still open: `7aab24f`, `45d2934`, `24b2947`, `6d5169d`, `38b688a` and `7a3f80e` await the user's
+review on the dev preview before going to production. Possible second cut: a dashed peer-median line per
 panel from the matched cohort. Unchanged: the "CRE / Assets" label (value is CRE ÷ loans); the
 FHFA/FRED Florida selector; `bank-failure-monitor.tsx` and the Executive Brief unreferenced.
 
