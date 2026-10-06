@@ -127,6 +127,78 @@ export const FDIC_FIELDS = {
     'STNAME', // State Name
     'CITY', // City
   ],
+  /**
+   * Bank *behaviour* fields for the Market Analytics expansion: what a bank is
+   * doing about its CRE book, as opposed to the condition fields above. A
+   * separate list, not additions to `financials`, because the screening cache
+   * entry is already 1.26MB against a 2MB ceiling and because every pull on
+   * the tab shares that list; these are pulled on their own path.
+   *
+   * Every field was checked against the official catalogue
+   * (api.fdic.gov/banks/docs/risview_properties.yaml, 2,378 fields) and, where
+   * the FFIEC CDR bulk subset carries the item, tied to the published Call
+   * Report for three banks (CERT 35541, 24156, 14851; 2026-06-30):
+   *   LNLSSALE = RCON5369, ORE = RCON2150, NARSLNLT = RCONHK28,
+   *   P3RSLNLT = RCONHK26, P9RSLNLT = RCONHK27 — all exact.
+   *
+   * Dollar fields are in thousands. `DR*`/`CR*`/`NT*` without a `Q` are
+   * year-to-date, as on Schedule RI-B; the `*Q` nets are the quarter alone.
+   */
+  behavior: [
+    'CERT',
+    'NAME',
+    'REPDTE',
+    'STNAME',
+    'ASSET',
+    'LNLSGR', // Gross loans and leases: the denominator for every rate below
+    // ── Schedule RC line 4.a: loans and leases held for sale. The "we are about
+    // to sell" balance. Titled "held for resale" in the catalogue, which is why
+    // a search for "held for sale" misses it. Total only: the Call Report has
+    // no HFS breakdown by loan type.
+    'LNLSSALE',
+    'NALNSALE', // of which nonaccrual
+    'P3LNSALE', // of which 30-89 days past due
+    'P9LNSALE', // of which 90+ days past due
+    // ── Schedule RI line 5.i: net gains (losses) on sales of loans and leases.
+    'NETGNSLN', // year-to-date
+    'NTGLLNQ', // the quarter alone — no differencing needed
+    // ── Schedule RI-B Part I, columns A (charge-offs) and B (recoveries), by
+    // CRE category. Year-to-date; `NT*Q` is the quarter's net.
+    'DRRECONS', 'CRRECONS', 'NTRECONS', 'NTRECONQ', // 1.a construction & land development
+    'DRREMULT', 'CRREMULT', 'NTREMULT', 'NTREMULQ', // 1.d multifamily
+    'DRRENRES', 'CRRENRES', 'NTRENRES', 'NTRENRSQ', // 1.e nonfarm nonresidential, both halves
+    'DRRENROT', 'CRRENROT', 'NTRENROT', // 1.e.(2) of which non-owner-occupied; owner-occupied is derived as the difference
+    // ── Schedule RC-M item 3: other real estate owned, by property type.
+    'ORE', // total
+    'ORECONS', // 3.a construction & land development
+    'OREMULT', // 3.c multifamily
+    'ORENRES', // 3.d nonfarm nonresidential
+    'ORERES', // 3.b 1-4 family
+    'OREAG', // farmland
+    // ── Schedule RC-N, by CRE category: columns A (30-89), B (90+), C (nonaccrual).
+    'P3RECONS', 'P9RECONS', 'NARECONS',
+    'P3REMULT', 'P9REMULT', 'NAREMULT',
+    'P3RENRES', 'P9RENRES', 'NARENRES',
+    'P3RENROT', 'P9RENROT', 'NARENROT', // of which non-owner-occupied
+    // ── Schedule RC-C Part I Memorandum 1 and RC-N Memorandum 1: loan
+    // modifications to borrowers experiencing financial difficulty (ASU
+    // 2022-02, from Q1 2023). The catalogue still titles these "restructured",
+    // the pre-2023 TDR label, but the series is live and ties to RCONHK26/27/28.
+    'RSLNLTOT', // total modified loans
+    'RSCONS', // construction & land development
+    'RSMULT', // multifamily
+    'RSNRES', // nonfarm nonresidential
+    'RSCI', // commercial & industrial
+    'RSLNREFM', // 1-4 family
+    'RSOTHER', // all other
+    'P3RSLNLT', // modified and 30-89 days past due
+    'P9RSLNLT', // modified and 90+ days past due
+    'NARSLNLT', // modified and nonaccrual
+    // ── Schedule RC-S: loans serviced for others. The only RC-S item that
+    // bears on CRE; the rest of the schedule is residential and card
+    // securitisation.
+    'LNSERV',
+  ],
   institutions: [
     'CERT',
     'NAME',
