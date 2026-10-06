@@ -2,10 +2,14 @@
 
 import { unstable_cache } from "next/cache"
 import { getLatestFdicQuarter } from "@/app/actions/fdic-latest-quarter"
-import { computeCohortWatch } from "@/app/services/cohort-watch"
+import { computeCohortWatch, toInput } from "@/app/services/cohort-watch"
 import { fetchAcquisitionsBy } from "@/app/services/fdic-structure-events"
 import { describeAcquisition, type StructureEvent } from "@/lib/fdic-structure-events"
 import type { CohortWatch } from "@/lib/analytics/cohort-watch"
+import { buildInstitutionTrend, type InstitutionTrend } from "@/lib/analytics/institution-trend"
+import { fetchFDICData } from "@/lib/fdic-client"
+import { FDIC_ENDPOINTS, FDIC_FIELDS } from "@/lib/fdic-config"
+import { transformFinancialData } from "@/lib/fdic-data-transformer"
 
 /**
  * A week, keyed by scope and the published quarter, like the screening table:
@@ -77,5 +81,48 @@ export async function getInstitutionHistory(cert: string): Promise<InstitutionHi
     return await cached()
   } catch {
     return { cert, acquisitions: [] }
+  }
+}
+
+export type InstitutionTrendResult = { ok: true; trend: InstitutionTrend } | { ok: false; error: string }
+
+/** 27 months: nine quarters, one of headroom for the FDIC's publication lag. */
+function trendWindowFilter(): string {
+  const d = new Date()
+  d.setMonth(d.getMonth() - 27)
+  return `[${d.toISOString().slice(0, 7)}-01 TO *]`
+}
+
+/**
+ * The last eight quarters for one institution, for the drawer's trend panels.
+ *
+ * One FDIC call for that CERT — about nine rows — rather than widening the
+ * screening payload, which is already near the data-cache ceiling. Cached per
+ * CERT and published quarter for a week; only successes are cached.
+ */
+export async function getInstitutionTrend(cert: string): Promise<InstitutionTrendResult> {
+  if (!cert) return { ok: false, error: "No institution selected." }
+  const quarter = await getLatestFdicQuarter()
+  const cached = unstable_cache(
+    async () => {
+      const response = await fetchFDICData<Record<string, unknown>>(FDIC_ENDPOINTS.financials, {
+        filters: { CERT: cert, REPDTE: trendWindowFilter() },
+        fields: FDIC_FIELDS.financials,
+        limit: 12,
+        sort_by: "REPDTE",
+        sort_order: "DESC",
+      })
+      if (response.error) throw new Error(response.error)
+      const rows = transformFinancialData(response.data ?? []).map(toInput)
+      if (rows.length === 0) throw new Error(`No FDIC filings for CERT ${cert} in the last 27 months.`)
+      return buildInstitutionTrend(cert, rows)
+    },
+    ["institution-trend-v1", cert, quarter],
+    { revalidate: WATCH_REVALIDATE_SECONDS }
+  )
+  try {
+    return { ok: true, trend: await cached() }
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Unable to load the institution's history." }
   }
 }

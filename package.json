@@ -21,6 +21,7 @@
     "test:headline-filing": "node --test --experimental-strip-types lib/analytics/headline-filing.test.ts",
     "test:capital-category": "node --test --experimental-strip-types lib/scoring/capital-category.test.ts",
     "test:structure-events": "node --test --experimental-strip-types lib/fdic-structure-events.test.ts",
+    "test:institution-trend": "tsx --tsconfig tsconfig.json lib/analytics/institution-trend.test.ts",
     "audit:fdic-columns": "node scripts/audit-fdic-columns.mjs",
     "test:quarter": "node --test --experimental-strip-types lib/scoring/quarter.test.ts",
     "test:peer-cohort": "node --test --experimental-strip-types lib/scoring/peer-cohort.test.ts",

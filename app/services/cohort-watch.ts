@@ -8,13 +8,14 @@ import {
   partitionCohort,
   resolveExits,
   type CohortWatch,
-  type WatchInputRow,
 } from "@/lib/analytics/cohort-watch"
+import type { TrendInputRow } from "@/lib/analytics/institution-trend"
 
 /** Matches the screening tab, so the watch and the table see the same cohort. */
 const ROW_CAP = 10000
 
-function toInput(row: BankFinancialData): WatchInputRow {
+/** The watch's narrow row, plus the three earnings fields the drawer's trend panels add. */
+export function toInput(row: BankFinancialData): TrendInputRow {
   const ratios = computeCapitalRatios({
     totalAssets: row.totalAssets,
     creLoans: row.creLoans ?? 0,
@@ -48,6 +49,9 @@ function toInput(row: BankFinancialData): WatchInputRow {
     totalEquityDollars: row.totalEquityDollars,
     creToTier1Tier2: ratios?.creToTier1Tier2 ?? null,
     constructionToTier1Tier2: ratios?.constructionToTier1Tier2 ?? null,
+    nplRatio: row.nplRatio,
+    roa: row.roa,
+    netInterestMargin: row.netInterestMargin,
   }
 }
 

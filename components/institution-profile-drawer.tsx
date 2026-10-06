@@ -4,7 +4,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Copy, X } from "lucide-react"
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 import { fetchNoncurrentDebugSnapshot } from "@/app/actions/fetch-fdic-data"
-import { getInstitutionHistory, type InstitutionHistory } from "@/app/actions/market-analytics-watch"
+import {
+  getInstitutionHistory,
+  getInstitutionTrend,
+  type InstitutionHistory,
+  type InstitutionTrendResult,
+} from "@/app/actions/market-analytics-watch"
+import { InstitutionTrendPanels, InstitutionTrendSkeleton } from "@/components/institution-trend-panels"
 import type { NoncurrentDebugSnapshot } from "@/lib/noncurrent-debug"
 import { formatEventDate } from "@/lib/fdic-structure-events"
 import { Button } from "@/components/ui/button"
@@ -294,8 +300,28 @@ export function InstitutionProfileDrawer({
   const lastLoggedRef = useRef<string | null>(null)
   const [fdicSnapshot, setFdicSnapshot] = useState<NoncurrentDebugSnapshot | null>(null)
   const [history, setHistory] = useState<InstitutionHistory | null>(null)
+  const [trend, setTrend] = useState<InstitutionTrendResult | null>(null)
 
   const primaryRow = row ?? compareRows[0]
+
+  // Eight-quarter trend: one cached FDIC call per institution, same lifecycle
+  // as the corporate history below. `null` while loading.
+  useEffect(() => {
+    setTrend(null)
+    if (!primaryRow) return
+    let active = true
+    getInstitutionTrend(primaryRow.id)
+      .then((result) => {
+        if (!active) return
+        if (!result.ok || result.trend.cert === primaryRow.id) setTrend(result)
+      })
+      .catch((error: unknown) => {
+        if (active) setTrend({ ok: false, error: error instanceof Error ? error.message : "Unable to load the trend." })
+      })
+    return () => {
+      active = false
+    }
+  }, [primaryRow?.id])
 
   // Corporate history is one small cached FDIC call per institution, fetched
   // when the drawer opens on a single bank. Cleared on change so a previous
@@ -592,6 +618,16 @@ export function InstitutionProfileDrawer({
               <PeerPositioningComparisonChart rows={displayRows} cohort={cohort} />
               {rowForCopy && displayRows.length === 1 && (
                 <>
+                  <div className="rounded-lg border border-slate-200/80 bg-slate-50/50 px-4 py-3">
+                    <h4 className="text-xs font-semibold uppercase tracking-wide text-[#006D95] mb-2">Eight-Quarter Trend</h4>
+                    {trend == null ? (
+                      <InstitutionTrendSkeleton />
+                    ) : trend.ok ? (
+                      <InstitutionTrendPanels trend={trend.trend} />
+                    ) : (
+                      <p className="text-xs text-slate-500">Trend unavailable: {trend.error}</p>
+                    )}
+                  </div>
                   <div className="rounded-lg border border-slate-200/80 bg-slate-50/50 px-4 py-3">
                     <p className="text-xs text-slate-500 uppercase tracking-wide">{rowForCopy.city ?? "—"}, {rowForCopy.state ?? "—"}</p>
                     <p className="text-sm font-semibold text-slate-800 mt-0.5">
