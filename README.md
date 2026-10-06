@@ -237,6 +237,7 @@ npm run test:capital-category # Prompt Corrective Action bands at the published 
 npm run test:structure-events # FDIC failure, merger and closing records shaped into exit sentences
 npm run test:institution-trend # eight-quarter drawer trend: units, CBLR nulls, verdict tone (runs under tsx: uses @/ imports)
 npm run test:trend-narrative  # the analyst reading's prompt table, screen flags, figure guard and fallback
+npm run test:bank-behavior    # bank-behaviour fields: provenance catalogue, null handling, YTD→quarter differencing (tsx)
 npm run test:quarter          # FDIC report-date arithmetic
 npm run test:peer-cohort      # workbench peer selection, and what it refuses to relax
 npm run test:cre-downside     # the capital scenario, on both regulatory capital regimes
@@ -294,6 +295,12 @@ Some checks need live data rather than fixtures, because they are calibrations r
   derivation or anything it reads. **An oversized payload is not an error** — Next just refuses the
   write and recomputes 22 seconds of FDIC pagination on every mount — so this script is the only
   thing standing between a new chart field and a silently slow tab.
+- `npm run verify:behavior-fields` — the bank-behaviour fields (held-for-sale, loan-sale gains, CRE
+  charge-offs, OREO, RC-N by category, modifications). Prints every catalogue entry with its live
+  value and source for the sample banks (`CERTS=`); with `CDR_SUBSET_DIR=` pointing at an FFIEC CDR
+  "Call Bulk Subset of Schedules" folder it ties five fields to the published Call Report and exits
+  non-zero on any mismatch; with `COHORT=1 SCOPE=…` it times the full-coverage nine-quarter pull.
+  Run it after touching `FDIC_FIELDS.behavior` or `BEHAVIOR_FIELD_CATALOG`.
 - `npm run verify:latest-quarter` — the FDIC quarter probe. This one is load-bearing and fails
   invisibly: its answer is part of both Market Analytics cache keys, so a wrong value serves stale
   figures for up to a week and an unstable one makes every visitor miss the cache. It already

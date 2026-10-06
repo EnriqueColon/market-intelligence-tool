@@ -1039,6 +1039,65 @@ view nobody can reach; it is untouched, and `confluence.md`'s note on its unreac
 Cohort Changes is the same information surfaced where people already are, which is the decision
 that retired the brief as a destination.
 
+### Bank behaviour fields: what a bank is doing about its CRE book
+
+The tab's scores measure *condition*. The Bank Behaviour expansion (in progress; ingestion only as
+of `c656665`) adds the Call Report items that show *action* — the footprints a bank leaves when it
+is working out or selling distressed CRE — as the base for signals, a Balance-Sheet Actions panel
+in the drawer and a Seller Likelihood score. None of those exist yet; this section describes the
+data layer they will stand on.
+
+**Fields.** `FDIC_FIELDS.behavior` in `lib/fdic-config.ts` is a separate BankFind field list. It
+is not merged into `FDIC_FIELDS.financials` because that list is shared by every pull on the tab
+and the screening reduction built from it is already 1.26MB against the 2MB cache ceiling. The
+groups, with Call Report schedule:
+
+| Group | Schedule | BankFind fields |
+| --- | --- | --- |
+| Loans held for sale | RC 4.a (RCON5369) | `LNLSSALE`; of which `NALNSALE`, `P3LNSALE`, `P9LNSALE` |
+| Net gains (losses) on loan sales | RI 5.i | `NETGNSLN` (YTD), `NTGLLNQ` (quarter) |
+| Charge-offs and recoveries by CRE category | RI-B Part I, cols A/B | `DR`/`CR`/`NT` × `RECONS`, `REMULT`, `RENRES`, `RENROT` (YTD); `NTRECONQ`, `NTREMULQ`, `NTRENRSQ` (quarter nets) |
+| OREO by property type | RC-M 3 (RCON2150) | `ORE`, `ORECONS`, `ORERES`, `OREMULT`, `ORENRES`, `OREAG` |
+| Past due and nonaccrual by CRE category | RC-N 1.a/1.d/1.e, cols A/B/C | `P3`/`P9`/`NA` × `RECONS`, `REMULT`, `RENRES`, `RENROT` |
+| Modifications to borrowers in financial difficulty | RC-C I M.1; RC-N M.1 (RCONHK26/27/28) | `RSLNLTOT`, `RSCONS`, `RSMULT`, `RSNRES`, `RSCI`, `RSLNREFM`, `RSOTHER`; `P3RSLNLT`, `P9RSLNLT`, `NARSLNLT` |
+| Loans serviced for others | RC-S M.2 | `LNSERV` |
+
+Two naming traps. `LNLSSALE` is titled "loans and leases held for *re*sale" in the FDIC catalogue;
+it is the RC 4.a held-for-sale balance and the Call Report has no breakdown of it by loan type.
+The `RS*` family is titled "restructured", the pre-2023 TDR label, but is the live ASU 2022-02
+modification series — it ties to RCONHK26/27/28 exactly.
+
+**Shaping** is pure, in `lib/analytics/bank-behavior.ts`. `BEHAVIOR_FIELD_CATALOG` is the
+provenance table: one entry per output key with the BankFind field or the derivation formula, the
+schedule and line, the basis (`balance`, `ytd`, `quarter`) and `reported` or `derived`. Anything
+shown to a user is to be labelled from this table. `toBehaviorQuarter` maps a raw row; a missing
+field is `null`, never zero, and a `null` term makes a derived sum `null` rather than a smaller
+number. Derived values: owner-occupied nonfarm nonresidential as nonfarm less its non-owner half
+(the Call Report reports both halves of RC-N and the non-owner half of RI-B, not owner-occupied
+alone); CRE totals as construction + multifamily + nonfarm nonresidential; and the quarter's own
+gross charge-offs and recoveries, which RI-B reports year-to-date — `withQuarterlyFlows` takes Q1
+as filed and otherwise YTD less the prior quarter's YTD, and leaves the quarter `null` when the
+prior quarter is not in the history. `buildBehaviorHistory` keeps the newest nine quarters, oldest
+first, one per report date; `groupBehaviorHistories` splits a many-bank pull by CERT.
+
+**Fetching** is in `app/services/bank-behavior.ts` and is deliberately uncached: raw nine-quarter
+histories for the national population are ~31MB. `fetchBehaviorHistory(cert)` is one request
+(about nine rows) for the drawer. `fetchBehaviorCohort(scope, latestQuarter)` is full coverage —
+every filer, not the screening table's top 1,116 — as one request per quarter, three at a time,
+because one quarter's population (~4,300 rows) fits a single FDIC page while the 27-month window
+would take four sequential pages. Measured: national 40,318 rows, 4,630 institutions (4,292 with
+all nine quarters), 12.8s; Florida 93 institutions, 1.3s. The reductions built on it will be what
+is cached, chunked by asset band so no entry nears 2MB.
+
+**Checks.** `npm run test:bank-behavior` (tsx) covers the config-list/catalogue agreement, the
+mapping, null handling, quarter arithmetic, the YTD differencing and history assembly.
+`npm run verify:behavior-fields` prints the catalogue with live values for sample banks (`CERTS=`),
+ties `LNLSSALE`, `ORE`, `P3RSLNLT`, `P9RSLNLT` and `NARSLNLT` to RCON5369, RCON2150 and
+RCONHK26/27/28 in an FFIEC CDR bulk subset on disk (`CDR_SUBSET_DIR=`; exits non-zero on any
+mismatch; 30/30 on 2026-10-06 for CERTs 35541, 24156, 14851 over Q1–Q2 2026), and times the
+cohort pull (`COHORT=1 SCOPE=…`). The subset is the "Call Bulk Subset of Schedules" ZIP from
+cdr.ffiec.gov Bulk Data; the facsimile pages there are ASP.NET postbacks and cannot be scripted.
+
 ### Peer Positioning in the institution drawer
 
 `components/institution-profile-drawer.tsx`. Percentiles are measured against a **matched peer
@@ -1947,6 +2006,7 @@ npm run test:fdic-cre              # the CRE definition and its two traps
 npm run test:quarter               # FDIC report-date arithmetic
 npm run test:peer-cohort           # workbench cohort selection and relaxation
 npm run test:cre-downside          # the capital scenario, both regimes
+npm run test:bank-behavior         # behaviour fields: catalogue, nulls, YTD→quarter, histories (tsx; @/ imports)
 ```
 
 `test:allowlist` runs under `tsx` rather than Node's type stripping, because `lib/domain-allowlist.ts`

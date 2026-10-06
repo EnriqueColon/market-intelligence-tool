@@ -8,7 +8,71 @@ is it in now, and what is still open.
 
 ---
 
-## 2026-10-06, late morning (latest) — eight quarters in the drawer: how a bank got here
+## 2026-10-06, afternoon (latest) — Bank Behaviour expansion, step 1: the fields are in
+
+The user wants the Market Analytics tab to measure bank *behaviour* as well as bank *condition*:
+which banks are charging off CRE, moving loans to held-for-sale, selling at a loss, foreclosing or
+modifying troubled borrowers — the banks about to put notes or REO on the market, which is where
+SHCP wants to be before a pool is marketed. The spec is additive only (existing scores, weights
+and layout untouched), percentile ranks within scope, weekly cached job, nine quarters per bank,
+every figure traceable to a Call Report field with derived values labelled. Build order agreed:
+(1) ingest the Phase 1 fields, (2) signals and the nonaccrual roll-forward, (3) Balance-Sheet
+Actions drawer panel, (4) Seller Likelihood score and backtest, (5) tab-level pieces. This session
+did the field audit and then step 1, on `dev` (`c656665`). Nothing on the tab has changed yet.
+
+**The audit, and what it corrected.** Every Phase 1 field group is in FDIC BankFind `/financials`;
+the FFIEC CDR bulk file is *not* needed. The held-for-sale balance, which the first pass reported
+as missing, is `LNLSSALE` — the catalogue titles it "held for *re*sale", so a search for "held for
+sale" misses it. It is the clearest signal in the set: Community B&T West Georgia went $0 → $57M
+HFS over the three quarters before it failed; BCB Community Bank parked $35M in HFS in Q2 2024
+with a $4.8M loan-sale loss, and $10.8M again in Q2 2026 with a $2.6M loss. Quarterly loan-sale
+gains are reported directly (`NTGLLNQ`), so no differencing there. The modification series
+(`RSLNLTOT`, `RSCONS`, `RSMULT`, `RSNRES`, `RSCI`, `RSLNREFM`, `RSOTHER`, `P3/P9/NARSLNLT`) still
+carries the pre-2023 "restructured" title but is the live ASU 2022-02 series: Ocean Bank went
+$0 → $60M modified in Q2 2026, BCB $114M → $1.5M as it cleaned up.
+
+**Tie-out to the published Call Report.** The user had the FFIEC CDR bulk subset for 2026 in
+`~/Downloads`; it carries RCON5369 (HFS), RCON2150 (OREO) and RCONHK26/27/28 (modified loans
+30–89 / 90+ / nonaccrual). For BCB (35541), Ocean Bank (24156) and Citizens Bank Elizabethton
+(14851), Q1 and Q2 2026, `LNLSSALE`, `ORE`, `P3RSLNLT`, `P9RSLNLT` and `NARSLNLT` match the
+published figures exactly — 30 comparisons, 0 mismatches. That settles the modification-field
+question the audit left open. The facsimile endpoints on cdr.ffiec.gov are ASP.NET postbacks and
+could not be driven from curl; the bulk subset is the reproducible route.
+
+**What was built** (`c656665`). `FDIC_FIELDS.behavior` in `lib/fdic-config.ts`: a *separate*
+BankFind field list — not additions to `financials`, whose cached reduction is already 1.26MB
+against the 2MB ceiling and whose list every pull on the tab shares — with each field's schedule
+and line in a comment. `lib/analytics/bank-behavior.ts`: `BEHAVIOR_FIELD_CATALOG`, one entry per
+output key naming the BankFind field or the formula, the schedule, the basis (balance / YTD /
+quarter) and whether it is reported or derived — the provenance table the drawer and verify script
+read; `toBehaviorQuarter` (null means not reported, never zero, and a null term makes a derived sum
+null rather than a smaller number); `withQuarterlyFlows`, which turns RI-B's year-to-date gross
+charge-offs and recoveries into the quarter's own (Q1 as filed, otherwise YTD less the prior
+quarter's YTD, null when the prior quarter is not in the history — a gap is a gap, not zero);
+`buildBehaviorHistory` (dedupe, oldest first, newest nine) and `groupBehaviorHistories`.
+Derived values: owner-occupied nonfarm as nonfarm less non-owner, CRE totals as construction +
+multifamily + nonfarm nonres, quarterly flows. `app/services/bank-behavior.ts`:
+`fetchBehaviorHistory(cert)` (one request) and `fetchBehaviorCohort(scope, latestQuarter)` — full
+coverage, one request per quarter, three at a time. Nothing is cached in this layer: raw
+nine-quarter histories for 4,600 banks are ~31MB and could not be; the reductions built on them in
+step 2 will be. `npm run test:bank-behavior` (9 tests, tsx) and `npm run verify:behavior-fields`
+(catalogue with live values; `CDR_SUBSET_DIR` for the tie-out; `COHORT=1 SCOPE=…` for timing).
+
+**Coverage question answered by measurement.** The spec asked for all ~4,300 banks rather than the
+top ~1,100 and the audit estimated 90–120s for the national nine-quarter pull. Measured: 40,318
+rows, 31MB, 4,630 institutions (4,292 with all nine quarters) in **12.8s**; Florida 93 institutions
+in 1.3s. Full coverage is not a cost problem for the cron (`maxDuration` 300s). What it still
+constrains is storage: computed signals for 4,600 banks need to be chunked by asset band to stay
+under 2MB per entry, which is the same shape the pending Tioga-Franklin table fix needs.
+
+**Still open.** Step 2 (signals, roll-forward, chunked cache) next, on the user's go. The
+pre-release items carry over: first production look at Cohort Changes and the drawer with cold
+caches; "CRE / Assets" label; the two-cohort table question (decision pending). The 2025 CDR
+subset would extend the tie-out to the 2025 quarters if wanted; the 2026 one covers Q1–Q2 2026.
+
+---
+
+## 2026-10-06, late morning — eight quarters in the drawer: how a bank got here
 
 The Cohort Changes list says *that* a bank is slipping; the user asked whether clicking a bank
 could show *how*, as line graphs over the last eight quarters. Discussed first, then built the

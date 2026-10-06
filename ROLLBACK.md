@@ -8,14 +8,17 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
 | `main` | `7a3f80e` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `7a3f80e` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `dev` | `c656665` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 This table names the newest commit on each branch that **changes behaviour**; documentation-only
 commits sit on top of it and are deliberately not tracked here, because amending one rotates its
 SHA and the table then reads as stale when nothing has moved. Confirm with
 `git log --format='%h|%ci|%s'` rather than trusting the previous entry — this has drifted twice.
 
-**`main` and `dev` are level at `ad24c30` as of 10:50 on 2026-10-06.** Production fast-forwarded
+**`dev` is one behavioural commit ahead of `main` as of 14:21 on 2026-10-06:** `c656665`, the
+Bank Behaviour expansion's ingestion layer (a new FDIC field list, a pure shaping module, a service
+and a verify script). It adds no caller — nothing on the tab reads it yet — so it is safe to carry
+and trivial to revert. Before it, **`main` and `dev` were level at `ad24c30` as of 10:50 on 2026-10-06.** Production fast-forwarded
 `8391d1c` → `ad24c30`, taking the whole morning's Market Analytics work in one release, six
 behavioural commits: `7aab24f`, which keeps failed and merged banks out of the charts and exports
 and reads each bank's headline-quarter filing rather than its largest-asset one; `45d2934`, the
@@ -190,6 +193,7 @@ to `4ca86dc`. It is kept as the record of what each commit does and what reverti
 
 | Commit | Date | Summary |
 | --- | --- | --- |
+| `c656665` | 10-06 | Bank Behaviour expansion, step 1 (ingestion only). `FDIC_FIELDS.behavior`, a separate BankFind list for held-for-sale, loan-sale gains, RI-B charge-offs by CRE category, OREO by type, RC-N by CRE category, modifications to borrowers in financial difficulty, loans serviced; `lib/analytics/bank-behavior.ts` (provenance catalogue, typed quarters, YTD→quarter differencing, nine-quarter histories); `app/services/bank-behavior.ts` (per-CERT and full-coverage pulls, uncached); `scripts/verify-behavior-fields.ts`. Five fields tie exactly to the published Call Report (30/30). No UI, no signals, no cache entries, no caller: reverting it removes files nothing imports. |
 | `7a3f80e` | 10-06 | **In production since 10-06 (`ad24c30`).** The analyst reading and its fallback open with the bank's city and state; the trend carries them from the filing and the `/institutions` record supplies the untruncated city. Keys → `institution-trend-v2`, `institution-trend-narrative-v2`. **Revertable in isolation.** |
 | `38b688a` | 10-06 | **In production since 10-06 (`ad24c30`).** Analyst reading under the Eight-Quarter Trend panels: a model-written two-paragraph reading of the table, shown only if every figure in it is a table figure (else a deterministic reading from the signals). Cached `institution-trend-narrative-v1` + CERT + quarter. `callOpenAi` gains a `model` override; this call uses `OPENAI_TREND_MODEL` or `gpt-4.1`. **Revertable in isolation**; reverting removes the reading block and the `model` option (no other caller uses it). |
 | `6d5169d` | 10-06 | **In production since 10-06 (`ad24c30`).** Institution drawer and expanded peer chart dialogs gain `sm:` on their max-widths so they outrank the base `DialogContent`'s `sm:max-w-lg` — the drawer had rendered at 512px on every desktop viewport. Trend grid switches to container queries (`@xl` / `@4xl`), taller panels, thinned ticks, reference labels separated. **Revertable in isolation**, but reverting restores the 512px drawer, which is the bug. |
