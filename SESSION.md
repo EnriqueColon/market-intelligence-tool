@@ -8,7 +8,44 @@ is it in now, and what is still open.
 
 ---
 
-## 2026-10-06, afternoon (latest) — Bank Behaviour expansion, step 1: the fields are in
+## 2026-10-06, mid-afternoon (latest) — step 2 built, not yet committed; status document for review
+
+Step 2 of the Bank Behaviour expansion — the seven behaviour signals and the nonaccrual
+roll-forward, computed for every filer in a scope and cached in asset-band chunks — is written and
+unit-tested (17 tests passing) but **left uncommitted** at the user's request to stop for the day,
+because the last round of fixes has not been re-verified against live data. The files are
+`lib/analytics/bank-behavior-signals.ts` (+ test), `app/actions/bank-behavior-signals.ts`,
+`scripts/verify-behavior-signals.ts`, and edits to `app/api/cron/warm-cache/route.ts` (warms
+`behavior:national` / `behavior:florida`), `lib/fdic-config.ts` (five RC-C CRE balance fields
+added to `FDIC_FIELDS.behavior` as denominators), `lib/analytics/bank-behavior.ts` (`creLoans`
+derived through `computeCreLoans`) and `package.json` (`test:bank-behavior-signals`,
+`verify:behavior-signals`, the latter run with `tsx --conditions=react-server`, which makes the
+`server-only` marker inert so the real service can be imported).
+
+**Design.** The spec's acceptance check — Florida and national must produce the same signals for
+the same bank — means signals fire on absolute floors and the bank's own history only; scope
+percentiles are attached as context and for the step 4 score, never as a firing condition. The
+first live run confirmed it: 90 Florida banks × 7 signals, 0 differences between scopes. Known
+cases fired as they should (BCB Q2 2026: HFS transfer + realized sale; Ocean Bank: modification
+build; Citizens Elizabethton, a routine mortgage seller: nothing). National compute ran in under a
+second after a 7.5 s pull. Two problems came out of that run and were fixed in code: the stored
+summary was 1.2 KB a bank and the smallest-asset chunk 2.3 MB (now fired/unjudged signal *keys*
+instead of seven objects, and seven asset bands with at most 975 banks each), and CRE runoff fired
+on 26.5% of banks on a one-quarter rule (now also requires a four-quarter shrink beyond
+charge-offs). Those fixes pass the unit tests; the live verify has not been re-run since.
+
+**For review:** `docs/BANK_BEHAVIOR_EXPANSION_STATUS.md` (this commit) is a self-contained account
+of what the expansion is, what steps 1–2 found and built, the decisions taken, the open risks and
+the commands that verify each claim. Written for the user to read away from the code.
+
+**Next session, in order:** `npm run test:bank-behavior-signals`; `npm run verify:behavior-signals`
+(every band under 2 MB, runoff at a sensible share, known cases and scope independence still
+passing); commit; update the four docs and `ROLLBACK.md`'s current-state table; push `dev`. Then
+step 3, the Balance-Sheet Actions drawer panel.
+
+---
+
+## 2026-10-06, afternoon — Bank Behaviour expansion, step 1: the fields are in
 
 The user wants the Market Analytics tab to measure bank *behaviour* as well as bank *condition*:
 which banks are charging off CRE, moving loans to held-for-sale, selling at a loss, foreclosing or
