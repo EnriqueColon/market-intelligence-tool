@@ -86,8 +86,13 @@ requires the opening sentence to name the bank and location as given and not rep
 fallback leads with "Citizens Bank (Elizabethton, Tennessee) — deteriorating: …". Cache keys bumped
 to `institution-trend-v2` and `institution-trend-narrative-v2`. Tests 11.
 
-Still open: `7aab24f`, `45d2934`, `24b2947`, `6d5169d`, `38b688a` and `7a3f80e` await the user's
-review on the dev preview before going to production. Possible second cut: a dashed peer-median line per
+**Shipped.** The user reviewed the drawer on the preview ("looks good") and asked for production;
+`main` fast-forwarded `8391d1c` → `ad24c30` at 10:50, taking all six of the day's behavioural
+commits. `main` and `dev` are level.
+
+Still open: the first production look at the Cohort Changes card and the drawer, with their
+caches cold — the warm cron covers the watch for National and Florida, but trend and reading are
+per bank and fill on first click (about 1 s for the panels, 2–3 s more for the reading). Possible second cut: a dashed peer-median line per
 panel from the matched cohort. Unchanged: the "CRE / Assets" label (value is CRE ÷ loans); the
 FHFA/FRED Florida selector; `bank-failure-monitor.tsx` and the Executive Brief unreferenced.
 
