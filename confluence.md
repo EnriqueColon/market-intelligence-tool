@@ -1002,6 +1002,33 @@ Well → Adequate → Under → Adequate → Critical.
 the bare Node runner because the module reaches `capital-category`, `quarter` and `cohort-watch`
 through `@/` imports.
 
+**Analyst reading.** Under the panels, a model-written reading of the same eight quarters —
+`getInstitutionTrendNarrative(cert)` in `app/actions/market-analytics-watch.ts` over
+`lib/analytics/institution-trend-narrative.ts` (pure, import-free). The model is handed the table
+the panels plot, formatted as a pipe table with the PCA category per quarter; a **Screens** list
+saying which quarters sit on the adverse side of each published threshold (2% and 5% noncurrent,
+300% CRE and 100% construction to capital as ceilings; 1% allowance and 5% leverage as floors),
+computed in code because the mini model got these comparisons backwards; the CBLR flag; and the
+automated verdict. It is asked for at most two paragraphs and 140 words that explain what is
+driving each move — a CRE-to-capital jump with flat lending is a shrinking denominator; an
+improvement that reverses is temporary; a single-quarter earnings outlier is "a one-off gain or a
+data issue" — quoting figures to one decimal and never rounding to a convenient number.
+
+The reply is shown only if `checkNarrative` passes: every number in it must be a table figure at
+some rounding (floor, ceiling, 0–2 decimals), a quarter or year label, one of the five screen
+values, or an integer of twenty or less; no markdown; under 1.4× the word limit. A trailing-zero
+trim applies only to fractional parts, so `400` is not accepted as the count `4`. A failed reply is
+replaced by `fallbackNarrative` — the verdict sentence plus first-to-last moves in noncurrent
+loans, leverage, CRE to capital and ROA — and the block's caption says "From the signals above"
+rather than "Generated from the eight quarters above; every figure checked against them".
+
+Cached `institution-trend-narrative-v1` + CERT + published quarter, seven days, including a
+fallback that resulted from a failed check (the same table draws the same slip); a fallback from
+a model *error* is not cached. The call uses `OPENAI_TREND_MODEL` or `gpt-4.1` through a new
+per-call `model` option on `callOpenAi`. With no `OPENAI_API_KEY` the fallback is shown with the
+note "No model configured". The reading loads after the panels and never blocks them.
+`npm run test:trend-narrative` covers the table, screen flags, guard and fallback.
+
 The Executive Brief (`app/actions/executive-brief.ts`) computed much of the Deteriorating list for a
 view nobody can reach; it is untouched, and `confluence.md`'s note on its unreachability stands.
 Cohort Changes is the same information surfaced where people already are, which is the decision
@@ -1562,6 +1589,7 @@ above were produced and is the before/after instrument for further work on load 
   | `market-analytics-watch-v1` + scope | Cohort Changes: deteriorating institutions and exits with their FDIC structure records |
   | `institution-history-v1` + CERT | Acquisitions a bank has made, for the drawer's Corporate History |
   | `institution-trend-v1` + CERT | Eight quarters of ratios, capital categories and the verdict, for the drawer's Eight-Quarter Trend |
+  | `institution-trend-narrative-v1` + CERT | The figure-checked analyst reading under the trend panels, or its fallback |
   | `market-analytics-visuals-v2` + scope | Derived chart series for the Visual Analysis panel |
   | `executive-brief-v4` + scope | Ranked change events and non-reporting institutions for the Executive Brief. **Never populated** — the view is unreachable and the cron no longer warms it |
   | `underwriter-workbench-v1` + scope | Latest-quarter rows for the whole scope, for the Underwriter Workbench. **Never populated**, as above |
@@ -1878,7 +1906,7 @@ Every variable referenced in code. Scope matters: `POSTGRES_URL` and `BLOB_READ_
 | `NEXT_PUBLIC_FDIC_API_KEY`, `FDIC_API_URL`, `FDIC_API_KEY` | All optional; anonymous FDIC access works today. Read by `lib/fdic-client.ts`, the single hardened path to the API (fallback host, timeout, 4xx short-circuit) shared by the analytics actions and the map |
 | `FRED_API_KEY` | **Not needed by the outlook**, which uses FRED's keyless CSV endpoint. Still read by `fetch-kpi-data.ts` and `fetch-cre-data.ts`, whose FRED paths return null without it (KPI then falls back to an AI-written narrative) |
 | `APP_URL`, `NEXT_PUBLIC_APP_URL` | Fallback base URL for server-side PDF rendering |
-| `OPENAI_FAST_MODEL`, `OPENAI_SMART_MODEL`, `OPENAI_SUMMARY_MODEL`, `OPENAI_SUMMARY_PDF_MODEL`, `OPENAI_SEARCH_FILTER_MODEL` | Model overrides; defaults apply if unset |
+| `OPENAI_FAST_MODEL`, `OPENAI_SMART_MODEL`, `OPENAI_SUMMARY_MODEL`, `OPENAI_SUMMARY_PDF_MODEL`, `OPENAI_SEARCH_FILTER_MODEL`, `OPENAI_TREND_MODEL` | Model overrides; defaults apply if unset (`OPENAI_TREND_MODEL` defaults to `gpt-4.1`, for the drawer's analyst reading) |
 | `CBRE_COVEO_SEARCH_URL` | Legacy CBRE ingestion |
 | `MI_PDF_EXTRACTOR_*` | Test-mode switches for the PDF extractor |
 | `NEXT_PUBLIC_NONCURRENT_DEBUG` | Optional debug flag |

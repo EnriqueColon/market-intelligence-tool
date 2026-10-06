@@ -12,8 +12,9 @@ is it in now, and what is still open.
 
 The Cohort Changes list says *that* a bank is slipping; the user asked whether clicking a bank
 could show *how*, as line graphs over the last eight quarters. Discussed first, then built the
-recommended shape on `dev` (`24b2947`), then fixed its layout (`6d5169d`) after the user's first
-look on the preview showed six panels crushed into a narrow dialog.
+recommended shape on `dev` (`24b2947`), fixed its layout (`6d5169d`) after the user's first look on
+the preview showed six panels crushed into a narrow dialog, then added a written reading under the
+panels (`38b688a`) after the user pasted the kind of breakdown they wanted.
 
 **What changed.** The institution drawer now opens with an **Eight-Quarter Trend** block above
 Structural Exposure (single-bank view only): a one-line verdict — *Deteriorating*, *Watch* or
@@ -55,8 +56,30 @@ with `sm:` so they outrank the base, and sizes the trend grid with Tailwind cont
 (`minTickGap`) and the paired reference labels sit on opposite sides of their lines. Verified at
 both widths in the esbuild harness; the user's next look on the preview is the confirmation.
 
-Still open: `7aab24f`, `45d2934`, `24b2947` and `6d5169d` await the user's review on the dev
-preview before going to production. Possible second cut: a dashed peer-median line per
+**The analyst reading (`38b688a`).** The user fed the eight-quarter table to a model and got the
+breakdown they wanted — problem loans 10–17% for a year; the −6.88% ROA loss took leverage to
+0.16%; the CRE-to-capital jump is a collapsed denominator, not lending; the Q3–Q4 2025 improvement
+did not hold; the other bank is CBLR and its 3.52% ROA is a one-off or a data issue — and asked for
+it under the trend whenever a bank is clicked. Built as `getInstitutionTrendNarrative(cert)` over
+`lib/analytics/institution-trend-narrative.ts`. The model sees only the table the panels plot,
+plus a precomputed list of which quarters sit on the adverse side of each published screen, and
+is asked for at most two paragraphs and 140 words in that style. Its answer is shown only if
+**every number in it** is a table figure at some rounding, a quarter or year label, or a count of
+twenty or less (`checkNarrative`); otherwise a deterministic reading built from the signals
+appears instead, and the block says which it is. Cached per CERT and quarter for a week; it
+arrives after the panels and never blocks them.
+
+Three things the live runs taught: the mini model called a 0.7% allowance "comfortably above the
+1% screen" and 2.5% "below" it, so the comparisons are now computed in code and handed over as
+facts rather than asked for; "soared past 400%" for 425.6% slipped through a trailing-zero rule
+that read `400` as the small count `4`, now closed, and the prompt forbids convenient rounding;
+and the call defaults to `gpt-4.1` (`OPENAI_TREND_MODEL` overrides) via a new per-call `model`
+option on `callOpenAi` — one short, checked, week-cached call per bank is worth the full model.
+After those, West Georgia, Anchor Bank and Madison County all read correctly in 2–3 s and
+120–140 words. Tests: `test:trend-narrative` 10.
+
+Still open: `7aab24f`, `45d2934`, `24b2947`, `6d5169d` and `38b688a` await the user's review on
+the dev preview before going to production. Possible second cut: a dashed peer-median line per
 panel from the matched cohort. Unchanged: the "CRE / Assets" label (value is CRE ÷ loans); the
 FHFA/FRED Florida selector; `bank-failure-monitor.tsx` and the Executive Brief unreferenced.
 
