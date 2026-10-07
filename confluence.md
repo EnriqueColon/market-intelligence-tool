@@ -1041,8 +1041,8 @@ that retired the brief as a destination.
 
 ### Bank behaviour fields: what a bank is doing about its CRE book
 
-The tab's scores measure *condition*. The Bank Behaviour expansion (in progress; ingestion only as
-of `c656665`) adds the Call Report items that show *action* — the footprints a bank leaves when it
+The tab's scores measure *condition*. The Bank Behaviour expansion (in progress; ingestion
+`c656665`, signals `4ab576f`, drawer panel `0d90a59`) adds the Call Report items that show *action* — the footprints a bank leaves when it
 is working out or selling distressed CRE — as the base for signals, a Balance-Sheet Actions panel
 in the drawer and a Seller Likelihood score. None of those exist yet; this section describes the
 data layer they will stand on.
@@ -1101,8 +1101,8 @@ cdr.ffiec.gov Bulk Data; the facsimile pages there are ASP.NET postbacks and can
 ### Bank behaviour signals: which banks are acting on their CRE book
 
 `lib/analytics/bank-behavior-signals.ts` turns a `BehaviorHistory` into seven yes/no signals per
-bank per quarter plus a CRE nonaccrual roll-forward. It has no UI caller yet; the drawer panel
-(step 3) and the Seller Likelihood score (step 4) read it.
+bank per quarter plus a CRE nonaccrual roll-forward. The drawer's Balance-Sheet Actions panel (next
+section) reads it per bank; the Seller Likelihood score (step 4) will read the cohort cache.
 
 **The rule that shapes the design: signals are scope-independent.** The spec's acceptance check is
 that Florida and national produce the same signals for the same bank, with only *scores* allowed
@@ -1168,6 +1168,52 @@ null → unjudged, bands, scope independence on fixtures, percentile withholding
 `server-only` marker in the service is inert): known cases with the full roll-forward table,
 firing counts, banks with ≥ 2 action signals, band sizes against the ceiling, Florida-vs-national
 diff; exits non-zero if a known case or the independence check fails.
+
+### Balance-Sheet Actions in the institution drawer
+
+The section under the Eight-Quarter Trend, for a single bank. What it shows, top to bottom:
+
+- **Signal chips** for the newest quarter, one per signal in `SIGNALS` order. Red fill = an action
+  signal fired, amber fill = the pressure signal fired, outline = judged and quiet, dashed grey with
+  "not judged" = an input was not reported. The rule and meaning are the chip's `title`.
+- **Held for sale, OREO, modifications**: `LNLSSALE` (all loans — the Call Report has no HFS split by
+  type), CRE OREO (RC-M 3.a–c) and CRE modifications (RC-C M.1), $ millions over the quarters on
+  file.
+- **CRE nonaccrual: where it went**: a signed stacked bar per quarter — charged off, to OREO
+  (proxy), unexplained (derived) — with the end-of-quarter CRE nonaccrual as a line. A bar below
+  zero means nonaccruals grew by more than the prior quarter's 90+ past-dues predicted.
+- **CRE net charge-offs and loan-sale results**: the reported quarter nets (RI-B) and `NTGLLNQ`
+  (RI 5.i), $ millions.
+- **Signals by quarter**: a grid of signal × quarter; filled red/amber fired, grey quiet, light grey
+  not judged.
+- **Roll-forward table** in $ thousands, every step, with the latest quarter's residual by category
+  under it and the derivation note (prior 90+ PD as new-nonaccrual proxy; OREO increase as transfer
+  proxy; YTD-differenced charge-offs; cures and payoffs land in the residual).
+- **Actions reading**: two short paragraphs — what fired this quarter and the figures behind it;
+  what the roll-forward says about the nonaccrual move. **Deterministic** (`buildReading` in
+  `lib/analytics/bank-behavior-panel.ts`): it quotes only numbers on the panel, so the spec's
+  every-figure-traces rule holds by construction and there is no model call, figure-checker or
+  fallback. When the roll-forward shows a positive residual but the exit chip did not fire, the
+  reading says why (share of prior nonaccrual under the 25% floor). The model-written trend reading
+  above the section is a separate thing and unchanged.
+
+**Data.** `getInstitutionBehavior(cert)` in `app/actions/bank-behavior.ts`: one FDIC call of about
+nine rows through `fetchBehaviorHistory`, shaped by `buildInstitutionBehavior` into
+`InstitutionBehavior` (points, roll-forward, latest step per category, signals by quarter, the
+newest-quarter summary without percentiles, the reading), cached `institution-behavior-v1` + CERT +
+published quarter for a week, successes only. ~7.5 KB per bank. Loaded by the drawer independently
+of the trend so neither blocks the other; cleared on bank change and guarded by CERT so a previous
+bank's panel cannot show under the next one's name. Signals are scope-independent, so the panel
+needs no cohort and reads the same in every scope. **Copy Snapshot** appends the fired and unjudged
+signals and the reading once the panel has loaded for the same bank.
+
+**Not shown yet.** Enforcement actions, EDGAR disclosures and transcript mentions (the spec's event
+timeline) arrive with steps 5–6; the footer says so. Bump `institution-behavior-v1` when
+`BehaviorPanelPoint`, the roll-forward or the reading change shape.
+
+**Checks.** `npm run test:bank-behavior-panel` (11 tests: points, roll-forward steps and category
+breakdown, signals by quarter, the reading's sentences and figures, one-quarter and missing-input
+cases, `money`, `signalName`).
 
 ### Peer Positioning in the institution drawer
 
@@ -1725,6 +1771,7 @@ above were produced and is the before/after instrument for further work on load 
   | `institution-history-v1` + CERT | Acquisitions a bank has made, for the drawer's Corporate History |
   | `institution-trend-v2` + CERT | Eight quarters of ratios, capital categories, city/state and the verdict, for the drawer's Eight-Quarter Trend |
   | `institution-trend-narrative-v2` + CERT | The figure-checked analyst reading under the trend panels, or its fallback |
+  | `institution-behavior-v1` + CERT + quarter | Balance-Sheet Actions for the drawer: behaviour points, CRE nonaccrual roll-forward, signals by quarter, deterministic reading |
   | `market-analytics-visuals-v2` + scope | Derived chart series for the Visual Analysis panel |
   | `behavior-signals-v1` + scope + asset band + quarter | Bank behaviour signals and roll-forward measures for every filer in the scope, one entry per asset band (seven). No UI reader yet |
   | `executive-brief-v4` + scope | Ranked change events and non-reporting institutions for the Executive Brief. **Never populated** — the view is unreachable and the cron no longer warms it |
@@ -2081,6 +2128,7 @@ npm run test:peer-cohort           # workbench cohort selection and relaxation
 npm run test:cre-downside          # the capital scenario, both regimes
 npm run test:bank-behavior         # behaviour fields: catalogue, nulls, YTD→quarter, histories (tsx; @/ imports)
 npm run test:bank-behavior-signals # behaviour signals: roll-forward, each rule, unjudged, bands, scope independence (tsx)
+npm run test:bank-behavior-panel   # drawer's Balance-Sheet Actions: points, roll-forward, signals by quarter, the reading (tsx)
 ```
 
 `test:allowlist` runs under `tsx` rather than Node's type stripping, because `lib/domain-allowlist.ts`

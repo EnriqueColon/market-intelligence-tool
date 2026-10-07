@@ -1,6 +1,6 @@
 # Bank Behaviour Expansion — status for review
 
-*As of 2026-10-07, 09:10. Branch `dev` at `4ab576f`; production (`main`) untouched.*
+*As of 2026-10-07, 09:30. Branch `dev` at `0d90a59`; production (`main`) untouched.*
 
 ## 1. What we are building, in one paragraph
 
@@ -24,14 +24,15 @@ labelled derived.
 | --- | --- | --- |
 | 1 | Field audit, then ingest the Phase 1 Call Report fields | **Done, committed, pushed** (`c656665`, docs `db373cf`) |
 | 2 | Behaviour signals + nonaccrual roll-forward, cached per scope in the weekly job | **Done, committed, pushed** (`4ab576f`) |
-| 3 | Balance-Sheet Actions panel in the institution drawer | Not started |
+| 3 | Balance-Sheet Actions panel in the institution drawer | **Done, committed** (`0d90a59`) — first visible change |
 | 4 | Seller Likelihood score, four states (Pre-seller / Active seller / Cleaned up / Stable), backtest against known sellers and failures | Not started |
 | 5 | Enforcement actions (FDIC / OCC / Fed), monthly | Not started |
 | 6 | Public-bank intent: EDGAR and transcripts | Not started |
 | 7 | Weekly alerts digest; Cohort Changes list, table columns, Pressure-vs-Action scatter | Not started |
 
-Nothing on the tab looks different yet. Steps 1 and 2 are data and computation layers with no
-caller in the UI; the first visible change is step 3.
+Steps 1 and 2 are data and computation layers; step 3 is the first visible change — a
+Balance-Sheet Actions section in the institution drawer, under the Eight-Quarter Trend. Nothing
+else on the tab changes.
 
 ## 3. Step 1 — what the audit found
 
@@ -141,8 +142,28 @@ scope + band + quarter, a week, one FDIC pull shared across the bands on a cold 
 `app/api/cron/warm-cache/route.ts` (warms National and Florida), five RC-C CRE balance fields
 added to `FDIC_FIELDS.behavior` as denominators, `scripts/verify-behavior-signals.ts`.
 
-**Next:** step 3, the Balance-Sheet Actions panel in the institution drawer, reading
-`fetchBehaviorHistory(cert)` and `signalResultsOf`.
+## 4a. Step 3 — the drawer panel
+
+Open any bank from the screening table or Cohort Changes; the new section sits under the
+Eight-Quarter Trend. Top to bottom: the seven signal chips for the newest quarter (red = action
+fired, amber = pressure fired, outline = quiet, dashed = not judged; the rule is on hover); a
+held-for-sale / CRE OREO / CRE modifications chart; the CRE nonaccrual roll-forward as a stacked
+waterfall with the nonaccrual balance over it; CRE net charge-offs and loan-sale results; a
+signals-by-quarter grid; the roll-forward table in thousands with the latest quarter split by
+category; and an **Actions reading**. Copy Snapshot includes the signals and the reading.
+
+The reading is built from the figures on the panel, not by a model, so every number in it is one
+you can see in the table above it. Where the roll-forward shows a residual but the exit chip did
+not fire, it says why ("23% of the prior balance, under the 25% at which the exit signal fires").
+
+One FDIC call per bank, cached a week per CERT and quarter, about 7.5 KB. The panel needs no
+cohort because signals are judged on the bank's own history, so it reads the same in Florida and
+national scope.
+
+Not in it yet: the event timeline (enforcement actions, EDGAR, transcripts), which depends on steps
+5–6; the footer says so.
+
+**Next:** step 4 — Seller Likelihood score, the four states, and the backtest.
 
 ## 5. Decisions made along the way
 
@@ -177,6 +198,7 @@ added to `FDIC_FIELDS.behavior` as denominators, `scripts/verify-behavior-signal
 ```bash
 npm run test:bank-behavior              # 9 tests: catalogue, nulls, YTD→quarter, histories
 npm run test:bank-behavior-signals      # 17 tests: roll-forward, each firing rule, scope independence, bands
+npm run test:bank-behavior-panel        # 11 tests: the drawer panel's points, roll-forward and reading
 npm run verify:behavior-fields          # live values for sample banks; CDR_SUBSET_DIR=… ties to the filed Call Report
 COHORT=1 SCOPE=National npm run verify:behavior-fields   # times the full-coverage pull
 npm run verify:behavior-signals         # known cases, Florida-vs-national, band sizes, firing rates
@@ -185,4 +207,4 @@ npm run verify:behavior-signals         # known cases, Florida-vs-national, band
 ## 8. Git state
 
 - `main` (production): `8afac5b` — unchanged by this work.
-- `dev`: step 1 `c656665`, step 2 `4ab576f`, plus documentation commits on top.
+- `dev`: step 1 `c656665`, step 2 `4ab576f`, step 3 `0d90a59`, plus documentation commits on top.

@@ -8,7 +8,55 @@ is it in now, and what is still open.
 
 ---
 
-## 2026-10-07, morning (latest) — Bank Behaviour expansion, step 2 shipped to `dev`: the signals
+## 2026-10-07, mid-morning (latest) — Bank Behaviour expansion, step 3: the Balance-Sheet Actions panel
+
+The first visible piece of the expansion. The institution drawer gains a **Balance-Sheet Actions**
+section directly under the Eight-Quarter Trend (`0d90a59`): the seven behaviour signals for the
+newest quarter as chips (red = action fired, amber = pressure fired, outline = judged and quiet,
+dashed = not judged; the firing rule is on hover), a held-for-sale / CRE OREO / CRE modifications
+line chart, the CRE nonaccrual roll-forward as a stacked waterfall (charged off, to OREO, unexplained)
+with the nonaccrual balance over it, CRE net charge-offs and loan-sale results as bars, a
+signals-by-quarter strip, the roll-forward table in thousands with the latest quarter split by
+category, and an **Actions reading**. Copy Snapshot now carries the fired signals and the reading.
+
+**The reading is deterministic, not a model call.** The spec asks that the analyst reading be
+extended to actions "with the same rule that every figure is checked against the data". Building
+the reading from the figures on the panel (`buildReading` in `lib/analytics/bank-behavior-panel.ts`)
+satisfies the rule by construction, costs nothing per open, and cannot drift from the table — so
+there is no figure-checker and no fallback path. The one place it goes beyond the figures is to say
+why the exit chip did not fire when the roll-forward still shows a residual ("23% of the prior
+balance, under the 25% at which the exit signal fires"), which is the question a reader asks first.
+The model-written trend reading above it is unchanged. If a model reading over actions is ever
+wanted, it would go through the same `checkNarrative` discipline as the trend's.
+
+**Data path.** `getInstitutionBehavior(cert)` (`app/actions/bank-behavior.ts`) is one FDIC call of
+about nine rows per CERT through `fetchBehaviorHistory`, shaped by `buildInstitutionBehavior`,
+cached `institution-behavior-v1` + CERT + published quarter for a week, successes only — the same
+lifecycle as the trend, and loaded independently of it so neither waits on the other. About 7.5 KB
+per bank. Signals are judged on the bank's own history, so the panel needs no cohort and reads the
+same in every scope; the scope percentiles live in the step 2 cohort cache and are not shown here.
+
+**Checked** on a local dev server against live Q2 2026 filings: BCB (HFS transfer + realized sale;
+reading quotes $10.8M HFS at 0.41% of loans against a $488K prior high, and the $2.6M loss), Ocean
+Bank (modification build), Citizens Elizabethton (nothing this quarter; last signal Q1 2026 HFS
+transfer), First Citizens Bank IA (four action signals; $6.0M unexplained exit) and First-Citizens
+B&T NC ($236B; roll-forward in the hundreds of millions renders and the $152M residual is explained
+as under the 25% floor). 11 unit tests (`npm run test:bank-behavior-panel`); tsc clean on touched
+files (91 pre-existing errors elsewhere, unchanged).
+
+**Not in this step, by design.** The spec's event timeline (enforcement actions, EDGAR, transcript
+mentions) depends on steps 5–6; the panel's footer says those are not yet included rather than
+showing an empty timeline. Cohort Changes' third list, the screening-table columns and the
+Pressure-vs-Action scatter are step 4/7 work and need the Seller Likelihood score first.
+
+**Next:** step 4 — Seller Likelihood score, the four states, and the backtest against known
+2023–2026 sellers and failures that validates the thresholds. Carried: the screening-table
+two-cohort decision, the cold-cache production look at Cohort Changes and the drawer, the
+"CRE / Assets" label.
+
+---
+
+## 2026-10-07, morning — Bank Behaviour expansion, step 2 shipped to `dev`: the signals
 
 The seven behaviour signals and the CRE nonaccrual roll-forward are committed as `4ab576f` after
 the live verification that yesterday's final fixes were waiting on. Nothing on the tab changes yet;
