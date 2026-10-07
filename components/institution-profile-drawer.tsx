@@ -13,6 +13,9 @@ import {
   type InstitutionTrendResult,
 } from "@/app/actions/market-analytics-watch"
 import { InstitutionTrendPanels, InstitutionTrendSkeleton } from "@/components/institution-trend-panels"
+import { InstitutionBehaviorPanel, InstitutionBehaviorSkeleton } from "@/components/institution-behavior-panel"
+import { getInstitutionBehavior, type InstitutionBehaviorResult } from "@/app/actions/bank-behavior"
+import { SIGNALS } from "@/lib/analytics/bank-behavior-signals"
 import type { NoncurrentDebugSnapshot } from "@/lib/noncurrent-debug"
 import { formatEventDate } from "@/lib/fdic-structure-events"
 import { Button } from "@/components/ui/button"
@@ -303,6 +306,7 @@ export function InstitutionProfileDrawer({
   const [fdicSnapshot, setFdicSnapshot] = useState<NoncurrentDebugSnapshot | null>(null)
   const [history, setHistory] = useState<InstitutionHistory | null>(null)
   const [trend, setTrend] = useState<InstitutionTrendResult | null>(null)
+  const [behavior, setBehavior] = useState<InstitutionBehaviorResult | null>(null)
   // `undefined` while the model is writing; `null` when nothing could be produced.
   const [reading, setReading] = useState<InstitutionTrendNarrative | null | undefined>(undefined)
 
@@ -331,6 +335,26 @@ export function InstitutionProfileDrawer({
       })
       .catch(() => {
         if (active) setReading(null)
+      })
+    return () => {
+      active = false
+    }
+  }, [primaryRow?.id])
+
+  // Balance-sheet actions: one cached FDIC call per institution for the
+  // behaviour fields, independent of the trend above so neither waits on the
+  // other. `null` while loading.
+  useEffect(() => {
+    setBehavior(null)
+    if (!primaryRow) return
+    let active = true
+    getInstitutionBehavior(primaryRow.id)
+      .then((result) => {
+        if (!active) return
+        if (!result.ok || result.behavior.cert === primaryRow.id) setBehavior(result)
+      })
+      .catch((error: unknown) => {
+        if (active) setBehavior({ ok: false, error: error instanceof Error ? error.message : "Unable to load balance-sheet actions." })
       })
     return () => {
       active = false
@@ -537,8 +561,27 @@ export function InstitutionProfileDrawer({
       `NIM: ${formatPercentile(nimPct)}`,
     ]
 
+    // Behaviour signals, when the panel has loaded for this bank. Signals are judged on the
+    // bank's own history, so the line reads the same in any scope; the reading quotes only
+    // figures from the Call Report fields behind it.
+    const latest = behavior?.ok && behavior.behavior.cert === rowForCopy.id ? behavior.behavior.latest : null
+    if (behavior?.ok && latest) {
+      const b = behavior.behavior
+      const latestLabel = b.points[b.points.length - 1]?.label ?? asOfQuarter
+      const name = (key: string) => SIGNALS.find((sig) => sig.key === key)?.label ?? key
+      lines.push(
+        "",
+        `Balance-Sheet Actions (${latestLabel}):`,
+        "",
+        `Signals fired: ${latest.fired.length ? latest.fired.map(name).join(", ") : "none"}`,
+        ...(latest.unjudged.length ? [`Not judged (input not reported): ${latest.unjudged.map(name).join(", ")}`] : []),
+        "",
+        ...b.reading.text.split(/\n{2,}/).map((para) => para.trim()).filter(Boolean)
+      )
+    }
+
     return lines.join("\n")
-  }, [rowForCopy, peerGroup, peers, asOfQuarter, fdicSnapshot])
+  }, [rowForCopy, peerGroup, peers, asOfQuarter, fdicSnapshot, behavior])
 
   const handleCopy = useCallback(async () => {
     const text = buildSnapshot()
@@ -640,6 +683,16 @@ export function InstitutionProfileDrawer({
                       <InstitutionTrendPanels trend={trend.trend} reading={reading} />
                     ) : (
                       <p className="text-xs text-slate-500">Trend unavailable: {trend.error}</p>
+                    )}
+                  </div>
+                  <div className="rounded-lg border border-slate-200/80 bg-slate-50/50 px-4 py-3">
+                    <h4 className="text-xs font-semibold uppercase tracking-wide text-[#006D95] mb-2">Balance-Sheet Actions</h4>
+                    {behavior == null ? (
+                      <InstitutionBehaviorSkeleton />
+                    ) : behavior.ok ? (
+                      <InstitutionBehaviorPanel behavior={behavior.behavior} />
+                    ) : (
+                      <p className="text-xs text-slate-500">Balance-sheet actions unavailable: {behavior.error}</p>
                     )}
                   </div>
                   <div className="rounded-lg border border-slate-200/80 bg-slate-50/50 px-4 py-3">

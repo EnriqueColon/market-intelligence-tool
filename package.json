@@ -25,6 +25,7 @@
     "test:trend-narrative": "node --test --experimental-strip-types lib/analytics/institution-trend-narrative.test.ts",
     "test:bank-behavior": "tsx --test --tsconfig tsconfig.json lib/analytics/bank-behavior.test.ts",
     "test:bank-behavior-signals": "tsx --test --tsconfig tsconfig.json lib/analytics/bank-behavior-signals.test.ts",
+    "test:bank-behavior-panel": "tsx --test --tsconfig tsconfig.json lib/analytics/bank-behavior-panel.test.ts",
     "audit:fdic-columns": "node scripts/audit-fdic-columns.mjs",
     "test:quarter": "node --test --experimental-strip-types lib/scoring/quarter.test.ts",
     "test:peer-cohort": "node --test --experimental-strip-types lib/scoring/peer-cohort.test.ts",
