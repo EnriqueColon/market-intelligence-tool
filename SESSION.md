@@ -8,7 +8,53 @@ is it in now, and what is still open.
 
 ---
 
-## 2026-10-07, mid-morning (latest) — Bank Behaviour expansion, step 3: the Balance-Sheet Actions panel
+## 2026-10-07, late morning (latest) — Market Analytics data API, so AMO Tracker can render this tab's data
+
+**Why.** A second tool, AMO Tracker (`EnriqueColon/amo-dashboard`), carries an "FDIC Data Analytics"
+page forked from this tab in April 2026, before scoring existed: its three scores are hardcoded to 0.
+The ask was to make it show the same as this tab, in AMO's own layout. A file-level sync is impossible
+(AMO is Vite + Express on a DigitalOcean droplet, not Next on Vercel — a parity script run there found
+0 of 116 reference files) and a shared package would make AMO compute its own figures and drift. So
+this tool becomes the data source: AMO's server reads the cached objects the tab reads and renders them.
+
+**What changed (`80743b6`).** Six read-only routes under `/api/analytics/v1/`: `meta`, `screening`,
+`visuals`, `cohort-watch`, `behavior-signals` (optional `band=`), `institution/<CERT>` (trend, history,
+Balance-Sheet Actions; `?include=narrative` opts into the OpenAI narrative). Each returns exactly what the
+tab's server action returns, wrapped in `{ ok, meta }` with the quarter, the exact scope string and a
+contract version. Auth is `Authorization: Bearer $ANALYTICS_API_KEY`, constant-time, **fail-closed**
+(unset key → 503; the cron routes are the opposite). `middleware.ts` exempts `/api/analytics` from the
+login cookie. `lib/analytics/api-contract.ts` holds the pure decisions (auth, scope → tab's exact string
+so caches are shared, CERT validation) with 5 tests; `lib/analytics-api.ts` is the Next wrapper;
+`scripts/verify-analytics-api.mjs` exercises every endpoint and the negative cases against a deployment.
+
+**Verified live on a dev server.** All checks pass for Florida (BCB 35541: trend ok, behaviour ok, fired
+HFS transfer + realized sale; 90 institutions, 3 with ≥2 action signals — the same figures the tab
+showed earlier today) and National (First Citizens 4433 with four action signals; 1,010 screening rows;
+4,603 institutions). Sizes: Florida 6–119 KB; national screening 1.4 MB, national whole-scope signals
+3.9 MB against Vercel's 4.5 MB ceiling, so the consumer fetches national signals per band (0.6 MB).
+
+**Also found, not changed.** (1) The AMO repo's `origin` URL embeds a GitHub token; my parity script
+wrote it into `~/Downloads/parity-amo-dashboard.md`. The user was told to revoke it, re-set the remote
+URL and delete the file; the script now masks credentials. (2) The cron warms screening as
+`"national"` (lowercase) while the tab requests `"National"`, which are different cache keys — the
+national screening table may be recomputing on first visit rather than being served warm. One-line fix
+in `app/api/cron/warm-cache/route.ts`; left for a separate commit. (3) AMO has two guardrails worth
+adopting here: a shared query-window constant with a check script, and a per-metric percentile
+direction (`high-risk` / `high-good`) asserted by a negative-control script.
+
+**State.** `dev` = `80743b6` plus this docs commit, not pushed at time of writing; `main` untouched.
+`ANALYTICS_API_KEY` is **not yet set on Vercel** — until it is, the routes return 503 on every
+deployment, which is the intended closed state. A prompt for the AMO side (Express fetch-and-cache
+layer, then rendering) is the next deliverable; it depends on the key being set on the dev preview.
+
+**Open.** Set `ANALYTICS_API_KEY` on Vercel (preview first, then production when the API ships to
+`main`); the cron scope-casing mismatch; refuse the whole-scope national signals response once it nears
+4.5 MB; Bank Behaviour step 4 (Seller Likelihood, states, backtest) is unchanged and still next in the
+expansion; the AOM export questions from earlier today are still with the user.
+
+---
+
+## 2026-10-07, mid-morning — Bank Behaviour expansion, step 3: the Balance-Sheet Actions panel
 
 The first visible piece of the expansion. The institution drawer gains a **Balance-Sheet Actions**
 section directly under the Eight-Quarter Trend (`0d90a59`): the seven behaviour signals for the

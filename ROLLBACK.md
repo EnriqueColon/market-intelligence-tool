@@ -8,14 +8,17 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
 | `main` | `7a3f80e` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `0d90a59` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `dev` | `80743b6` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 This table names the newest commit on each branch that **changes behaviour**; documentation-only
 commits sit on top of it and are deliberately not tracked here, because amending one rotates its
 SHA and the table then reads as stale when nothing has moved. Confirm with
 `git log --format='%h|%ci|%s'` rather than trusting the previous entry — this has drifted twice.
 
-**`dev` is three behavioural commits ahead of `main` as of 09:27 on 2026-10-07:** `c656665`, the
+**`dev` is four behavioural commits ahead of `main` as of 11:05 on 2026-10-07:** `80743b6`, the
+Market Analytics data API (`/api/analytics/v1/*`, bearer-keyed and fail-closed, plus the one-line
+`middleware.ts` exemption — revertable in isolation, nothing in the tab imports it; while
+`ANALYTICS_API_KEY` is unset on Vercel it is inert, answering 503); `c656665`, the
 Bank Behaviour expansion's ingestion layer (a new FDIC field list, a pure shaping module, a service
 and a verify script); `4ab576f`, its signals layer (seven behaviour signals, the CRE nonaccrual
 roll-forward, a server action cached per asset band, and two new warm-cache entries); and `0d90a59`,
@@ -196,6 +199,7 @@ to `4ca86dc`. It is kept as the record of what each commit does and what reverti
 
 | Commit | Date | Summary |
 | --- | --- | --- |
+| `80743b6` | 10-07 | Market Analytics data API. Six read-only routes under `/api/analytics/v1/` (meta, screening, visuals, cohort-watch, behavior-signals with optional band, institution/CERT) return the tab's cached objects to other tools — AMO Tracker is the consumer. `Authorization: Bearer $ANALYTICS_API_KEY`, constant-time, 503 when the key is unset; `middleware.ts` adds `/api/analytics` to `PUBLIC_PATHS`. **Revertable in isolation** and inert until the env var is set. Reverting it breaks AMO Tracker's FDIC page once that page has been switched over, and nothing here. |
 | `0d90a59` | 10-07 | Bank Behaviour expansion, step 3 (drawer panel). The institution drawer gains a Balance-Sheet Actions section under the Eight-Quarter Trend: signal chips, HFS/OREO/modifications chart, CRE nonaccrual roll-forward waterfall and table, charge-offs and loan-sale bars, signals-by-quarter strip, deterministic actions reading; Copy Snapshot gains the signals and reading. `getInstitutionBehavior(cert)` cached `institution-behavior-v1` + CERT + quarter. **Revertable in isolation**: the section and its action go, the step 1–2 layers stay with no UI caller. |
 | `4ab576f` | 10-07 | Bank Behaviour expansion, step 2 (signals). `lib/analytics/bank-behavior-signals.ts`: HFS transfer, realized sale, CRE charge-off spike, unexplained nonaccrual exit, foreclosure route, modification build, CRE runoff, each on absolute floors and the bank's own history so Florida and national judge a bank identically; the per-category nonaccrual roll-forward. `app/actions/bank-behavior-signals.ts` caches per asset band (`behavior-signals-v1` + scope + band + quarter, seven days; largest entry 0.90 MB). `warm-cache` gains `behavior:national` / `behavior:florida`. Adds five RC-C fields to `FDIC_FIELDS.behavior` and `creLoans` to `BehaviorQuarter`. No UI; reverting removes two cron entries and files nothing else imports. |
 | `c656665` | 10-06 | Bank Behaviour expansion, step 1 (ingestion only). `FDIC_FIELDS.behavior`, a separate BankFind list for held-for-sale, loan-sale gains, RI-B charge-offs by CRE category, OREO by type, RC-N by CRE category, modifications to borrowers in financial difficulty, loans serviced; `lib/analytics/bank-behavior.ts` (provenance catalogue, typed quarters, YTD→quarter differencing, nine-quarter histories); `app/services/bank-behavior.ts` (per-CERT and full-coverage pulls, uncached); `scripts/verify-behavior-fields.ts`. Five fields tie exactly to the published Call Report (30/30). No UI, no signals, no cache entries, no caller: reverting it removes files nothing imports. |
