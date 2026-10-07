@@ -238,6 +238,7 @@ npm run test:structure-events # FDIC failure, merger and closing records shaped 
 npm run test:institution-trend # eight-quarter drawer trend: units, CBLR nulls, verdict tone (runs under tsx: uses @/ imports)
 npm run test:trend-narrative  # the analyst reading's prompt table, screen flags, figure guard and fallback
 npm run test:bank-behavior    # bank-behaviour fields: provenance catalogue, null handling, YTD→quarter differencing (tsx)
+npm run test:bank-behavior-signals  # bank-behaviour signals: roll-forward, firing rules, scope independence (tsx)
 npm run test:quarter          # FDIC report-date arithmetic
 npm run test:peer-cohort      # workbench peer selection, and what it refuses to relax
 npm run test:cre-downside     # the capital scenario, on both regulatory capital regimes
@@ -301,6 +302,11 @@ Some checks need live data rather than fixtures, because they are calibrations r
   "Call Bulk Subset of Schedules" folder it ties five fields to the published Call Report and exits
   non-zero on any mismatch; with `COHORT=1 SCOPE=…` it times the full-coverage nine-quarter pull.
   Run it after touching `FDIC_FIELDS.behavior` or `BEHAVIOR_FIELD_CATALOG`.
+- `npm run verify:behavior-signals` — the behaviour signals against live FDIC data: known cases
+  (BCB, Ocean Bank, Citizens Elizabethton) with their roll-forward tables, national and Florida
+  firing rates, cache-entry size per asset band against the 2 MB ceiling, and a Florida-vs-national
+  diff that must be zero. Exits non-zero if a known case or the scope-independence check fails. Run
+  it after touching `SIGNAL_THRESHOLDS`, a rule, or `ASSET_BANDS`.
 - `npm run verify:latest-quarter` — the FDIC quarter probe. This one is load-bearing and fails
   invisibly: its answer is part of both Market Analytics cache keys, so a wrong value serves stale
   figures for up to a week and an unstable one makes every visitor miss the cache. It already

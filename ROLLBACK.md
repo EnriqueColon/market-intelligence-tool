@@ -8,17 +8,19 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
 | `main` | `7a3f80e` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `c656665` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `dev` | `4ab576f` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 This table names the newest commit on each branch that **changes behaviour**; documentation-only
 commits sit on top of it and are deliberately not tracked here, because amending one rotates its
 SHA and the table then reads as stale when nothing has moved. Confirm with
 `git log --format='%h|%ci|%s'` rather than trusting the previous entry — this has drifted twice.
 
-**`dev` is one behavioural commit ahead of `main` as of 14:21 on 2026-10-06:** `c656665`, the
+**`dev` is two behavioural commits ahead of `main` as of 09:06 on 2026-10-07:** `c656665`, the
 Bank Behaviour expansion's ingestion layer (a new FDIC field list, a pure shaping module, a service
-and a verify script). It adds no caller — nothing on the tab reads it yet — so it is safe to carry
-and trivial to revert. Before it, **`main` and `dev` were level at `ad24c30` as of 10:50 on 2026-10-06.** Production fast-forwarded
+and a verify script), and `4ab576f`, its signals layer (seven behaviour signals, the CRE nonaccrual
+roll-forward, a server action cached per asset band, and two new warm-cache entries). Neither has a
+UI caller — nothing on the tab reads them yet — so they are safe to carry; reverting `4ab576f`
+alone is clean, and reverting both removes files nothing imports. Before them, **`main` and `dev` were level at `ad24c30` as of 10:50 on 2026-10-06.** Production fast-forwarded
 `8391d1c` → `ad24c30`, taking the whole morning's Market Analytics work in one release, six
 behavioural commits: `7aab24f`, which keeps failed and merged banks out of the charts and exports
 and reads each bank's headline-quarter filing rather than its largest-asset one; `45d2934`, the
@@ -193,6 +195,7 @@ to `4ca86dc`. It is kept as the record of what each commit does and what reverti
 
 | Commit | Date | Summary |
 | --- | --- | --- |
+| `4ab576f` | 10-07 | Bank Behaviour expansion, step 2 (signals). `lib/analytics/bank-behavior-signals.ts`: HFS transfer, realized sale, CRE charge-off spike, unexplained nonaccrual exit, foreclosure route, modification build, CRE runoff, each on absolute floors and the bank's own history so Florida and national judge a bank identically; the per-category nonaccrual roll-forward. `app/actions/bank-behavior-signals.ts` caches per asset band (`behavior-signals-v1` + scope + band + quarter, seven days; largest entry 0.90 MB). `warm-cache` gains `behavior:national` / `behavior:florida`. Adds five RC-C fields to `FDIC_FIELDS.behavior` and `creLoans` to `BehaviorQuarter`. No UI; reverting removes two cron entries and files nothing else imports. |
 | `c656665` | 10-06 | Bank Behaviour expansion, step 1 (ingestion only). `FDIC_FIELDS.behavior`, a separate BankFind list for held-for-sale, loan-sale gains, RI-B charge-offs by CRE category, OREO by type, RC-N by CRE category, modifications to borrowers in financial difficulty, loans serviced; `lib/analytics/bank-behavior.ts` (provenance catalogue, typed quarters, YTD→quarter differencing, nine-quarter histories); `app/services/bank-behavior.ts` (per-CERT and full-coverage pulls, uncached); `scripts/verify-behavior-fields.ts`. Five fields tie exactly to the published Call Report (30/30). No UI, no signals, no cache entries, no caller: reverting it removes files nothing imports. |
 | `7a3f80e` | 10-06 | **In production since 10-06 (`ad24c30`).** The analyst reading and its fallback open with the bank's city and state; the trend carries them from the filing and the `/institutions` record supplies the untruncated city. Keys → `institution-trend-v2`, `institution-trend-narrative-v2`. **Revertable in isolation.** |
 | `38b688a` | 10-06 | **In production since 10-06 (`ad24c30`).** Analyst reading under the Eight-Quarter Trend panels: a model-written two-paragraph reading of the table, shown only if every figure in it is a table figure (else a deterministic reading from the signals). Cached `institution-trend-narrative-v1` + CERT + quarter. `callOpenAi` gains a `model` override; this call uses `OPENAI_TREND_MODEL` or `gpt-4.1`. **Revertable in isolation**; reverting removes the reading block and the `model` option (no other caller uses it). |

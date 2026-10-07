@@ -1,6 +1,6 @@
 # Bank Behaviour Expansion — status for review
 
-*As of 2026-10-06, 14:45. Branch `dev` at `db373cf`; production (`main`) untouched.*
+*As of 2026-10-07, 09:10. Branch `dev` at `4ab576f`; production (`main`) untouched.*
 
 ## 1. What we are building, in one paragraph
 
@@ -23,7 +23,7 @@ labelled derived.
 | Step | Scope | Status |
 | --- | --- | --- |
 | 1 | Field audit, then ingest the Phase 1 Call Report fields | **Done, committed, pushed** (`c656665`, docs `db373cf`) |
-| 2 | Behaviour signals + nonaccrual roll-forward, cached per scope in the weekly job | **Built and unit-tested; live verification of the final cut pending; uncommitted** |
+| 2 | Behaviour signals + nonaccrual roll-forward, cached per scope in the weekly job | **Done, committed, pushed** (`4ab576f`) |
 | 3 | Balance-Sheet Actions panel in the institution drawer | Not started |
 | 4 | Seller Likelihood score, four states (Pre-seller / Active seller / Cleaned up / Stable), backtest against known sellers and failures | Not started |
 | 5 | Enforcement actions (FDIC / OCC / Fed), monthly | Not started |
@@ -84,7 +84,7 @@ signals are stored in asset-band chunks (section 4).
   reductions built on them are what get cached.
 - `npm run test:bank-behavior` (9 tests) and `npm run verify:behavior-fields`.
 
-## 4. Step 2 — signals and the roll-forward (built, awaiting final live check)
+## 4. Step 2 — signals and the roll-forward
 
 **Design decision that shapes everything here.** The spec's acceptance check says *Florida and
 national scopes must produce the same signals for the same bank; only scores may differ by
@@ -113,7 +113,7 @@ New nonaccrual is not reported, so the prior quarter's 90+ past due stands in; t
 are not reported, so the increase in the OREO balance stands in. Both are named as proxies and
 the residual is a flag, not a dollar estimate (cures and payoffs land in it too).
 
-**Verified so far against live data** (before the final adjustments below):
+**Verified against live data** (2026-10-07, Q2 2026 filings):
 
 - Known cases fire: BCB Community Bank Q2 2026 → HFS transfer + realized sale; Ocean Bank Q2 2026
   → modification build. Citizens Bank Elizabethton (a routine mortgage seller) fires nothing,
@@ -123,26 +123,26 @@ the residual is a flag, not a dollar estimate (cures and payoffs land in it too)
 - National compute: 4,603 institutions judged (4,309 current at Q2 2026) in under a second after
   a 7.5 s pull.
 - Firing rates nationally: HFS transfer 1.6%, realized sale 2.7%, charge-off spike 2.7%,
-  unexplained exit 8.6%, foreclosure route 3.2%, modification build 8.2%.
+  unexplained exit 8.6%, foreclosure route 3.2%, modification build 8.2%, CRE runoff 12.6%.
+  166 banks carry two or more action signals (Florida: Amerant, Banesco USA, BayFirst).
+- Cache entries: 0.16–0.90 MB per asset band against the 2 MB ceiling (4.02 MB if unchunked).
 
-**Two problems that run exposed, both fixed in code but not yet re-verified live:**
+**Two problems the first run exposed, both fixed and confirmed on the second:**
 
 1. Storage. A summary was 1.2 KB per bank, and the smallest-bank chunk was 2.3 MB — over the
    ceiling. Fixed by storing fired/unjudged signal *keys* instead of seven objects and by moving
-   to seven asset bands (<$100M, $100–250M, $250–500M, $500M–1B, $1–3B, $3–10B, >$10B; largest
-   holds 975 banks).
-2. CRE runoff fired on 26.5% of banks with a one-quarter rule. Fixed by requiring the shrink to be
-   sustained over four quarters as well.
+   to seven asset bands (<$100M, $100–250M, $250–500M, $500M–1B, $1–3B, $3–10B, >$10B).
+2. CRE runoff fired on 26.5% of banks with a one-quarter rule. Requiring a sustained four-quarter
+   shrink as well brought it to 12.6%.
 
-**Where it lives (all uncommitted on `dev`):** `lib/analytics/bank-behavior-signals.ts` (+ 17
+**Where it lives:** `lib/analytics/bank-behavior-signals.ts` (+ 17
 unit tests, passing), `app/actions/bank-behavior-signals.ts` (cache key `behavior-signals-v1` +
 scope + band + quarter, a week, one FDIC pull shared across the bands on a cold cache),
 `app/api/cron/warm-cache/route.ts` (warms National and Florida), five RC-C CRE balance fields
 added to `FDIC_FIELDS.behavior` as denominators, `scripts/verify-behavior-signals.ts`.
 
-**Tomorrow's first move:** `npm run test:bank-behavior-signals`, then
-`npm run verify:behavior-signals` — confirm every band is under 2 MB, runoff is at a sensible
-share, known cases and scope independence still pass — then commit, docs, push.
+**Next:** step 3, the Balance-Sheet Actions panel in the institution drawer, reading
+`fetchBehaviorHistory(cert)` and `signalResultsOf`.
 
 ## 5. Decisions made along the way
 
@@ -185,5 +185,4 @@ npm run verify:behavior-signals         # known cases, Florida-vs-national, band
 ## 8. Git state
 
 - `main` (production): `8afac5b` — unchanged by this work.
-- `dev`: `db373cf` (pushed) = step 1 code `c656665` + its docs.
-- Uncommitted on `dev`: the step 2 files listed in section 4.
+- `dev`: step 1 `c656665`, step 2 `4ab576f`, plus documentation commits on top.

@@ -1086,8 +1086,8 @@ histories for the national population are ~31MB. `fetchBehaviorHistory(cert)` is
 every filer, not the screening table's top 1,116 — as one request per quarter, three at a time,
 because one quarter's population (~4,300 rows) fits a single FDIC page while the 27-month window
 would take four sequential pages. Measured: national 40,318 rows, 4,630 institutions (4,292 with
-all nine quarters), 12.8s; Florida 93 institutions, 1.3s. The reductions built on it will be what
-is cached, chunked by asset band so no entry nears 2MB.
+all nine quarters), 12.8s; Florida 93 institutions, 1.3s. The reductions built on it are what is
+cached, chunked by asset band so no entry nears 2MB — see the next section.
 
 **Checks.** `npm run test:bank-behavior` (tsx) covers the config-list/catalogue agreement, the
 mapping, null handling, quarter arithmetic, the YTD differencing and history assembly.
@@ -1097,6 +1097,77 @@ RCONHK26/27/28 in an FFIEC CDR bulk subset on disk (`CDR_SUBSET_DIR=`; exits non
 mismatch; 30/30 on 2026-10-06 for CERTs 35541, 24156, 14851 over Q1–Q2 2026), and times the
 cohort pull (`COHORT=1 SCOPE=…`). The subset is the "Call Bulk Subset of Schedules" ZIP from
 cdr.ffiec.gov Bulk Data; the facsimile pages there are ASP.NET postbacks and cannot be scripted.
+
+### Bank behaviour signals: which banks are acting on their CRE book
+
+`lib/analytics/bank-behavior-signals.ts` turns a `BehaviorHistory` into seven yes/no signals per
+bank per quarter plus a CRE nonaccrual roll-forward. It has no UI caller yet; the drawer panel
+(step 3) and the Seller Likelihood score (step 4) read it.
+
+**The rule that shapes the design: signals are scope-independent.** The spec's acceptance check is
+that Florida and national produce the same signals for the same bank, with only *scores* allowed
+to differ by cohort. So every rule fires on absolute floors and the bank's own trailing history,
+never on where it sits among peers. Scope percentiles of six measures (`PERCENTILED_MEASURES`) are
+attached to each summary as context and as inputs for the score, but cannot change a flag; they
+are withheld (`null`) when the current cohort has fewer than ten banks. `verify-behavior-signals`
+asserts the property by judging every Florida bank in both cohorts and diffing.
+
+**The signals** (`SIGNALS`; thresholds in `SIGNAL_THRESHOLDS`, one object so the backtest can tune
+them; `rule` text on each spec quotes them for the UI):
+
+| Key | Side | Fires when |
+| --- | --- | --- |
+| `hfsTransfer` | action | held-for-sale rose ≥ 0.25% of gross loans in the quarter **and** is ≥ 1.5× the bank's prior-four-quarter high (so a standing mortgage pipeline does not fire every quarter) |
+| `realizedSale` | action | `NTGLLNQ` non-zero and either a loss or the bank sold in at most one of the prior four quarters |
+| `chargeOffSpike` | action | quarterly CRE net charge-offs ≥ 0.5% of CRE loans, or ≥ 0.1% and 3× the bank's own trailing mean (≥ 3 prior quarters) |
+| `unexplainedExit` | action | CRE nonaccrual fell, and the roll-forward residual is ≥ 25% of prior nonaccrual and ≥ 0.1% of CRE loans |
+| `foreclosureRoute` | action | CRE OREO rose ≥ 0.05% of CRE loans while CRE nonaccrual fell |
+| `modificationBuild` | pressure | CRE modifications rose ≥ 0.1% of CRE loans while CRE past-dues were flat or falling |
+| `creRunoff` | action | CRE loans down > 2% in the quarter **and** > 5% over four quarters, after adding back net charge-offs |
+
+A signal is *unjudged* (not false) when any input it needs is `null` — a bank with one quarter, a
+missing prior quarter, no CRE book. `BankBehaviorSummary.fired` and `.unjudged` are key arrays;
+`signalResultsOf(summary)` expands them to `{fired, judged}` per key for display.
+
+**The roll-forward** (`rollForward(history, category)` for construction, multifamily, nonfarm
+nonresidential and total CRE):
+
+> unexplained exit = prior nonaccrual + new nonaccrual − current nonaccrual − charge-offs − transfers to OREO
+
+New nonaccrual is not reported, so the prior quarter's 90+ past due stands in
+(`newNonaccrualProxy`); transfers to OREO are not reported, so the increase in the OREO balance
+stands in (`oreoTransferProxy`); charge-offs are the quarter's gross, derived by YTD differencing.
+Both proxies are named as such in the step type and the residual is a flag, not a dollar estimate
+— cures and payoffs land in it too.
+
+**CRE denominators.** `creLoans` on `BehaviorQuarter` is `computeCreLoans` from `lib/fdic-cre.ts`
+(construction + multifamily + non-owner nonfarm, with its undivided-nonfarm fallback), so a rate
+here agrees with a ratio elsewhere on the tab. The one exception is the charge-off rate: the
+reported quarter nets (`NTRECONQ`, `NTREMULQ`, `NTRENRSQ`) cover the whole nonfarm line, so its
+denominator is construction + multifamily + all nonfarm, noted in the code as `creLoansBroad`.
+
+**Caching** is in `app/actions/bank-behavior-signals.ts`. `getBehaviorSignals(scope)` computes the
+whole scope once per request (one `fetchBehaviorCohort` pull — 8s national, under a second Florida)
+and stores it as **one `unstable_cache` entry per asset band**: key `behavior-signals-v1` + scope +
+band + published quarter, seven days. Seven bands (<$100M, $100–250M, $250–500M, $500M–1B, $1–3B,
+$3–10B, >$10B; `ASSET_BANDS`, thousands of dollars) because the whole national cohort is 4.02 MB
+against the Data Cache's 2 MB per-entry ceiling; the largest band is 0.90 MB. The summary stores
+signal keys rather than objects for the same reason. The cron warms `behavior:national` and
+`behavior:florida`; the key carries the quarter, so a new FDIC release starts a fresh set.
+
+**Measured 2026-10-07 (Q2 2026).** National firing: HFS transfer 1.6%, realized sale 2.7%,
+charge-off spike 2.7%, unexplained exit 8.6%, foreclosure route 3.2%, modification build 8.2%, CRE
+runoff 12.6%; 166 banks with two or more action signals. Known cases: BCB Community Bank (35541)
+fires HFS transfer + realized sale; Ocean Bank (24156) fires modification build; Citizens Bank
+Elizabethton (14851), a routine mortgage seller, fires nothing. Thresholds are the spec's starting
+proposals until the step 4 backtest.
+
+**Checks.** `npm run test:bank-behavior-signals` (17 tests: roll-forward arithmetic, each rule,
+null → unjudged, bands, scope independence on fixtures, percentile withholding).
+`npm run verify:behavior-signals` (live; runs under `tsx --conditions=react-server` so the
+`server-only` marker in the service is inert): known cases with the full roll-forward table,
+firing counts, banks with ≥ 2 action signals, band sizes against the ceiling, Florida-vs-national
+diff; exits non-zero if a known case or the independence check fails.
 
 ### Peer Positioning in the institution drawer
 
@@ -1655,6 +1726,7 @@ above were produced and is the before/after instrument for further work on load 
   | `institution-trend-v2` + CERT | Eight quarters of ratios, capital categories, city/state and the verdict, for the drawer's Eight-Quarter Trend |
   | `institution-trend-narrative-v2` + CERT | The figure-checked analyst reading under the trend panels, or its fallback |
   | `market-analytics-visuals-v2` + scope | Derived chart series for the Visual Analysis panel |
+  | `behavior-signals-v1` + scope + asset band + quarter | Bank behaviour signals and roll-forward measures for every filer in the scope, one entry per asset band (seven). No UI reader yet |
   | `executive-brief-v4` + scope | Ranked change events and non-reporting institutions for the Executive Brief. **Never populated** — the view is unreachable and the cron no longer warms it |
   | `underwriter-workbench-v1` + scope | Latest-quarter rows for the whole scope, for the Underwriter Workbench. **Never populated**, as above |
   | `legal-updates-v14` | Legal Landscape items: deduped, freshness-filtered, relevant to the firm's operations, source-verified, and — for legislation — checked against the bill record. Exposure counts are **not** in here, see `resolveLegalApplicability`. Bumped to `v14` when federal bills gained record facts and details from GPO bulk data and items gained `detailsSource`; `v13` when Florida items gained `intent` and the response gained `sectionContext`; `v12` when Florida bills gained record facts and staff-analysis details and enforcement roundups began to be read from their pages; `v11` when Federal Register items gained `record` facts and `details` from the full text (item shape changed); `v10` when monthly enforcement roundups began to be admitted; `v9` when Florida bills and Federal Register rulemaking began coming from records; `v7` entries hold the fabricated bills, and the Data Cache survives deploys |
@@ -1803,7 +1875,8 @@ only, sleeps 120s for the build, then calls both endpoints with `CRON_SECRET`. *
 `CRON_SECRET` secret in GitHub must match Vercel's value** — a mismatch has broken warming before,
 and the symptom is a slow tool rather than an error.
 
-`warm-cache` includes both department lenses (`executiveBrief:national`, `workbench:national`). All
+`warm-cache` includes both department lenses (`executiveBrief:national`, `workbench:national`) and
+the bank behaviour signals for both scopes (`behavior:national`, `behavior:florida`). All
 tasks run concurrently, so wall time is the slowest single one, but that is now a lens rather than an
 OpenAI call: the workflow's curl timeout is 280s against the route's 300s `maxDuration`. **Only
 `National` is warmed, because that is the only scope either lens is mounted with** — adding a scope
@@ -2007,6 +2080,7 @@ npm run test:quarter               # FDIC report-date arithmetic
 npm run test:peer-cohort           # workbench cohort selection and relaxation
 npm run test:cre-downside          # the capital scenario, both regimes
 npm run test:bank-behavior         # behaviour fields: catalogue, nulls, YTD→quarter, histories (tsx; @/ imports)
+npm run test:bank-behavior-signals # behaviour signals: roll-forward, each rule, unjudged, bands, scope independence (tsx)
 ```
 
 `test:allowlist` runs under `tsx` rather than Node's type stripping, because `lib/domain-allowlist.ts`

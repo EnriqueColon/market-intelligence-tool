@@ -8,7 +8,40 @@ is it in now, and what is still open.
 
 ---
 
-## 2026-10-06, mid-afternoon (latest) — step 2 built, not yet committed; status document for review
+## 2026-10-07, morning (latest) — Bank Behaviour expansion, step 2 shipped to `dev`: the signals
+
+The seven behaviour signals and the CRE nonaccrual roll-forward are committed as `4ab576f` after
+the live verification that yesterday's final fixes were waiting on. Nothing on the tab changes yet;
+this is the computation layer that step 3 (the drawer panel) and step 4 (the Seller Likelihood
+score) will read.
+
+**What the live run showed** (`npm run verify:behavior-signals`, 2026-10-07 09:05). National:
+4,630 institutions pulled in 8.2s, 4,603 judged, signals computed in well under a second. Known
+cases unchanged from yesterday — BCB Community Bank Q2 2026 fires HFS transfer + realized sale,
+Ocean Bank fires modification build, Citizens Bank Elizabethton fires nothing. Scope independence:
+90 Florida banks × 7 signals, 0 differences between the Florida and national cohorts. The two
+fixes made yesterday both landed: cache entries are now 0.16–0.90 MB per asset band (the whole
+cohort is 4.02 MB unchunked, which is why it is chunked), and CRE runoff fell from 26.5% of banks
+to 12.6% once the four-quarter condition was added. Firing rates nationally: HFS transfer 1.6%,
+realized sale 2.7%, charge-off spike 2.7%, unexplained exit 8.6%, foreclosure route 3.2%,
+modification build 8.2%, CRE runoff 12.6%; 166 banks carry two or more action signals (Florida: 3
+— Amerant, Banesco USA, BayFirst).
+
+**One slip caught before push:** `app/actions/bank-behavior-signals.ts` had been written with CRLF
+endings. Normalised to LF and the commit amended; every new code file from this expansion is LF.
+
+**Still open.** The thresholds are the spec's starting proposals — the step 4 backtest validates
+them, and 12.6% for runoff and 8.6% for unexplained exit are the two most likely to move. HFS and
+loan-sale signals cannot separate CRE from residential (the Call Report does not split them); the
+own-history rules suppress routine mortgage sellers but not an unusual quarter at one. The review
+document `docs/BANK_BEHAVIOR_EXPANSION_STATUS.md` is updated to this state. Next: step 3, the
+Balance-Sheet Actions panel in the institution drawer, reading `fetchBehaviorHistory(cert)` and
+`signalResultsOf`. Carried: the screening-table two-cohort decision, the cold-cache production look
+at Cohort Changes and the drawer, the "CRE / Assets" label.
+
+---
+
+## 2026-10-06, mid-afternoon — step 2 built, not yet committed; status document for review
 
 Step 2 of the Bank Behaviour expansion — the seven behaviour signals and the nonaccrual
 roll-forward, computed for every filer in a scope and cached in asset-band chunks — is written and
