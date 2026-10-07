@@ -1,6 +1,6 @@
 # Bank Behaviour Expansion — status for review
 
-*As of 2026-10-07, 09:30. Branch `dev` at `0d90a59`; production (`main`) untouched.*
+*As of 2026-10-07, 11:30. Steps 1–3 are in production: `main` and `dev` level at `fe0ad1b` (behavioural head `80743b6`, the data API that AMO Tracker will consume).*
 
 ## 1. What we are building, in one paragraph
 
@@ -206,5 +206,5 @@ npm run verify:behavior-signals         # known cases, Florida-vs-national, band
 
 ## 8. Git state
 
-- `main` (production): `8afac5b` — unchanged by this work.
-- `dev`: step 1 `c656665`, step 2 `4ab576f`, step 3 `0d90a59`, plus documentation commits on top.
+- `main` (production) and `dev`: level at `fe0ad1b` since 11:30 on 2026-10-07. Step 1 `c656665`, step 2 `4ab576f`, step 3 `0d90a59`, then `80743b6` (Market Analytics data API, `/api/analytics/v1/*`, so AMO Tracker renders this tab's data in its own layout — see `confluence.md` → "Market Analytics data API"), plus documentation commits.
+- Production state before this work: `8afac5b`.

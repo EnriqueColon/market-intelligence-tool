@@ -7,7 +7,7 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
-| `main` | `7a3f80e` | Production | https://market-intelligence-tool-gilt.vercel.app |
+| `main` | `80743b6` | Production | https://market-intelligence-tool-gilt.vercel.app |
 | `dev` | `80743b6` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 This table names the newest commit on each branch that **changes behaviour**; documentation-only
@@ -15,16 +15,19 @@ commits sit on top of it and are deliberately not tracked here, because amending
 SHA and the table then reads as stale when nothing has moved. Confirm with
 `git log --format='%h|%ci|%s'` rather than trusting the previous entry — this has drifted twice.
 
-**`dev` is four behavioural commits ahead of `main` as of 11:05 on 2026-10-07:** `80743b6`, the
-Market Analytics data API (`/api/analytics/v1/*`, bearer-keyed and fail-closed, plus the one-line
-`middleware.ts` exemption — revertable in isolation, nothing in the tab imports it; while
-`ANALYTICS_API_KEY` is unset on Vercel it is inert, answering 503); `c656665`, the
-Bank Behaviour expansion's ingestion layer (a new FDIC field list, a pure shaping module, a service
-and a verify script); `4ab576f`, its signals layer (seven behaviour signals, the CRE nonaccrual
-roll-forward, a server action cached per asset band, and two new warm-cache entries); and `0d90a59`,
-the first visible piece — the Balance-Sheet Actions section in the institution drawer and its lines
-in Copy Snapshot. Reverting `0d90a59` alone removes the section and leaves the data layers in place
-with no caller; reverting all three removes files nothing imports. Before them, **`main` and `dev` were level at `ad24c30` as of 10:50 on 2026-10-06.** Production fast-forwarded
+**`main` and `dev` are level at `fe0ad1b` as of 11:30 on 2026-10-07.** Production fast-forwarded
+`8afac5b` → `fe0ad1b`, four behavioural commits: `c656665`, the Bank Behaviour expansion's ingestion
+layer (a new FDIC field list, a pure shaping module, a service and a verify script); `4ab576f`, its
+signals layer (seven behaviour signals, the CRE nonaccrual roll-forward, a server action cached per
+asset band, two new warm-cache entries); `0d90a59`, the Balance-Sheet Actions section in the
+institution drawer and its lines in Copy Snapshot; and `80743b6`, the Market Analytics data API
+(`/api/analytics/v1/*`, bearer `ANALYTICS_API_KEY`, fail-closed, plus the one-line `middleware.ts`
+exemption). The API was verified against production at 11:28 with `verify:analytics-api` for Florida
+and National: every endpoint 200, the negative cases 400/401, figures identical to the tab. **AMO
+Tracker will depend on `80743b6` once its FDIC page is switched over**; reverting it then breaks that
+page and nothing here. `0d90a59` reverts alone (section goes, data layers stay with no caller);
+the four together remove files nothing else imports. `8afac5b` is the production state before them
+and the rollback target if the drawer or the API misbehaves. Before them, **`main` and `dev` were level at `ad24c30` as of 10:50 on 2026-10-06.** Production fast-forwarded
 `8391d1c` → `ad24c30`, taking the whole morning's Market Analytics work in one release, six
 behavioural commits: `7aab24f`, which keeps failed and merged banks out of the charts and exports
 and reads each bank's headline-quarter filing rather than its largest-asset one; `45d2934`, the

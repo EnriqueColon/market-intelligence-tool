@@ -42,13 +42,16 @@ in `app/api/cron/warm-cache/route.ts`; left for a separate commit. (3) AMO has t
 adopting here: a shared query-window constant with a check script, and a per-metric percentile
 direction (`high-risk` / `high-good`) asserted by a negative-control script.
 
-**State.** `dev` = `80743b6` plus this docs commit, not pushed at time of writing; `main` untouched.
-`ANALYTICS_API_KEY` is **not yet set on Vercel** — until it is, the routes return 503 on every
-deployment, which is the intended closed state. A prompt for the AMO side (Express fetch-and-cache
-layer, then rendering) is the next deliverable; it depends on the key being set on the dev preview.
+**State (updated 11:30).** Shipped. The user chose production as the API's home, set
+`ANALYTICS_API_KEY` on Vercel (Production environment only) and said "merge": `main` fast-forwarded
+`8afac5b` → `fe0ad1b`, taking the API and Bank Behaviour steps 1–3 together. `verify:analytics-api`
+against production passed for Florida (35541) and National (4433) with the same figures as the local
+run and the tab. National responses were cold on that first call (visuals 26 s, signals 10 s); the
+05:00 UTC cron keeps them warm from tomorrow. The AMO-side prompt has been handed over; it points at
+`https://market-intelligence-tool-gilt.vercel.app` and starts once the user's current AMO update is
+done. The key was generated in chat, so it is to be rotated (Vercel + droplet) once AMO is working.
 
-**Open.** Set `ANALYTICS_API_KEY` on Vercel (preview first, then production when the API ships to
-`main`); the cron scope-casing mismatch; refuse the whole-scope national signals response once it nears
+**Open.** Rotate `ANALYTICS_API_KEY` after AMO is wired up; the cron scope-casing mismatch; refuse the whole-scope national signals response once it nears
 4.5 MB; Bank Behaviour step 4 (Seller Likelihood, states, backtest) is unchanged and still next in the
 expansion; the AOM export questions from earlier today are still with the user.
 
