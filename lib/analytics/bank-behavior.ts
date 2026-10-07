@@ -1,3 +1,4 @@
+import { computeCreLoans } from "@/lib/fdic-cre"
 import { formatQuarter, normalizeQuarter } from "@/lib/scoring/quarter"
 
 /**
@@ -30,6 +31,15 @@ export type BehaviorQuarter = {
   label: string
   totalAssets: number | null
   grossLoans: number | null
+
+  // Schedule RC-C — CRE balances, the denominators for the category rates
+  constructionLoans: number | null
+  multifamilyLoans: number | null
+  nonfarmNonresLoans: number | null
+  nonfarmOwnerLoans: number | null
+  nonfarmNonOwnerLoans: number | null
+  /** Derived: the tab's CRE definition (`computeCreLoans`): construction + multifamily + non-owner-occupied nonfarm. */
+  creLoans: number | null
 
   // Schedule RC line 4.a — loans and leases held for sale
   heldForSale: number | null
@@ -158,6 +168,12 @@ const derived = (
 export const BEHAVIOR_FIELD_CATALOG: readonly BehaviorFieldSpec[] = [
   reported("totalAssets", "ASSET", "Total assets", "RC 12", "balance"),
   reported("grossLoans", "LNLSGR", "Gross loans and leases", "RC-C", "balance"),
+  reported("constructionLoans", "LNRECONS", "Construction & land development loans", "RC-C 1.a", "balance"),
+  reported("multifamilyLoans", "LNREMULT", "Multifamily loans", "RC-C 1.d", "balance"),
+  reported("nonfarmNonresLoans", "LNRENRES", "Nonfarm nonresidential loans", "RC-C 1.e", "balance"),
+  reported("nonfarmOwnerLoans", "LNRENROW", "Owner-occupied nonfarm nonresidential loans", "RC-C 1.e.(1)", "balance"),
+  reported("nonfarmNonOwnerLoans", "LNRENROT", "Non-owner-occupied nonfarm nonresidential loans", "RC-C 1.e.(2)", "balance"),
+  derived("creLoans", "computeCreLoans: constructionLoans + multifamilyLoans + nonfarmNonOwnerLoans (nonfarmNonresLoans when the split does not reconcile)", "CRE loans, tab definition", "RC-C 1.a + 1.d + 1.e.(2)", "balance"),
 
   reported("heldForSale", "LNLSSALE", "Loans held for sale", "RC 4.a (RCON5369)", "balance"),
   reported("heldForSaleNonaccrual", "NALNSALE", "Held for sale, nonaccrual", "RC-N 11 col C", "balance"),
@@ -275,6 +291,16 @@ export function toBehaviorQuarter(raw: Record<string, unknown>): BehaviorQuarter
     if (spec.kind === "reported") (q as Record<string, unknown>)[spec.key] = num(raw[spec.source])
     else (q as Record<string, unknown>)[spec.key] = null
   }
+  q.creLoans =
+    q.constructionLoans === null || q.multifamilyLoans === null || q.nonfarmNonresLoans === null
+      ? null
+      : computeCreLoans({
+          constructionLoans: q.constructionLoans,
+          multifamilyLoans: q.multifamilyLoans,
+          nonResidentialLoans: q.nonfarmNonresLoans,
+          ownerOccupiedLoans: q.nonfarmOwnerLoans ?? 0,
+          nonOwnerOccupiedLoans: q.nonfarmNonOwnerLoans ?? 0,
+        })
   q.netChargeOffsNonfarmOwnerYtd = diff(q.netChargeOffsNonfarmNonresYtd, q.netChargeOffsNonfarmNonOwnerYtd)
   q.oreoCre = sum(q.oreoConstruction, q.oreoMultifamily, q.oreoNonfarmNonres)
   q.nonaccrualNonfarmOwner = diff(q.nonaccrualNonfarmNonres, q.nonaccrualNonfarmNonOwner)

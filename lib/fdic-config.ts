@@ -151,6 +151,10 @@ export const FDIC_FIELDS = {
     'STNAME',
     'ASSET',
     'LNLSGR', // Gross loans and leases: the denominator for every rate below
+    // ── Schedule RC-C CRE balances, the denominators for the category rates.
+    // Same fields and the same definition (`computeCreLoans`) as the rest of
+    // the tab, so a rate here and a ratio there agree on what CRE is.
+    'LNRECONS', 'LNREMULT', 'LNRENRES', 'LNRENROW', 'LNRENROT',
     // ── Schedule RC line 4.a: loans and leases held for sale. The "we are about
     // to sell" balance. Titled "held for resale" in the catalogue, which is why
     // a search for "held for sale" misses it. Total only: the Call Report has

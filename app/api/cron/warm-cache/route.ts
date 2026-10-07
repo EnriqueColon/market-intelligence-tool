@@ -14,6 +14,7 @@ import { fetchPriceIndexData, fetchTransactionVolumeData } from "@/app/actions/f
 import { getScreeningPayload } from "@/app/actions/market-analytics-screening"
 import { getAnalyticsVisuals } from "@/app/actions/market-analytics-visuals"
 import { getCohortWatch } from "@/app/actions/market-analytics-watch"
+import { getBehaviorSignals } from "@/app/actions/bank-behavior-signals"
 
 export const runtime = "nodejs"
 // 5 minutes — all tasks run concurrently so wall time is the slowest single task
@@ -110,6 +111,14 @@ export async function GET(request: Request) {
     // round trip as the screening table plus a few structure-record requests.
     warmWithLabel("watch:national", () => getCohortWatch("National"), results),
     warmWithLabel("watch:florida", () => getCohortWatch("Florida"), results),
+
+    // Bank behaviour signals (HFS transfers, loan-sale losses, CRE charge-off
+    // spikes, unexplained nonaccrual exits, foreclosure route, modification
+    // build, CRE runoff) for every filer in the scope: one FDIC pull of nine
+    // quarters (about 13s nationally), stored in four asset-band entries so no
+    // single entry nears the 2MB ceiling.
+    warmWithLabel("behavior:national", () => getBehaviorSignals("National"), results),
+    warmWithLabel("behavior:florida", () => getBehaviorSignals("Florida"), results),
 
     // The Executive Brief and Underwriter Workbench were warmed here. They are
     // no longer reachable, so warming them would spend a couple of minutes of
