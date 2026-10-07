@@ -171,6 +171,7 @@ with almost no configuration.
 | **GPO bulk data** (govinfo.gov) | Each federal bill's record, text, committee report and CRS summary, by bill number | Keyless — the bulk files, not the API, which needs one | Federal bill cards show govtrack's four facts and no details |
 | **Federal Register** | Rules and proposed rules for the Regulatory section, with each rule's record facts and full text | Keyless | That section falls back to the model alone, which it also uses anyway for FILs and bulletins |
 | **LegiScan** | Florida bills for the Legislative Tracker — sponsors, votes, text versions and the staff analyses (PDFs on flsenate.gov, read with `pdf-parse`) | `LEGISCAN_API_KEY` | Florida legislation is omitted and the feed says so in a note |
+| **AMO Tracker** (consumer, not a source) | Reads this tab's cached screening, visuals, cohort watch, signals and per-bank drawer data over `/api/analytics/v1/*` and renders them in its own layout | `ANALYTICS_API_KEY`, bearer, server-to-server; closed when unset | Only AMO Tracker is affected; this tool does not depend on it. See `confluence.md` → "Market Analytics data API" |
 
 `FRED_API_KEY` is **not needed** by the outlook, despite appearing in older documents. It is still
 read by `fetch-kpi-data.ts` and `fetch-cre-data.ts`, whose FRED paths return null without it.
@@ -240,6 +241,7 @@ npm run test:trend-narrative  # the analyst reading's prompt table, screen flags
 npm run test:bank-behavior    # bank-behaviour fields: provenance catalogue, null handling, YTD→quarter differencing (tsx)
 npm run test:bank-behavior-signals  # bank-behaviour signals: roll-forward, firing rules, scope independence (tsx)
 npm run test:bank-behavior-panel    # drawer's Balance-Sheet Actions: points, roll-forward, the deterministic reading (tsx)
+npm run test:analytics-api          # the data API other tools consume: fail-closed auth, scope normalisation (tsx)
 npm run test:quarter          # FDIC report-date arithmetic
 npm run test:peer-cohort      # workbench peer selection, and what it refuses to relax
 npm run test:cre-downside     # the capital scenario, on both regulatory capital regimes

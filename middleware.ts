@@ -7,7 +7,8 @@ import {
   safeRedirectPath,
 } from '@/lib/auth';
 
-const PUBLIC_PATHS = ['/api/auth', '/api/cron'];
+// /api/analytics checks its own bearer key (lib/analytics-api.ts) and is closed when the key is unset.
+const PUBLIC_PATHS = ['/api/auth', '/api/cron', '/api/analytics'];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;

@@ -1215,6 +1215,59 @@ timeline) arrive with steps 5–6; the footer says so. Bump `institution-behavio
 breakdown, signals by quarter, the reading's sentences and figures, one-quarter and missing-input
 cases, `money`, `signalName`).
 
+### Market Analytics data API (`/api/analytics/v1/*`)
+
+Other tools render this tab's data in their own layout. Today that is the **AMO Tracker** dashboard
+(`EnriqueColon/amo-dashboard`, a Vite + Express app on a DigitalOcean droplet), whose "FDIC Data
+Analytics" page reads from here instead of computing its own figures. The principle: one
+computation, several front ends. A consumer receives the same cached objects the tab receives, keyed
+by the same scope string and quarter, so the two cannot show different numbers for the same bank.
+
+**Auth.** `Authorization: Bearer $ANALYTICS_API_KEY`, compared in constant time
+(`lib/analytics/api-contract.ts`). `middleware.ts` exempts `/api/analytics` from the login cookie, so
+every route calls `requireApiKey` first. Unlike the cron routes, an **unset key closes the API**
+(503), it does not open it. The key is server-to-server only: a consumer must call from its backend,
+never from a browser, because a browser would expose it. Responses carry `Cache-Control: private,
+no-store`; consumers do their own caching (AMO caches for seven days in memory, as it does FDIC).
+
+**Endpoints.** All GET, all JSON, every success wrapped as `{ ok: true, meta, ... }` where `meta` has
+`apiVersion`, `contractVersion` (bumped when a field is renamed, removed or changes unit; additions do
+not bump it), `quarter` (`YYYYMMDD`, the FDIC quarter the object was computed for), `scope` (the exact
+cache-key string) and `servedAt`. Failures are `{ ok: false, error }` with 400 (bad scope, band or
+CERT), 401, 502 (the cached getter reported an FDIC failure, which is never cached) or 503.
+
+| Endpoint | Returns | Backed by |
+| --- | --- | --- |
+| `/meta` | Current quarter, scope strings, asset bands, the signal catalogue (label, meaning, rule, thresholds), CRE category labels, endpoint list | `getLatestFdicQuarter`, `SIGNALS`, `ASSET_BANDS` |
+| `/screening?scope=` | The `ScreeningPayload` the tab receives: scored rows, KPIs, NPL summary, quarters, raw row count | `getScreeningPayload` (`market-analytics-screening-v2`) |
+| `/visuals?scope=` | Chart series behind Visual Analysis | `getAnalyticsVisuals` |
+| `/cohort-watch?scope=` | Cohort Changes: deteriorations and exits | `getCohortWatch` (`market-analytics-watch-v1`) |
+| `/behavior-signals?scope=&band=` | Behaviour signals for every filer in the scope; `band` (optional, keys from `/meta`) returns one asset band | `getBehaviorSignals` (`behavior-signals-v1`) |
+| `/institution/<CERT>?include=narrative` | Everything the drawer loads for one bank: eight-quarter trend, corporate history, Balance-Sheet Actions (signals by quarter, roll-forward, reading). The model narrative is opt-in because it calls OpenAI | `getInstitutionTrend`, `getInstitutionHistory`, `getInstitutionBehavior`, `getInstitutionTrendNarrative` |
+
+**Scope.** The tab uses `"National"` or a state name in title case (`"Florida"`) and that string is
+part of every cache key. `normalizeScope` maps whatever a consumer sends (`FL`, `florida`, `national`,
+`US`) onto that exact string so a consumer request and a tab visit share one cache entry; anything
+that is not a US state is a 400. CERTs must be numeric (`normalizeCert`).
+
+**Sizes and timing, measured 2026-10-07 on a dev server.** Florida: screening 119 KB, visuals 14 KB,
+cohort watch 6 KB, signals 77 KB, one institution 11 KB; warm responses 10–50 ms, cold 0.8–1.9 s.
+National: screening 1.4 MB (5.8 s cold), visuals 567 KB, signals **3.9 MB for the whole scope** (9.8 s
+cold), one band about 0.6 MB. Vercel's function response ceiling is 4.5 MB, so consumers fetch national
+signals per band; the full-scope response will cross the ceiling as signals are added, at which point
+the route should refuse it rather than let it grow. `maxDuration` is 120 s on the data routes.
+
+**Checks.** `npm run test:analytics-api` (5 tests: the auth decision including fail-closed, scope and
+CERT normalisation, the envelope). `BASE_URL=… ANALYTICS_API_KEY=… npm run verify:analytics-api
+[scope] [cert]` exercises every endpoint against a running deployment, including the negative cases
+(no key, wrong key, bad scope, bad band, bad CERT), and prints row counts, top Opportunity names and
+the latest fired signals for the chosen bank so they can be compared with the tab by eye.
+
+**Changing the tab.** Adding a field to a payload is safe; consumers ignore what they do not know.
+Renaming, removing or changing the unit of a field is a contract change: bump
+`ANALYTICS_CONTRACT_VERSION` in `lib/analytics/api-contract.ts` in the same commit, and tell the
+consumer. Bumping a cache key version (`…-v2` → `…-v3`) does not change the contract.
+
 ### Peer Positioning in the institution drawer
 
 `components/institution-profile-drawer.tsx`. Percentiles are measured against a **matched peer
@@ -2060,6 +2113,7 @@ Additional token-protected endpoints, each authenticated by header:
 | `/api/ingestion/run` | `x-ingestion-token` |
 | `/api/research/upload`, `delete-report`, `delete-test-reports` | `x-admin-upload-token` |
 | `/api/cron/*` | `Authorization: Bearer $CRON_SECRET` |
+| `/api/analytics/v1/*` | `Authorization: Bearer $ANALYTICS_API_KEY` — fail-closed when unset; see "Market Analytics data API" |
 
 Vercel **Deployment Protection** is enabled for previews, so the `dev` URL additionally requires a
 Vercel login and cannot be shared with people outside the account without a bypass token.
@@ -2083,6 +2137,7 @@ Every variable referenced in code. Scope matters: `POSTGRES_URL` and `BLOB_READ_
 | `GOOGLE_CSE_API_KEY` | Separate key, used only by CBRE ingestion (`app/ingestion/sources/cbre-cse.ts`) |
 | `ADMIN_INIT_TOKEN` | Cannot initialize database tables |
 | `ADMIN_UPLOAD_TOKEN` | Cannot upload or delete reports |
+| `ANALYTICS_API_KEY` | The Market Analytics data API returns 503 to every caller (closed, not open). AMO Tracker's FDIC Data Analytics page cannot load. Set the same value in the consumer's server environment |
 | `INGESTION_TOKEN` | Ingestion endpoint unavailable |
 | `ELEMENTIX_API_KEY` | Participants-intel API returns null (feeds orphaned UI — see §10) |
 | `LEGISCAN_API_KEY` | Legislative Tracker shows federal bills only; a feed note says so. Federal bills come from govtrack and the Federal Register, which need no key |
@@ -2129,6 +2184,7 @@ npm run test:cre-downside          # the capital scenario, both regimes
 npm run test:bank-behavior         # behaviour fields: catalogue, nulls, YTD→quarter, histories (tsx; @/ imports)
 npm run test:bank-behavior-signals # behaviour signals: roll-forward, each rule, unjudged, bands, scope independence (tsx)
 npm run test:bank-behavior-panel   # drawer's Balance-Sheet Actions: points, roll-forward, signals by quarter, the reading (tsx)
+npm run test:analytics-api         # data API: fail-closed auth, scope and CERT normalisation, envelope (tsx)
 ```
 
 `test:allowlist` runs under `tsx` rather than Node's type stripping, because `lib/domain-allowlist.ts`
