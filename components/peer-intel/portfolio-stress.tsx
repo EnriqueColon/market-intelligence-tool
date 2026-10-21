@@ -72,10 +72,10 @@ export function PortfolioStress({
       <Card className="p-6 surface-primary">
         <h3 className="text-base font-semibold text-slate-800">Portfolio stress</h3>
         <p className="mt-2 text-sm text-slate-600">
-          No peer in {layerName(cohort.layer)} reports a portfolio. A private fund discloses no holdings, no valuations
-          and no performance at any point in its life — not at a close, not quarterly, not at the end. What it raised is
-          the whole of what is public, and that is on the panels above. Switch to the US layer for the vehicles that
-          file quarterly reports.
+          <strong>No peer in {layerName(cohort.layer)} reports a portfolio</strong> — again a structural fact rather
+          than a gap. A private fund discloses no holdings, no valuations and no performance at any point in its life:
+          not at a close, not quarterly, not at the end. What it raised is the whole of what is public, and that is on
+          the panels above. Switch to the US layer for the twelve vehicles that file quarterly reports.
         </p>
       </Card>
     )

@@ -9,6 +9,7 @@ import {
   layerForLocation,
   REQUEST_CONCURRENCY,
   REQUEST_SPACING_MS,
+  unpadCik,
   retryDelayMs,
   shouldRetry,
   type FtsQuery,
@@ -25,7 +26,8 @@ import {
   type DevelopmentItem,
   type ScoredDevelopment,
 } from "@/lib/peer-intel/developments"
-import { peersInScope } from "@/lib/peer-intel/registry"
+import { nonTradedVehiclesInScope, peersInScope } from "@/lib/peer-intel/registry"
+import { assessGating, plainText, type GatingAssessment } from "@/lib/peer-intel/gating"
 import {
   managerSignals,
   signalFiringRates,
@@ -573,6 +575,12 @@ export type PeerIntelPayload = {
    * because there was nothing to report — `developments.failures` says which.
    */
   developments: DevelopmentsResult
+  /**
+   * Whether each non-traded vehicle's repurchase offer was taken to its stated
+   * cap — the closest thing to gating that any filing supports. Empty for a
+   * layer with no non-traded vehicle.
+   */
+  gating: GatingResult
   /** What the fetch cost and what it could not read, so a panel can be honest. */
   diagnostics: {
     asOf: string
@@ -601,7 +609,7 @@ export async function buildPeerIntelPayload(layer: PeerLayer, asOf: string): Pro
   // exceed its ceiling; the news feeds are a different host entirely and run
   // alongside. A news failure is collected rather than thrown, so an outage
   // there cannot take the filings panels down.
-  const [offerings, tier, developments] = await Promise.all([
+  const [offerings, tier, developments, gating] = await Promise.all([
     fetchCohortOfferings(layer),
     fetchRegisteredTier(layer),
     fetchDevelopments(layer, asOf).catch((error) => ({
@@ -609,6 +617,12 @@ export async function buildPeerIntelPayload(layer: PeerLayer, asOf: string): Pro
       unsearchable: [],
       failures: [{ manager: "all", reason: error instanceof Error ? error.message : String(error) }],
       considered: 0,
+      requests: 0,
+    })),
+    fetchGating(layer).catch((error) => ({
+      assessments: [],
+      unassessable: [],
+      failures: [{ manager: "all", reason: error instanceof Error ? error.message : String(error) }],
       requests: 0,
     })),
   ])
@@ -642,6 +656,7 @@ export async function buildPeerIntelPayload(layer: PeerLayer, asOf: string): Pro
     firingRates: signalFiringRates(signals),
     tier: tier.vehicles.map((v) => buildVehicleTrend(v, ownerOf.get(v.cik) ?? "")),
     developments,
+    gating,
     diagnostics: {
       asOf,
       formDRequests: offerings.requests,
@@ -761,4 +776,72 @@ export async function fetchDevelopments(layer: PeerLayer, asOf: string): Promise
   })
 
   return { items: rankDevelopments(perManager.flat()), unsearchable, failures, considered, requests }
+}
+
+export type GatingResult = {
+  assessments: GatingAssessment[]
+  /** Vehicles whose filing was read but stated no cap or had no table. */
+  unassessable: Array<{ manager: string; vehicleName: string }>
+  failures: Array<{ manager: string; reason: string }>
+  requests: number
+}
+
+/**
+ * Gating for the non-traded tier, read from each vehicle's newest 10-Q.
+ *
+ * This is the only part of the tracker that downloads a whole filing rather
+ * than a structured endpoint, because the repurchase cap exists only in prose
+ * and a multi-class filer's share count exists only in the earnings-per-share
+ * table — `companyconcept` returns a 404 for it. The documents are large (Blue
+ * Owl's is 14 MB) so this runs only over the seven non-traded vehicles, not the
+ * whole registry, and only the newest 10-Q each.
+ *
+ * Listed vehicles are skipped: they have no repurchase programme to gate, and a
+ * holder wanting out sells the stock.
+ */
+export async function fetchGating(layer: PeerLayer): Promise<GatingResult> {
+  const vehicles = nonTradedVehiclesInScope(layer)
+  const assessments: GatingAssessment[] = []
+  const unassessable: GatingResult["unassessable"] = []
+  const failures: GatingResult["failures"] = []
+  let requests = 0
+
+  const outcomes = await mapWithConcurrency(vehicles, 3, async (vehicle) => {
+    try {
+      const submissions = await getJson<SubmissionsResponse>(buildSubmissionsUrl(vehicle.cik))
+      requests++
+      const recent = submissions.filings?.recent
+      const forms = recent?.form ?? []
+      const index = forms.findIndex((f) => f === "10-Q")
+      if (index < 0) return { vehicle, reason: "no 10-Q on file" }
+
+      const accession = (recent?.accessionNumber ?? [])[index]
+      const document = (recent as { primaryDocument?: string[] })?.primaryDocument?.[index]
+      if (!accession || !document) return { vehicle, reason: "10-Q has no primary document" }
+
+      const bare = accession.replace(/-/g, "")
+      const url = `https://www.sec.gov/Archives/edgar/data/${unpadCik(vehicle.cik)}/${bare}/${document}`
+      const html = await getText(url)
+      requests++
+      // Distinguish a filing that states no cap from a download that failed —
+      // treating both as "unassessable" hid six empty fetches behind a result
+      // that looked like a data limitation.
+      if (html.length < 50_000) return { vehicle, reason: `10-Q returned only ${html.length} bytes` }
+      const assessment = assessGating(
+        { cik: vehicle.cik, manager: vehicle.manager, vehicleName: vehicle.name },
+        plainText(html)
+      )
+      return assessment ? { vehicle, assessment } : { vehicle, unassessable: true as const }
+    } catch (error) {
+      return { vehicle, reason: error instanceof Error ? error.message : String(error) }
+    }
+  })
+
+  for (const outcome of outcomes) {
+    if ("assessment" in outcome && outcome.assessment) assessments.push(outcome.assessment)
+    else if ("unassessable" in outcome) unassessable.push({ manager: outcome.vehicle.manager, vehicleName: outcome.vehicle.name })
+    else if ("reason" in outcome && outcome.reason) failures.push({ manager: outcome.vehicle.manager, reason: outcome.reason })
+  }
+
+  return { assessments, unassessable, failures, requests }
 }

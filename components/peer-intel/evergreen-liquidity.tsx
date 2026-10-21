@@ -6,6 +6,7 @@ import { CHART_INK, CHART_SERIES, gridProps, numericTick } from "@/lib/chart-the
 import type { PeerCohort } from "@/lib/peer-intel/cohort"
 import { aggregateNetFlow, liquidityRows, type VehicleTrend } from "@/lib/peer-intel/liquidity"
 import { layerName, money, percent } from "@/lib/peer-intel/panel"
+import type { PeerIntelPayload } from "@/app/services/peer-intel"
 
 /**
  * Whether the semi-liquid complex is taking money in or paying it out.
@@ -41,10 +42,12 @@ function compact(value: number): string {
 export function EvergreenLiquidity({
   cohort,
   tier,
+  gating,
   onSelectManager,
 }: {
   cohort: PeerCohort
   tier: VehicleTrend[]
+  gating?: PeerIntelPayload["gating"]
   onSelectManager?: (peerId: string) => void
 }) {
   const aggregate = aggregateNetFlow(tier)
@@ -55,17 +58,20 @@ export function EvergreenLiquidity({
       <Card className="p-6 surface-primary">
         <h3 className="text-base font-semibold text-slate-800">Evergreen liquidity</h3>
         <p className="mt-2 text-sm text-slate-600">
-          No peer in {layerName(cohort.layer)} runs a semi-liquid vehicle that reports quarterly, so there is no
-          redemption activity to show.{" "}
+          <strong>Not applicable to any peer in {layerName(cohort.layer)}</strong> — this is a structural fact, not
+          missing data.{" "}
           {cohort.coverage.registeredVehicles === 0 ? (
             <>
-              Every manager in this layer raises through private funds, which have no redemption programme to report —
-              an investor is committed for the fund&apos;s life. Switch to the US layer for the non-traded vehicles.
+              Every manager in this layer raises drawdown funds, where an investor commits for the fund&apos;s life.
+              There is no quarterly redemption window, no cap and nothing to gate, so there is no redemption activity
+              that could be reported. Of the 20 direct peers in the registry, only Blackstone and Starwood run a
+              redeemable vehicle at all; the rest raise drawdown funds exclusively. Switch to the US layer to see the
+              seven that do.
             </>
           ) : (
             <>
-              The vehicles here that do report are listed, where share repurchases are a buyback rather than investors
-              being paid out.
+              The vehicles here that report quarterly are listed, where a share repurchase is a buyback rather than
+              investors being paid out — a holder wanting liquidity sells the stock instead.
             </>
           )}
         </p>
@@ -90,6 +96,15 @@ export function EvergreenLiquidity({
           share issuance, capital out is the redemption programme paying investors back.
         </p>
       </div>
+
+      <p className="mb-4 rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-xs leading-relaxed text-slate-700">
+        <strong>Read this as market context, not competitor intelligence.</strong> Only 7 of the 65 vehicles tracked
+        have a redemption programme at all, and only two direct peers — Blackstone and Starwood — are among them.
+        Every Miami-Dade and Florida competitor raises drawdown funds, where an investor is committed for the
+        fund&apos;s life and there is nothing to redeem. What these figures show is whether allocators are putting
+        money into private credit or taking it out, which bears on any raise competing for the same money, including
+        our own. They say nothing about what a drawdown-fund peer is doing.
+      </p>
 
       {aggregate.newest && (
         <div className="mb-4 rounded-md border border-[#006D95]/25 bg-[#006D95]/5 px-4 py-3">
@@ -202,9 +217,12 @@ export function EvergreenLiquidity({
         A quarter counts only the vehicles that reported both sides of it, and the chart tooltip gives that count — so a
         quarter where half the tier has not filed yet cannot read as a collapse in flows. &ldquo;Out, % of book&rdquo;
         is repurchases against investments at fair value, blank where that balance is not tagged.{" "}
-        <strong>Gating is not shown.</strong> Whether repurchase requests exceeded what was actually paid appears in the
-        narrative of a filing rather than in any tagged figure, so its absence here does not mean a vehicle paid
-        everyone out in full.
+        <strong>Gating is not shown as a figure.</strong> No filing discloses how many redemption requests a vehicle
+        received — the repurchase table reports what was bought, and shares times price equals the stated amount
+        exactly. It can be inferred from whether a vehicle used its whole stated cap, but that cap is worded
+        differently by every filer and several do not state it in the 10-Q at all, so it is currently readable for one
+        of the seven vehicles here and is withheld rather than shown at that coverage. The developments panel below
+        surfaces gating where it is reported as news.
       </p>
     </Card>
   )

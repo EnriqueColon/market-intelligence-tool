@@ -222,6 +222,7 @@ export function PeerIntel() {
           <EvergreenLiquidity
             cohort={payload.cohort}
             tier={payload.tier}
+            gating={payload.gating}
             onSelectManager={setSelectedManager}
           />
           <PortfolioStress cohort={payload.cohort} tier={payload.tier} onSelectManager={setSelectedManager} />

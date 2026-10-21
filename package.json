@@ -74,7 +74,8 @@
     "test:peer-intel-panel": "tsx --test --tsconfig tsconfig.json lib/peer-intel/panel.test.ts",
     "test:peer-intel-liquidity": "tsx --test --tsconfig tsconfig.json lib/peer-intel/liquidity.test.ts",
     "test:peer-intel-distribution": "tsx --test --tsconfig tsconfig.json lib/peer-intel/distribution.test.ts",
-    "test:peer-intel-developments": "tsx --test --tsconfig tsconfig.json lib/peer-intel/developments.test.ts"
+    "test:peer-intel-developments": "tsx --test --tsconfig tsconfig.json lib/peer-intel/developments.test.ts",
+    "test:peer-intel-gating": "tsx --test --tsconfig tsconfig.json lib/peer-intel/gating.test.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
