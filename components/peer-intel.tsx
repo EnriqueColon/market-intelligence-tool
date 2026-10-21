@@ -10,6 +10,7 @@ import { layerName } from "@/lib/peer-intel/panel"
 import { getErrorMessage } from "@/lib/error-utils"
 import { ActiveRaises, NewLaunches } from "@/components/peer-intel/active-raises"
 import { DataSources } from "@/components/peer-intel/data-sources"
+import { ManagerRoster } from "@/components/peer-intel/manager-roster"
 import { ManagerDrawer } from "@/components/peer-intel/manager-drawer"
 import { RaiseEnvironment } from "@/components/peer-intel/raise-environment"
 
@@ -205,6 +206,11 @@ export function PeerIntel() {
           <RaiseEnvironment cohort={payload.cohort} />
           <ActiveRaises cohort={payload.cohort} onSelectManager={setSelectedManager} />
           <NewLaunches cohort={payload.cohort} onSelectManager={setSelectedManager} />
+          <ManagerRoster
+            cohort={payload.cohort}
+            signals={payload.signals}
+            onSelectManager={setSelectedManager}
+          />
           <DataSources cohort={payload.cohort} diagnostics={payload.diagnostics} />
 
           <ManagerDrawer

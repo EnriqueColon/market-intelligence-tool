@@ -5,6 +5,8 @@ import type { OfferingRecord } from "./form-d"
 import { managerSignals } from "./signals"
 import {
   activeRaiseRows,
+  managerRoster,
+  standingLabel,
   filingTrail,
   filingUrl,
   buildEnvironmentReading,
@@ -236,4 +238,57 @@ test("the filing trail is newest first and carries each filing's own figures", (
   assert.equal(trail[1].sold, 0, "the original filing's own figure, not the latest")
   assert.equal(trail[1].target, 500_000_000, "and its own offering amount, before the cut")
   for (const f of trail) assert.match(f.url ?? "", /sec\.gov/)
+})
+
+test("the roster reaches every tracked manager, not just those raising", () => {
+  const cohort = buildPeerCohort("miami-dade", miamiRecords(), ASOF)
+  const signals = cohort.managers.map((m) => managerSignals(m, new Map()))
+  const rows = managerRoster(cohort, signals)
+
+  assert.equal(rows.length, cohort.managers.length, "every manager must be reachable")
+  // The tables only show open raises, so the roster is the only route to the rest.
+  const openPeerIds = new Set(activeRaiseRows(cohort).map((r) => r.peerId))
+  const unreachableWithoutRoster = rows.filter((r) => !openPeerIds.has(r.peerId))
+  assert.ok(unreachableWithoutRoster.length > 0, "the fixture has managers with no open raise")
+})
+
+test("the firm sorts first, then managers in market by size, then the quiet", () => {
+  const cohort = buildPeerCohort("miami-dade", miamiRecords(), ASOF)
+  const rows = managerRoster(cohort, cohort.managers.map((m) => managerSignals(m, new Map())))
+  assert.equal(rows[0].isSelf, true)
+  const standings = rows.map((r) => r.standing)
+  const firstQuiet = standings.findIndex((s) => s !== "in-market")
+  if (firstQuiet > -1) {
+    assert.ok(
+      standings.slice(firstQuiet).every((s) => s !== "in-market"),
+      "in-market managers must all come before the quiet ones"
+    )
+  }
+})
+
+test("a manager with no readable filing is not-raising, which is an answer not a gap", () => {
+  const cohort = buildPeerCohort("miami-dade", new Map(), ASOF)
+  const rows = managerRoster(cohort, cohort.managers.map((m) => managerSignals(m, new Map())))
+  assert.ok(rows.every((r) => r.standing === "not-raising"))
+  assert.equal(standingLabel(rows[0]), "no Reg D filing")
+})
+
+test("standing says how long a manager has been quiet, in plain words", () => {
+  const long = new Map<string, OfferingRecord[]>([
+    ["2017189", [rec({ cik: "2017189", filedAt: "2019-12-11", offeringAmount: 1_800_000, totalSold: 1_800_000 })]],
+  ])
+  const cohort = buildPeerCohort("miami-dade", long, ASOF)
+  const row = managerRoster(cohort, cohort.managers.map((m) => managerSignals(m, new Map())))
+    .find((r) => r.isSelf)!
+  assert.equal(row.standing, "quiet")
+  // Gelt's real shape: a raise that closed years ago, stated as such.
+  assert.match(standingLabel(row), /last raised \d+ years ago/)
+})
+
+test("an open raise reports its count rather than a quiet duration", () => {
+  const cohort = buildPeerCohort("miami-dade", miamiRecords(), ASOF)
+  const row = managerRoster(cohort, cohort.managers.map((m) => managerSignals(m, new Map())))
+    .find((r) => r.isSelf)!
+  assert.equal(row.standing, "in-market")
+  assert.equal(standingLabel(row), "1 open raise")
 })

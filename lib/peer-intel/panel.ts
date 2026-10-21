@@ -15,6 +15,7 @@ import { buildFilingIndexUrl } from "./edgar-contract"
 import type { ManagerRaises, PeerCohort, VehicleRaise } from "./cohort"
 import { activeRaises, newLaunches, selfPositioning } from "./cohort"
 import { peerSignalSpec, type ManagerSignals, type PeerSignalKey } from "./signals"
+import { UNRESOLVED_WATCH } from "./registry"
 
 export function money(value: number | "indefinite" | null | undefined): string {
   if (value === "indefinite") return "no stated cap"
@@ -340,4 +341,92 @@ export function filingTrail(raise: VehicleRaise["raise"]): Array<{
 
 export function newLaunchRows(cohort: PeerCohort): Array<VehicleRaise & { manager: string; peerId: string }> {
   return newLaunches(cohort)
+}
+
+/**
+ * Where a manager stands, for the roster.
+ *
+ * `in-market` has an open offering. `quiet` has raised before but has filed
+ * nothing for four quarters — which includes funds that simply closed, since
+ * Form D has no closed flag. `not-raising` has no readable filing at all, which
+ * for a manager that funds from its own balance sheet is the accurate answer
+ * rather than a gap.
+ */
+export type ManagerStanding = "in-market" | "quiet" | "not-raising"
+
+export type RosterRow = {
+  peerId: string
+  manager: string
+  location: string
+  relevance: ManagerRaises["relevance"]
+  isSelf: boolean
+  standing: ManagerStanding
+  totalRaised: number | null
+  raiseCount: number
+  openRaiseCount: number
+  lastFiled: string | null
+  firedCount: number
+  pressureCount: number
+  /** Quarters since the newest filing, for the "last raised" wording. */
+  quartersQuiet: number | null
+}
+
+/**
+ * Every tracked manager in the layer, not just the ones currently raising.
+ *
+ * The Open Raises and New Launches tables both filter to live offerings, which
+ * left the quiet managers with no route into the drawer at all — eleven of
+ * twenty-six nationally, including Gelt Financial, whose only Reg D raise
+ * closed in 2019 because it lends from its own balance sheet. A tab that says
+ * it tracks twenty-six managers has to let a reader reach all of them, and a
+ * competitor that has stopped raising is itself worth knowing about.
+ *
+ * Ordered: the firm itself first, then managers in market by capital raised,
+ * then the quiet ones.
+ */
+export function managerRoster(cohort: PeerCohort, signals: readonly ManagerSignals[]): RosterRow[] {
+  const byPeer = new Map(signals.map((s) => [s.peerId, s]))
+  const rows = cohort.managers.map((m) => {
+    const signalSet = byPeer.get(m.peerId)
+    const quartersQuiet = m.raises
+      .map((r) => r.raise.quartersSinceFiling)
+      .filter((q): q is number => q != null)
+      .sort((a, b) => a - b)[0] ?? null
+    const standing: ManagerStanding = m.inMarket ? "in-market" : m.raises.length ? "quiet" : "not-raising"
+    return {
+      peerId: m.peerId,
+      manager: m.manager,
+      location: m.location,
+      relevance: m.relevance,
+      isSelf: m.isSelf,
+      standing,
+      totalRaised: m.totalRaised,
+      raiseCount: m.raiseCount,
+      openRaiseCount: m.openRaiseCount,
+      lastFiled: m.lastFiled,
+      firedCount: signalSet?.firedKeys.length ?? 0,
+      pressureCount: signalSet?.pressureCount ?? 0,
+      quartersQuiet,
+    }
+  })
+
+  const rank = (r: RosterRow) => (r.isSelf ? 0 : r.standing === "in-market" ? 1 : r.standing === "quiet" ? 2 : 3)
+  return rows.sort((a, b) => rank(a) - rank(b) || (b.totalRaised ?? -1) - (a.totalRaised ?? -1))
+}
+
+/** Plain words for a manager's standing, including how long it has been quiet. */
+export function standingLabel(row: RosterRow): string {
+  if (row.standing === "in-market") {
+    return `${row.openRaiseCount} open ${row.openRaiseCount === 1 ? "raise" : "raises"}`
+  }
+  if (row.standing === "not-raising") return "no Reg D filing"
+  if (row.quartersQuiet == null) return "quiet"
+  const years = Math.floor(row.quartersQuiet / 4)
+  if (years >= 1) return `last raised ${years} ${years === 1 ? "year" : "years"} ago`
+  return `quiet ${row.quartersQuiet} ${row.quartersQuiet === 1 ? "quarter" : "quarters"}`
+}
+
+/** Managers the registry watches but could not resolve to an SEC filer. */
+export function unresolvedWatchList(): readonly string[] {
+  return UNRESOLVED_WATCH
 }
