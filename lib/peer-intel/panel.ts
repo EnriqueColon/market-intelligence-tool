@@ -11,6 +11,7 @@
  * Pure: aggregates in, strings out.
  */
 
+import { buildFilingIndexUrl } from "./edgar-contract"
 import type { ManagerRaises, PeerCohort, VehicleRaise } from "./cohort"
 import { activeRaises, newLaunches, selfPositioning } from "./cohort"
 import { peerSignalSpec, type ManagerSignals, type PeerSignalKey } from "./signals"
@@ -298,6 +299,43 @@ export function activeRaiseRows(cohort: PeerCohort): Array<VehicleRaise & { mana
       if (a.isSelf !== b.isSelf) return a.isSelf ? -1 : 1
       return (b.raise.sold ?? -1) - (a.raise.sold ?? -1)
     })
+}
+
+/**
+ * The SEC filing a raise's headline figures came from.
+ *
+ * The strongest provenance available: rather than asking a reader to trust the
+ * table, link them to the document it was read from. Always the newest filing
+ * in the trail, because that is the one `target`, `sold` and `investorCount`
+ * are taken from.
+ */
+export function filingUrl(raise: VehicleRaise["raise"]): string | null {
+  const newest = raise.filings[raise.filings.length - 1]
+  if (!newest?.accession || !newest.cik) return null
+  try {
+    return buildFilingIndexUrl(newest.cik, newest.accession)
+  } catch {
+    return null
+  }
+}
+
+/** Every filing behind a raise, newest first, for the drawer's trail. */
+export function filingTrail(raise: VehicleRaise["raise"]): Array<{
+  formType: string
+  filedAt: string
+  url: string | null
+  sold: number | null
+  target: number | "indefinite" | null
+}> {
+  return [...raise.filings].reverse().map((f) => {
+    let url: string | null = null
+    try {
+      url = f.accession && f.cik ? buildFilingIndexUrl(f.cik, f.accession) : null
+    } catch {
+      url = null
+    }
+    return { formType: f.formType, filedAt: f.filedAt, url, sold: f.totalSold, target: f.offeringAmount }
+  })
 }
 
 export function newLaunchRows(cohort: PeerCohort): Array<VehicleRaise & { manager: string; peerId: string }> {

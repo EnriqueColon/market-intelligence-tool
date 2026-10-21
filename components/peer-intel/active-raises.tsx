@@ -2,7 +2,7 @@
 
 import { Card } from "@/components/ui/card"
 import type { PeerCohort } from "@/lib/peer-intel/cohort"
-import { activeRaiseRows, money, newLaunchRows, percent } from "@/lib/peer-intel/panel"
+import { activeRaiseRows, filingUrl, money, newLaunchRows, percent } from "@/lib/peer-intel/panel"
 
 /**
  * Every open raise in the layer, with the firm's own pinned to the top.
@@ -58,6 +58,7 @@ export function ActiveRaises({
                 <th className={`${HEAD} text-right`}>Avg ticket</th>
                 <th className={`${HEAD} text-right`}>Last 12m</th>
                 <th className={HEAD}>Last filed</th>
+                <th className={HEAD}>Source</th>
               </tr>
             </thead>
             <tbody>
@@ -97,6 +98,22 @@ export function ActiveRaises({
                   <td className={NUM}>{money(row.raise.averageTicket)}</td>
                   <td className={NUM}>{row.raise.soldLastYear == null ? "—" : money(row.raise.soldLastYear)}</td>
                   <td className={`${CELL} whitespace-nowrap`}>{row.raise.lastFiled ?? "—"}</td>
+                  <td className={CELL}>
+                    {filingUrl(row.raise) ? (
+                      <a
+                        href={filingUrl(row.raise) as string}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="whitespace-nowrap text-xs text-[#006D95] underline"
+                        title="Open this fund's Form D on sec.gov — the filing these figures were read from"
+                      >
+                        Form {row.raise.filings[row.raise.filings.length - 1]?.formType ?? "D"}
+                      </a>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -107,7 +124,8 @@ export function ActiveRaises({
       <p className="mt-3 text-[11px] leading-snug text-slate-500">
         &ldquo;Subscribed&rdquo; is blank where the offering states no cap, which is common for open-ended vehicles — a
         share of an uncapped offering has no meaning. &ldquo;Last 12m&rdquo; is measured between filings, so it ends at
-        the date in the final column rather than today.
+        the date in the Last filed column rather than today. Every figure in a row comes from the filing linked under
+        Source; it is self-reported by the issuer and unaudited.
       </p>
     </Card>
   )
@@ -162,7 +180,23 @@ export function NewLaunches({
                   <span className="font-semibold text-slate-800">{money(row.raise.sold)}</span> raised
                   {row.raise.investorCount != null && <> · {row.raise.investorCount} investors</>}
                 </div>
-                <div>first sale {row.raise.firstSale ?? row.raise.firstFiled ?? "—"}</div>
+                <div>
+                  first sale {row.raise.firstSale ?? row.raise.firstFiled ?? "—"}
+                  {filingUrl(row.raise) && (
+                    <>
+                      {" · "}
+                      <a
+                        href={filingUrl(row.raise) as string}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-[#006D95] underline"
+                      >
+                        filing
+                      </a>
+                    </>
+                  )}
+                </div>
               </div>
             </li>
           ))}

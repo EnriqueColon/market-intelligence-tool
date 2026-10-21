@@ -4,7 +4,14 @@ import { useMemo, useState } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import type { PeerCohort } from "@/lib/peer-intel/cohort"
-import { buildManagerReading, buildManagerSnapshot, money, orderedSignals, percent } from "@/lib/peer-intel/panel"
+import {
+  buildManagerReading,
+  buildManagerSnapshot,
+  filingTrail,
+  money,
+  orderedSignals,
+  percent,
+} from "@/lib/peer-intel/panel"
 import { peerById } from "@/lib/peer-intel/registry"
 import { peerSignalSpec, type ManagerSignals, type SignalState } from "@/lib/peer-intel/signals"
 
@@ -193,13 +200,69 @@ export function ManagerDrawer({
                               {r.raise.progress == null ? "—" : percent(r.raise.progress, 1)}
                             </td>
                             <td className="px-2 py-1.5 text-right text-sm tabular-nums text-slate-700">{r.raise.investorCount ?? "—"}</td>
-                            <td className="px-2 py-1.5 text-sm whitespace-nowrap text-slate-700">{r.raise.lastFiled ?? "—"}</td>
+                            <td className="px-2 py-1.5 text-sm whitespace-nowrap text-slate-700">
+                              {r.raise.lastFiled ?? "—"}
+                              {filingTrail(r.raise)[0]?.url && (
+                                <>
+                                  {" "}
+                                  <a
+                                    href={filingTrail(r.raise)[0].url as string}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-xs text-[#006D95] underline"
+                                    title="Open on sec.gov"
+                                  >
+                                    filing
+                                  </a>
+                                </>
+                              )}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
                 )}
+              </Section>
+
+              <Section title="Filing trail">
+                {manager.raises.length === 0 ? (
+                  <p className="text-sm text-slate-600">No filings found.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {manager.raises.map((r) => (
+                      <div key={`trail-${r.cik}`}>
+                        <div className="text-xs font-medium text-slate-700">{r.vehicleName}</div>
+                        <ul className="mt-0.5 flex flex-wrap gap-x-3 gap-y-1">
+                          {filingTrail(r.raise).map((f) => (
+                            <li key={`${r.cik}-${f.filedAt}-${f.formType}`} className="text-[11px] text-slate-600">
+                              {f.url ? (
+                                <a
+                                  href={f.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-[#006D95] underline"
+                                  title={`Form ${f.formType} filed ${f.filedAt} — raised ${money(f.sold)} against an offering of ${money(f.target)}`}
+                                >
+                                  {f.formType} · {f.filedAt}
+                                </a>
+                              ) : (
+                                <span>
+                                  {f.formType} · {f.filedAt}
+                                </span>
+                              )}
+                              <span className="ml-1 text-slate-400">{money(f.sold)}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <p className="mt-2 text-[11px] text-slate-500">
+                  Every amendment, newest first, with the amount sold as at that filing. Each links to the document on
+                  sec.gov — these are the filings every figure in this drawer was read from.
+                </p>
               </Section>
 
               {registryEntry && (

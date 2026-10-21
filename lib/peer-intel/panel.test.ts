@@ -5,6 +5,8 @@ import type { OfferingRecord } from "./form-d"
 import { managerSignals } from "./signals"
 import {
   activeRaiseRows,
+  filingTrail,
+  filingUrl,
   buildEnvironmentReading,
   buildManagerReading,
   buildManagerSnapshot,
@@ -18,9 +20,17 @@ import {
 
 const ASOF = "2026-10-21"
 
+/** A real accession shape: 10-digit CIK, 2-digit year, 6-digit sequence. */
+function accessionFor(cik: string, filedAt: string): string {
+  const yy = filedAt.slice(2, 4)
+  const seq = filedAt.replace(/-/g, "").slice(-6)
+  return `${cik.padStart(10, "0")}-${yy}-${seq}`
+}
+
 function rec(over: Partial<OfferingRecord> & { cik: string; filedAt: string }): OfferingRecord {
   return {
-    accession: "x", formType: "D", entityName: "Fund LP", location: "Miami, FL", jurisdiction: "DE",
+    accession: accessionFor(over.cik, over.filedAt),
+    formType: "D", entityName: "Fund LP", location: "Miami, FL", jurisdiction: "DE",
     offeringAmount: null, totalSold: null, remaining: null, investorCount: null,
     minimumInvestment: null, dateOfFirstSale: null, industryGroup: null, fundType: null, ...over,
   }
@@ -193,4 +203,37 @@ test("no reading ever emits undefined, NaN or a raw null", () => {
       }
     }
   }
+})
+
+test("every raise links to the SEC filing its figures came from", () => {
+  const cohort = buildPeerCohort("miami-dade", miamiRecords(), ASOF)
+  const self = cohort.managers.find((m) => m.isSelf)!
+  const raise = self.raises[0].raise
+  const url = filingUrl(raise)
+  assert.ok(url, "a raise with filings must link to one")
+  // The newest filing, since that is where target/sold/investors are read from.
+  assert.match(url, /^https:\/\/www\.sec\.gov\/Archives\/edgar\/data\/2017189\//)
+  assert.match(url, /-index\.html$/)
+})
+
+test("a raise with no readable accession links to nothing rather than a broken URL", () => {
+  const cohort = buildPeerCohort("miami-dade", new Map([
+    ["2017189", [rec({ cik: "2017189", filedAt: "2026-07-23", accession: "not-an-accession", totalSold: 1 })]],
+  ]), ASOF)
+  const raise = cohort.managers.find((m) => m.isSelf)!.raises[0].raise
+  assert.equal(filingUrl(raise), null)
+})
+
+test("the filing trail is newest first and carries each filing's own figures", () => {
+  const cohort = buildPeerCohort("miami-dade", miamiRecords(), ASOF)
+  const raise = cohort.managers.find((m) => m.isSelf)!.raises[0].raise
+  const trail = filingTrail(raise)
+  assert.equal(trail.length, 2)
+  assert.equal(trail[0].filedAt, "2026-07-23", "newest first")
+  assert.equal(trail[0].formType, "D/A")
+  assert.equal(trail[0].sold, 64_168_863)
+  assert.equal(trail[1].filedAt, "2024-03-28")
+  assert.equal(trail[1].sold, 0, "the original filing's own figure, not the latest")
+  assert.equal(trail[1].target, 500_000_000, "and its own offering amount, before the cut")
+  for (const f of trail) assert.match(f.url ?? "", /sec\.gov/)
 })

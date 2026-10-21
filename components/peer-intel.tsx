@@ -9,6 +9,7 @@ import type { PeerLayer } from "@/lib/peer-intel/edgar-contract"
 import { layerName } from "@/lib/peer-intel/panel"
 import { getErrorMessage } from "@/lib/error-utils"
 import { ActiveRaises, NewLaunches } from "@/components/peer-intel/active-raises"
+import { DataSources } from "@/components/peer-intel/data-sources"
 import { ManagerDrawer } from "@/components/peer-intel/manager-drawer"
 import { RaiseEnvironment } from "@/components/peer-intel/raise-environment"
 
@@ -137,6 +138,7 @@ export function PeerIntel() {
           <RaiseEnvironment cohort={payload.cohort} />
           <ActiveRaises cohort={payload.cohort} onSelectManager={setSelectedManager} />
           <NewLaunches cohort={payload.cohort} onSelectManager={setSelectedManager} />
+          <DataSources cohort={payload.cohort} diagnostics={payload.diagnostics} />
 
           <ManagerDrawer
             cohort={payload.cohort}
@@ -147,16 +149,8 @@ export function PeerIntel() {
 
           <p className="text-[11px] leading-snug text-slate-500">
             {payload.cohort.totals.managers} managers and {payload.cohort.totals.vehicles} vehicles tracked in{" "}
-            {layerName(layer)}, built {payload.diagnostics.asOf} from {payload.diagnostics.formDRequests} Form D and{" "}
-            {payload.diagnostics.xbrlRequests} XBRL requests to SEC EDGAR. Rebuilt weekly.
-            {payload.diagnostics.offeringFailures.length > 0 && (
-              <>
-                {" "}
-                {payload.diagnostics.offeringFailures.length} vehicle
-                {payload.diagnostics.offeringFailures.length === 1 ? "" : "s"} could not be read and{" "}
-                {payload.diagnostics.offeringFailures.length === 1 ? "is" : "are"} excluded from the figures above.
-              </>
-            )}
+            {layerName(layer)}. Read from SEC EDGAR, rebuilt weekly — see &ldquo;Where this data comes from&rdquo; above
+            for every field and its source.
           </p>
         </>
       )}
