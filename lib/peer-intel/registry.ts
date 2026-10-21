@@ -36,6 +36,25 @@ import type { PeerLayer } from "./edgar-contract"
 
 export type VehicleKind = "private" | "registered"
 
+/**
+ * Whether a vehicle is a raise in its own right.
+ *
+ * A single fundraise is routinely spread across several CIKs — an onshore LP, an
+ * offshore or international feeder, a master, a parallel or "-R" sleeve. Each
+ * files its own Form D, and each reports its own slice of the capital, so
+ * counting them as separate raises would overstate the number of funds in the
+ * market and understate the size of each. `sleeve` vehicles carry real capital
+ * and are summed; they are not counted as distinct raises.
+ *
+ * Not represented here at all are the "Holdings LLC" aggregator shells that
+ * some managers file alongside each vintage — Madison Realty has one per fund,
+ * every single one reporting a $125,000 target fully sold to exactly 125
+ * investors. They are a structural artefact of the feeder, not fundraising, and
+ * including them would put a run of spurious "100% subscribed" rows into the
+ * table. They are deliberately omitted.
+ */
+export type VehicleRole = "fund" | "sleeve"
+
 export type PeerVehicle = {
   /** Unpadded CIK, as EDGAR Archives paths use it. */
   cik: string
@@ -46,6 +65,8 @@ export type PeerVehicle = {
    * nothing else. Re-derived at fetch time; this is the audited value.
    */
   kind: VehicleKind
+  /** Defaults to `fund` when absent. */
+  role?: VehicleRole
 }
 
 export type Peer = {
@@ -84,6 +105,28 @@ export const PEERS: readonly Peer[] = [
       { cik: "1685329", name: "Safe Harbor Equity Distressed Debt Fund 2, L.P.", kind: "private" },
       { cik: "1778808", name: "Safe Harbor Equity Distressed Debt Fund 3, L.P.", kind: "private" },
       { cik: "2017189", name: "Safe Harbor Equity Distressed Debt Fund 4, L.P.", kind: "private" },
+    ],
+  },
+  {
+    id: "rialto-capital-management",
+    manager: "Rialto Capital Management",
+    layer: "miami-dade",
+    location: "Miami, FL",
+    relevance: "direct",
+    evidence:
+      "Miami-headquartered CRE credit and special-situations manager — the largest direct peer in the county by a wide margin. Rialto Real Estate Fund V - Debt raised $2.61B from 914 investors; Hines Rialto Credit Partners and Rialto Credit Opportunities are both still filing. Found by targeted lookup, not by name-pattern discovery, because its funds are named after the firm rather than the strategy.",
+    aliases: ["Rialto", "Rialto Capital", "Rialto Real Estate Fund", "Rialto Credit"],
+    website: "https://www.rialtocapital.com",
+    vehicles: [
+      { cik: "2026136", name: "Hines Rialto Credit Partners, LP", kind: "private" },
+      { cik: "1912768", name: "Rialto Credit Opportunities Fund, LP", kind: "private" },
+      { cik: "1912769", name: "Rialto Credit Opportunities Fund (Offshore), LP", kind: "private", role: "sleeve" },
+      { cik: "2143451", name: "Rialto Insurance Credit Partners, LP", kind: "private" },
+      { cik: "1986577", name: "Rialto Real Estate Fund V - Debt, LP", kind: "private" },
+      { cik: "1788190", name: "Rialto Real Estate Fund IV - Debt, LP", kind: "private" },
+      { cik: "1942076", name: "Rialto Credit Partnership II, LP", kind: "private" },
+      { cik: "1831112", name: "Rialto Relative Value Credit Fund, LP", kind: "private" },
+      { cik: "1818200", name: "Rialto Special Situations Fund II, LP", kind: "private" },
     ],
   },
   {
@@ -197,6 +240,18 @@ export const PEERS: readonly Peer[] = [
     ],
   },
   {
+    id: "gelt-financial",
+    manager: "Gelt Financial",
+    layer: "florida",
+    location: "Delray Beach, FL",
+    relevance: "direct",
+    evidence:
+      "Buys non-performing and sub-performing CRE loans of $100K–$5M — the closest strategy and cheque-size match to Safe Harbor outside Miami-Dade. Its only Reg D raise ($1.8M, 12 investors) closed in 2019, so it appears to lend from its own balance sheet; the fundraising panels will show that raise as long closed, which is itself the useful fact about this competitor.",
+    aliases: ["Gelt", "Gelt Financial LLC"],
+    website: "https://geltfinancial.com",
+    vehicles: [{ cik: "1796479", name: "Gelt Financial, LLC", kind: "private" }],
+  },
+  {
     id: "silverview-capital",
     manager: "Silverview Capital",
     layer: "florida",
@@ -238,6 +293,57 @@ export const PEERS: readonly Peer[] = [
   // ----------------------------------------------------------------- National
   // CRE credit specifically: these are the listed and non-traded vehicles whose
   // quarterly filings make portfolio and liquidity figures observable at all.
+  {
+    id: "madison-realty-capital",
+    manager: "Madison Realty Capital",
+    layer: "national",
+    location: "New York, NY",
+    relevance: "direct",
+    evidence:
+      "CRE debt and distressed manager on the firm's watchlist. Debt Fund VI raised $2.04B after cutting its target from $2.25B; Debt Fund VII opened in April 2026 with nothing sold yet, and Debt MA IV has taken $464.4M. Its per-vintage 'Holdings LLC' feeder shells are omitted — see VehicleRole.",
+    aliases: ["Madison Realty", "MRC", "Madison Realty Capital Debt Fund"],
+    vehicles: [
+      { cik: "2124480", name: "Madison Realty Capital Debt Fund VII LP", kind: "private" },
+      { cik: "2001103", name: "Madison Realty Capital Debt MA IV LP", kind: "private" },
+      { cik: "1943560", name: "Madison Realty Capital Debt Fund VI LP", kind: "private" },
+      { cik: "1802090", name: "Madison Realty Capital Debt Fund V LP", kind: "private" },
+      { cik: "1924061", name: "Madison Realty Capital Debt MA III LP", kind: "private" },
+    ],
+  },
+  {
+    id: "bridge-investment-group",
+    manager: "Bridge Investment Group",
+    layer: "national",
+    location: "Salt Lake City, UT",
+    relevance: "direct",
+    evidence:
+      "Real-estate credit and distressed platform on the firm's watchlist. Bridge Debt Strategies Fund VI opened in August 2026 against a $2.5B target with $500K taken — the clearest example in the registry of a raise caught at the very start.",
+    aliases: ["Bridge", "Bridge Debt Strategies", "BRDG"],
+    vehicles: [
+      { cik: "2151824", name: "Bridge Debt Strategies Fund VI LP", kind: "private" },
+      { cik: "2151821", name: "Bridge Debt Strategies Fund VI International LP", kind: "private", role: "sleeve" },
+      { cik: "2151822", name: "Bridge Debt Strategies Fund VI International Master LP", kind: "private", role: "sleeve" },
+      { cik: "2151823", name: "Bridge Debt Strategies Fund VI-R LP", kind: "private", role: "sleeve" },
+      { cik: "1969450", name: "Bridge Debt Strategies Fund V LP", kind: "private" },
+      { cik: "1969394", name: "Bridge Debt Strategies Fund V International LP", kind: "private", role: "sleeve" },
+    ],
+  },
+  {
+    id: "pretium-partners",
+    manager: "Pretium Partners",
+    layer: "national",
+    location: "New York, NY",
+    relevance: "direct",
+    evidence:
+      "Real-estate credit and residential-focused manager on the firm's watchlist; Pretium Real Estate Debt Fund and its B sleeve have taken $132.8M and $124.2M and were still filing in August 2026. 'Pretium Packaging LLC' matches the name but is an unrelated company that last reported in 2014, and is excluded — the reason this registry is reviewed rather than generated.",
+    aliases: ["Pretium", "Pretium Real Estate Debt"],
+    website: "https://www.pretium.com",
+    vehicles: [
+      { cik: "2065921", name: "Pretium Real Estate Debt Fund, LP", kind: "private" },
+      { cik: "2065970", name: "Pretium Real Estate Debt Fund B, LP", kind: "private", role: "sleeve" },
+      { cik: "2141000", name: "Pretium Low Beta Fund, LP", kind: "private" },
+    ],
+  },
   {
     id: "blackstone",
     manager: "Blackstone",
@@ -341,24 +447,16 @@ export const PEERS: readonly Peer[] = [
 ]
 
 /**
- * Managers worth tracking that produced no resolvable EDGAR entity in the step 1
- * audit, kept here rather than in `PEERS` so nothing in the tab claims to show
- * data it does not have.
+ * Managers worth tracking that produced no resolvable EDGAR entity.
  *
- * Gelt Financial (Boca Raton) buys non-performing loans of $100K–$5M and is a
- * close strategy match, but appears to fund on balance sheet rather than through
- * a Reg D offering — no Form D was found. Rialto Capital and Madison Realty
- * Capital are on the firm's watchlist and are real competitors, but their
- * current vehicles did not surface under the discovery name patterns; they need
- * a targeted lookup before being added.
+ * Empty as of the 2026-10-21 targeted lookups: every name previously listed
+ * here — Rialto, Madison Realty, Bridge, Pretium and Gelt — was found and is
+ * now in `PEERS`. Name-pattern discovery had missed all five because their
+ * funds are named after the firm rather than the strategy, which is what
+ * `scripts/lookup-peer.ts` exists to catch. Add a manager here only when a
+ * lookup has actually come back empty.
  */
-export const UNRESOLVED_WATCH: readonly string[] = [
-  "Gelt Financial",
-  "Rialto Capital Management",
-  "Madison Realty Capital",
-  "Bridge Investment Group",
-  "Pretium Partners",
-]
+export const UNRESOLVED_WATCH: readonly string[] = []
 
 export function peersForLayer(layer: PeerLayer): Peer[] {
   return PEERS.filter((p) => p.layer === layer)
@@ -391,6 +489,17 @@ export function vehiclesInScope(layer: PeerLayer): Array<PeerVehicle & { peerId:
   return peersInScope(layer).flatMap((p) =>
     p.vehicles.map((v) => ({ ...v, peerId: p.id, manager: p.manager }))
   )
+}
+
+/**
+ * Vehicles that are raises in their own right — sleeves excluded.
+ *
+ * Use this to count funds or average their progress; use `vehiclesInScope` to
+ * sum capital, which has to include the sleeves because that is where some of
+ * it is reported.
+ */
+export function fundVehiclesInScope(layer: PeerLayer): Array<PeerVehicle & { peerId: string; manager: string }> {
+  return vehiclesInScope(layer).filter((v) => (v.role ?? "fund") === "fund")
 }
 
 export function registeredVehiclesInScope(layer: PeerLayer): Array<PeerVehicle & { peerId: string; manager: string }> {

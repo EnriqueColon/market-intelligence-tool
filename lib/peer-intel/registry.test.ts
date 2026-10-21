@@ -3,6 +3,8 @@ import assert from "node:assert/strict"
 import { layerForLocation } from "./edgar-contract"
 import {
   PEERS,
+  UNRESOLVED_WATCH,
+  fundVehiclesInScope,
   peerById,
   peersForLayer,
   peersInScope,
@@ -107,4 +109,61 @@ test("the registered tier exists nationally and is empty locally", () => {
 test("peerById resolves and misses cleanly", () => {
   assert.equal(peerById("bh3-management")?.manager, "BH3 Management")
   assert.equal(peerById("nobody"), undefined)
+})
+
+test("sleeves are excluded from the fund count but kept for summing capital", () => {
+  const all = vehiclesInScope("national")
+  const funds = fundVehiclesInScope("national")
+  assert.ok(funds.length < all.length, "some vehicles are sleeves of a larger raise")
+  for (const v of funds) assert.notEqual(v.role, "sleeve")
+
+  // Bridge Debt Strategies Fund VI is one raise across four CIKs.
+  const bridge = all.filter((v) => v.peerId === "bridge-investment-group")
+  const bridgeFunds = funds.filter((v) => v.peerId === "bridge-investment-group")
+  assert.equal(bridge.length, 6)
+  assert.equal(bridgeFunds.length, 2, "two vintages, not six raises")
+})
+
+test("a vehicle without an explicit role counts as a fund", () => {
+  const self = selfPeer()!
+  for (const v of self.vehicles) assert.equal(v.role, undefined)
+  assert.equal(fundVehiclesInScope("miami-dade").filter((v) => v.peerId === self.id).length, 4)
+})
+
+test("Rialto is a Miami-Dade direct peer, found by targeted lookup", () => {
+  const rialto = peerById("rialto-capital-management")
+  assert.equal(rialto?.layer, "miami-dade")
+  assert.equal(rialto?.relevance, "direct")
+  assert.ok((rialto?.vehicles.length ?? 0) >= 9)
+  assert.ok(peersForLayer("miami-dade").some((p) => p.id === "rialto-capital-management"))
+})
+
+test("every manager resolved by lookup is in the registry, and the watch list is empty", () => {
+  for (const id of [
+    "rialto-capital-management",
+    "madison-realty-capital",
+    "bridge-investment-group",
+    "pretium-partners",
+    "gelt-financial",
+  ]) {
+    assert.ok(peerById(id), `${id} missing`)
+  }
+  assert.deepEqual([...UNRESOLVED_WATCH], [], "a name here must have come back empty from a real lookup")
+})
+
+test("the private credit tier is kept, and marked adjacent rather than direct", () => {
+  for (const id of ["blue-owl", "apollo", "ares", "hps"]) {
+    const p = peerById(id)
+    assert.ok(p, `${id} missing`)
+    assert.equal(p?.layer, "national")
+    assert.equal(p?.relevance, "adjacent", "broader private credit is not a CRE lender")
+  }
+})
+
+test("no omitted feeder shell slipped in", () => {
+  // Madison files one "Holdings LLC" per vintage, each a $125,000 target fully
+  // sold to 125 investors. They are structural, not raises.
+  for (const v of vehiclesInScope("national")) {
+    assert.ok(!/Holdings LLC$/i.test(v.name), `${v.name} is a feeder shell and should be omitted`)
+  }
 })

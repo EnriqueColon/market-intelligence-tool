@@ -63,7 +63,8 @@
     "test:peer-intel-formd": "tsx --test --tsconfig tsconfig.json lib/peer-intel/form-d.test.ts",
     "discover:peers": "tsx --conditions=react-server scripts/discover-peers.ts",
     "test:peer-intel-registry": "tsx --test --tsconfig tsconfig.json lib/peer-intel/registry.test.ts",
-    "verify:peer-registry": "tsx --conditions=react-server scripts/verify-peer-registry.ts"
+    "verify:peer-registry": "tsx --conditions=react-server scripts/verify-peer-registry.ts",
+    "lookup:peer": "tsx --conditions=react-server scripts/lookup-peer.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

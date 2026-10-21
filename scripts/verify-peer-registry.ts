@@ -11,7 +11,13 @@
 
 import { layerForLocation } from "../lib/peer-intel/edgar-contract"
 import { buildRaise, isLikelyOpen } from "../lib/peer-intel/form-d"
-import { PEERS, UNRESOLVED_WATCH, registeredVehiclesInScope, vehiclesInScope } from "../lib/peer-intel/registry"
+import {
+  PEERS,
+  UNRESOLVED_WATCH,
+  fundVehiclesInScope,
+  registeredVehiclesInScope,
+  vehiclesInScope,
+} from "../lib/peer-intel/registry"
 import { fetchFilerProfile, fetchOfferingHistory } from "../app/services/peer-intel"
 
 let failures = 0
@@ -127,7 +133,13 @@ async function verifyLayers() {
     registeredVehiclesInScope("miami-dade").length === 0 && registeredVehiclesInScope("national").length > 0,
     `${registeredVehiclesInScope("national").length} registered vehicles nationally`
   )
-  console.log(`  note  ${UNRESOLVED_WATCH.length} watched managers have no resolvable vehicle yet: ${UNRESOLVED_WATCH.join(", ")}`)
+  console.log(
+    UNRESOLVED_WATCH.length
+      ? `  note  ${UNRESOLVED_WATCH.length} watched manager(s) with no resolvable vehicle: ${UNRESOLVED_WATCH.join(", ")}`
+      : "  note  every watched manager has been resolved into the registry"
+  )
+  const funds = fundVehiclesInScope("national").length
+  console.log(`  note  ${funds} distinct raises across ${national} vehicles; the rest are sleeves of a larger raise`)
 }
 
 async function main() {
