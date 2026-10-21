@@ -1,6 +1,6 @@
 # Peer & Private Credit Tracker — status and open items
 
-*As of 2026-10-21. `dev` at `eb2b140`, pushed through `2258a34`; `main` unchanged at `fe0ad1b`. Steps 1–5 are committed.
+*As of 2026-10-21. `dev` at `f842f88`, pushed through `0d63e33`; `main` unchanged at `fe0ad1b`. Steps 1–5 are committed.
 The tab exists but **has not rendered in a browser yet** — the standing rule is to verify on a
 Vercel deployment rather than a local dev server, and `dev` is unpushed by choice. Production is
 unaffected: `peer-intel` is absent from `ENABLED_TABS`.*
@@ -19,8 +19,8 @@ The running list of what is still open. Update it at the end of every session al
 | 3 | XBRL quarterly series for the registered tier | **Done** (`8cb6fa9`) |
 | 4 | Signals and the layer aggregate, cached weekly, cron entries | **Done** (`04bcd92`) |
 | 5 | The tab: Raise Environment, Active Raises, New Launches, manager drawer | **Built** (`94d8f24`), not yet seen in a browser |
-| 6 | Evergreen Liquidity and Portfolio Stress panels | Not started |
-| 7 | Developments feed, gating narrative, alerts digest | Not started |
+| 6 | Evergreen Liquidity and Portfolio Stress panels | **Done** (`f842f88`) |
+| 7 | Developments feed, gating narrative, alerts digest | **Next** |
 
 Registry today: **26 managers, 65 vehicles, 59 distinct raises**; 25 / 39 / 65 vehicles by layer;
 12 registered vehicles (7 non-traded, 5 listed), all national.
@@ -80,6 +80,12 @@ zero.
 
 **Deferred by design.**
 
+- [ ] **Gating is not shown anywhere.** Whether repurchase requests exceeded what was actually paid
+  lives in a filing's narrative rather than any tagged figure. Both liquidity panels say so, but it
+  is step 7 work and is the most-requested item in the original brief still unbuilt.
+- [ ] **A NAV plausibility guard exists only for NAV.** `looksLikeNav` rejects a net asset value that
+  never moves, after HPS was found tagging exactly 1000.00 across six filings. Every other concept
+  is trusted as tagged. Worth a sweep if a figure ever looks wrong.
 - [ ] **Display grouping of sleeves under their parent fund.** A raise spread across four CIKs is
   counted once, but the registry holds no parent link — grouping for display is step 5 UI work, and
   would need either a `partOf` field or name-prefix matching.

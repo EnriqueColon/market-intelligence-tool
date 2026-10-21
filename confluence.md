@@ -2242,6 +2242,7 @@ npm run verify:peer-raises -- --layer national   # live: pulls every trail, chec
 npm run test:peer-intel-signals    # signals: own-history rules, unjudged, scope independence (tsx)
 npm run verify:peer-metrics        # live: reproduces Blue Owl's quarterly series by hand-checked figures
 npm run test:peer-intel-panel      # readings: no undefined/NaN/null, self ranking, snapshot (tsx)
+npm run test:peer-intel-liquidity  # tier flow, PIK share, the NAV plausibility guard (tsx)
 npm run verify:peer-signals -- --all   # live: all three layers, firing rates, cache size, scope independence
 ```
 
@@ -2307,6 +2308,14 @@ narrative, so strategy terms return nothing. All three facts, with the measureme
 live in `lib/peer-intel/edgar-contract.ts`; the older
 `app/ingestion/competitor_surveillance/connectors/sec_edgar.ts` still has the `keys=` bug and is
 superseded rather than fixed.
+
+**A tagged figure can be faithful and still wrong.** HPS Corporate Lending Fund tags
+`NetAssetValuePerShare` as exactly 1000.00 in six consecutive filings while its real NAV is about
+$25 — a par or subscription price under the NAV concept. XBRL guarantees only that a filer used a
+tag, not that it meant what the tag says. `looksLikeNav` in `lib/peer-intel/liquidity.ts` rejects a
+NAV that never moves across the quarters reported, and the panel distinguishes "reported but not
+usable" from "not reported". Treat any new concept as needing a plausibility check before it reaches
+a reader.
 
 **An SEC filer tags the same period twice, as year-to-date and as a standalone quarter.** Blue Owl's
 Q2 2026 investment income appears both as a 181-day year-to-date figure and as a 91-day quarter, and

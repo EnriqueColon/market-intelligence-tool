@@ -8,14 +8,20 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
 | `main` | `80743b6` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `94d8f24` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `dev` | `f842f88` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 This table names the newest commit on each branch that **changes behaviour**; documentation-only
 commits sit on top of it and are deliberately not tracked here, because amending one rotates its
 SHA and the table then reads as stale when nothing has moved. Confirm with
 `git log --format='%h|%ci|%s'` rather than trusting the previous entry — this has drifted twice.
 
-**`dev` carries `94d8f24` as of 2026-10-21.** Step 5, the first peer commit that changes what a
+**`dev` carries `f842f88` as of 2026-10-21.** Step 6 adds the liquidity and portfolio panels plus
+`lib/peer-intel/liquidity.ts`, and widens `PeerIntelPayload` with a trimmed `tier` array — so the
+cache key version stays `peer-intel-v2` but **stored entries written before it lack `tier`**, and the
+panels render their empty state until the weekly revalidate refreshes them. Reverting
+`f842f88` removes both panels and the field; the entries themselves expire on their own. Also on
+`dev`: `eb2b140`, the manager roster that makes quiet managers reachable, and `0d63e33`, the
+"Peers (beta)" label. Before them, **`dev` carries `94d8f24` as of 2026-10-21.** Step 5, the first peer commit that changes what a
 user can see: `components/peer-intel.tsx` and `components/peer-intel/*`, the reading builder
 `lib/peer-intel/panel.ts`, a fifth entry in `TAB_DEFS`, a new `peerIntel` key on `EnabledTabs`,
 `5: "grid-cols-5"` in `TAB_GRID_COLS`, and `isFeatureEnabled("peer-intel")` in `app/page.tsx`.

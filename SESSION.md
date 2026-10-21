@@ -8,7 +8,67 @@ is it in now, and what is still open.
 
 ---
 
-## 2026-10-21 (latest) — Peers tab: provenance on the surface, and the preview is up
+## 2026-10-21 (latest) — Peer tracker, step 6: a $10B swing in the semi-liquid tier
+
+Step 6 is committed as `f842f88`: the Evergreen Liquidity and Portfolio Stress panels, which cover
+the half of the brief that only exists for vehicles filing periodic reports. Before it, `eb2b140`
+fixed a real gap found while working the open items, and `0d63e33` named the tab **Peers (beta)**.
+
+**The tier-wide net flow is the finding, not the code.** Capital in and out across the non-traded
+vehicles, per quarter, read from their own filings:
+
+| Quarter | Capital in | Capital out | Net | Vehicles |
+| --- | --- | --- | --- | --- |
+| Q3 2024 | $6.22B | $2.71B | +$3.51B | 5 |
+| Q1 2025 | $8.31B | $2.75B | **+$5.56B** | 6 |
+| Q3 2025 | $8.40B | $3.33B | +$5.06B | 6 |
+| Q4 2025 | $6.80B | $3.26B | +$3.54B | 6 |
+| Q1 2026 | $4.18B | $5.44B | **−$1.26B** | 6 |
+| Q2 2026 | $1.92B | $6.38B | **−$4.45B** | 6 |
+
+Subscriptions fell 77% while redemptions rose 135% — a **$10B swing in five quarters**, with 6 of 7
+vehicles individually in outflow. BREIT and SREIT have been in outflow for all eight quarters shown.
+That is the environment Fund 4 is raising into, which is exactly what the tab was asked for.
+
+**A plausibility guard, because one figure was faithful and wrong.** HPS Corporate Lending Fund tags
+`NetAssetValuePerShare` as exactly **1000.00 in six consecutive filings** while its real NAV is about
+$25 — a par or subscription price tagged under the NAV concept. Rendered beside BCRED's $24.62 it
+would have told a reader HPS's NAV was forty times its peers'. A NAV that never moves across the
+quarters reported is not a NAV, so it shows as "n/a" with the reason on hover — a different fact from
+"not reported", and recorded as such. Three points are required before judging, since two identical
+quarters is a coincidence rather than a pattern.
+
+**Honesty rules carried through both panels.** Each quarter in the aggregate counts only the vehicles
+that reported both sides of it, and the chart says how many, so a quarter where half the tier has not
+filed cannot read as a collapse in flows. Listed vehicles are excluded from liquidity entirely rather
+than shown blank — there, repurchases are a buyback and issuance an equity raise, and an investor
+wanting out sells the stock. Portfolio stress does include them, because a shrinking book and a
+rising PIK share mean the same thing either way. **Gating is named as absent**: whether repurchase
+requests exceeded what was paid lives in a filing's narrative rather than any tagged figure, so it is
+step 7, and its absence here does not mean a vehicle paid everyone out in full.
+
+**Series are trimmed before storage.** Eight quarters, matching the institution drawer's window.
+Untrimmed, twelve vehicles across eight metrics would have added most of a megabyte; trimmed, the
+cached entry went 144 KB → **191 KB**, 9% of the 2 MB limit. The untrimmed series still feed the
+signals, which need five quarters.
+
+**Earlier the same day, working the open items found a real bug.** Open Raises and New Launches both
+filter to live offerings and were the *only* routes into the manager drawer, so **eleven of
+twenty-six tracked managers were unreachable** — Gelt Financial appeared nowhere at all, because its
+only Reg D raise closed in 2019. An "All tracked managers" roster now reaches every manager and
+states its standing. Five "state this limit in the UI" items were closed by auditing the code rather
+than assuming, and `.gitignore` turned out to have `next-env.d.ts` and `.env.local` concatenated onto
+one line, so it matched the single pattern `next-env.d.ts.env.local`. No env file was ever exposed —
+`.env*.local` below always covered them.
+
+149 unit tests; tsc clean; `next build` passes with the root route at 97.8 kB.
+
+**Next:** step 7 — the developments feed through the existing relevance gate, gating narrative
+extracted from 10-Q text and figure-checked against the XBRL figure, and the alerts digest.
+
+---
+
+## 2026-10-21 — Peers tab: provenance on the surface, and the preview is up
 
 Two things after step 5. The user asked that a reader be told **where the data comes from and how it
 is pulled in**, and pushed `dev` so a preview could be built.
