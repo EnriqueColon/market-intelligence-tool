@@ -73,9 +73,9 @@ Two questions came up after stopping, and the user wants to **discuss the approa
 is built**. Nothing was implemented.
 
 **Build versus buy.** Commercial products already cover three of the brief's five asks better than
-this tool does. **Stanger publishes the gating figure we established cannot be derived from
-filings** — Q2 2026 requests at 12.4% of NAV with sponsors meeting 38% — because sponsors tell them.
-That is a data-acquisition advantage, not a software one. Our own figures corroborate theirs
+this tool does. Stanger publishes a gating figure — Q2 2026 requests at 12.4% of NAV with sponsors
+meeting 38%. It was first assessed as unobtainable from filings; **that was wrong**, and Schedule TO
+final amendments carry it, so their advantage is aggregation and cadence rather than access. Our own figures corroborate theirs
 (−$4.45B against their ~−$3.8B from a wider vehicle set), which is reassuring about the method and
 also shows theirs is more complete. Where this tool wins and should stay: the Miami-Dade and Florida
 layers, which no vendor covers, filing-level provenance, and integration with the bank analytics.
@@ -93,11 +93,14 @@ cannot be derived at any effort, and a proposed build order if the discussion la
 
 1. **Bank Behaviour step 5** — enforcement actions (FDIC / OCC / Fed, monthly). The next numbered
    step, and the inputs are a new source rather than a reshaping of existing ones.
-2. **Gating, if it is worth finishing.** The method works and is tested, but the repurchase cap is
-   readable from only 1 of 7 filings because filers word it differently and some omit it from the
-   10-Q entirely. The fix is to curate the cap per vehicle in the registry — a one-off read of seven
-   prospectuses — rather than re-parse a 33 MB document weekly. Withheld from the tab meanwhile, with
-   the panel saying so.
+2. **Gating — rebuild it on Schedule TO.** **A correction found 2026-10-21:** the claim that no
+   filing discloses requests received was wrong, and had reached the liquidity panel's copy. Rule
+   13e-4(c)(4) obliges a Schedule TO **final amendment** to report tender results, and BCRED's gives
+   requests, fulfilment, proration and the cap in under 5,000 characters — *191,782,834 tendered,
+   93,100,272 accepted pro rata at 5% of shares outstanding*. The mistake was method: the 10-Q was
+   searched and the figure declared non-existent, rather than asking which form was obliged to carry
+   it. Schedule TO supersedes the 10-Q approach and should give full coverage. Confirm first whether
+   BREIT and SREIT, being REITs, run repurchase *plans* rather than tenders.
 3. **The screening-table column and Pressure-vs-Action scatter**, which the plan puts in step 7 —
    now unblocked, since the summaries carry `sellerState` and `sellerScore`.
 4. **The peer alerts digest**, worth doing only after `peer-intel` is in `ENABLED_TABS` and the user

@@ -10,8 +10,21 @@
  * note lists, per class and per quarter, the offer date, the amount and the
  * shares repurchased — and shares repurchased multiplied by the purchase price
  * equals the stated offer amount exactly, so that column is what was *bought*,
- * not what was *asked for*. Requests received appear, if anywhere, in the tender
- * offer documents or an 8-K, not in the financial statements.
+ * not what was *asked for*.
+ *
+ * **They are reported, though — in the tender offer, not the financial
+ * statements.** A non-traded fund runs its repurchase programme as an issuer
+ * tender offer, and Rule 13e-4(c)(4) obliges it to file a Schedule TO final
+ * amendment reporting the results. BCRED's, filed 2026-08-04, states it plainly:
+ * 191,782,834 shares validly tendered, 93,100,272 accepted on a pro rata basis
+ * representing 5% of shares outstanding, $2,201,821,426 of net asset value, at
+ * $23.65 a share. That is requests, fulfilment, proration and the cap in one
+ * short filing whose wording is prescribed by rule rather than left to each
+ * sponsor's prose.
+ *
+ * So this module reads the 10-Q because that is where it started, and it works,
+ * but **`SC TO-I/A` is the better source and the one to move to.** BCRED alone
+ * has 59 Schedule TO filings, giving a long per-quarter history per fund.
  *
  * What the filing does state plainly, in words, is the cap: "intends to limit
  * the number of shares to be repurchased in each quarter to no more than 5.00%

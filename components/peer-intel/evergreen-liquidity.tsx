@@ -229,12 +229,13 @@ export function EvergreenLiquidity({
         A quarter counts only the vehicles that reported both sides of it, and the chart tooltip gives that count — so a
         quarter where half the tier has not filed yet cannot read as a collapse in flows. &ldquo;Out, % of book&rdquo;
         is repurchases against investments at fair value, blank where that balance is not tagged.{" "}
-        <strong>Gating is not shown as a figure.</strong> No filing discloses how many redemption requests a vehicle
-        received — the repurchase table reports what was bought, and shares times price equals the stated amount
-        exactly. It can be inferred from whether a vehicle used its whole stated cap, but that cap is worded
-        differently by every filer and several do not state it in the 10-Q at all, so it is currently readable for one
-        of the seven vehicles here and is withheld rather than shown at that coverage. The developments panel below
-        surfaces gating where it is reported as news.
+        <strong>Gating is not shown here yet, but it is obtainable.</strong> The repurchase table in a 10-Q reports
+        only what was bought — shares times price equals the stated amount exactly. Requests received are reported
+        elsewhere: a non-traded fund runs its repurchase programme as a tender offer, and Rule 13e-4(c)(4) obliges it
+        to file a final amendment stating how many shares were tendered, how many were accepted and whether
+        acceptance was pro rata. Those filings are short and their wording is prescribed, so this is a better source
+        than the 10-Q prose we first tried. Not yet built. Meanwhile the developments panel below surfaces gating
+        where it is reported as news.
       </p>
     </Card>
   )

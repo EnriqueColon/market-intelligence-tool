@@ -108,11 +108,27 @@ zero.
 
 **Deferred by design.**
 
-- [ ] **Gating is still not shown as a figure.** Whether repurchase requests exceeded what was
-  actually paid lives in a filing's narrative, not any tagged value. Both liquidity panels say so.
-  The developments feed now surfaces it as *news* — the WSJ reported two Blue Owl funds seeing
-  requests above 5% — which proves it is real and currently only visible that way. Extracting it
-  from 10-Q text, figure-checked against the XBRL repurchase figure, is the remaining step 7 work.
+- [ ] **Gating — buildable at full coverage from Schedule TO, which supersedes the 10-Q approach.**
+  **Correction, 2026-10-21:** this item previously said no filing discloses requests received. That
+  was wrong, and the error was repeated in the liquidity panel's copy. A non-traded fund runs its
+  repurchase programme as an **issuer tender offer**, and Rule 13e-4(c)(4) obliges it to file a
+  Schedule TO **final amendment reporting the results**. BCRED's, filed 2026-08-04, states:
+  *191,782,834 shares validly tendered, 93,100,272 accepted on a pro rata basis representing 5% of
+  shares outstanding, $2,201,821,426 of net asset value, at $23.65 per share.* That is requests,
+  fulfilment (48.5%), proration and the cap in one filing of under 5,000 characters, in a format
+  prescribed by rule rather than left to each sponsor's prose.
+
+  The mistake was method, not data: the 10-Q was searched, found to carry only what was bought, and
+  the conclusion drawn that the figure did not exist — instead of asking **which form would be
+  obliged to carry it**. BCRED alone has 59 Schedule TO filings, so there is a long per-quarter
+  history per fund.
+
+  `lib/peer-intel/gating.ts` and its 15 tests still work against the 10-Q and stay for now, but
+  **Schedule TO is the source to move to.** Two things to confirm first: whether the other six
+  non-traded vehicles use tender offers the same way — BREIT and SREIT are REITs and may run share
+  repurchase *plans* rather than tenders — and how consistent the Rule 13e-4(c)(4) wording is across
+  sponsors.
+
 - [ ] **The alerts digest** is the other half of step 7 and is not started.
 - [ ] **A NAV plausibility guard exists only for NAV.** `looksLikeNav` rejects a net asset value that
   never moves, after HPS was found tagging exactly 1000.00 across six filings. Every other concept
@@ -219,7 +235,10 @@ months apart. The curve shows direction, not a smooth trajectory, and any panel 
 
 ### Cannot be derived, at any effort
 
-- **Requests received.** Buy it from Stanger or ask sponsors directly.
+- ~~**Requests received.**~~ **Struck 2026-10-21 — it can be.** Rule 13e-4(c)(4) obliges a Schedule
+  TO final amendment to report tender results: shares tendered, shares accepted, and whether
+  acceptance was pro rata. See §3's gating item. This also narrows the build-versus-buy case:
+  Stanger's advantage on this metric is **aggregation and cadence, not access**.
 - **LP identities.** No filing discloses them — but the legitimate route exists and is how Preqin
   builds its commitments data: public pension and endowment disclosures, from the LP side. Public
   record, real work.
