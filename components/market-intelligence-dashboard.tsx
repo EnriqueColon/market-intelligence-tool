@@ -51,7 +51,7 @@ const TAB_DEFS = [
   { value: "analytics", flag: "marketAnalytics", label: "Market Analytics", Icon: LineChart },
   { value: "market-research", flag: "marketResearch", label: "Market Research", Icon: FileText },
   { value: "legal", flag: "legal", label: "Legal Landscape", Icon: Scale },
-  { value: "peers", flag: "peerIntel", label: "Peers", Icon: Users },
+  { value: "peers", flag: "peerIntel", label: "Peers (beta)", Icon: Users },
 ] as const satisfies ReadonlyArray<{ value: TabValue; flag: keyof EnabledTabs; label: string; Icon: typeof Newspaper }>
 
 /**

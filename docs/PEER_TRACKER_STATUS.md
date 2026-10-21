@@ -1,6 +1,6 @@
 # Peer & Private Credit Tracker — status and open items
 
-*As of 2026-10-21. `dev` at `ee56247` (pushed through `f9a7540`); `main` unchanged at `fe0ad1b`. Steps 1–5 are committed.
+*As of 2026-10-21. `dev` at `eb2b140`, pushed through `2258a34`; `main` unchanged at `fe0ad1b`. Steps 1–5 are committed.
 The tab exists but **has not rendered in a browser yet** — the standing rule is to verify on a
 Vercel deployment rather than a local dev server, and `dev` is unpushed by choice. Production is
 unaffected: `peer-intel` is absent from `ENABLED_TABS`.*
@@ -51,16 +51,26 @@ These gate nothing immediately but shape what the tab shows.
 **Known limits to carry into the UI.** Each must be stated on the panel, not left as a blank or a
 zero.
 
-- [ ] **Payment-in-kind income is tagged by only 2 of 12 registered vehicles.** The PIK-build stress
-  signal works for those two and must read "not reported" elsewhere — never inferred.
-- [ ] **Portfolio and liquidity are unobservable for every private fund**, which is every Miami-Dade
-  and Florida peer. `PRIVATE_FUND_LIMITS` in `lib/peer-intel/catalog.ts` holds the wording.
-- [ ] **Gelt Financial's only Reg D raise closed in 2019** at $1.8M; it lends from its own balance
-  sheet. The panel should show that raise as long closed rather than as a dormant competitor.
-- [ ] **32 of 50 national offerings are "Indefinite"**, so "capital sought" covers only the
-  remainder and must always show the excluded count beside it.
-- [ ] **`isLikelyOpen` is inferred from four quarters of silence**, because Form D has no closed
-  flag. A fund that closed the day after its last amendment reads as open for a year.
+- [x] **Payment-in-kind income is tagged by only 2 of 12 registered vehicles.** Closed 2026-10-21,
+  audited: the signal returns `unjudged` with "payment-in-kind income is not tagged by this filer",
+  the drawer renders a dashed chip, and the coverage is stated in the sources panel.
+- [x] **Portfolio and liquidity are unobservable for every private fund.** Closed 2026-10-21:
+  `PRIVATE_FUND_LIMITS` is rendered in the sources panel, the Raise Environment footer says it for a
+  layer with no reporting vehicle, and the manager reading distinguishes "not observable" from a
+  signal that simply did not fire.
+- [x] **Gelt Financial's only Reg D raise closed in 2019.** Closed 2026-10-21 (`eb2b140`), and it
+  turned out to be the symptom of a real gap: Open Raises and New Launches both filter to live
+  offerings and were the only routes into the drawer, so **eleven of twenty-six tracked managers
+  were unreachable** and Gelt appeared nowhere. The new "All tracked managers" roster reaches every
+  manager and states its standing — Gelt reads "last raised 6 years ago".
+- [x] **32 of 50 national offerings are "Indefinite".** Closed 2026-10-21, audited: Raise
+  Environment shows "excludes N uncapped" beside capital sought, the table leaves the subscribed
+  share blank rather than computing one, and an invariant asserts no percentage is ever computed
+  against an indefinite offering.
+- [x] **`isLikelyOpen` is inferred from four quarters of silence.** Closed 2026-10-21, audited: said
+  in the provenance catalogue, in the signal's firing rule in the sources panel, and in the roster
+  footnote. The roster's standing column shows how long a manager has been quiet, so a reader can
+  judge the inference themselves.
 - [ ] **The signal thresholds have no backtest**, unlike the bank signals. There is no public record
   of which managers were "right" to be raising, so `PEER_SIGNAL_THRESHOLDS` holds deliberately
   conservative starting values. Worth revisiting once the tab has been read against a few quarters:
@@ -76,12 +86,12 @@ zero.
 - [ ] **A read-only `/api/peers/v1`** mirroring `/api/analytics/v1`, once the shapes settle.
 - [ ] **`peer-intel` must be added to `ENABLED_TABS` on Vercel** before the tab renders in
   production. Outside production every feature is on, so a preview shows it without the change.
-- [ ] **The tab has not been seen in a browser.** A preview of `f9a7540` built successfully at
-  `https://market-intelligence-tool-mpfavtlub.vercel.app`, but it sits behind Vercel Deployment
-  Protection — both `/` and `/login` redirect to `vercel.com/sso-api`, so only a signed-in Vercel
-  team member can open it, and it cannot be checked from a script. **The user needs to look at it**
-  and confirm layout, the drawer width, the layer switch and the loading states. Note `ee56247` (the
-  provenance panel and filing links) is not in that preview and needs another push.
+- [ ] **The tab has not been seen in a browser.** The current preview is
+  `https://market-intelligence-tool-5g4cjxdxb.vercel.app` (`2258a34`, built 16:41 UTC). It sits
+  behind Vercel Deployment Protection — `/` redirects to `vercel.com/sso-api` — so only a signed-in
+  team member can open it and it cannot be checked from a script. **Still needs the user's eyes** on
+  the five-tab bar, the drawer width, the layer switch and the loading state. `eb2b140` (the manager
+  roster) is newer than that preview and needs another push.
 
 ---
 
@@ -111,8 +121,8 @@ Not part of this expansion, still open.
 
 ## 5. Housekeeping and risks found along the way
 
-- [ ] **`dev` is ahead of `origin/dev` by several commits** and the user has chosen not to push for
-  now. Production is untouched at `fe0ad1b`.
+- [x] ~~`dev` is ahead of `origin/dev`.~~ Pushed 2026-10-21 through `2258a34`. `eb2b140` is newer
+  and unpushed. Production remains untouched at `fe0ad1b`.
 - [ ] **A credential was embedded in plaintext in the `origin` URL** in `.git/config` until
   2026-10-21. If it was a token rather than a bare username it should be treated as exposed and
   revoked. It was masked rather than read, so which it was is unknown.
@@ -128,8 +138,11 @@ Not part of this expansion, still open.
   read `process.cwd()` and cannot run on Vercel, and nothing in the tab reaches them: 606 tracked
   files, of which 572 are unpacked Apple Numbers internals under `data/aom-csv/.tmp-numbers/`, plus
   a tracked 4.4 MB `data/aom.sqlite`. The user chose on 2026-10-21 to leave all of it in place.
-- [ ] **`.gitignore` has `next-env.d.ts.env.local` concatenated onto one line**, so `next-env.d.ts`
-  is not actually ignored. `.env*.local` on the next line still covers the env files.
+- [x] **`.gitignore` had two entries concatenated onto one line.** Split 2026-10-21 (`eb2b140`). No
+  env file was ever exposed — `.env*.local` on the following line always covered them.
+- [ ] **`next-env.d.ts` is tracked**, so the ignore rule above takes effect only once it is
+  untracked: `git rm --cached next-env.d.ts`. Next regenerates it on every build, so this is safe,
+  but it changes what is in the repo and is left as the user's call.
 
 ---
 

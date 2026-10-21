@@ -179,7 +179,15 @@ export function PeerIntel() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h2 className="text-xl font-semibold text-slate-800">Peers &amp; Private Credit</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-semibold text-slate-800">Peers &amp; Private Credit</h2>
+            <span
+              className="rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-900"
+              title="New. The data is read straight from SEC filings and every figure links to its source, but the peer list is still being reviewed and the signal thresholds have not been backtested — read the figures, and treat the signals as a prompt to look rather than a verdict."
+            >
+              beta
+            </span>
+          </div>
           <p className="mt-1 max-w-3xl text-sm text-slate-600">
             What competing managers are doing about raising capital — ongoing raises, fund sizes and progress, new
             launches, and where the data exists, redemption activity and portfolio stress. From SEC filings only.
