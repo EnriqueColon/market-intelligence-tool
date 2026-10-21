@@ -16,6 +16,7 @@ import {
 } from "@/lib/peer-intel/edgar-contract"
 import { parseFormD, type OfferingRecord } from "@/lib/peer-intel/form-d"
 import { buildPeerCohort, type PeerCohort } from "@/lib/peer-intel/cohort"
+import { buildVehicleTrend, type VehicleTrend } from "@/lib/peer-intel/liquidity"
 import {
   managerSignals,
   signalFiringRates,
@@ -543,6 +544,18 @@ export type PeerIntelPayload = {
   /** One entry per manager in the layer, in the cohort's order. */
   signals: ManagerSignals[]
   firingRates: ReturnType<typeof signalFiringRates>
+  /**
+   * The registered tier's quarterly series, trimmed to the trailing window.
+   *
+   * Trimmed before storage rather than after: a full history for twelve
+   * vehicles across eight metrics would add most of a megabyte to an entry that
+   * is otherwise 144 KB, and no panel shows more than eight quarters. The
+   * untrimmed series are still used to compute the signals, which need five.
+   *
+   * Empty for the Miami-Dade and Florida layers, because every peer there is a
+   * private fund — which the panels state rather than rendering blank charts.
+   */
+  tier: VehicleTrend[]
   /** What the fetch cost and what it could not read, so a panel can be honest. */
   diagnostics: {
     asOf: string
@@ -598,6 +611,7 @@ export async function buildPeerIntelPayload(layer: PeerLayer, asOf: string): Pro
     cohort,
     signals,
     firingRates: signalFiringRates(signals),
+    tier: tier.vehicles.map((v) => buildVehicleTrend(v, ownerOf.get(v.cik) ?? "")),
     diagnostics: {
       asOf,
       formDRequests: offerings.requests,
