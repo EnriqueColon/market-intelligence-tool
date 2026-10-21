@@ -8,7 +8,71 @@ is it in now, and what is still open.
 
 ---
 
-## 2026-10-21 (latest) — Peer & Private Credit tracker, step 1: who the competitors actually are
+## 2026-10-21 (latest) — Peer tracker, step 2: the raise environment
+
+Step 2 is committed as `19e0e24`: Form D ingestion across the registry, manager- and layer-level
+aggregation, and the provenance catalog. The user declined a Vercel preview once it was clear step 1
+renders nothing — correct, and the same is true of step 2. The visible change is step 5.
+
+**The counting rule is the whole design, and the invariant checks enforce it.** Capital is summed
+over *every* vehicle, because a sleeve holds part of a real raise; raises are *counted* over
+fund-role vehicles only. Bridge Debt Strategies Fund VI is one raise across four CIKs — counting
+filers would report four competitors and divide its capital four ways when averaging progress.
+Offering amounts are summed over funds only, since a sleeve restates the same ask rather than adding
+to it.
+
+**Live figures, all three layers verified** (`npm run verify:peer-raises -- --layer <layer>`):
+
+| Layer | Managers | In market | Raises | Open | Raised | Launches, 12m | Offerings cut |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Miami-Dade | 10 | 8 | 24 | 13 | $9.27B | 5 | 1 |
+| Florida | 15 | 11 | 38 | 19 | $9.82B | 8 | 1 |
+| National | 26 | 15 | 50 | 25 | $18.68B | 11 | 2 |
+
+**Where the firm actually sits.** Fund 4 ranks **6 of 13** open raises in Miami-Dade against a peer
+median of $45.3M raised and 11.6% of offering, and **7 of 19** statewide against $32.1M and 24.8%.
+So it is above the median on capital in both layers — and is the only Miami-Dade manager to have cut
+an offering. Rialto dominates locally (Hines Rialto $1.08B, Credit Opportunities $248.5M, Insurance
+Credit Partners $200M from a July 2026 first sale); Bayview Opportunity Fund VII has $1.01B.
+`selfPositioning` returns null below three comparable peer raises, because a percentile over two
+funds is noise.
+
+**Two findings that changed the code.** 32 of 50 national offerings are the literal string
+"Indefinite", so "capital sought" covers only the remainder and reports the excluded count rather
+than implying it is the whole market's ask. And **nine registered vehicles file no Form D at all** —
+a listed REIT or non-traded BDC raises through a registered offering, not Regulation D. The first
+run reported those as nine failures, which would have had a panel showing problems where there are
+none. `CohortOfferings` now separates `noFormD` from `failures`, `coverage` separates
+`registeredWithoutFormD` from `unresolvedVehicles`, and an invariant asserts no *private* vehicle is
+ever missing its Form D (a Reg D fund must have one, so that would be a real gap). BREIT runs a
+parallel Reg D offering alongside its registered one, so this is "expected", never "required".
+
+**Provenance.** `lib/peer-intel/catalog.ts` mirrors `BEHAVIOR_FIELD_CATALOG`: every value traces to
+a Form D element or carries its formula, and the figures most open to misreading carry a caveat that
+a test asserts is present — `totalOfferingAmount` is a cap the issuer set, not a target it is working
+towards; `totalSold` is cumulative and unaudited; `investorCount` is per-vehicle, so a manager-level
+sum is not a count of distinct LPs; `isLikelyOpen` is inferred from four quarters of silence because
+Form D carries no closed flag, so a fund that closed the day after its last amendment reads as open
+for a year. `PRIVATE_FUND_LIMITS` states what Form D cannot show at all.
+
+**Cron budget, measured for step 4.** The national fetch is 244 requests in 49–60s against
+warm-cache's `maxDuration = 300`, leaving about 190s of headroom. Each vehicle needs one submissions
+request plus one per Form D filing, because the offering figures live in each filing's own XML and
+there is no bulk form of them.
+
+60 unit tests; tsc clean on the new files; `next build` passes (exit 0). **Nothing renders yet.**
+
+**Next:** step 3 — XBRL for the registered tier (`companyconcept` per concept, `fy`/`fp`
+differencing, comparative dedup), which is where redemption and portfolio figures come from and the
+only reason the national layer carries the mega-managers at all.
+
+**Open, carried.** The two `adjacent` calls in Miami-Dade (Integra is multifamily equity, SEGLO
+states no strategy) and whether Rialto's Property funds should stay excluded as equity. The user kept
+the broader private credit tier (Blue Owl, Apollo, Ares, HPS), marked `adjacent`.
+
+---
+
+## 2026-10-21 — Peer & Private Credit tracker, step 1: who the competitors actually are
 
 A new expansion, from a capital-raising ask: track what peer managers are doing — fundraising,
 new launches, evergreen redemption activity, portfolio stress, other developments. The tool has

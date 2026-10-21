@@ -8,14 +8,18 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
 | `main` | `80743b6` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `f310c1a` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `dev` | `19e0e24` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 This table names the newest commit on each branch that **changes behaviour**; documentation-only
 commits sit on top of it and are deliberately not tracked here, because amending one rotates its
 SHA and the table then reads as stale when nothing has moved. Confirm with
 `git log --format='%h|%ci|%s'` rather than trusting the previous entry — this has drifted twice.
 
-**`dev` carries `f310c1a` as of 2026-10-21.** `f310c1a` extends the peer registry with the five
+**`dev` carries `19e0e24` as of 2026-10-21.** Step 2 of the peer tracker: the provenance catalog,
+manager- and layer-level raise aggregation, a cohort fetcher on the service, and a verify script.
+Still inert — new files plus two `package.json` entries, nothing imported by any route, no cache
+entry, no cron change, no tab — so `git revert 19e0e24` is the whole procedure and leaves step 1's
+registry working. Before it, **`dev` carries `f310c1a` as of 2026-10-21.** `f310c1a` extends the peer registry with the five
 managers found by targeted lookup (Rialto into Miami-Dade, Madison Realty, Bridge and Pretium
 nationally, Gelt into Florida) and adds `PeerVehicle.role` so a raise spread across several CIKs is
 counted once. Still inert — registry data, one new script, no route or cache or tab — so

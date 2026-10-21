@@ -2190,7 +2190,9 @@ npm run test:peer-intel-formd      # Form D: entities, "Indefinite", the Safe Ha
 npm run test:peer-intel-registry   # peer registry: unique CIKs, cumulative layers, evidence (tsx)
 npm run discover:peers             # proposes peer candidates from EDGAR by location and name
 npm run lookup:peer -- "Rialto"     # finds one named manager's vehicles (names, not patterns)
+npm run test:peer-intel-cohort     # raise aggregation: sleeve counting, coverage, positioning (tsx)
 npm run verify:peer-registry       # live: all 65 vehicles resolve; Fund 4 reproduces exactly
+npm run verify:peer-raises -- --layer national   # live: pulls every trail, checks the invariants
 ```
 
 `test:allowlist` runs under `tsx` rather than Node's type stripping, because `lib/domain-allowlist.ts`
@@ -2255,6 +2257,15 @@ narrative, so strategy terms return nothing. All three facts, with the measureme
 live in `lib/peer-intel/edgar-contract.ts`; the older
 `app/ingestion/competitor_surveillance/connectors/sec_edgar.ts` still has the `keys=` bug and is
 superseded rather than fixed.
+
+**A registered vehicle files no Form D, and that is not a gap.** A listed REIT or non-traded BDC
+raises through a registered offering rather than Regulation D, so nine of the twelve registered
+vehicles in the peer registry have no Form D at all — the expected shape, not a failure. Their
+issuance is in the periodic reports instead. `CohortOfferings` separates `noFormD` from `failures`
+and `PeerCohort.coverage` separates `registeredWithoutFormD` from `unresolvedVehicles` for exactly
+this reason; a *private* vehicle missing its Form D is a real gap, because a Reg D fund must have
+one. BREIT runs a parallel Reg D offering alongside its registered one, so treat this as expected
+and never as required.
 
 **One fundraise is spread across several SEC filers.** A fund routinely files a separate Form D for
 its onshore LP, its offshore or international feeder, a master, and parallel or "-R" sleeves — each
