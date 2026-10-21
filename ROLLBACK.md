@@ -8,14 +8,21 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
 | `main` | `80743b6` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `f842f88` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `dev` | `8f3eda9` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 This table names the newest commit on each branch that **changes behaviour**; documentation-only
 commits sit on top of it and are deliberately not tracked here, because amending one rotates its
 SHA and the table then reads as stale when nothing has moved. Confirm with
 `git log --format='%h|%ci|%s'` rather than trusting the previous entry — this has drifted twice.
 
-**`dev` carries `f842f88` as of 2026-10-21.** Step 6 adds the liquidity and portfolio panels plus
+**`dev` carries `8f3eda9` as of 2026-10-21.** `a8855c6` adds the Distribution panel and widens
+`OfferingRecord` with `salesRecipients`, `relatedPersons` and `hasNonAccreditedInvestors`;
+`8f3eda9` adds the developments feed and widens `PeerIntelPayload` with `developments`. Both widen
+shapes under the same `peer-intel-v2` key, so **entries written earlier lack the new fields** and
+those panels show their empty state until the weekly revalidate. `8f3eda9` is also the first part of
+the tab that calls a **non-SEC host** (Google News RSS): failures there are collected per manager and
+caught at the payload boundary, so a news outage degrades one panel and nothing else. Reverting
+either is a clean `git revert`. Before them, **`dev` carries `f842f88` as of 2026-10-21.** Step 6 adds the liquidity and portfolio panels plus
 `lib/peer-intel/liquidity.ts`, and widens `PeerIntelPayload` with a trimmed `tier` array — so the
 cache key version stays `peer-intel-v2` but **stored entries written before it lack `tier`**, and the
 panels render their empty state until the weekly revalidate refreshes them. Reverting

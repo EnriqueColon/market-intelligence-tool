@@ -2243,6 +2243,8 @@ npm run test:peer-intel-signals    # signals: own-history rules, unjudged, scope
 npm run verify:peer-metrics        # live: reproduces Blue Owl's quarterly series by hand-checked figures
 npm run test:peer-intel-panel      # readings: no undefined/NaN/null, self ranking, snapshot (tsx)
 npm run test:peer-intel-liquidity  # tier flow, PIK share, the NAV plausibility guard (tsx)
+npm run test:peer-intel-distribution  # sales agents, CRD grouping, placeholder names (tsx)
+npm run test:peer-intel-developments  # name-collision gate, word boundaries, dedup (tsx)
 npm run verify:peer-signals -- --all   # live: all three layers, firing rates, cache size, scope independence
 ```
 
@@ -2308,6 +2310,19 @@ narrative, so strategy terms return nothing. All three facts, with the measureme
 live in `lib/peer-intel/edgar-contract.ts`; the older
 `app/ingestion/competitor_surveillance/connectors/sec_edgar.ts` still has the `keys=` bug and is
 superseded rather than fixed.
+
+**A field added to `OfferingRecord` is multiplied by every filing in every trail.** Adding
+`relatedPersons` to the Form D record put a copy on all nine filings of sixty-five vehicles — 132 KB
+in the weekly cache for data no panel displays, taking the entry from 191 KB to 406 KB. Anything only
+the newest filing needs belongs on `Raise`, hoisted once, and the stored filings should carry only
+what the filing trail renders.
+
+**Peer news must match a manager's full name, never a token.** The peer registry contains firms
+called Bridge, Ladder, Camden, Integra, Omnia, Naso, Apollo, Ares, Pretium and Safe Harbor. Matching
+on a short name attributes other firms' news — and bridges, theatres and spacecraft — to a
+competitor. `lib/peer-intel/developments.ts` requires an exact phrase of two words or more, refuses
+one-word aliases outright, matches the headline rather than the URL, and records which phrase matched
+so a wrong attribution is visible. Match terms on word boundaries too: "Issues" contains "sues".
 
 **A tagged figure can be faithful and still wrong.** HPS Corporate Lending Fund tags
 `NetAssetValuePerShare` as exactly 1000.00 in six consecutive filings while its real NAV is about

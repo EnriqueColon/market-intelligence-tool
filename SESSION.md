@@ -8,7 +8,81 @@ is it in now, and what is still open.
 
 ---
 
-## 2026-10-21 (latest) — Peer tracker, step 6: a $10B swing in the semi-liquid tier
+## 2026-10-21 (latest) — Distribution, and step 7's developments feed
+
+Two things the user asked for in order: surface the broker-dealers selling a competitor's fund
+(`a8855c6`), then begin step 7 (`8f3eda9`). Open items are on hold at the user's direction.
+
+### Distribution — who is paid to sell
+
+From a question about the investor column: can you click 232 and see who those investors are? **No**,
+and not because of how this was built. Form D reports `totalNumberAlreadyInvested` and whether any
+were non-accredited, and nothing else about investors; no SEC filing discloses a private fund's
+limited partners, so there is no list to link to. The count now carries that on hover rather than
+being inert.
+
+But the filing *does* disclose who was paid to sell, with FINRA CRD numbers, and that is the more
+useful half. From live Florida filings:
+
+| Manager | Investors | Avg commitment | Channel |
+| --- | --- | --- | --- |
+| Rialto Capital | 126 | $8.6M | Morgan Stanley, Citigroup, Hines Private Wealth |
+| H.I.G. Bayside | 13 | $13.4M | direct |
+| 3650 REIT | 4 | $35.2M | direct |
+| Silverview Capital | 56 | $1.0M | five agents incl. North Capital, FNEX |
+| Safe Harbor | 40 | $1.60M | The Courtney Group |
+
+Four distinct go-to-markets in one asset class, and none of it appears in any dollar figure. Twelve
+broker-dealers are named across the layer; none is shared between managers.
+
+**Two corrections the live data forced.** A broker-dealer literally named **"N/A"** was appearing on
+sixteen funds with $28.9B of associated raises, leading the agent table — Form D's documented
+placeholder is "None", but filers also write "N/A", "NA" or a dash, and taking those literally
+invented a firm. And I had written in two comments that Fund 4 names no selling agent; the filing
+names The Courtney Group, so both were corrected. Grouping is on CRD, not name, since the same firm
+is filed with different spellings.
+
+### Step 7, part one — other developments
+
+**Name collisions are the whole problem.** The registry contains managers called Bridge, Ladder,
+Camden, Integra, Omnia, Naso, Apollo, Ares, Pretium and Safe Harbor. A search for "Bridge" returns
+bridges; "Apollo" returns a theatre and a spacecraft. So nothing matches on a token: a manager is
+recognised only by an exact phrase of two words or more, a one-word alias is refused rather than used
+carefully, and the match is against the headline rather than the URL because a slug can contain
+anything. Every item shows which phrase attributed it, so a wrong attribution is visible.
+
+Live, the filter takes **1,120 raw items to 10**, and what survives is the right kind of thing: Hines
+Rialto Credit Partners closing a **$1.1B** office credit strategy — corroborating the $1.08B that
+fund's Form D reports — the WSJ on **two Blue Owl funds seeing redemption requests above 5%**, and
+Reuters on Blue Owl withdrawal requests slowing. **The news independently corroborates the
+net-outflow finding the XBRL panels show**, which is the strongest validation the tab has had.
+
+Three defects the live run exposed, all now fixed and tested: a term matched inside a longer word, so
+"Issues Pessimistic Forecast" matched "sues" and read as litigation; sell-side price-target notes
+dominated the first run and are about the share price rather than the business, so "target" and
+"returns" are no longer development terms and analyst vocabulary is noise; and the same story
+syndicated to several outlets arrived as several items differing only in the " - Publisher" suffix
+Google News appends.
+
+A news outage cannot take the tab down — failures are collected per manager, caught at the payload
+boundary, and the panel says the feed was unavailable while every filings panel is unaffected.
+
+**A regression I introduced with the distribution work, and fixed.** The cached entry had grown to
+406 KB because `salesRecipients` and `relatedPersons` were stored on every filing of every trail —
+155 KB, of which the related-person lists that nothing displays were **132 KB**. Both are hoisted
+onto the raise from the newest filing, so the per-filing copies are dropped and the entry is back to
+**250 KB** (12% of the limit). Developments itself is 7 KB. Worth remembering that a field added to
+`OfferingRecord` is multiplied by every filing in every trail.
+
+181 unit tests; tsc clean; `next build` passes with the root route at 102 kB.
+
+**Step 7 remaining:** the gating narrative (repurchase requests against what was paid, from 10-Q
+text, figure-checked against the XBRL figure) and the alerts digest. The WSJ item above shows gating
+is real and currently only visible through news.
+
+---
+
+## 2026-10-21 — Peer tracker, step 6: a $10B swing in the semi-liquid tier
 
 Step 6 is committed as `f842f88`: the Evergreen Liquidity and Portfolio Stress panels, which cover
 the half of the brief that only exists for vehicles filing periodic reports. Before it, `eb2b140`

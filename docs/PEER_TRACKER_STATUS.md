@@ -1,6 +1,6 @@
 # Peer & Private Credit Tracker — status and open items
 
-*As of 2026-10-21. `dev` at `f842f88`, pushed through `0d63e33`; `main` unchanged at `fe0ad1b`. Steps 1–5 are committed.
+*As of 2026-10-21. `dev` at `8f3eda9`, pushed through `0d63e33`; `main` unchanged at `fe0ad1b`. Steps 1–5 are committed.
 The tab exists but **has not rendered in a browser yet** — the standing rule is to verify on a
 Vercel deployment rather than a local dev server, and `dev` is unpushed by choice. Production is
 unaffected: `peer-intel` is absent from `ENABLED_TABS`.*
@@ -20,14 +20,18 @@ The running list of what is still open. Update it at the end of every session al
 | 4 | Signals and the layer aggregate, cached weekly, cron entries | **Done** (`04bcd92`) |
 | 5 | The tab: Raise Environment, Active Raises, New Launches, manager drawer | **Built** (`94d8f24`), not yet seen in a browser |
 | 6 | Evergreen Liquidity and Portfolio Stress panels | **Done** (`f842f88`) |
-| 7 | Developments feed, gating narrative, alerts digest | **Next** |
+| 7 | Developments feed, gating narrative, alerts digest | **Feed done** (`8f3eda9`); gating and digest remain |
 
 Registry today: **26 managers, 65 vehicles, 59 distinct raises**; 25 / 39 / 65 vehicles by layer;
 12 registered vehicles (7 non-traded, 5 listed), all national.
 
-Cache entries written by `warm-cache`: `peers:national` (~144 KB, 73s, 340 requests),
-`peers:florida` (~110 KB), `peers:miami` (~81 KB) — all far inside the 2 MB per-entry limit, so no
-chunking is needed.
+Also shipped outside the numbered steps: a **Distribution** panel (`a8855c6`) showing the
+broker-dealers each manager pays to sell, with CRD numbers — the answer to "who are the investors?",
+which no filing discloses.
+
+Cache entries written by `warm-cache`: `peers:national` (~250 KB, 43s, 340 SEC requests plus 26 news
+feeds), with Florida and Miami-Dade smaller — all far inside the 2 MB per-entry limit, so no chunking
+is needed.
 
 ---
 
@@ -80,9 +84,12 @@ zero.
 
 **Deferred by design.**
 
-- [ ] **Gating is not shown anywhere.** Whether repurchase requests exceeded what was actually paid
-  lives in a filing's narrative rather than any tagged figure. Both liquidity panels say so, but it
-  is step 7 work and is the most-requested item in the original brief still unbuilt.
+- [ ] **Gating is still not shown as a figure.** Whether repurchase requests exceeded what was
+  actually paid lives in a filing's narrative, not any tagged value. Both liquidity panels say so.
+  The developments feed now surfaces it as *news* — the WSJ reported two Blue Owl funds seeing
+  requests above 5% — which proves it is real and currently only visible that way. Extracting it
+  from 10-Q text, figure-checked against the XBRL repurchase figure, is the remaining step 7 work.
+- [ ] **The alerts digest** is the other half of step 7 and is not started.
 - [ ] **A NAV plausibility guard exists only for NAV.** `looksLikeNav` rejects a net asset value that
   never moves, after HPS was found tagging exactly 1000.00 across six filings. Every other concept
   is trusted as tagged. Worth a sweep if a figure ever looks wrong.
