@@ -7,6 +7,7 @@ import {
   edgarHeaders,
   isExcludedName,
   layerForLocation,
+  REQUEST_CONCURRENCY,
   REQUEST_SPACING_MS,
   retryDelayMs,
   shouldRetry,
@@ -58,13 +59,45 @@ function contact(): string {
 
 let nextSlot = 0
 
-/** Serialises every EDGAR call to one per `REQUEST_SPACING_MS`, process-wide. */
+/**
+ * Takes the next request slot, so EDGAR sees at most one call per
+ * `REQUEST_SPACING_MS` however many callers are waiting.
+ *
+ * Reserving the slot *before* awaiting is what lets several requests be in
+ * flight at once while still respecting the rate: each caller books a distinct
+ * future instant, sleeps until it, then fires.
+ */
 async function rateLimited<T>(run: () => Promise<T>): Promise<T> {
   const now = Date.now()
   const slot = Math.max(now, nextSlot)
   nextSlot = slot + REQUEST_SPACING_MS
   if (slot > now) await new Promise((r) => setTimeout(r, slot - now))
   return run()
+}
+
+/**
+ * Run `work` over `items` with at most `limit` in flight, preserving order.
+ *
+ * The rate limiter above already caps throughput, so this exists only to stop
+ * each request's round-trip latency being paid serially. Results come back in
+ * input order so a partial failure cannot silently reorder a cohort.
+ */
+async function mapWithConcurrency<T, R>(
+  items: readonly T[],
+  limit: number,
+  work: (item: T, index: number) => Promise<R>
+): Promise<R[]> {
+  const results = new Array<R>(items.length)
+  let next = 0
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    for (;;) {
+      const index = next++
+      if (index >= items.length) return
+      results[index] = await work(items[index], index)
+    }
+  })
+  await Promise.all(workers)
+  return results
 }
 
 async function getText(url: string): Promise<string> {
@@ -288,17 +321,18 @@ export async function fetchOffering(
 
 /** Every Form D offering record for one filer, oldest first. */
 export async function fetchOfferingHistory(profile: FilerProfile): Promise<OfferingRecord[]> {
-  const records: OfferingRecord[] = []
-  for (const filing of [...profile.formD].reverse()) {
+  const filings = [...profile.formD].reverse()
+  const settled = await mapWithConcurrency(filings, REQUEST_CONCURRENCY, async (filing) => {
     try {
-      records.push(await fetchOffering(profile.cik, filing, profile.location))
+      return await fetchOffering(profile.cik, filing, profile.location)
     } catch (error) {
       // A single unreadable filing should not lose the rest of the trail; the
       // raise is still computable from the filings that did parse.
       console.warn(`peer intel: ${profile.cik} ${filing.accession} unreadable`, error)
+      return null
     }
-  }
-  return records
+  })
+  return settled.filter((r): r is OfferingRecord => r != null)
 }
 
 export type CohortOfferings = {
@@ -342,35 +376,31 @@ export async function fetchCohortOfferings(layer: PeerLayer): Promise<CohortOffe
   const noFormD: CohortOfferings["noFormD"] = []
   let requests = 0
 
-  for (const vehicle of vehiclesInScope(layer)) {
+  const vehicles = vehiclesInScope(layer)
+  const outcomes = await mapWithConcurrency(vehicles, REQUEST_CONCURRENCY, async (vehicle) => {
     try {
       const profile = await fetchFilerProfile(vehicle.cik)
-      requests++
       if (!profile.formD.length) {
         // A registered vehicle without a Form D is raising through a
         // registered offering, which is normal; a private one without a Form D
         // should not exist.
-        if (vehicle.kind === "registered" || profile.kind === "registered") {
-          noFormD.push({ cik: vehicle.cik, manager: vehicle.manager })
-        } else {
-          failures.push({ cik: vehicle.cik, manager: vehicle.manager, reason: "no Form D filings" })
-        }
-        continue
+        const expected = vehicle.kind === "registered" || profile.kind === "registered"
+        return { vehicle, requests: 1, ...(expected ? { noFormD: true as const } : { reason: "no Form D filings" }) }
       }
       const records = await fetchOfferingHistory(profile)
-      requests += profile.formD.length
-      if (!records.length) {
-        failures.push({ cik: vehicle.cik, manager: vehicle.manager, reason: "no readable Form D" })
-        continue
-      }
-      byCik.set(vehicle.cik, records)
+      if (!records.length) return { vehicle, requests: 1 + profile.formD.length, reason: "no readable Form D" }
+      return { vehicle, requests: 1 + profile.formD.length, records }
     } catch (error) {
-      failures.push({
-        cik: vehicle.cik,
-        manager: vehicle.manager,
-        reason: error instanceof Error ? error.message : String(error),
-      })
+      return { vehicle, requests: 1, reason: error instanceof Error ? error.message : String(error) }
     }
+  })
+
+  for (const outcome of outcomes) {
+    requests += outcome.requests
+    const { cik, manager } = outcome.vehicle
+    if ("records" in outcome && outcome.records) byCik.set(cik, outcome.records)
+    else if ("noFormD" in outcome) noFormD.push({ cik, manager })
+    else if ("reason" in outcome && outcome.reason) failures.push({ cik, manager, reason: outcome.reason })
   }
 
   return { byCik, failures, noFormD, requests }
@@ -426,8 +456,7 @@ export async function fetchVehicleMetrics(vehicle: {
   const resolvedConcepts: Record<string, string> = {}
   const missingMetrics: string[] = []
 
-  for (const metric of PEER_METRICS) {
-    let resolved = false
+  const resolvedPerMetric = await mapWithConcurrency(PEER_METRICS, REQUEST_CONCURRENCY, async (metric) => {
     for (const [taxonomy, concept] of metric.candidates) {
       let json: unknown
       try {
@@ -439,12 +468,22 @@ export async function fetchVehicleMetrics(vehicle: {
       }
       const parsed = parseConceptFacts(json)
       if (!parsed?.facts.length) continue
-      series[metric.key] = toQuarters(metric.basis, parsed.facts)
-      resolvedConcepts[metric.key] = `${taxonomy}:${concept} (${parsed.unit})`
-      resolved = true
-      break
+      return {
+        key: metric.key,
+        points: toQuarters(metric.basis, parsed.facts),
+        source: `${taxonomy}:${concept} (${parsed.unit})`,
+      }
     }
-    if (!resolved) missingMetrics.push(metric.key)
+    return null
+  })
+
+  for (const [index, result] of resolvedPerMetric.entries()) {
+    if (result) {
+      series[result.key] = result.points
+      resolvedConcepts[result.key] = result.source
+    } else {
+      missingMetrics.push(PEER_METRICS[index].key)
+    }
   }
 
   return {
@@ -482,18 +521,18 @@ export async function fetchRegisteredTier(layer: PeerLayer): Promise<RegisteredT
   const failures: RegisteredTier["failures"] = []
   let requests = 0
 
-  for (const vehicle of registeredVehiclesInScope(layer)) {
+  const tier = registeredVehiclesInScope(layer)
+  const outcomes = await mapWithConcurrency(tier, Math.max(2, Math.floor(REQUEST_CONCURRENCY / 2)), async (vehicle) => {
     try {
-      const metrics = await fetchVehicleMetrics(vehicle)
-      requests += PEER_METRICS.length
-      vehicles.push(metrics)
+      return { vehicle, metrics: await fetchVehicleMetrics(vehicle) }
     } catch (error) {
-      failures.push({
-        cik: vehicle.cik,
-        manager: vehicle.manager,
-        reason: error instanceof Error ? error.message : String(error),
-      })
+      return { vehicle, reason: error instanceof Error ? error.message : String(error) }
     }
+  })
+  for (const outcome of outcomes) {
+    requests += PEER_METRICS.length
+    if ("metrics" in outcome && outcome.metrics) vehicles.push(outcome.metrics)
+    else if ("reason" in outcome) failures.push({ cik: outcome.vehicle.cik, manager: outcome.vehicle.manager, reason: outcome.reason })
   }
 
   return { vehicles, failures, requests }
@@ -528,10 +567,9 @@ export type PeerIntelPayload = {
  * the service does the work, the action adds the cache.
  */
 export async function buildPeerIntelPayload(layer: PeerLayer, asOf: string): Promise<PeerIntelPayload> {
-  // Both fetches are rate-limited internally against the same SEC ceiling, so
-  // they run in sequence rather than racing each other into a 429.
-  const offerings = await fetchCohortOfferings(layer)
-  const tier = await fetchRegisteredTier(layer)
+  // Safe to overlap: the rate limiter is process-wide, so both fetches draw
+  // from the same slot queue and cannot together exceed the SEC ceiling.
+  const [offerings, tier] = await Promise.all([fetchCohortOfferings(layer), fetchRegisteredTier(layer)])
 
   const cohort = buildPeerCohort(layer, offerings.byCik, asOf)
 

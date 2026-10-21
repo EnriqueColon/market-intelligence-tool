@@ -5,47 +5,40 @@ import type { PeerLayer } from "@/lib/peer-intel/edgar-contract"
 import { buildPeerIntelPayload, type PeerIntelPayload } from "@/app/services/peer-intel"
 
 /**
- * A week. Unlike the bank caches there is no published quarter to key on — SEC
- * filings arrive continuously — so the key carries an ISO week instead, and a
- * new week is a new entry. Inside a week the entry is served as-is, which suits
- * data whose inputs are quarterly reports and annual amendments.
+ * A week. The inputs are quarterly reports and annual amendments, so nothing is
+ * gained by rebuilding more often.
  */
 const PEER_REVALIDATE_SECONDS = 60 * 60 * 24 * 7
-
-/** `2026-W43`. Stable within a week, in every timezone the deployment runs in. */
-export async function isoWeek(date = new Date()): Promise<string> {
-  return isoWeekOf(date)
-}
-
-function isoWeekOf(date: Date): string {
-  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()))
-  // ISO weeks run Monday-Sunday and belong to the year containing their Thursday.
-  const day = d.getUTCDay() || 7
-  d.setUTCDate(d.getUTCDate() + 4 - day)
-  const yearStart = Date.UTC(d.getUTCFullYear(), 0, 1)
-  const week = Math.ceil(((d.getTime() - yearStart) / 86_400_000 + 1) / 7)
-  return `${d.getUTCFullYear()}-W${String(week).padStart(2, "0")}`
-}
 
 export type PeerIntelResult = { ok: true; payload: PeerIntelPayload } | { ok: false; error: string }
 
 /**
  * The cached layer payload.
  *
- * Keyed on the layer and the ISO week, revalidated weekly, and **successes
- * only** — a failed build throws inside the cached function, so `unstable_cache`
- * stores nothing and a bad SEC day cannot pin an error in the cache for a week.
+ * **The cache key is deliberately stable** — layer and version only, with no
+ * date in it. An earlier version keyed on the ISO week, which looked tidy and
+ * quietly broke the thing that matters: `revalidate` serves a *stale* entry
+ * immediately and refreshes behind the request, but a key that changes every
+ * week has no stale entry to serve, so the first visitor of every week waited
+ * out a full rebuild — 28 seconds for Miami-Dade, over a minute for the US
+ * layer. With a stable key that happens once, ever, and every visit afterwards
+ * is served from the cache while the refresh happens out of band.
  *
- * Bump the key version when `PeerIntelPayload` changes shape, or cached entries
- * keep serving the old one until the week turns.
+ * Successes only: a failed build throws inside the cached function, so nothing
+ * is stored and a bad SEC day cannot pin an error in the cache for a week.
+ *
+ * Bump the version when `PeerIntelPayload` changes shape, or cached entries
+ * keep serving the old one for up to a week.
  */
 export async function getPeerIntel(layer: PeerLayer, asOf?: string): Promise<PeerIntelResult> {
   const day = asOf ?? new Date().toISOString().slice(0, 10)
   try {
     const cached = unstable_cache(
+      // `day` is not in the key, so it is not a cache input; it only dates the
+      // payload that gets stored. A rebuild a week later stamps the new date.
       async () => buildPeerIntelPayload(layer, day),
-      ["peer-intel-v1", layer, isoWeekOf(new Date(day))],
-      { revalidate: PEER_REVALIDATE_SECONDS }
+      ["peer-intel-v2", layer],
+      { revalidate: PEER_REVALIDATE_SECONDS, tags: [`peer-intel`, `peer-intel:${layer}`] }
     )
     return { ok: true, payload: await cached() }
   } catch (error) {

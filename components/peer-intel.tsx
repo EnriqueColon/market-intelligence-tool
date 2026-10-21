@@ -56,6 +56,89 @@ function LayerTabs({ value, onChange }: { value: PeerLayer; onChange: (layer: Pe
   )
 }
 
+/** Roughly what a cold build costs per layer, measured 2026-10-21. */
+const COLD_BUILD: Record<PeerLayer, { seconds: number; requests: number }> = {
+  "miami-dade": { seconds: 17, requests: 139 },
+  florida: { seconds: 22, requests: 178 },
+  national: { seconds: 43, requests: 340 },
+}
+
+/**
+ * A cold build reads every filing live from SEC, which takes tens of seconds —
+ * SEC caps callers at ten requests a second, and the US layer needs 340 of
+ * them. A bare skeleton for that long reads as a hang, so the wait says what is
+ * happening, why it is slow, and that it happens once.
+ *
+ * After the first build the stored result is served immediately and refreshed
+ * behind the request, so this screen should be rare in production, where the
+ * scheduled job builds all three layers before anyone opens the tab.
+ */
+function LoadingLayer({ layer }: { layer: PeerLayer }) {
+  const [elapsed, setElapsed] = useState(0)
+  const expected = COLD_BUILD[layer]
+
+  useEffect(() => {
+    setElapsed(0)
+    const id = setInterval(() => setElapsed((v) => v + 1), 1000)
+    return () => clearInterval(id)
+  }, [layer])
+
+  // Only explain the wait once it is long enough to need explaining; a cache
+  // hit returns well inside this and should just show a skeleton.
+  const slow = elapsed >= 3
+
+  return (
+    <>
+      <Card className="p-6 surface-primary">
+        {slow ? (
+          <>
+            <h3 className="text-base font-semibold text-slate-800">
+              Reading {layerName(layer)} filings from SEC EDGAR…
+            </h3>
+            <p className="mt-1 max-w-2xl text-sm text-slate-600">
+              Nothing was cached for this layer, so every filing is being read live. SEC limits callers to ten requests
+              a second and this layer needs about {expected.requests}, so a first build takes roughly{" "}
+              {expected.seconds} seconds. It is stored afterwards — later visits are immediate, and the refresh happens
+              in the background.
+            </p>
+            <div className="mt-3 flex items-center gap-3">
+              <div className="h-1.5 w-full max-w-sm overflow-hidden rounded-full bg-slate-200">
+                <div
+                  className="h-full rounded-full bg-[#006D95] transition-all duration-1000 ease-linear"
+                  style={{ width: `${Math.min(96, (elapsed / expected.seconds) * 100)}%` }}
+                />
+              </div>
+              <span className="whitespace-nowrap text-xs tabular-nums text-slate-500">
+                {elapsed}s of about {expected.seconds}s
+              </span>
+            </div>
+            {elapsed > expected.seconds * 2 && (
+              <p className="mt-2 text-xs text-amber-800">
+                This is taking longer than usual. SEC may be rate-limiting or briefly unavailable; the request will
+                either finish or report an error rather than hanging indefinitely.
+              </p>
+            )}
+          </>
+        ) : (
+          <>
+            <Skeleton className="h-5 w-72" />
+            <Skeleton className="mt-3 h-16 w-full" />
+          </>
+        )}
+        <div className="mt-4 grid gap-3 sm:grid-cols-3 xl:grid-cols-6">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-16 w-full" />
+          ))}
+        </div>
+      </Card>
+      <Card className="p-6 surface-primary">
+        <Skeleton className="h-5 w-48" />
+        <Skeleton className="mt-3 h-48 w-full" />
+      </Card>
+    </>
+  )
+}
+
 export function PeerIntel() {
   const [layer, setLayer] = useState<PeerLayer>("miami-dade")
   const [payload, setPayload] = useState<PeerIntelPayload | null>(null)
@@ -115,23 +198,7 @@ export function PeerIntel() {
         </Card>
       )}
 
-      {loading && !error && (
-        <>
-          <Card className="p-6 surface-primary">
-            <Skeleton className="h-5 w-72" />
-            <Skeleton className="mt-3 h-16 w-full" />
-            <div className="mt-4 grid gap-3 sm:grid-cols-3 xl:grid-cols-6">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <Skeleton key={i} className="h-16 w-full" />
-              ))}
-            </div>
-          </Card>
-          <Card className="p-6 surface-primary">
-            <Skeleton className="h-5 w-48" />
-            <Skeleton className="mt-3 h-48 w-full" />
-          </Card>
-        </>
-      )}
+      {loading && !error && <LoadingLayer layer={layer} />}
 
       {!loading && !error && payload && (
         <>

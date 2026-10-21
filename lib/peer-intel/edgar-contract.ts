@@ -45,8 +45,26 @@ export function edgarHeaders(contact: string): Record<string, string> {
   }
 }
 
-/** 10/s is the published ceiling; 5/s leaves room for retries without tripping it. */
-export const REQUEST_SPACING_MS = 200
+/**
+ * Spacing between EDGAR requests, process-wide.
+ *
+ * SEC publishes a ceiling of 10 requests a second. 125ms is 8/s, which leaves
+ * headroom for retries without tripping it. This is the binding constraint on
+ * how fast a layer can be built: the US layer needs about 340 requests, so no
+ * amount of concurrency gets it below 340 x 125ms.
+ */
+export const REQUEST_SPACING_MS = 125
+
+/**
+ * How many EDGAR requests may be in flight at once.
+ *
+ * The spacing above already enforces the rate, so concurrency only decides how
+ * much of the round-trip latency is hidden. Without it the fetchers awaited
+ * each response before asking for the next slot, which made the real cost
+ * `spacing + latency` per request rather than `spacing` — the US layer took 73
+ * seconds against a 42-second floor.
+ */
+export const REQUEST_CONCURRENCY = 6
 
 /**
  * Full-text search is the only way to *discover* filers we do not already
