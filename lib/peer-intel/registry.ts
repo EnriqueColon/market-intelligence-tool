@@ -55,6 +55,23 @@ export type VehicleKind = "private" | "registered"
  */
 export type VehicleRole = "fund" | "sleeve"
 
+/**
+ * Whether a registered vehicle's shares trade.
+ *
+ * This decides what its flows *mean*, and it is not cosmetic. For a
+ * **non-traded** BDC or REIT, share repurchases are the redemption programme
+ * paying investors out and issuance is subscriptions coming in — together, the
+ * evergreen liquidity signal the brief asks for. For a **listed** company the
+ * same two tags are a buyback and an equity raise: capital-markets decisions
+ * that say almost the opposite about investor demand, and that an investor
+ * wanting out would not use at all, because they would simply sell the stock.
+ *
+ * So net flow is computed only for non-traded vehicles. Listed ones still
+ * contribute portfolio and performance figures, where the tags mean the same
+ * thing in both.
+ */
+export type VehicleQuotation = "listed" | "non-traded"
+
 export type PeerVehicle = {
   /** Unpadded CIK, as EDGAR Archives paths use it. */
   cik: string
@@ -67,6 +84,12 @@ export type PeerVehicle = {
   kind: VehicleKind
   /** Defaults to `fund` when absent. */
   role?: VehicleRole
+  /**
+   * Required in practice for a `registered` vehicle, since it decides whether
+   * its flows describe investor liquidity or a capital-markets decision.
+   * Meaningless for a private fund, whose units do not trade at all.
+   */
+  quoted?: VehicleQuotation
 }
 
 export type Peer = {
@@ -355,10 +378,10 @@ export const PEERS: readonly Peer[] = [
     aliases: ["Blackstone Real Estate Debt Strategies", "BREDS", "BXMT", "BCRED", "BREIT"],
     website: "https://www.blackstone.com",
     vehicles: [
-      { cik: "1061630", name: "Blackstone Mortgage Trust, Inc. (BXMT)", kind: "registered" },
-      { cik: "1662972", name: "Blackstone Real Estate Income Trust, Inc. (BREIT)", kind: "registered" },
-      { cik: "1803498", name: "Blackstone Private Credit Fund (BCRED)", kind: "registered" },
-      { cik: "1736035", name: "Blackstone Secured Lending Fund (BXSL)", kind: "registered" },
+      { cik: "1061630", name: "Blackstone Mortgage Trust, Inc. (BXMT)", kind: "registered", quoted: "listed" },
+      { cik: "1662972", name: "Blackstone Real Estate Income Trust, Inc. (BREIT)", kind: "registered", quoted: "non-traded" },
+      { cik: "1803498", name: "Blackstone Private Credit Fund (BCRED)", kind: "registered", quoted: "non-traded" },
+      { cik: "1736035", name: "Blackstone Secured Lending Fund (BXSL)", kind: "registered", quoted: "listed" },
     ],
   },
   {
@@ -372,8 +395,8 @@ export const PEERS: readonly Peer[] = [
     aliases: ["Starwood", "Starwood Property Trust", "STWD", "SREIT"],
     website: "https://www.starwoodcapital.com",
     vehicles: [
-      { cik: "1465128", name: "Starwood Property Trust, Inc. (STWD)", kind: "registered" },
-      { cik: "1711929", name: "Starwood Real Estate Income Trust, Inc. (SREIT)", kind: "registered" },
+      { cik: "1465128", name: "Starwood Property Trust, Inc. (STWD)", kind: "registered", quoted: "listed" },
+      { cik: "1711929", name: "Starwood Real Estate Income Trust, Inc. (SREIT)", kind: "registered", quoted: "non-traded" },
     ],
   },
   {
@@ -384,7 +407,7 @@ export const PEERS: readonly Peer[] = [
     relevance: "direct",
     evidence: "CRE credit REIT focused on debt investments; already on the firm's watchlist.",
     aliases: ["BrightSpire", "BRSP"],
-    vehicles: [{ cik: "1717547", name: "BrightSpire Capital, Inc. (BRSP)", kind: "registered" }],
+    vehicles: [{ cik: "1717547", name: "BrightSpire Capital, Inc. (BRSP)", kind: "registered", quoted: "listed" }],
   },
   {
     id: "ladder-capital",
@@ -394,7 +417,7 @@ export const PEERS: readonly Peer[] = [
     relevance: "direct",
     evidence: "Internally managed CRE lender and securities holder; on the firm's watchlist under CRE Debt Platforms.",
     aliases: ["Ladder", "LADR"],
-    vehicles: [{ cik: "1577670", name: "Ladder Capital Corp (LADR)", kind: "registered" }],
+    vehicles: [{ cik: "1577670", name: "Ladder Capital Corp (LADR)", kind: "registered", quoted: "listed" }],
   },
 
   // The broader private credit market the brief also asks about. Not CRE
@@ -410,7 +433,7 @@ export const PEERS: readonly Peer[] = [
     evidence:
       "Blue Owl Credit Income Corp is the largest non-traded BDC by redemption volume: $1.18B repurchased across 2025 against $1.97B in the first half of 2026 alone, with PIK income up from $86.1M to $103.6M.",
     aliases: ["Blue Owl", "OBDC", "Blue Owl Credit Income", "OCIC"],
-    vehicles: [{ cik: "1812554", name: "Blue Owl Credit Income Corp.", kind: "registered" }],
+    vehicles: [{ cik: "1812554", name: "Blue Owl Credit Income Corp.", kind: "registered", quoted: "non-traded" }],
   },
   {
     id: "apollo",
@@ -421,7 +444,7 @@ export const PEERS: readonly Peer[] = [
     evidence: "Apollo Debt Solutions BDC is a flagship non-traded private credit vehicle; Apollo is on the firm's watchlist.",
     aliases: ["Apollo", "ADS BDC", "Apollo Debt Solutions"],
     website: "https://www.apollo.com",
-    vehicles: [{ cik: "1837532", name: "Apollo Debt Solutions BDC", kind: "registered" }],
+    vehicles: [{ cik: "1837532", name: "Apollo Debt Solutions BDC", kind: "registered", quoted: "non-traded" }],
   },
   {
     id: "ares",
@@ -432,7 +455,7 @@ export const PEERS: readonly Peer[] = [
     evidence: "Ares Strategic Income Fund is its non-traded credit vehicle; Ares is on the firm's watchlist.",
     aliases: ["Ares", "ASIF", "Ares Strategic Income"],
     website: "https://www.aresmgmt.com",
-    vehicles: [{ cik: "1918712", name: "Ares Strategic Income Fund", kind: "registered" }],
+    vehicles: [{ cik: "1918712", name: "Ares Strategic Income Fund", kind: "registered", quoted: "non-traded" }],
   },
   {
     id: "hps",
@@ -442,7 +465,7 @@ export const PEERS: readonly Peer[] = [
     relevance: "adjacent",
     evidence: "HPS Corporate Lending Fund is among the largest non-traded BDCs; included so the national liquidity read is not drawn from two managers.",
     aliases: ["HPS", "HLEND", "HPS Corporate Lending"],
-    vehicles: [{ cik: "1838126", name: "HPS Corporate Lending Fund", kind: "registered" }],
+    vehicles: [{ cik: "1838126", name: "HPS Corporate Lending Fund", kind: "registered", quoted: "non-traded" }],
   },
 ]
 
@@ -500,6 +523,16 @@ export function vehiclesInScope(layer: PeerLayer): Array<PeerVehicle & { peerId:
  */
 export function fundVehiclesInScope(layer: PeerLayer): Array<PeerVehicle & { peerId: string; manager: string }> {
   return vehiclesInScope(layer).filter((v) => (v.role ?? "fund") === "fund")
+}
+
+/**
+ * Registered vehicles whose shares do not trade — the only ones whose share
+ * issuance and repurchases describe investor liquidity rather than a
+ * capital-markets decision. Net flow and the redemption signals are restricted
+ * to these.
+ */
+export function nonTradedVehiclesInScope(layer: PeerLayer): Array<PeerVehicle & { peerId: string; manager: string }> {
+  return registeredVehiclesInScope(layer).filter((v) => v.quoted === "non-traded")
 }
 
 export function registeredVehiclesInScope(layer: PeerLayer): Array<PeerVehicle & { peerId: string; manager: string }> {

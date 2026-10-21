@@ -5,6 +5,7 @@ import {
   PEERS,
   UNRESOLVED_WATCH,
   fundVehiclesInScope,
+  nonTradedVehiclesInScope,
   peerById,
   peersForLayer,
   peersInScope,
@@ -166,4 +167,33 @@ test("no omitted feeder shell slipped in", () => {
   for (const v of vehiclesInScope("national")) {
     assert.ok(!/Holdings LLC$/i.test(v.name), `${v.name} is a feeder shell and should be omitted`)
   }
+})
+
+test("every registered vehicle declares whether its shares trade", () => {
+  // The distinction decides what the flows mean: for a non-traded vehicle
+  // repurchases are investors being paid out, for a listed one they are a
+  // buyback. A registered vehicle without it would be silently misread.
+  for (const v of registeredVehiclesInScope("national")) {
+    assert.ok(
+      v.quoted === "listed" || v.quoted === "non-traded",
+      `${v.manager} / ${v.name} must declare listed or non-traded`
+    )
+  }
+})
+
+test("quotation is only set where it means something", () => {
+  for (const v of vehiclesInScope("national")) {
+    if (v.kind === "private") {
+      assert.equal(v.quoted, undefined, `${v.name}: a private fund's units do not trade`)
+    }
+  }
+})
+
+test("the non-traded subset is where investor liquidity is observable", () => {
+  const nonTraded = nonTradedVehiclesInScope("national")
+  const registered = registeredVehiclesInScope("national")
+  assert.ok(nonTraded.length > 0)
+  assert.ok(nonTraded.length < registered.length, "some of the tier is listed")
+  for (const v of nonTraded) assert.equal(v.quoted, "non-traded")
+  assert.equal(nonTradedVehiclesInScope("miami-dade").length, 0)
 })

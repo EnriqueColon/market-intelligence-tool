@@ -1,5 +1,6 @@
 import "server-only"
 import {
+  buildCompanyConceptUrl,
   buildFtsUrl,
   buildPrimaryDocUrl,
   buildSubmissionsUrl,
@@ -13,7 +14,18 @@ import {
   type PeerLayer,
 } from "@/lib/peer-intel/edgar-contract"
 import { parseFormD, type OfferingRecord } from "@/lib/peer-intel/form-d"
-import { vehiclesInScope } from "@/lib/peer-intel/registry"
+import {
+  registeredVehiclesInScope,
+  vehiclesInScope,
+  type VehicleQuotation,
+} from "@/lib/peer-intel/registry"
+import {
+  netFlow,
+  parseConceptFacts,
+  PEER_METRICS,
+  toQuarters,
+  type QuarterPoint,
+} from "@/lib/peer-intel/xbrl"
 
 /**
  * SEC EDGAR fetchers for the peer tracker.
@@ -355,4 +367,127 @@ export async function fetchCohortOfferings(layer: PeerLayer): Promise<CohortOffe
   }
 
   return { byCik, failures, noFormD, requests }
+}
+
+export type VehicleMetrics = {
+  cik: string
+  manager: string
+  vehicleName: string
+  /** Quarterly series per metric key; a metric the filer does not tag is absent. */
+  series: Record<string, QuarterPoint[]>
+  /** Which concept answered for each metric, for the provenance disclosure. */
+  resolvedConcepts: Record<string, string>
+  /** Metric keys the filer tags under no candidate concept. */
+  missingMetrics: string[]
+  /**
+   * Whether the vehicle's shares trade, carried through because it decides what
+   * the flows mean.
+   */
+  quoted?: VehicleQuotation
+  /**
+   * Capital in less capital out, per quarter. Empty when either side is
+   * missing, **and empty for a listed vehicle**: there, issuance and
+   * repurchases are an equity raise and a buyback rather than subscriptions and
+   * redemptions, so a net figure would read as investor demand when it is a
+   * capital-markets decision.
+   */
+  netFlow: QuarterPoint[]
+}
+
+/**
+ * The quarterly series for one registered vehicle.
+ *
+ * One request per metric, not one for the whole entity: `companyfacts` returns
+ * every concept a filer has ever tagged, which for Blue Owl is 570 KB against
+ * 4.9 KB for a single concept — 117x the payload for data we discard. The
+ * `frames` API would be fewer requests still but cannot read these filers at
+ * all; `edgar-contract.ts` carries that measurement.
+ *
+ * A 404 on a concept means the filer does not tag it, which is ordinary and
+ * common — coverage across the tier runs from 12/12 for share issuance down to
+ * 2/12 for payment-in-kind income. It is recorded in `missingMetrics` rather
+ * than thrown, so a panel can say the figure is not reported instead of showing
+ * a zero.
+ */
+export async function fetchVehicleMetrics(vehicle: {
+  cik: string
+  manager: string
+  name: string
+  quoted?: VehicleQuotation
+}): Promise<VehicleMetrics> {
+  const series: Record<string, QuarterPoint[]> = {}
+  const resolvedConcepts: Record<string, string> = {}
+  const missingMetrics: string[] = []
+
+  for (const metric of PEER_METRICS) {
+    let resolved = false
+    for (const [taxonomy, concept] of metric.candidates) {
+      let json: unknown
+      try {
+        json = await getJson<unknown>(buildCompanyConceptUrl(vehicle.cik, taxonomy, concept))
+      } catch {
+        // A 404 is the normal answer for a concept this filer does not tag;
+        // getText only throws after exhausting retries on transient statuses.
+        continue
+      }
+      const parsed = parseConceptFacts(json)
+      if (!parsed?.facts.length) continue
+      series[metric.key] = toQuarters(metric.basis, parsed.facts)
+      resolvedConcepts[metric.key] = `${taxonomy}:${concept} (${parsed.unit})`
+      resolved = true
+      break
+    }
+    if (!resolved) missingMetrics.push(metric.key)
+  }
+
+  return {
+    cik: vehicle.cik,
+    manager: vehicle.manager,
+    vehicleName: vehicle.name,
+    series,
+    resolvedConcepts,
+    missingMetrics,
+    ...(vehicle.quoted ? { quoted: vehicle.quoted } : {}),
+    netFlow:
+      vehicle.quoted === "non-traded" && series.subscriptions && series.repurchases
+        ? netFlow(series.subscriptions, series.repurchases)
+        : [],
+  }
+}
+
+export type RegisteredTier = {
+  vehicles: VehicleMetrics[]
+  failures: Array<{ cik: string; manager: string; reason: string }>
+  requests: number
+}
+
+/**
+ * Every registered vehicle in a layer.
+ *
+ * Only the registered tier is fetched, because a private fund files no periodic
+ * report and has none of this to give. In this registry that tier is entirely
+ * national, so the Miami-Dade and Florida layers return nothing here — which is
+ * the fact the coverage footers have to state rather than leave as an empty
+ * chart.
+ */
+export async function fetchRegisteredTier(layer: PeerLayer): Promise<RegisteredTier> {
+  const vehicles: VehicleMetrics[] = []
+  const failures: RegisteredTier["failures"] = []
+  let requests = 0
+
+  for (const vehicle of registeredVehiclesInScope(layer)) {
+    try {
+      const metrics = await fetchVehicleMetrics(vehicle)
+      requests += PEER_METRICS.length
+      vehicles.push(metrics)
+    } catch (error) {
+      failures.push({
+        cik: vehicle.cik,
+        manager: vehicle.manager,
+        reason: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
+  return { vehicles, failures, requests }
 }

@@ -66,7 +66,9 @@
     "verify:peer-registry": "tsx --conditions=react-server scripts/verify-peer-registry.ts",
     "lookup:peer": "tsx --conditions=react-server scripts/lookup-peer.ts",
     "test:peer-intel-cohort": "tsx --test --tsconfig tsconfig.json lib/peer-intel/cohort.test.ts",
-    "verify:peer-raises": "tsx --conditions=react-server scripts/verify-peer-raises.ts"
+    "verify:peer-raises": "tsx --conditions=react-server scripts/verify-peer-raises.ts",
+    "test:peer-intel-xbrl": "tsx --test --tsconfig tsconfig.json lib/peer-intel/xbrl.test.ts",
+    "verify:peer-metrics": "tsx --conditions=react-server scripts/verify-peer-metrics.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
