@@ -29,7 +29,16 @@
  * how much of the score was actually observed.
  */
 
-import type { BankBehaviorSummary, BehaviorMeasures, SignalKey } from "./bank-behavior-signals"
+import {
+  judgeSignals,
+  measuresAt,
+  SIGNAL_KEYS,
+  type BankBehaviorSummary,
+  type BehaviorMeasures,
+  type BehaviorSignalsCohort,
+  type SignalKey,
+} from "./bank-behavior-signals"
+import type { BehaviorHistory } from "./bank-behavior"
 
 /**
  * What the assessment actually needs.
@@ -341,4 +350,79 @@ export function stateCounts(assessments: readonly SellerLikelihood[]): Record<Se
   const counts: Record<SellerState, number> = { "active-seller": 0, "pre-seller": 0, "cleaned-up": 0, stable: 0 }
   for (const a of assessments) counts[a.state] += 1
   return counts
+}
+
+/**
+ * The compact form stored per bank in the weekly cache.
+ *
+ * Three fields, not the whole assessment. The components carry a label and a
+ * sentence of meaning each, which is right for one bank in a drawer and
+ * ruinous for 4,603 in a cache entry — roughly 900 bytes a bank, 4.1 MB across
+ * the cohort, against a 2 MB per-entry ceiling. The same reasoning that made
+ * step 2 store fired signal *keys* rather than seven objects.
+ *
+ * The drawer recomputes the full assessment from the one institution's own
+ * history, which it already loads, so nothing is lost by not storing it.
+ */
+export type SellerSummaryFields = {
+  sellerState: SellerState
+  sellerScore: number | null
+  /** 0-1. Shown beside the score, because a score on two measures is not a score. */
+  sellerConfidence: number
+}
+
+/**
+ * Action signals fired in each quarter before the newest, newest first.
+ *
+ * Needed to tell `cleaned-up` from `stable`: both look like a bank doing
+ * nothing, and the difference is whether it was doing something recently. Cheap
+ * to compute — pure arithmetic over a history already in memory — so it is done
+ * for the whole cohort rather than only in the drawer.
+ */
+export function priorActionCounts(history: BehaviorHistory, quarters = SELLER_THRESHOLDS.recentActionQuarters): number[] {
+  const counts: number[] = []
+  // The newest quarter is the one being judged, so start one back.
+  for (let i = history.quarters.length - 2; i >= 0 && counts.length < quarters; i--) {
+    const measures = measuresAt(history, i)
+    if (!measures) {
+      counts.push(0)
+      continue
+    }
+    const results = judgeSignals(measures)
+    counts.push(SIGNAL_KEYS.filter((k) => results[k].fired && ACTION_SIGNALS.includes(k)).length)
+  }
+  return counts
+}
+
+/**
+ * Add the seller fields to every summary in a cohort.
+ *
+ * Lives here rather than inside `computeBehaviorSignals` to keep the import
+ * one-way: this module reads the signals layer, and the signals layer does not
+ * know about scoring. The action calls this before caching, so the stored
+ * entries carry the fields and the screening table needs no second pass.
+ */
+export function withSellerFields<T extends BehaviorSignalsCohort>(
+  cohort: T,
+  histories: readonly BehaviorHistory[]
+  // `Omit` rather than an intersection: intersecting `summaries` leaves the
+  // narrower array type in place, so callers could not see the added fields.
+): Omit<T, "summaries"> & { summaries: Array<BankBehaviorSummary & SellerSummaryFields> } {
+  const byCert = new Map(histories.map((h) => [h.cert, h]))
+  return {
+    ...cohort,
+    summaries: cohort.summaries.map((summary) => {
+      const history = byCert.get(summary.cert)
+      const assessment = assessSeller(
+        summary,
+        history ? { priorActionCounts: priorActionCounts(history) } : undefined
+      )
+      return {
+        ...summary,
+        sellerState: assessment.state,
+        sellerScore: assessment.score,
+        sellerConfidence: Math.round(assessment.confidence * 100) / 100,
+      }
+    }),
+  }
 }

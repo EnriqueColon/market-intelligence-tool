@@ -14,6 +14,12 @@
 
 import type { BehaviorHistory, BehaviorQuarter } from "@/lib/analytics/bank-behavior"
 import {
+  assessSeller,
+  describeState,
+  priorActionCounts,
+  type SellerLikelihood,
+} from "@/lib/analytics/seller-likelihood"
+import {
   CRE_CATEGORY_LABEL,
   SIGNALS,
   SIGNAL_KEYS,
@@ -69,6 +75,19 @@ export type BehaviorPanelReading = {
   signals: SignalKey[]
 }
 
+/**
+ * The Seller Likelihood view for one institution.
+ *
+ * Recomputed here rather than read from the cohort cache, which stores only the
+ * state, score and confidence: the components carry a label and a sentence each,
+ * which is right for one bank and 4.1 MB across 4,603 of them.
+ */
+export type InstitutionSeller = {
+  assessment: SellerLikelihood
+  label: string
+  meaning: string
+}
+
 export type InstitutionBehavior = {
   cert: string
   name: string
@@ -84,6 +103,11 @@ export type InstitutionBehavior = {
   signalsByQuarter: QuarterSignals[]
   /** The newest quarter's summary, or null when there is only one quarter. */
   latest: Omit<BankBehaviorSummary, "percentiles"> | null
+  /**
+   * Null when there is only one quarter on file, because every component
+   * compares a quarter with the one before it.
+   */
+  seller: InstitutionSeller | null
   reading: BehaviorPanelReading
 }
 
@@ -293,6 +317,21 @@ export function buildInstitutionBehavior(history: BehaviorHistory, asOfQuarter: 
     latestByCategory,
     signalsByQuarter: byQuarter,
     latest,
+    // Percentiles are deliberately absent: the drawer loads one bank, so there
+    // is no cohort here to rank it against. The score therefore rests on the
+    // absolute measures, which is also the harsher basis — a percentile would
+    // flatter any bank sitting in a stressed scope. The cohort cache carries
+    // the percentile-aware score for the table.
+    seller: latest
+      ? (() => {
+          const assessment = assessSeller(
+            { ...latest, percentiles: {} },
+            { priorActionCounts: priorActionCounts(history) }
+          )
+          const { label, meaning } = describeState(assessment.state)
+          return { assessment, label, meaning }
+        })()
+      : null,
     reading: buildReading(history, latest, steps, byQuarter),
   }
 }

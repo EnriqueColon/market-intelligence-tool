@@ -1,8 +1,11 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 import type { BankBehaviorSummary, BehaviorMeasures, SignalKey } from "@/lib/analytics/bank-behavior-signals"
+import type { BehaviorHistory } from "@/lib/analytics/bank-behavior"
 import {
   assessSeller,
+  priorActionCounts,
+  withSellerFields,
   describeState,
   rankSellers,
   SELLER_THRESHOLDS,
@@ -257,4 +260,54 @@ test("two action signals are required to call a bank an active seller", () => {
   assert.notEqual(one.state, "active-seller")
   const two = assessSeller(bank({ fired: ["creRunoff", "hfsTransfer"] }), { priorActionCounts: [0] })
   assert.equal(two.state, "active-seller")
+})
+
+test("prior action counts look back from the quarter before the newest", () => {
+  // A one-quarter history has nothing to look back at.
+  const single: BehaviorHistory = { cert: "1", name: "B", state: "FL", quarters: [] }
+  assert.deepEqual(priorActionCounts(single), [])
+})
+
+test("the cohort enrichment adds three compact fields and nothing else", () => {
+  // The components carry a label and a sentence each — fine for one bank in a
+  // drawer, 4.1 MB across 4,603 of them against a 2 MB per-entry ceiling.
+  const summaries = [
+    { ...bank({ cert: "a", fired: ["hfsTransfer", "realizedSale"] }), percentiles: {} },
+    { ...bank({ cert: "b", measures: { oreoCrePct: 0.03, modificationsCrePct: 0.04, creNcoRateQ: 0.01 } }), percentiles: {} },
+  ]
+  const enriched = withSellerFields(
+    { scope: "National", asOfQuarter: "20260630", institutionCount: 2, currentCount: 2, unjudgedCount: 0, summaries },
+    []
+  )
+  assert.equal(enriched.summaries.length, 2)
+  for (const s of enriched.summaries) {
+    assert.ok(["active-seller", "pre-seller", "cleaned-up", "stable"].includes(s.sellerState))
+    assert.ok(s.sellerConfidence >= 0 && s.sellerConfidence <= 1)
+    // The heavy parts must not travel into the cache.
+    assert.equal((s as Record<string, unknown>).components, undefined)
+    assert.equal((s as Record<string, unknown>).reason, undefined)
+  }
+  assert.equal(enriched.summaries.find((s) => s.cert === "a")?.sellerState, "active-seller")
+  assert.equal(enriched.summaries.find((s) => s.cert === "b")?.sellerState, "pre-seller")
+})
+
+test("confidence is stored rounded, so the cache does not carry float noise", () => {
+  const summaries = [{ ...bank({ measures: { oreoCrePct: 0.03 } }), percentiles: {} }]
+  const enriched = withSellerFields(
+    { scope: "National", asOfQuarter: "20260630", institutionCount: 1, currentCount: 1, unjudgedCount: 0, summaries },
+    []
+  )
+  const c = enriched.summaries[0].sellerConfidence
+  assert.equal(c, Math.round(c * 100) / 100)
+})
+
+test("a bank with no history in the map is still scored, just without cleaned-up", () => {
+  // `withSellerFields` is called with the histories it has; a summary whose
+  // history is missing must not throw or vanish.
+  const summaries = [{ ...bank({ cert: "orphan", measures: { oreoCrePct: 0.0001 } }), percentiles: {} }]
+  const enriched = withSellerFields(
+    { scope: "National", asOfQuarter: "20260630", institutionCount: 1, currentCount: 1, unjudgedCount: 0, summaries },
+    []
+  )
+  assert.equal(enriched.summaries[0].sellerState, "stable")
 })

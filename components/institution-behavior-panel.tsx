@@ -232,6 +232,82 @@ function SignalStrip({ byQuarter }: { byQuarter: QuarterSignals[] }) {
   )
 }
 
+const SELLER_STATE_STYLE: Record<string, string> = {
+  "active-seller": "border-red-200 bg-red-50 text-red-900",
+  "pre-seller": "border-amber-200 bg-amber-50 text-amber-900",
+  "cleaned-up": "border-slate-200 bg-white text-slate-600",
+  stable: "border-slate-200 bg-slate-50 text-slate-500",
+}
+
+/**
+ * Seller Likelihood for this institution.
+ *
+ * The state matters more than the score, and the panel is laid out to say so: a
+ * high score on a stable bank means little, while a pre-seller is the one to
+ * call. Confidence sits beside the score because a score built on two of six
+ * measures is not the same number as one built on all of them, and the
+ * components are listed so the figure can be argued with.
+ *
+ * Percentiles are absent here by design — the drawer loads one bank, so there is
+ * no cohort to rank it against, and the score rests on absolute measures.
+ */
+function SellerPanel({ seller }: { seller: NonNullable<InstitutionBehavior["seller"]> }) {
+  const { assessment, label, meaning } = seller
+  return (
+    <div className="rounded-md border border-slate-200/80 bg-white px-3 py-2">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Seller likelihood</p>
+        <p className="text-[10px] text-slate-500">Judged on this bank&apos;s own history; no cohort ranking</p>
+      </div>
+
+      <div className="mt-1.5 flex flex-wrap items-center gap-3">
+        <span
+          className={`rounded border px-2 py-0.5 text-xs font-semibold ${SELLER_STATE_STYLE[assessment.state] ?? ""}`}
+          title={meaning}
+        >
+          {label}
+        </span>
+        {assessment.score != null && (
+          <span className="text-sm tabular-nums text-slate-700">
+            <span className="font-semibold">{assessment.score}</span>
+            <span className="text-slate-500">/100 pressure</span>
+          </span>
+        )}
+        <span
+          className="text-[11px] text-slate-500"
+          title="How much of the score was actually reported. A score built on two of six measures is not the same number as one built on all six."
+        >
+          {Math.round(assessment.confidence * 100)}% of measures reported
+        </span>
+      </div>
+
+      <p className="mt-1.5 text-sm leading-relaxed text-slate-700">{assessment.reason}</p>
+
+      <div className="mt-2 grid gap-1 sm:grid-cols-2">
+        {assessment.components.map((c) => (
+          <div key={c.key} className="flex items-baseline justify-between gap-2 text-[11px]" title={c.meaning}>
+            <span className="text-slate-600">{c.label}</span>
+            <span className="tabular-nums text-slate-700">
+              {c.value == null ? (
+                <span className="text-slate-400">not reported</span>
+              ) : (
+                `${Math.round(c.value * 100)}%`
+              )}
+              <span className="ml-1 text-slate-400">×{c.weight}</span>
+            </span>
+          </div>
+        ))}
+      </div>
+
+      <p className="mt-2 text-[10px] leading-snug text-slate-500">
+        Each component is shown as a share of its own ceiling, so one extreme figure cannot carry the score, and with
+        the weight it contributes. &ldquo;Not reported&rdquo; reduces the confidence rather than counting as zero — a
+        bank that files no modification figure is not a bank without modifications.
+      </p>
+    </div>
+  )
+}
+
 function RollForwardTable({ steps, byCategory }: { steps: RollForwardStep[]; byCategory: InstitutionBehavior["latestByCategory"] }) {
   if (steps.length === 0) return null
   return (
@@ -286,6 +362,7 @@ export function InstitutionBehaviorPanel({ behavior }: { behavior: InstitutionBe
         <SignalStrip byQuarter={behavior.signalsByQuarter} />
       </div>
       <RollForwardTable steps={behavior.rollForward} byCategory={behavior.latestByCategory} />
+      {behavior.seller && <SellerPanel seller={behavior.seller} />}
       <div className="rounded-md border border-slate-200/80 bg-white px-3 py-2">
         <div className="flex items-baseline justify-between gap-2">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Actions reading</p>
