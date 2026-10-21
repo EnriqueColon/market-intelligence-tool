@@ -396,6 +396,9 @@ components/
 lib/            Domain logic: FDIC client and transforms, auth, features, caching, formatting
   scoring/      Pure, testable analysis: opportunity score, change detection, brief ranking,
                 peer cohorts, the CRE capital scenario, FDIC quarter arithmetic
+  analytics/    Market Analytics computation, incl. the bank-behaviour layers
+  peer-intel/   Peer & Private Credit tracker: EDGAR access contract, Form D parsing,
+                the three-layer competitor registry (not yet rendered anywhere)
 docs/           Focused guides (start with DEV_ENVIRONMENT.md)
 data/           Local SQLite and JSON — development only
 scripts/        One-off and ingestion scripts (TypeScript and Python)
@@ -428,6 +431,17 @@ scripts/        One-off and ingestion scripts (TypeScript and Python)
 ## Maintenance notes
 
 ### Traps that have already caused incidents
+
+**SEC EDGAR ignores an unknown query parameter instead of rejecting it.** Full-text search takes
+`q`; a request built with `keys=` returns the entire form firehose, newest first, with the search
+term dropped — 10,000+ unrelated Form D filings that look like a successful response.
+`app/ingestion/competitor_surveillance/connectors/sec_edgar.ts` has always passed `keys`, which is
+why it finds almost nothing. The location filter behaves the same way: `locationCodes` (plural)
+works, `locationCode` is silently ignored. Anything new against EDGAR should go through
+`lib/peer-intel/edgar-contract.ts`, which encodes the working parameters and the measurement behind
+each one. Related: Form D full-text matches **entity names only** (the form has no narrative), so a
+search for a strategy term returns nothing while a search for a name pattern returns hundreds.
+
 
 **A bare `max-w-*` on `DialogContent` loses to the base component's `sm:max-w-lg`.** The base
 class is a media-query rule and wins on every desktop viewport, so the institution drawer asked for

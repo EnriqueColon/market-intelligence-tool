@@ -8,14 +8,23 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
 | `main` | `80743b6` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `80743b6` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `dev` | `203b818` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 This table names the newest commit on each branch that **changes behaviour**; documentation-only
 commits sit on top of it and are deliberately not tracked here, because amending one rotates its
 SHA and the table then reads as stale when nothing has moved. Confirm with
 `git log --format='%h|%ci|%s'` rather than trusting the previous entry — this has drifted twice.
 
-**`main` and `dev` are level at `fe0ad1b` as of 11:30 on 2026-10-07.** Production fast-forwarded
+**`dev` carries `203b818` as of 2026-10-21; `main` is unchanged at `fe0ad1b`.** Step 1 of the Peer &
+Private Credit tracker: `lib/peer-intel/` (the EDGAR access contract, Form D parsing and raise
+maths, the three-layer registry of 21 managers and 41 vehicles), `app/services/peer-intel.ts`, and
+two scripts. It is **inert** — new files plus four `package.json` script entries, no route, no cache
+entry, no cron change, no tab, and nothing existing imports any of it. So it cannot affect
+production behaviour and needs no rollback plan beyond `git revert 203b818`, which removes the files
+and the script entries together. It does **not** touch the SQLite `competitor_surveillance`
+framework (which cannot run on Vercel) or the AOM material; it supersedes
+`app/ingestion/competitor_surveillance/connectors/sec_edgar.ts`, whose `keys=` parameter EDGAR
+silently ignores, but deliberately leaves that file in place. Before it, **`main` and `dev` are level at `fe0ad1b` as of 11:30 on 2026-10-07.** Production fast-forwarded
 `8afac5b` → `fe0ad1b`, four behavioural commits: `c656665`, the Bank Behaviour expansion's ingestion
 layer (a new FDIC field list, a pure shaping module, a service and a verify script); `4ab576f`, its
 signals layer (seven behaviour signals, the CRE nonaccrual roll-forward, a server action cached per

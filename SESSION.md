@@ -8,7 +8,99 @@ is it in now, and what is still open.
 
 ---
 
-## 2026-10-07, late morning (latest) — Market Analytics data API, so AMO Tracker can render this tab's data
+## 2026-10-21 (latest) — Peer & Private Credit tracker, step 1: who the competitors actually are
+
+A new expansion, from a capital-raising ask: track what peer managers are doing — fundraising,
+new launches, evergreen redemption activity, portfolio stress, other developments. The tool has
+only ever served deal sourcing; this is the second purpose. Plan approved before any code, and
+step 1 is committed as `203b818`.
+
+**The firm research changed the design.** Safe Harbor Capital Partners (Miami Beach, 2005, Rafael
+Serrano) buys non-performing and sub-performing first mortgages and originates high-yield CRE
+financing — buying NPL pools from banks, which is why the Market Analytics tab watches bank balance
+sheets in the first place. Four vintages, $500M+ invested, deals of $8.5M–$44M. It is a
+**lower-middle-market** manager, so the repo's existing watchlist — which leads with Blackstone,
+Apollo and KKR under "Global Distressed Credit" — names the wrong competitors: several of those are
+*counterparties* selling pools, not rivals for the same LP dollars. Hence three layers, per the ask
+and matching the tool's existing `national` / `Florida` / `miami` scopes.
+
+**Form D is the spine, and the method was proved on the firm's own filings.** Any Reg D raise must
+file a Form D and amend it annually while open, which makes it the one fundraising dataset that is
+mandatory, free, authoritative and current. Fund 4 (CIK 2017189) was read by hand during the audit
+and the pipeline now reproduces it exactly: target **cut from $500M to $300M**, $64,168,863 sold to
+40 investors (21.4% of target), $1.60M average ticket, +$11.25M and +10 LPs in the twelve months to
+July 2026. A target cut is not something a competitor puts in a press release.
+
+**What step 1 built.** `lib/peer-intel/` — `edgar-contract.ts` (pure URL/param/retry decisions),
+`form-d.ts` (filing XML to offering record, raise and pace maths), `registry.ts` (the three layers,
+21 managers, 41 vehicles) — plus `app/services/peer-intel.ts` (rate-limited, retrying fetchers),
+`scripts/discover-peers.ts` and `scripts/verify-peer-registry.ts`. 38 unit tests; tsc clean on the
+new files. **Nothing renders yet**: no tab, no cache, no cron.
+
+**Verified live** (`npm run verify:peer-registry`, 2026-10-21): all 41 vehicles resolve on EDGAR,
+every audited `kind` still matches what the entity files, layers cumulative at 16 / 29 / 41
+vehicles, and all seventeen Fund 4 assertions pass.
+
+**Two coverage tiers, and the measurement that forced them.** Of 41 vehicles, the 12 that file
+periodic reports — and so have observable quarterly redemption and portfolio figures — are **all
+national**. Discovery resolved 67 Florida Form D filers and *not one* reports quarterly. So private
+funds get fundraising depth only, and the panels must say what cannot be known rather than render
+empty charts.
+
+**Four traps, all confirmed against the live API and encoded with their measurements.** EDGAR
+full-text search takes `q`; `keys` is **silently ignored** and returns the entire Form D firehose
+(10,000+ unrelated filings) — which is exactly what the existing
+`app/ingestion/competitor_surveillance/connectors/sec_edgar.ts` passes, so **that connector is
+broken** and this expansion supersedes it. The location filter is `locationCodes`, plural; singular
+is ignored the same way (80 hits, 25 of them Florida, against 25 and all Florida). Form D full-text
+matches **entity names only**, because the form carries no narrative — `"non-performing"` returns 0
+hits and `"opportunity fund"` returns 194 — so discovery is name-pattern matching and needs explicit
+exclusions for Opportunity-Zone, CLO, SPAC and venture funds. And `totalOfferingAmount` is routinely
+the literal string `Indefinite`, against which a percentage must be null, not computed.
+
+Two further findings that shaped the ingestion design rather than the contract: the XBRL **frames**
+API looks ideal for cohort pulls but is unusable here — `frames/.../CY2026Q2` returned 134 entities
+and none of the evergreen vehicles, because their year-to-date durations do not match a
+calendar-quarter frame — so per-entity `companyconcept` is required, which is also 117× smaller
+than `companyfacts` (4.9 KB against 570 KB). And XBRL repeats prior-year comparatives, so a
+dedup on `(start, end)` preferring the earliest-filed accession is needed in step 3.
+
+**Discovery proposes, a human decides.** `discover:peers` surfaced candidates by location and name;
+the registry records which are real peers with an evidence note each, and marks relevance `direct`
+only where the Form D industry group, fund type or legal name supports it. Soma Capital's eight
+Miami Beach funds are **Venture Capital** by their own filing and are excluded on that basis — the
+name-only search could not have told. Genuine peers the hand-curated watchlist had missed: **BH3**
+(Fort Lauderdale, Fund III filed 2026-10-08), **Bayview** (Coral Gables), **H.I.G. Bayside**,
+**3650 REIT** (Coconut Grove), **Omnia** (Aventura), **Silverview** (Tampa), **Naso CRE Bridge**
+(Boca Raton). Gelt Financial, Rialto, Madison Realty, Bridge and Pretium are listed in
+`UNRESOLVED_WATCH` — real competitors with no resolvable vehicle, kept out of `PEERS` so nothing
+claims data it does not have.
+
+**Two bugs found by running discovery rather than trusting it.** Fund names arrived with XML
+entities undecoded ("R &amp; R Capital"), and a filer whose matched filing carried a stale Miami
+address was landing in the Miami-Dade layer although its current address is New York. Both fixed,
+both now covered by tests.
+
+**Also decided.** Storage is the `unstable_cache` + weekly cron path, not the SQLite
+`competitor_surveillance` framework, which reads `process.cwd()` and cannot run on Vercel — it has
+never worked in production. That framework and the AOM material are untouched.
+
+**Open.** The registry needs your review before step 2 — particularly the `adjacent` calls (Integra,
+SEGLO) and whether the broader private credit names (Blue Owl, Apollo, Ares, HPS) belong at all.
+Then step 2 (Form D ingestion across the registry and the provenance catalog), step 3 (XBRL for the
+registered tier), step 4 (signals and the Raise Environment aggregate), step 5 (the tab), step 6
+(liquidity and portfolio panels), step 7 (developments, gating narrative, alerts).
+
+**Carried from before.** Rotate `ANALYTICS_API_KEY` once AMO is wired up; refuse the whole-scope
+national behaviour-signals response as it nears 4.5 MB; the screening-table two-cohort decision;
+the cold-cache production look at Cohort Changes and the drawer; the "CRE / Assets" label; Bank
+Behaviour step 4 (Seller Likelihood). The cron scope-casing item is **struck**: the tab deliberately
+sends `"national"` for screening and `"National"` for visuals, watch and behaviour, and
+`app/api/cron/warm-cache/route.ts` matches both exactly. Not a bug.
+
+---
+
+## 2026-10-07, late morning — Market Analytics data API, so AMO Tracker can render this tab's data
 
 **Why.** A second tool, AMO Tracker (`EnriqueColon/amo-dashboard`), carries an "FDIC Data Analytics"
 page forked from this tab in April 2026, before scoring existed: its three scores are hardcoded to 0.

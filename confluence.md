@@ -2185,6 +2185,11 @@ npm run test:bank-behavior         # behaviour fields: catalogue, nulls, YTD→q
 npm run test:bank-behavior-signals # behaviour signals: roll-forward, each rule, unjudged, bands, scope independence (tsx)
 npm run test:bank-behavior-panel   # drawer's Balance-Sheet Actions: points, roll-forward, signals by quarter, the reading (tsx)
 npm run test:analytics-api         # data API: fail-closed auth, scope and CERT normalisation, envelope (tsx)
+npm run test:peer-intel-edgar      # EDGAR contract: q= not keys=, locationCodes, CIKs, retry, layers (tsx)
+npm run test:peer-intel-formd      # Form D: entities, "Indefinite", the Safe Harbor Fund 4 trail (tsx)
+npm run test:peer-intel-registry   # peer registry: unique CIKs, cumulative layers, evidence (tsx)
+npm run discover:peers             # proposes peer candidates from EDGAR by location and name
+npm run verify:peer-registry       # live: all 41 vehicles resolve; Fund 4 reproduces exactly
 ```
 
 `test:allowlist` runs under `tsx` rather than Node's type stripping, because `lib/domain-allowlist.ts`
@@ -2239,6 +2244,23 @@ across roughly a dozen files, so `npx tsc --noEmit` is noisy and the build does 
 changing code, check that *your* files are clean rather than expecting a clean overall run.
 
 ## 10. Known fragility
+
+**SEC EDGAR silently ignores unknown query parameters.** A misnamed filter does not error — it is
+dropped, and the request succeeds with the filter absent. `keys=` instead of `q=` returns the whole
+form firehose newest-first; `locationCode=` instead of `locationCodes=` returns every state. Both
+look like working responses and both were found only by checking that the results actually matched
+the filter. Form D full-text also indexes **entity names only**, since the form carries no
+narrative, so strategy terms return nothing. All three facts, with the measurements behind them,
+live in `lib/peer-intel/edgar-contract.ts`; the older
+`app/ingestion/competitor_surveillance/connectors/sec_edgar.ts` still has the `keys=` bug and is
+superseded rather than fixed.
+
+**The XBRL `frames` API cannot read year-to-date filers.** It looks like the right tool for a
+cohort pull — every filer, one concept, one period, one request — but
+`frames/us-gaap/.../CY2026Q2` returned 134 entities and not one of the non-traded BDCs, because
+their figures are year-to-date durations that do not match a calendar-quarter frame. Per-entity
+`companyconcept` is the only reliable path, and is 117× smaller than `companyfacts` besides.
+
 
 - **`NODE_ENV` as a production check.** Fixed in `lib/features.ts`,
   `app/actions/search-industry-reports.ts` and `app/actions/summarize-found-report.ts`, but other
