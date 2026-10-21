@@ -58,7 +58,12 @@
     "verify:legal-freshness": "tsx scripts/verify-legal-freshness.ts",
     "verify:peer-positioning": "node scripts/verify-peer-positioning-visually.mjs",
     "verify:peer-cohort": "tsx scripts/verify-peer-cohort.ts",
-    "verify:legal-applicability": "tsx scripts/verify-legal-applicability.ts"
+    "verify:legal-applicability": "tsx scripts/verify-legal-applicability.ts",
+    "test:peer-intel-edgar": "tsx --test --tsconfig tsconfig.json lib/peer-intel/edgar-contract.test.ts",
+    "test:peer-intel-formd": "tsx --test --tsconfig tsconfig.json lib/peer-intel/form-d.test.ts",
+    "discover:peers": "tsx --conditions=react-server scripts/discover-peers.ts",
+    "test:peer-intel-registry": "tsx --test --tsconfig tsconfig.json lib/peer-intel/registry.test.ts",
+    "verify:peer-registry": "tsx --conditions=react-server scripts/verify-peer-registry.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
