@@ -8,14 +8,22 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
 | `main` | `80743b6` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `04bcd92` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `dev` | `94d8f24` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 This table names the newest commit on each branch that **changes behaviour**; documentation-only
 commits sit on top of it and are deliberately not tracked here, because amending one rotates its
 SHA and the table then reads as stale when nothing has moved. Confirm with
 `git log --format='%h|%ci|%s'` rather than trusting the previous entry — this has drifted twice.
 
-**`dev` carries `04bcd92` as of 2026-10-21.** Step 4: `lib/peer-intel/signals.ts`, the payload
+**`dev` carries `94d8f24` as of 2026-10-21.** Step 5, the first peer commit that changes what a
+user can see: `components/peer-intel.tsx` and `components/peer-intel/*`, the reading builder
+`lib/peer-intel/panel.ts`, a fifth entry in `TAB_DEFS`, a new `peerIntel` key on `EnabledTabs`,
+`5: "grid-cols-5"` in `TAB_GRID_COLS`, and `isFeatureEnabled("peer-intel")` in `app/page.tsx`.
+**It is invisible in production until `peer-intel` is added to `ENABLED_TABS`**, because
+`isFeatureEnabled` returns false for anything not in that list. Outside production every feature is
+on, so a preview deployment shows the tab without any variable change. Reverting is
+`git revert 94d8f24`, which removes the tab and leaves steps 1-4 intact and still inert. Note the
+`EnabledTabs` type gains a required key, so a revert must take `app/page.tsx` with it. Before it, **`dev` carries `04bcd92` as of 2026-10-21.** Step 4: `lib/peer-intel/signals.ts`, the payload
 builder on the service, the cached action `app/actions/peer-intel.ts`, and **three new
 `warm-cache` entries** (`peers:national`, `peers:florida`, `peers:miami`). This is the first peer
 commit that is *not* inert: the cron will build and store three cache entries on its next run, and

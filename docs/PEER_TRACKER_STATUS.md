@@ -1,8 +1,9 @@
 # Peer & Private Credit Tracker — status and open items
 
-*As of 2026-10-21. `dev` at `04bcd92`; `main` unchanged at `fe0ad1b`. Steps 1–4 are committed and
-verified live. **Nothing renders yet** — there is no tab. Step 4 does add three `warm-cache` entries,
-so the cron now builds and stores them; nothing reads them.*
+*As of 2026-10-21. `dev` at `94d8f24`; `main` unchanged at `fe0ad1b`. Steps 1–5 are committed.
+The tab exists but **has not rendered in a browser yet** — the standing rule is to verify on a
+Vercel deployment rather than a local dev server, and `dev` is unpushed by choice. Production is
+unaffected: `peer-intel` is absent from `ENABLED_TABS`.*
 
 The running list of what is still open. Update it at the end of every session alongside
 `SESSION.md`, `ROLLBACK.md`, `README.md` and `confluence.md`.
@@ -17,7 +18,7 @@ The running list of what is still open. Update it at the end of every session al
 | 2 | Form D ingestion across the registry, raise aggregation, provenance catalog | **Done** (`19e0e24`) |
 | 3 | XBRL quarterly series for the registered tier | **Done** (`8cb6fa9`) |
 | 4 | Signals and the layer aggregate, cached weekly, cron entries | **Done** (`04bcd92`) |
-| 5 | The tab: Raise Environment, Active Raises, New Launches, manager drawer | **Next** |
+| 5 | The tab: Raise Environment, Active Raises, New Launches, manager drawer | **Built** (`94d8f24`), not yet seen in a browser |
 | 6 | Evergreen Liquidity and Portfolio Stress panels | Not started |
 | 7 | Developments feed, gating narrative, alerts digest | Not started |
 
@@ -75,6 +76,9 @@ zero.
 - [ ] **A read-only `/api/peers/v1`** mirroring `/api/analytics/v1`, once the shapes settle.
 - [ ] **`peer-intel` must be added to `ENABLED_TABS` on Vercel** before the tab renders in
   production. Outside production every feature is on, so a preview shows it without the change.
+- [ ] **The tab has not been seen in a browser.** Verified only by unit tests, `tsc`, `next build`
+  and a check that `grid-cols-5` reached the built CSS. A deployment is needed to confirm layout,
+  the drawer width, the layer switch and the loading states. This is the first item to clear.
 
 ---
 

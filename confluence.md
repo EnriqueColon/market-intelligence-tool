@@ -770,6 +770,25 @@ paywalled by default (extraction is still attempted).
 transparent about what was actually accessible. Keep that property when changing it. The list view
 shows the status per article and the detail view carries a banner for anything not `open`.
 
+### Peers & Private Credit tab
+
+Flag `peer-intel` in `ENABLED_TABS`; tab value `peers`; component
+`components/peer-intel.tsx`. **Absent from `ENABLED_TABS` means the tab does not render in
+production**, which is the state at the time of writing.
+
+A three-layer selector — Miami-Dade, Florida, the US — cumulative upward and matching the scopes
+Market Analytics uses. Each layer is one cached entry (see the caching section). Panels, in order:
+Raise Environment with the firm's own position against the layer, Open Raises with the firm's row
+pinned, Launched in the last twelve months, and a manager drawer.
+
+Everything comes from SEC EDGAR: Form D for the raise, XBRL company facts for the vehicles that file
+periodic reports. The readings are built from the figures on the panel (`lib/peer-intel/panel.ts`)
+rather than written by a model, so no figure-checker is needed.
+
+**`TAB_GRID_COLS` must carry an entry for the number of visible tabs.** Tailwind only ships classes
+it can see in the source, so `grid-cols-${n}` compiles to nothing; adding a fifth tab without adding
+`5: "grid-cols-5"` leaves the tab bar laid out for four. Check the built CSS after adding a tab.
+
 ## 4. The Industry Outlook / Key Signals pipeline
 
 The most complex and most failure-prone part of the system. It generates the memo whose Executive
@@ -2216,6 +2235,7 @@ npm run test:peer-intel-xbrl       # XBRL: dedup, YTD differencing, reported-win
 npm run verify:peer-raises -- --layer national   # live: pulls every trail, checks the invariants
 npm run test:peer-intel-signals    # signals: own-history rules, unjudged, scope independence (tsx)
 npm run verify:peer-metrics        # live: reproduces Blue Owl's quarterly series by hand-checked figures
+npm run test:peer-intel-panel      # readings: no undefined/NaN/null, self ranking, snapshot (tsx)
 npm run verify:peer-signals -- --all   # live: all three layers, firing rates, cache size, scope independence
 ```
 

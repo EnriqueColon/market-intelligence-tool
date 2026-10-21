@@ -8,7 +8,56 @@ is it in now, and what is still open.
 
 ---
 
-## 2026-10-21 (latest) — Peer tracker, step 4: signals, and the first thing in a cache
+## 2026-10-21 (latest) — Peer tracker, step 5: the tab exists, but nothing has rendered yet
+
+Step 5 is committed as `94d8f24`: a fifth tab, **Peers**, gated on `peer-intel` in `ENABLED_TABS`,
+with a three-layer selector matching the scopes Market Analytics already uses.
+
+**What it shows, in order.** Raise Environment leads, because it answers the question the tab exists
+for — how many competitors are in the market, what they are asking for, what has just launched, who
+is cutting back. Under it, Safe Harbor's own position against the layer: rank among open raises, the
+peer median, and how far above or below it the firm sits. Then Open Raises with the firm's row
+pinned to the top, New Launches, and a manager drawer with signal chips, the raises behind them, a
+reading and Copy Snapshot.
+
+**The readings are deterministic**, built from the figures beside them — the same decision as the
+Balance-Sheet Actions panel. Building the sentence from what is already on screen satisfies "every
+figure is checked against the data" by construction and cannot drift from the table, so there is no
+figure-checker and no fallback path. A test asserts no reading can emit `undefined`, `NaN` or a raw
+`null` across every layer, with both full and empty data.
+
+They are also deliberately blunt in both directions. In the test fixture Fund 4 ranks **4 of 4** open
+Miami-Dade raises and the reading says so, with how far below the median it sits. The point of
+putting the firm on the same axes as its peers is to see the unflattering comparison as readily as
+the flattering one.
+
+**Three things the UI states rather than implies.** A layer with no reporting vehicle says every peer
+is a private fund that reports the raise and nothing else. An uncapped offering shows a blank
+subscribed share rather than a computed percentage. And an unjudged signal chip says *why* — "no
+redemption signal" and "redemptions not reported" mean very different things to a reader. Sleeves are
+excluded from the table, since a raise across an onshore LP and three feeders would read as four
+competitors, and are listed in the drawer instead.
+
+**Two traps avoided by reading the codebase first.** `TAB_GRID_COLS` only went to 4, so a fifth tab
+would have fallen back to `grid-cols-4` and left a broken bar — exactly what that file's own comment
+warns about, since Tailwind only ships classes it can see. `5: "grid-cols-5"` is added and the built
+CSS confirms the rule was emitted. And the drawer uses `sm:max-w-5xl` rather than a bare `max-w-*`,
+because the base `DialogContent` carries `sm:max-w-lg` as a media-query rule that wins on every
+desktop viewport — the trap that rendered the institution drawer 512px wide for weeks.
+
+**Not verified visually, and that is the honest state.** The standing rule is to verify on a Vercel
+deployment rather than a local dev server, and `dev` is unpushed by choice, so no part of this has
+rendered in a browser. What *is* verified: 122 unit tests, tsc clean on the new files with the
+132-line baseline elsewhere unchanged, `next build` passing, the root route at 87.1 kB, and
+`grid-cols-5` present in the built CSS. Production is unaffected regardless — `peer-intel` is absent
+from `ENABLED_TABS`, so the tab does not appear there until it is added.
+
+**Next:** the user has asked to return to the open items in `docs/PEER_TRACKER_STATUS.md` before
+steps 6 and 7.
+
+---
+
+## 2026-10-21 — Peer tracker, step 4: signals, and the first thing in a cache
 
 Step 4 is committed as `04bcd92`. Eight signals judged on each manager's own trail, rolled up per
 manager, cached per layer for a week, with three `warm-cache` entries. The user also asked for a
