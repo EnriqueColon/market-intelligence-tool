@@ -1,6 +1,6 @@
 # Peer & Private Credit Tracker — status and open items
 
-*As of 2026-10-21. `dev` at `94d8f24`; `main` unchanged at `fe0ad1b`. Steps 1–5 are committed.
+*As of 2026-10-21. `dev` at `ee56247` (pushed through `f9a7540`); `main` unchanged at `fe0ad1b`. Steps 1–5 are committed.
 The tab exists but **has not rendered in a browser yet** — the standing rule is to verify on a
 Vercel deployment rather than a local dev server, and `dev` is unpushed by choice. Production is
 unaffected: `peer-intel` is absent from `ENABLED_TABS`.*
@@ -76,9 +76,12 @@ zero.
 - [ ] **A read-only `/api/peers/v1`** mirroring `/api/analytics/v1`, once the shapes settle.
 - [ ] **`peer-intel` must be added to `ENABLED_TABS` on Vercel** before the tab renders in
   production. Outside production every feature is on, so a preview shows it without the change.
-- [ ] **The tab has not been seen in a browser.** Verified only by unit tests, `tsc`, `next build`
-  and a check that `grid-cols-5` reached the built CSS. A deployment is needed to confirm layout,
-  the drawer width, the layer switch and the loading states. This is the first item to clear.
+- [ ] **The tab has not been seen in a browser.** A preview of `f9a7540` built successfully at
+  `https://market-intelligence-tool-mpfavtlub.vercel.app`, but it sits behind Vercel Deployment
+  Protection — both `/` and `/login` redirect to `vercel.com/sso-api`, so only a signed-in Vercel
+  team member can open it, and it cannot be checked from a script. **The user needs to look at it**
+  and confirm layout, the drawer width, the layer switch and the loading states. Note `ee56247` (the
+  provenance panel and filing links) is not in that preview and needs another push.
 
 ---
 

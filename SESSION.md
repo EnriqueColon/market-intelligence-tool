@@ -8,7 +8,44 @@ is it in now, and what is still open.
 
 ---
 
-## 2026-10-21 (latest) — Peer tracker, step 5: the tab exists, but nothing has rendered yet
+## 2026-10-21 (latest) — Peers tab: provenance on the surface, and the preview is up
+
+Two things after step 5. The user asked that a reader be told **where the data comes from and how it
+is pulled in**, and pushed `dev` so a preview could be built.
+
+**Provenance is now on the surface, not in the source** (`ee56247`). Every raise links to the SEC
+document its headline figures were read from — in Open Raises, in New Launches, and as a full filing
+trail in the manager drawer: every amendment, newest first, each with the amount sold as at that
+filing and a link to the document. Two sample URLs were checked live and return 200 from sec.gov; an
+unparseable accession yields no link rather than a broken one, which a test covers.
+
+A **"Where this data comes from"** panel states the pipeline in three parts — who is tracked and how
+the registry is curated, what is read (Form D for the raise, XBRL company facts for the vehicles
+that report), and how often: rebuilt weekly, with the daily 05:00 UTC job rebuilding a layer on the
+first run of each new ISO week and serving the stored result in between. Above the fold it carries
+what the figures are *not*: self-reported and unaudited, cumulative rather than per-period, only as
+current as the last amendment, and "still open" inferred rather than reported because Form D has no
+closed flag. Expanded, it surfaces three tables that until now existed only in code — the Form D
+provenance catalogue with each figure's source or formula and how it can mislead, the XBRL concepts
+with measured coverage and the note that company-specific tags cannot be read at all, and every
+signal's firing rule with the caveat that the thresholds have never been backtested.
+
+**The preview deployment succeeded.** `f9a7540` built at 16:30 UTC —
+`https://market-intelligence-tool-mpfavtlub.vercel.app`. It is behind **Vercel Deployment
+Protection**: both `/` and `/login` redirect to `vercel.com/sso-api`, so only a signed-in Vercel team
+member can open it and it cannot be checked from a script. The user has to look at it. Worth
+recording that the earlier wait for this deployment was a false alarm twice over — the GitHub
+deployment record appears several minutes after the push, and a first poll compared a 7-character sha
+against the full 40-character one and so could never have matched.
+
+`ee56247` is not in that preview, so the sources panel needs another push before it can be seen.
+
+125 unit tests; tsc clean; `next build` passes with the root route at 92.3 kB, up from 87.1 kB for
+the catalogue data.
+
+---
+
+## 2026-10-21 — Peer tracker, step 5: the tab exists, but nothing has rendered yet
 
 Step 5 is committed as `94d8f24`: a fifth tab, **Peers**, gated on `peer-intel` in `ENABLED_TABS`,
 with a three-layer selector matching the scopes Market Analytics already uses.

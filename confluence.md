@@ -785,6 +785,12 @@ Everything comes from SEC EDGAR: Form D for the raise, XBRL company facts for th
 periodic reports. The readings are built from the figures on the panel (`lib/peer-intel/panel.ts`)
 rather than written by a model, so no figure-checker is needed.
 
+**Provenance is part of the tab, not a footnote.** Every raise links to the SEC filing its headline
+figures were read from, and a "Where this data comes from" panel surfaces `PEER_FIELD_CATALOG`,
+`PEER_METRICS` coverage and every signal's firing rule. When a figure or signal is added, add its
+catalogue entry too — the panel renders the catalogue, so an uncatalogued figure appears on screen
+with no stated source.
+
 **`TAB_GRID_COLS` must carry an entry for the number of visible tabs.** Tailwind only ships classes
 it can see in the source, so `grid-cols-${n}` compiles to nothing; adding a fifth tab without adding
 `5: "grid-cols-5"` leaves the tab bar laid out for four. Check the built CSS after adding a tab.
