@@ -138,6 +138,108 @@ zero.
   deployed against **production**, which does not yet carry either commit — pushing `dev` is safe,
   **merging to `main` is what breaks it**. Either brief AMO first or hold the merge.
 
+## 3b. Build versus buy, and what to borrow — FOR DISCUSSION
+
+Raised 2026-10-21 and **deliberately not acted on**. The user wants to discuss the approach before
+any of it is built. This section holds what was established so the conversation does not start from
+scratch.
+
+### Commercial products already cover three of the five asks, better than this tool
+
+| The brief's ask | Who does it | Verdict |
+| --- | --- | --- |
+| Fundraising, fund sizes, progress | Preqin, PitchBook | Better nationally |
+| New fund launches | Preqin "funds in market" | Better |
+| Evergreen liquidity and gating | **Stanger** | **Much** better |
+| Portfolio performance | Preqin (IRR/TVPI from LP disclosures) | Better |
+| Other developments | With Intelligence, PEI titles | Comparable |
+
+**Stanger publishes the gating figure this tool established cannot be derived from filings.** Their
+Q2 2026 data: non-listed BDCs raised $2.0B, the lowest quarter since Q4 2020 and down 82% year on
+year; **repurchase requests equalled 12.4% of NAV, a Stanger record, and sponsors met 38% of them**.
+They also carry per-fund detail — BCRED's Q1 2026 requests were ~7.9% of NAV and it **raised its
+repurchase limit from 5% to 7%** to meet them.
+
+They have it because **sponsors tell them**. That is a data-acquisition advantage, not a software
+one, and no amount of engineering closes it.
+
+**Our figures corroborate theirs**, which is worth knowing: step 6 measured the non-traded tier at
+−$4.45B net in Q2 2026 against Stanger's ~−$3.8B sector-wide. Different vehicle sets — they cover
+all public non-listed BDCs, we cover seven — so the same direction and magnitude from two
+independent methods.
+
+### Where this tool genuinely wins, and should stay
+
+- **The Miami-Dade and Florida layers.** Preqin and PitchBook are thin on sub-$500M regional
+  managers. Discovery surfaced Omnia, Atipana, R&R Capital, Naso and SEGLO, almost certainly absent
+  from any vendor database. Preqin does carry a Safe Harbor profile, so the firm itself is covered —
+  it is the local peer *set* that is not.
+- **Provenance.** Every figure links to the filing it came from; vendor data cannot be clicked
+  through to a source.
+- **Integration with the FDIC bank analytics**, which no vendor combines, and no annual cost.
+
+### The scope line on "reverse engineering"
+
+Agreed in conversation: studying a vendor's **published methodology and output** to understand what
+they measure and why is ordinary competitive analysis and is in scope. **Scraping their databases or
+decompiling their applications is not** — that is their copyrighted compilation and their terms of
+service. Everything below is derived from public filings or from publicly published methodology.
+
+### Framings worth borrowing
+
+**From Stanger.** Requests as a share of NAV and a fulfilment rate are better metrics than
+repurchases-over-portfolio, but neither is derivable without requests received. **Cap changes are
+derivable** — a sponsor raising its repurchase limit is a gating signal that does appear in filings,
+and would partially rescue the withheld gating work. They also keep non-listed BDCs, non-traded
+REITs and DSTs separate, where this tool has a single `non-traded` bucket that mixes BDCs with
+REITs and makes the aggregate less meaningful.
+
+**From Preqin.** "Funds in market" with *interim closes* — our Form D/A amendments **are** interim
+closes and are simply not labelled as such. Target versus hard cap as distinct fields, where Form D
+gives one number and we collapse the distinction. And vintage-over-vintage pacing, below.
+
+### The one idea already proven, from data we fetch today
+
+Safe Harbor's own vintage ladder, pulled 2026-10-21 from the Form D trails already in the tool:
+
+| Fund | Target | Raised | Months in | % of target |
+| --- | --- | --- | --- | --- |
+| Fund 1 | $20.0M | $10.3M | — | 52% |
+| Fund 2 | $50.0M | $24.3M | 71 | 49% |
+| Fund 3 | $100.0M | $61.7M | 40 | 62% |
+| **Fund 4** | **$300.0M** | **$64.2M** | **28** | **21%** |
+
+**Fund 4 is raising at roughly Fund 3's dollar pace — slightly ahead, $64.2M at month 28 against
+$61.7M at month 40 — against a target that tripled.** That is the story behind the $500M → $300M
+cut, and it suggests $300M is still ambitious at this trajectory. No vendor would surface it,
+because none carries this vintage detail.
+
+**Caveat for the panel:** each fund has only one to five filings, and Fund 2 has two points 71
+months apart. The curve shows direction, not a smooth trajectory, and any panel must say so.
+
+### Cannot be derived, at any effort
+
+- **Requests received.** Buy it from Stanger or ask sponsors directly.
+- **LP identities.** No filing discloses them — but the legitimate route exists and is how Preqin
+  builds its commitments data: public pension and endowment disclosures, from the LP side. Public
+  record, real work.
+
+### Proposed order, if the discussion lands on building
+
+1. **Vintage-over-vintage pacing** — proven above, free, the clearest win. About half a day.
+2. **Cap-change detection** — in filings, and partially rescues the withheld gating work.
+3. **Split the `non-traded` bucket** into BDC and REIT so the aggregate means something.
+4. **Label Form D/A amendments as interim closes** — wording, an hour.
+
+And the standing alternative: **subscribe to Stanger for the evergreen piece and delete our worse
+version**, keeping it only as the free corroboration it has already proven to be.
+
+### One caveat on the market picture
+
+Most of what the search returned was vendor marketing. The reported **S&P acquisition of With
+Intelligence** rests on a single secondary source. Confirm coverage and pricing with vendors directly
+before committing to anything.
+
 ## 4. Carried from earlier work
 
 Not part of this expansion, still open.

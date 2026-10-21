@@ -67,6 +67,28 @@ D's cumulative `totalAmountSold`. Logged in `docs/PEER_TRACKER_STATUS.md` §3; t
 is not in doubt but the retrieval path is unverified, and coverage depends on each adviser being
 registered.
 
+### Open for discussion before any more is built — read §3b of the peer status doc
+
+Two questions came up after stopping, and the user wants to **discuss the approach before anything
+is built**. Nothing was implemented.
+
+**Build versus buy.** Commercial products already cover three of the brief's five asks better than
+this tool does. **Stanger publishes the gating figure we established cannot be derived from
+filings** — Q2 2026 requests at 12.4% of NAV with sponsors meeting 38% — because sponsors tell them.
+That is a data-acquisition advantage, not a software one. Our own figures corroborate theirs
+(−$4.45B against their ~−$3.8B from a wider vehicle set), which is reassuring about the method and
+also shows theirs is more complete. Where this tool wins and should stay: the Miami-Dade and Florida
+layers, which no vendor covers, filing-level provenance, and integration with the bank analytics.
+
+**What to borrow, and the line.** Studying published methodology and output is in scope; scraping
+vendor databases or decompiling their applications is not. The borrowable framings are listed in
+§3b. One is already proven from data we fetch today: **Fund 4 is raising at roughly Fund 3's dollar
+pace against a target that tripled** — $64.2M at month 28 versus Fund 3's $61.7M at month 40, which
+is the story behind the $500M → $300M cut and suggests $300M is still ambitious.
+
+Both are written up in full in `docs/PEER_TRACKER_STATUS.md` §3b, including the vintage table, what
+cannot be derived at any effort, and a proposed build order if the discussion lands that way.
+
 ### Pick up with, in order
 
 1. **Bank Behaviour step 5** — enforcement actions (FDIC / OCC / Fed, monthly). The next numbered
