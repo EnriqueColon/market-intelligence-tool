@@ -15,6 +15,7 @@ import { getScreeningPayload } from "@/app/actions/market-analytics-screening"
 import { getAnalyticsVisuals } from "@/app/actions/market-analytics-visuals"
 import { getCohortWatch } from "@/app/actions/market-analytics-watch"
 import { getBehaviorSignals } from "@/app/actions/bank-behavior-signals"
+import { getPeerIntel } from "@/app/actions/peer-intel"
 
 export const runtime = "nodejs"
 // 5 minutes — all tasks run concurrently so wall time is the slowest single task
@@ -33,6 +34,16 @@ async function warmWithLabel<T>(
   } catch (err) {
     results[label] = `error:${err instanceof Error ? err.message : String(err)}`
   }
+}
+
+/**
+ * Actions that report failure in their return value rather than by throwing
+ * need unwrapping, or `warmWithLabel` records a failed warm as a success.
+ */
+async function throwIfFailed<T>(promise: Promise<{ ok: true; payload: T } | { ok: false; error: string }>): Promise<T> {
+  const result = await promise
+  if (!result.ok) throw new Error(result.error)
+  return result.payload
 }
 
 export async function GET(request: Request) {
@@ -119,6 +130,20 @@ export async function GET(request: Request) {
     // single entry nears the 2MB ceiling.
     warmWithLabel("behavior:national", () => getBehaviorSignals("National"), results),
     warmWithLabel("behavior:florida", () => getBehaviorSignals("Florida"), results),
+
+    // Peer tracker. Each layer is one entry, keyed on the ISO week rather than
+    // a published quarter — SEC filings arrive continuously, so there is no
+    // quarter to key on. The national layer is the expensive one: about 340
+    // requests, measured at 70-85s, against the 300s ceiling above. The three
+    // run concurrently with everything else here, and each rate-limits itself
+    // internally against the same SEC ceiling.
+    //
+    // `getPeerIntel` returns a result object rather than throwing, so a failed
+    // layer would be recorded as "ok" by `warmWithLabel`; the error is
+    // re-thrown here so the cron response names the layer that failed.
+    warmWithLabel("peers:national", () => throwIfFailed(getPeerIntel("national")), results),
+    warmWithLabel("peers:florida", () => throwIfFailed(getPeerIntel("florida")), results),
+    warmWithLabel("peers:miami", () => throwIfFailed(getPeerIntel("miami-dade")), results),
 
     // The Executive Brief and Underwriter Workbench were warmed here. They are
     // no longer reachable, so warming them would spend a couple of minutes of

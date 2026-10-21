@@ -14,6 +14,13 @@ import {
   type PeerLayer,
 } from "@/lib/peer-intel/edgar-contract"
 import { parseFormD, type OfferingRecord } from "@/lib/peer-intel/form-d"
+import { buildPeerCohort, type PeerCohort } from "@/lib/peer-intel/cohort"
+import {
+  managerSignals,
+  signalFiringRates,
+  type ManagerSignals,
+  type VehicleSeries,
+} from "@/lib/peer-intel/signals"
 import {
   registeredVehiclesInScope,
   vehiclesInScope,
@@ -490,4 +497,76 @@ export async function fetchRegisteredTier(layer: PeerLayer): Promise<RegisteredT
   }
 
   return { vehicles, failures, requests }
+}
+
+export type PeerIntelPayload = {
+  cohort: PeerCohort
+  /** One entry per manager in the layer, in the cohort's order. */
+  signals: ManagerSignals[]
+  firingRates: ReturnType<typeof signalFiringRates>
+  /** What the fetch cost and what it could not read, so a panel can be honest. */
+  diagnostics: {
+    asOf: string
+    formDRequests: number
+    xbrlRequests: number
+    /** Private vehicles whose Form D could not be read — real gaps. */
+    offeringFailures: Array<{ cik: string; manager: string; reason: string }>
+    /** Registered vehicles with no Form D, which is expected rather than a gap. */
+    registeredWithoutFormD: Array<{ cik: string; manager: string }>
+    metricFailures: Array<{ cik: string; manager: string; reason: string }>
+  }
+}
+
+/**
+ * Build a whole layer: Form D trails, the registered tier's quarterly series,
+ * the aggregate and the signals.
+ *
+ * The work lives here rather than in the server action so it can be exercised
+ * against live data without Next — importing a `"use server"` module outside
+ * the framework pulls in React's server entry point and fails. Same split as
+ * `app/services/bank-behavior.ts` under `app/actions/bank-behavior.ts`:
+ * the service does the work, the action adds the cache.
+ */
+export async function buildPeerIntelPayload(layer: PeerLayer, asOf: string): Promise<PeerIntelPayload> {
+  // Both fetches are rate-limited internally against the same SEC ceiling, so
+  // they run in sequence rather than racing each other into a 429.
+  const offerings = await fetchCohortOfferings(layer)
+  const tier = await fetchRegisteredTier(layer)
+
+  const cohort = buildPeerCohort(layer, offerings.byCik, asOf)
+
+  const seriesByCik = new Map<string, { series: VehicleSeries; quoted?: VehicleQuotation }>()
+  for (const vehicle of tier.vehicles) {
+    seriesByCik.set(vehicle.cik, {
+      series: { ...vehicle.series, ...(vehicle.netFlow.length ? { netFlow: vehicle.netFlow } : {}) },
+      ...(vehicle.quoted ? { quoted: vehicle.quoted } : {}),
+    })
+  }
+
+  // CIK to manager comes from the registry, not from the raises: a registered
+  // vehicle files no Form D, so it never appears in its manager's `raises` and
+  // could not be matched that way. Getting this wrong silently drops every
+  // liquidity and portfolio signal, because the series would reach no manager.
+  const ownerOf = new Map(vehiclesInScope(layer).map((v) => [v.cik, v.peerId]))
+
+  const signals = cohort.managers.map((manager) => {
+    // Only this manager's own vehicles, so a signal can never be drawn from a
+    // peer's figures — the rule that keeps the three layers agreeing.
+    const own = new Map([...seriesByCik].filter(([cik]) => ownerOf.get(cik) === manager.peerId))
+    return managerSignals(manager, own)
+  })
+
+  return {
+    cohort,
+    signals,
+    firingRates: signalFiringRates(signals),
+    diagnostics: {
+      asOf,
+      formDRequests: offerings.requests,
+      xbrlRequests: tier.requests,
+      offeringFailures: offerings.failures,
+      registeredWithoutFormD: offerings.noFormD,
+      metricFailures: tier.failures,
+    },
+  }
 }
