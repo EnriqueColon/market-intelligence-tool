@@ -12,7 +12,7 @@ is it in now, and what is still open.
 
 Read this first. Everything below is the running record; this is the state to pick up from.
 
-**`dev` is pushed and level with `origin/dev` at `a379757`.** Production is untouched at
+**`dev` is at `d04bc4f`; `origin/dev` is at `64a27fc`, so the final correction commit is unpushed.** Production is untouched at
 `fe0ad1b` — nothing here has been merged to `main`. The working tree is clean apart from
 `.DS_Store` and the untracked `.claude/`.
 
@@ -88,6 +88,19 @@ is the story behind the $500M → $300M cut and suggests $300M is still ambitiou
 
 Both are written up in full in `docs/PEER_TRACKER_STATUS.md` §3b, including the vintage table, what
 cannot be derived at any effort, and a proposed build order if the discussion lands that way.
+
+### The two questions the next conversation should start from
+
+Both are about the Schedule TO finding and both are ~20 minutes of checking, not building:
+
+1. **Do BREIT and SREIT use tender offers?** They are REITs and may run share repurchase *plans*
+   rather than tenders, which would mean Schedule TO gives five of seven vehicles rather than all
+   seven.
+2. **How consistent is the Rule 13e-4(c)(4) wording across sponsors?** BCRED's is clean; if Blue
+   Owl, Apollo, Ares and HPS phrase it the same way, extraction is near-trivial.
+
+Answering these decides whether gating is a full-coverage feature or a partial one, and it feeds the
+approach discussion rather than pre-empting it.
 
 ### Pick up with, in order
 
