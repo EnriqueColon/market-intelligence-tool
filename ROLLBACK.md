@@ -8,14 +8,19 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
 | `main` | `80743b6` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `203b818` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `dev` | `f310c1a` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 This table names the newest commit on each branch that **changes behaviour**; documentation-only
 commits sit on top of it and are deliberately not tracked here, because amending one rotates its
 SHA and the table then reads as stale when nothing has moved. Confirm with
 `git log --format='%h|%ci|%s'` rather than trusting the previous entry — this has drifted twice.
 
-**`dev` carries `203b818` as of 2026-10-21; `main` is unchanged at `fe0ad1b`.** Step 1 of the Peer &
+**`dev` carries `f310c1a` as of 2026-10-21.** `f310c1a` extends the peer registry with the five
+managers found by targeted lookup (Rialto into Miami-Dade, Madison Realty, Bridge and Pretium
+nationally, Gelt into Florida) and adds `PeerVehicle.role` so a raise spread across several CIKs is
+counted once. Still inert — registry data, one new script, no route or cache or tab — so
+`git revert f310c1a` is the whole procedure, and reverting it leaves `203b818`'s smaller registry
+working. Before it, **`dev` carries `203b818` as of 2026-10-21; `main` is unchanged at `fe0ad1b`.** Step 1 of the Peer &
 Private Credit tracker: `lib/peer-intel/` (the EDGAR access contract, Form D parsing and raise
 maths, the three-layer registry of 21 managers and 41 vehicles), `app/services/peer-intel.ts`, and
 two scripts. It is **inert** — new files plus four `package.json` script entries, no route, no cache

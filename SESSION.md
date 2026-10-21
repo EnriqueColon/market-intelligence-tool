@@ -85,9 +85,39 @@ both now covered by tests.
 `competitor_surveillance` framework, which reads `process.cwd()` and cannot run on Vercel — it has
 never worked in production. That framework and the AOM material are untouched.
 
-**Open.** The registry needs your review before step 2 — particularly the `adjacent` calls (Integra,
-SEGLO) and whether the broader private credit names (Blue Owl, Apollo, Ares, HPS) belong at all.
-Then step 2 (Form D ingestion across the registry and the provenance catalog), step 3 (XBRL for the
+**Then, same day: the targeted lookups.** The user kept the private credit tier and asked for the
+five `UNRESOLVED_WATCH` names to be chased down. `scripts/lookup-peer.ts` searches by *manager*
+name rather than by strategy-name pattern, and found all five — `f310c1a`. The list is now empty.
+
+The important one: **Rialto Capital Management is in Miami**, and is the largest direct peer in the
+county by a wide margin — Real Estate Fund V - Debt took $2.61B from 914 investors, and Hines Rialto
+Credit Partners ($1.08B), Rialto Credit Opportunities ($248.5M) and Rialto Insurance Credit Partners
+($200M) were all still filing in 2026. It sat on the firm's own watchlist under *national* CRE Debt
+Platforms, so it would have been benchmarked against the wrong cohort entirely. Also added: Madison
+Realty Capital (Debt Fund VI raised $2.04B after cutting its target from $2.25B; Debt Fund VII
+opened April 2026 with nothing sold), Bridge Investment Group (Fund VI opened August 2026, $2.5B
+target, $500K taken — a raise caught at the very start), Pretium Partners, and Gelt Financial
+(Delray Beach, not Boca Raton; its only Reg D raise closed in 2019 at $1.8M, so it lends off balance
+sheet — showing that raise as long closed is the useful fact about it).
+
+**Two structural traps the lookups exposed, both now encoded.** A single raise is routinely spread
+across several CIKs — onshore LP, offshore or international feeder, master, parallel or "-R" sleeve
+— each filing its own Form D for its own slice of the capital. Bridge Debt Strategies Fund VI is one
+raise across four CIKs. So `PeerVehicle` gained a `role`, and `fundVehiclesInScope()` counts raises
+while `vehiclesInScope()` sums capital; counting the sleeves would have overstated the number of
+funds in the market and understated the size of each. Separately, some managers file a "Holdings
+LLC" aggregator per vintage — Madison has one per fund, every one reporting a $125,000 target fully
+sold to exactly 125 investors. That is a feeder artefact, not fundraising, and would have put a run
+of spurious "100% subscribed" rows in the table; they are omitted and a test asserts none slips
+back. And "Pretium Packaging LLC" matches the name "Pretium" but is an unrelated company last
+reporting in 2014, excluded by hand — the reason this registry is reviewed rather than generated.
+
+**Registry now:** 26 managers, 65 vehicles, 59 distinct raises; 25 / 39 / 65 by layer; 12 registered
+vehicles, still all national. All 65 resolve on live EDGAR. 44 unit tests.
+
+**Open.** The two `adjacent` calls in Miami-Dade are still unreviewed — Integra (multifamily equity,
+not credit) and SEGLO (strategy not stated in its filing). Rialto's Property funds are deliberately
+excluded from its vehicle list as equity rather than debt; worth confirming. Then step 2 (Form D ingestion across the registry and the provenance catalog), step 3 (XBRL for the
 registered tier), step 4 (signals and the Raise Environment aggregate), step 5 (the tab), step 6
 (liquidity and portfolio panels), step 7 (developments, gating narrative, alerts).
 

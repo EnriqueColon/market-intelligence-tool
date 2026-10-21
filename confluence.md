@@ -2189,7 +2189,8 @@ npm run test:peer-intel-edgar      # EDGAR contract: q= not keys=, locationCodes
 npm run test:peer-intel-formd      # Form D: entities, "Indefinite", the Safe Harbor Fund 4 trail (tsx)
 npm run test:peer-intel-registry   # peer registry: unique CIKs, cumulative layers, evidence (tsx)
 npm run discover:peers             # proposes peer candidates from EDGAR by location and name
-npm run verify:peer-registry       # live: all 41 vehicles resolve; Fund 4 reproduces exactly
+npm run lookup:peer -- "Rialto"     # finds one named manager's vehicles (names, not patterns)
+npm run verify:peer-registry       # live: all 65 vehicles resolve; Fund 4 reproduces exactly
 ```
 
 `test:allowlist` runs under `tsx` rather than Node's type stripping, because `lib/domain-allowlist.ts`
@@ -2254,6 +2255,23 @@ narrative, so strategy terms return nothing. All three facts, with the measureme
 live in `lib/peer-intel/edgar-contract.ts`; the older
 `app/ingestion/competitor_surveillance/connectors/sec_edgar.ts` still has the `keys=` bug and is
 superseded rather than fixed.
+
+**One fundraise is spread across several SEC filers.** A fund routinely files a separate Form D for
+its onshore LP, its offshore or international feeder, a master, and parallel or "-R" sleeves — each
+reporting only its own slice of the capital. Bridge Debt Strategies Fund VI is one raise across four
+CIKs. Counting filers as raises overstates how many funds are in the market and understates each
+one's size, so `lib/peer-intel/registry.ts` marks sleeves with a `role` and counts raises through
+`fundVehiclesInScope()` while summing capital through `vehiclesInScope()`. Some managers also file a
+per-vintage "Holdings LLC" aggregator — Madison Realty has one per fund, each reporting a $125,000
+target fully sold to exactly 125 investors. Those are feeder artefacts, not fundraising, and are
+omitted from the registry.
+
+**Searching EDGAR by strategy name misses managers who name funds after themselves.** The
+name-pattern discovery in `scripts/discover-peers.ts` found 67 Florida filers and none of Rialto,
+Madison Realty, Bridge, Pretium or Gelt, because "Rialto Real Estate Fund V - Debt" contains no
+strategy phrase. `scripts/lookup-peer.ts` searches by manager name and found all five — including
+Rialto, which is Miami-based and the largest direct peer in the county. Name matching also produces
+false positives across industries ("Pretium Packaging LLC"), which is why the registry is curated.
 
 **The XBRL `frames` API cannot read year-to-date filers.** It looks like the right tool for a
 cohort pull — every filer, one concept, one period, one request — but
