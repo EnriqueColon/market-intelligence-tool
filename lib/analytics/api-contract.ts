@@ -41,6 +41,51 @@ export function authorize(authorizationHeader: string | null, configuredKey: str
   return timingSafeEqual(a, b) ? "ok" : "unauthorized"
 }
 
+/**
+ * Vercel's cap on a serverless function's response body, on every plan.
+ *
+ * Crossing it does not truncate — the function fails and the consumer gets an
+ * error with no indication that the shape of its request was the cause.
+ */
+export const RESPONSE_BYTE_LIMIT = 4.5 * 1024 * 1024
+
+/**
+ * Where we refuse rather than risk it.
+ *
+ * The whole-scope national behaviour-signals response measured 3.9 MB when the
+ * API shipped, against a 4.5 MB ceiling — about 13% of headroom, closing as
+ * banks are added and as signals gain fields. Refusing at 4.0 MB turns a
+ * confusing platform failure into a 413 that names the fix, and leaves room for
+ * the response to grow between deployments without anyone watching it.
+ */
+export const RESPONSE_REFUSE_BYTES = 4 * 1024 * 1024
+
+/** Where it is worth telling a consumer the ceiling is coming. */
+export const RESPONSE_WARN_BYTES = 3.5 * 1024 * 1024
+
+export type SizeVerdict = "ok" | "near-limit" | "too-large"
+
+/**
+ * Whether a response of this size should be sent.
+ *
+ * Measured on the serialised body, because that is what the platform limits —
+ * a count of rows is not a proxy for it, and the figure that matters is bytes.
+ */
+export function responseSizeVerdict(bytes: number): SizeVerdict {
+  if (bytes >= RESPONSE_REFUSE_BYTES) return "too-large"
+  if (bytes >= RESPONSE_WARN_BYTES) return "near-limit"
+  return "ok"
+}
+
+/** How much of the platform ceiling a response uses, 0–1. */
+export function responseSizeShare(bytes: number): number {
+  return bytes / RESPONSE_BYTE_LIMIT
+}
+
+export function describeBytes(bytes: number): string {
+  return bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(2)} MB` : `${Math.round(bytes / 1024)} KB`
+}
+
 export const NATIONAL_SCOPE = "National"
 
 /**
