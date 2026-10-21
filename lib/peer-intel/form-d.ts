@@ -359,12 +359,19 @@ export function buildRaise(filings: OfferingRecord[], asOf: string): Raise | nul
 
   const months = /^\d{4}-\d{2}-\d{2}$/.test(asOf) ? monthsBetween(newest.filedAt, asOf) : null
 
+  // The per-filing records are stored in the weekly cache, so they carry only
+  // what the filing trail actually renders. `salesRecipients` and
+  // `relatedPersons` are hoisted onto the raise from the newest filing below,
+  // and keeping a copy on all nine filings of sixty-five vehicles added 155 KB
+  // of which the related-person lists — which nothing displays — were 132 KB.
+  const stored: OfferingRecord[] = ordered.map((f) => ({ ...f, salesRecipients: [], relatedPersons: [] }))
+
   return {
     cik: newest.cik,
     fundName: newest.entityName || oldest.entityName,
     location: newest.location ?? oldest.location,
     layerHint: null,
-    filings: ordered,
+    filings: stored,
     target: newest.offeringAmount,
     sold,
     investorCount: newest.investorCount,

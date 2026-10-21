@@ -200,3 +200,28 @@ test("a real firm whose name merely contains those letters survives", () => {
   assert.equal(r.salesRecipients.length, 1)
   assert.equal(r.salesRecipients[0].name, "NATIONAL ADVISORS LLC")
 })
+
+test("agents are hoisted to the raise, not kept on every filing", () => {
+  // The per-filing copies are stored in the weekly cache; keeping them on all
+  // nine filings of sixty-five vehicles added 155 KB that nothing renders.
+  const cohort = buildPeerCohort(
+    "florida",
+    new Map<string, OfferingRecord[]>([
+      ["1980247", [
+        rec({ cik: "1980247", filedAt: "2025-06-05", salesRecipients: SILVERVIEW_AGENTS }),
+        rec({ cik: "1980247", filedAt: "2026-06-05", formType: "D/A", salesRecipients: SILVERVIEW_AGENTS, relatedPersons: [{ name: "Silverview Credit Partners LP", relationships: ["Promoter"] }] }),
+      ]],
+    ]),
+    ASOF
+  )
+  const raise = cohort.managers.find((m) => m.manager === "Silverview Capital")!.raises[0].raise
+  assert.equal(raise.salesRecipients.length, 5, "the raise keeps the newest filing's agents")
+  assert.equal(raise.relatedPersons.length, 1)
+  for (const filing of raise.filings) {
+    assert.deepEqual(filing.salesRecipients, [], "not repeated per filing")
+    assert.deepEqual(filing.relatedPersons, [])
+  }
+  // The trail still has everything it renders.
+  assert.equal(raise.filings.length, 2)
+  assert.ok(raise.filings.every((f) => f.accession && f.filedAt && f.formType))
+})

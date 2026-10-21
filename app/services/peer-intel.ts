@@ -18,6 +18,15 @@ import { parseFormD, type OfferingRecord } from "@/lib/peer-intel/form-d"
 import { buildPeerCohort, type PeerCohort } from "@/lib/peer-intel/cohort"
 import { buildVehicleTrend, type VehicleTrend } from "@/lib/peer-intel/liquidity"
 import {
+  developmentsQuery,
+  isRecent,
+  rankDevelopments,
+  scoreDevelopment,
+  type DevelopmentItem,
+  type ScoredDevelopment,
+} from "@/lib/peer-intel/developments"
+import { peersInScope } from "@/lib/peer-intel/registry"
+import {
   managerSignals,
   signalFiringRates,
   type ManagerSignals,
@@ -556,6 +565,14 @@ export type PeerIntelPayload = {
    * private fund — which the panels state rather than rendering blank charts.
    */
   tier: VehicleTrend[]
+  /**
+   * Recent news about tracked managers, gated for name and subject.
+   *
+   * The only part of the payload that is not from a filing, and the only part
+   * that may be empty because an external service was unavailable rather than
+   * because there was nothing to report — `developments.failures` says which.
+   */
+  developments: DevelopmentsResult
   /** What the fetch cost and what it could not read, so a panel can be honest. */
   diagnostics: {
     asOf: string
@@ -580,9 +597,21 @@ export type PeerIntelPayload = {
  * the service does the work, the action adds the cache.
  */
 export async function buildPeerIntelPayload(layer: PeerLayer, asOf: string): Promise<PeerIntelPayload> {
-  // Safe to overlap: the rate limiter is process-wide, so both fetches draw
-  // from the same slot queue and cannot together exceed the SEC ceiling.
-  const [offerings, tier] = await Promise.all([fetchCohortOfferings(layer), fetchRegisteredTier(layer)])
+  // The SEC fetches share a process-wide rate limiter, so they cannot together
+  // exceed its ceiling; the news feeds are a different host entirely and run
+  // alongside. A news failure is collected rather than thrown, so an outage
+  // there cannot take the filings panels down.
+  const [offerings, tier, developments] = await Promise.all([
+    fetchCohortOfferings(layer),
+    fetchRegisteredTier(layer),
+    fetchDevelopments(layer, asOf).catch((error) => ({
+      items: [],
+      unsearchable: [],
+      failures: [{ manager: "all", reason: error instanceof Error ? error.message : String(error) }],
+      considered: 0,
+      requests: 0,
+    })),
+  ])
 
   const cohort = buildPeerCohort(layer, offerings.byCik, asOf)
 
@@ -612,6 +641,7 @@ export async function buildPeerIntelPayload(layer: PeerLayer, asOf: string): Pro
     signals,
     firingRates: signalFiringRates(signals),
     tier: tier.vehicles.map((v) => buildVehicleTrend(v, ownerOf.get(v.cik) ?? "")),
+    developments,
     diagnostics: {
       asOf,
       formDRequests: offerings.requests,
@@ -621,4 +651,114 @@ export async function buildPeerIntelPayload(layer: PeerLayer, asOf: string): Pro
       metricFailures: tier.failures,
     },
   }
+}
+
+/**
+ * Google News RSS. No key, no quota published, so it is used politely and its
+ * absence is never an error — the panel says the feed was unavailable and the
+ * filings-based panels are unaffected.
+ */
+function newsFeedUrl(query: string): string {
+  return `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`
+}
+
+function rssTag(block: string, tag: string): string | null {
+  const m = block.match(new RegExp(`<(?:[a-zA-Z0-9]+:)?${tag}(?:\\s[^>]*)?>([\\s\\S]*?)</(?:[a-zA-Z0-9]+:)?${tag}>`, "i"))
+  if (!m) return null
+  const v = m[1]
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/\s+/g, " ")
+    .trim()
+  return v.length ? v : null
+}
+
+function parseFeed(xml: string): DevelopmentItem[] {
+  return [...xml.matchAll(/<item>([\s\S]*?)<\/item>/gi)]
+    .map((m) => m[1])
+    .map((block) => {
+      const title = rssTag(block, "title")
+      const url = rssTag(block, "link")
+      if (!title || !url) return null
+      const published = rssTag(block, "pubDate")
+      const parsed = published ? Date.parse(published) : NaN
+      return {
+        title,
+        url,
+        publishedAt: Number.isNaN(parsed) ? null : new Date(parsed).toISOString().slice(0, 10),
+        source: rssTag(block, "source"),
+      } satisfies DevelopmentItem
+    })
+    .filter((i): i is DevelopmentItem => i != null)
+}
+
+export type DevelopmentsResult = {
+  items: ScoredDevelopment[]
+  /** Managers with no name phrase safe enough to search on. */
+  unsearchable: string[]
+  /** Managers whose feed could not be read. */
+  failures: Array<{ manager: string; reason: string }>
+  /** How many raw items were considered, so a panel can say how selective it is. */
+  considered: number
+  requests: number
+}
+
+/**
+ * Recent developments for every manager in a layer.
+ *
+ * One feed per manager, each query built from phrases long enough to be
+ * unambiguous — see `lib/peer-intel/developments.ts` for why a manager called
+ * Bridge or Apollo cannot be searched on its short name. A manager with no safe
+ * phrase is reported rather than searched loosely.
+ *
+ * Failures are collected, never thrown: this is the one part of the tab that
+ * depends on something other than SEC, and a news outage must not take the
+ * filings panels down with it.
+ */
+export async function fetchDevelopments(layer: PeerLayer, asOf: string): Promise<DevelopmentsResult> {
+  const peers = peersInScope(layer)
+  const unsearchable: string[] = []
+  const failures: DevelopmentsResult["failures"] = []
+  let considered = 0
+  let requests = 0
+
+  const searchable = peers
+    .map((peer) => ({ peer, query: developmentsQuery(peer.manager, peer.aliases) }))
+    .filter((entry): entry is { peer: (typeof peers)[number]; query: string } => {
+      if (!entry.query) {
+        unsearchable.push(entry.peer.manager)
+        return false
+      }
+      return true
+    })
+
+  const perManager = await mapWithConcurrency(searchable, 4, async ({ peer, query }) => {
+    try {
+      const res = await fetch(newsFeedUrl(query), {
+        headers: { "User-Agent": "MarketIntelligence/1.0 (peer-developments)" },
+        cache: "no-store",
+      })
+      requests++
+      if (!res.ok) {
+        failures.push({ manager: peer.manager, reason: `feed returned ${res.status}` })
+        return []
+      }
+      const items = parseFeed(await res.text())
+      considered += items.length
+      return items
+        .filter((item) => isRecent(item, asOf))
+        .map((item) => scoreDevelopment(item, { peerId: peer.id, manager: peer.manager, aliases: peer.aliases }))
+        .flatMap((decision) => (decision.kept ? [decision.item] : []))
+    } catch (error) {
+      failures.push({ manager: peer.manager, reason: error instanceof Error ? error.message : String(error) })
+      return []
+    }
+  })
+
+  return { items: rankDevelopments(perManager.flat()), unsearchable, failures, considered, requests }
 }

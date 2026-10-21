@@ -10,6 +10,7 @@ import { layerName } from "@/lib/peer-intel/panel"
 import { getErrorMessage } from "@/lib/error-utils"
 import { ActiveRaises, NewLaunches } from "@/components/peer-intel/active-raises"
 import { DataSources } from "@/components/peer-intel/data-sources"
+import { Developments } from "@/components/peer-intel/developments"
 import { Distribution } from "@/components/peer-intel/distribution"
 import { EvergreenLiquidity } from "@/components/peer-intel/evergreen-liquidity"
 import { ManagerRoster } from "@/components/peer-intel/manager-roster"
@@ -224,6 +225,7 @@ export function PeerIntel() {
             onSelectManager={setSelectedManager}
           />
           <PortfolioStress cohort={payload.cohort} tier={payload.tier} onSelectManager={setSelectedManager} />
+          <Developments layer={layer} developments={payload.developments} onSelectManager={setSelectedManager} />
           <ManagerRoster
             cohort={payload.cohort}
             signals={payload.signals}
