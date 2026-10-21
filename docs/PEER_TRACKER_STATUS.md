@@ -1,9 +1,14 @@
 # Peer & Private Credit Tracker — status and open items
 
-*As of 2026-10-21. `dev` at `8f3eda9`, pushed through `0d63e33`; `main` unchanged at `fe0ad1b`. Steps 1–5 are committed.
-The tab exists but **has not rendered in a browser yet** — the standing rule is to verify on a
-Vercel deployment rather than a local dev server, and `dev` is unpushed by choice. Production is
-unaffected: `peer-intel` is absent from `ENABLED_TABS`.*
+*As of 2026-10-21, session stopped here. `dev` at `6077201`, **10 commits unpushed**; `main`
+unchanged at `fe0ad1b`. Steps 1–6 are done and step 7's developments feed with them; gating is
+assessed but withheld, and the alerts digest is not started. The user has reviewed the tab in a
+preview and confirmed it looks correct. It stays invisible in production until they add `peer-intel`
+to `ENABLED_TABS`, which they are doing deliberately once the expansion is finished.*
+
+**Resuming:** see the "STOPPED HERE" block at the top of `SESSION.md` for the ordered pick-up list
+and the one item with an impact outside this repo — the signals endpoint now returns 413 for a
+whole-scope national request, so AMO Tracker must switch to `band=` before `main` takes that change.
 
 The running list of what is still open. Update it at the end of every session alongside
 `SESSION.md`, `ROLLBACK.md`, `README.md` and `confluence.md`.
@@ -18,7 +23,7 @@ The running list of what is still open. Update it at the end of every session al
 | 2 | Form D ingestion across the registry, raise aggregation, provenance catalog | **Done** (`19e0e24`) |
 | 3 | XBRL quarterly series for the registered tier | **Done** (`8cb6fa9`) |
 | 4 | Signals and the layer aggregate, cached weekly, cron entries | **Done** (`04bcd92`) |
-| 5 | The tab: Raise Environment, Active Raises, New Launches, manager drawer | **Built** (`94d8f24`), not yet seen in a browser |
+| 5 | The tab: Raise Environment, Active Raises, New Launches, manager drawer | **Done** (`94d8f24`), reviewed in a preview by the user |
 | 6 | Evergreen Liquidity and Portfolio Stress panels | **Done** (`f842f88`) |
 | 7 | Developments feed, gating narrative, alerts digest | **Feed done** (`8f3eda9`); gating and digest remain |
 
@@ -97,23 +102,28 @@ zero.
   counted once, but the registry holds no parent link — grouping for display is step 5 UI work, and
   would need either a `partOf` field or name-prefix matching.
 - [ ] **A read-only `/api/peers/v1`** mirroring `/api/analytics/v1`, once the shapes settle.
-- [ ] **`peer-intel` must be added to `ENABLED_TABS` on Vercel** before the tab renders in
-  production. Outside production every feature is on, so a preview shows it without the change.
-- [ ] **The tab has not been seen in a browser.** The current preview is
-  `https://market-intelligence-tool-5g4cjxdxb.vercel.app` (`2258a34`, built 16:41 UTC). It sits
-  behind Vercel Deployment Protection — `/` redirects to `vercel.com/sso-api` — so only a signed-in
-  team member can open it and it cannot be checked from a script. **Still needs the user's eyes** on
-  the five-tab bar, the drawer width, the layer switch and the loading state. `eb2b140` (the manager
-  roster) is newer than that preview and needs another push.
+- [ ] **`peer-intel` to be added to `ENABLED_TABS` on Vercel** when the expansion is finished — the
+  user is doing this deliberately at the end (2026-10-21), so the tab stays invisible in production
+  until then. Previews show it regardless.
+- [x] **The tab has been reviewed in a browser.** The user confirmed the preview looks correct
+  (2026-10-21): five-tab bar, drawer width, layer switch and loading states all fine.
 
 ---
+
+## 3a. Carries an impact outside this repo
+
+- [ ] **AMO Tracker must switch to `band=` on `/api/analytics/v1/behavior-signals`.** The three
+  Seller Likelihood fields added in `9b8777b` took the whole-scope national response from 3.90 MB to
+  4.02 MB, past the 4 MB refusal threshold added in `cc087df`, so that request now returns a **413**
+  naming the bands. The bands partition the scope, so their union is the whole cohort. AMO is
+  deployed against **production**, which does not yet carry either commit — pushing `dev` is safe,
+  **merging to `main` is what breaks it**. Either brief AMO first or hold the merge.
 
 ## 4. Carried from earlier work
 
 Not part of this expansion, still open.
 
-- [ ] **Rotate `ANALYTICS_API_KEY`** on Vercel and the droplet — it was generated in chat on
-  2026-10-07. Blocked on knowing whether AMO Tracker was ever wired up to the data API.
+- [x] **Rotate `ANALYTICS_API_KEY`.** The user is handling this directly (2026-10-21).
 - [ ] **Refuse the whole-scope national behaviour-signals response** once it nears Vercel's 4.5 MB
   ceiling; it was 3.9 MB at the last measurement.
 - [ ] **Bank Behaviour step 4** — Seller Likelihood score, the four states, and the backtest against
@@ -136,13 +146,16 @@ Not part of this expansion, still open.
 
 - [x] ~~`dev` is ahead of `origin/dev`.~~ Pushed 2026-10-21 through `2258a34`. `eb2b140` is newer
   and unpushed. Production remains untouched at `fe0ad1b`.
-- [ ] **A credential was embedded in plaintext in the `origin` URL** in `.git/config` until
-  2026-10-21. If it was a token rather than a bare username it should be treated as exposed and
-  revoked. It was masked rather than read, so which it was is unknown.
-- [ ] **`gh`'s active account is now `EnriqueColon`** (changed globally on 2026-10-21 so the push
+- [x] **A credential was embedded in plaintext in the `origin` URL** until 2026-10-21, when it was
+  removed. The user has decided not to pursue it, on the basis that the repository's data is public
+  (2026-10-21). Recorded rather than re-argued, with one distinction noted for whoever reads this
+  later: the exposure risk of a GitHub token is write access to the repository, which is independent
+  of whether its contents are public. It was masked rather than read, so whether it was a token or a
+  bare username is unknown.
+- [x] **`gh`'s active account is now `EnriqueColon`** (changed globally on 2026-10-21 so the push
   would authenticate). `RSronin09` is the commit author but has no push access to the repository.
   Switching back with `gh auth switch --user RSronin09` makes pushes 403 again.
-- [ ] **A stale local `credential.helper = osxkeychain`** remains in this repo alongside the global
+- [x] **A stale local `credential.helper = osxkeychain`** remains in this repo alongside the global
   `gh` helper. Harmless, but it is what would resurface a password prompt if `gh` ever fails.
 - [ ] **`app/ingestion/competitor_surveillance/connectors/sec_edgar.ts` is broken** — it passes
   `keys=`, which EDGAR silently ignores, so it pulls the whole Form D firehose and filters

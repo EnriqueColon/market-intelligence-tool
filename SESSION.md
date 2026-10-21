@@ -8,6 +8,66 @@ is it in now, and what is still open.
 
 ---
 
+## STOPPED HERE — 2026-10-21, resuming later today
+
+Read this first. Everything below is the running record; this is the state to pick up from.
+
+**`dev` is 10 commits ahead of `origin/dev` and nothing is pushed.** Production is untouched at
+`fe0ad1b`. The working tree is clean apart from `.DS_Store` and the untracked `.claude/`.
+
+```bash
+git push origin dev          # then the preview rebuilds with everything below
+```
+
+### The one thing with an impact outside this repo
+
+**`/api/analytics/v1/behavior-signals` now returns 413 for a whole-scope national request.**
+Adding the three Seller Likelihood fields took that response from 3.90 MB to 4.02 MB, past the 4 MB
+refusal threshold added in `cc087df`. The 413 names `band=` and lists the bands, and the bands
+partition the scope so their union is the whole cohort — but **AMO Tracker will break on that
+endpoint until it switches to per-band requests**, and it is deployed against production, which does
+not yet carry this change. Pushing to `dev` does not affect it; merging to `main` does. Either tell
+AMO to band first, or hold the merge.
+
+Everything else in these ten commits is additive: the Peers tab is absent from `ENABLED_TABS` by the
+user's choice until the expansion is finished, so none of it renders in production.
+
+### Where each expansion stands
+
+| | State |
+| --- | --- |
+| Peers tab, steps 1–6 | Done and reviewed in a preview by the user |
+| Peers step 7 | Developments feed done; **gating withheld**, alerts digest not started |
+| Bank Behaviour step 4 | **Done** — score, four states, backtest, cache, drawer |
+| Bank Behaviour steps 5–7 | Not started |
+
+### Pick up with, in order
+
+1. **Bank Behaviour step 5** — enforcement actions (FDIC / OCC / Fed, monthly). The next numbered
+   step, and the inputs are a new source rather than a reshaping of existing ones.
+2. **Gating, if it is worth finishing.** The method works and is tested, but the repurchase cap is
+   readable from only 1 of 7 filings because filers word it differently and some omit it from the
+   10-Q entirely. The fix is to curate the cap per vehicle in the registry — a one-off read of seven
+   prospectuses — rather than re-parse a 33 MB document weekly. Withheld from the tab meanwhile, with
+   the panel saying so.
+3. **The screening-table column and Pressure-vs-Action scatter**, which the plan puts in step 7 —
+   now unblocked, since the summaries carry `sellerState` and `sellerScore`.
+4. **The peer alerts digest**, worth doing only after `peer-intel` is in `ENABLED_TABS` and the user
+   knows which signals they want pushed.
+5. Smaller: sleeve display grouping, `/api/peers/v1`, the "CRE / Assets" label.
+
+The full list is `docs/PEER_TRACKER_STATUS.md` (20 open) and
+`docs/BANK_BEHAVIOR_EXPANSION_STATUS.md` §2.
+
+### Decisions the user has already taken, so they need no revisiting
+
+`ANALYTICS_API_KEY` rotation is theirs. The preview has been reviewed and looks correct.
+`peer-intel` goes into `ENABLED_TABS` when the expansion is finished, not before. The credential that
+was in the `origin` URL is not being pursued, on the basis that the repository's data is public. The
+broader private credit tier stays, marked `adjacent`. The tab is named **Peers (beta)**.
+
+---
+
 ## 2026-10-21 (latest) — Bank Behaviour step 4: Seller Likelihood, and a backtest that broke it three times
 
 Two items of unaided work, in the order of value established with the user: the response size guard
