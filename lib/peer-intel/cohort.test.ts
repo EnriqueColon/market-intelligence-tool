@@ -30,6 +30,7 @@ function rec(over: Partial<OfferingRecord> & { cik: string; filedAt: string }): 
     dateOfFirstSale: null,
     industryGroup: "Pooled Investment Fund",
     fundType: "Other Investment Fund",
+    hasNonAccreditedInvestors: null, salesRecipients: [], relatedPersons: [],
     ...over,
   }
 }

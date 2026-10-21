@@ -12,6 +12,7 @@ import {
   orderedSignals,
   percent,
 } from "@/lib/peer-intel/panel"
+import { agentsForManager } from "@/lib/peer-intel/distribution"
 import { peerById } from "@/lib/peer-intel/registry"
 import { peerSignalSpec, type ManagerSignals, type SignalState } from "@/lib/peer-intel/signals"
 
@@ -223,6 +224,67 @@ export function ManagerDrawer({
                     </table>
                   </div>
                 )}
+              </Section>
+
+              <Section title="How it raises">
+                {(() => {
+                  const agents = agentsForManager(manager)
+                  const newest = manager.raises.find((r) => r.role === "fund" && r.open) ?? manager.raises[0]
+                  const r = newest?.raise
+                  return (
+                    <>
+                      <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-700">
+                        <span>
+                          Investors: <strong>{r?.investorCount ?? "not reported"}</strong>
+                        </span>
+                        <span>
+                          Average commitment: <strong>{money(r?.averageTicket ?? null)}</strong>
+                        </span>
+                        <span>
+                          Minimum:{" "}
+                          <strong>
+                            {r?.minimumInvestment == null
+                              ? "not reported"
+                              : r.minimumInvestment === 0
+                                ? "none stated"
+                                : money(r.minimumInvestment)}
+                          </strong>
+                        </span>
+                        {r?.hasNonAccreditedInvestors != null && (
+                          <span>
+                            Non-accredited investors: <strong>{r.hasNonAccreditedInvestors ? "yes" : "no"}</strong>
+                          </span>
+                        )}
+                      </div>
+
+                      {agents.length === 0 ? (
+                        <p className="mt-2 text-xs text-slate-600">
+                          No selling agent is named, so the issuer placed this itself.
+                        </p>
+                      ) : (
+                        <>
+                          <div className="mt-2 text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                            Paid to sell it ({agents.length})
+                          </div>
+                          <ul className="mt-1 space-y-0.5">
+                            {agents.map((a) => (
+                              <li key={`${a.name}-${a.crd ?? ""}`} className="text-xs text-slate-700">
+                                {a.name}
+                                {a.crd && <span className="ml-1 font-mono text-[10px] text-slate-500">CRD {a.crd}</span>}
+                                {a.location && <span className="ml-1 text-slate-500">· {a.location}</span>}
+                              </li>
+                            ))}
+                          </ul>
+                        </>
+                      )}
+
+                      <p className="mt-2 text-[11px] leading-snug text-slate-500">
+                        Who <em>bought</em> is not disclosed in any filing — Form D reports the investor count and
+                        nothing more. Who was paid to <em>sell</em> is disclosed, and is above.
+                      </p>
+                    </>
+                  )
+                })()}
               </Section>
 
               <Section title="Filing trail">

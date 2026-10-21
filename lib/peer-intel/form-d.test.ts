@@ -69,7 +69,7 @@ test("absent fields are null, never zero", () => {
 
 /** The control case: Safe Harbor Equity Distressed Debt Fund 4's real trail. */
 function shcpFund4(): OfferingRecord[] {
-  const base = { cik: "2017189", entityName: "Safe Harbor Equity Distressed Debt Fund 4, L.P.", location: "Miami Beach, FL", jurisdiction: "DE", remaining: null, dateOfFirstSale: "2024-03-15", industryGroup: "Pooled Investment Fund", fundType: "Other Investment Fund", minimumInvestment: 100_000 }
+  const base = { cik: "2017189", entityName: "Safe Harbor Equity Distressed Debt Fund 4, L.P.", location: "Miami Beach, FL", jurisdiction: "DE", remaining: null, dateOfFirstSale: "2024-03-15", industryGroup: "Pooled Investment Fund", fundType: "Other Investment Fund", minimumInvestment: 100_000, hasNonAccreditedInvestors: false, salesRecipients: [], relatedPersons: [] }
   return [
     { ...base, accession: "0002017189-24-000001", formType: "D", filedAt: "2024-03-28", offeringAmount: 500_000_000, totalSold: 0, investorCount: 0 },
     { ...base, accession: "0002017189-25-000002", formType: "D/A", filedAt: "2025-07-22", offeringAmount: 300_000_000, totalSold: 52_918_863, investorCount: 30 },

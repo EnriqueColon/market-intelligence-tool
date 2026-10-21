@@ -27,6 +27,37 @@
  * `lib/analytics/bank-behavior.ts`. A fund that reports no investor count is
  * not a fund with no investors.
  */
+/**
+ * A broker-dealer paid to sell the offering, from Form D's sales compensation
+ * list.
+ *
+ * The most useful thing in the filing that is not a dollar figure. Form D never
+ * says who *bought* — investor identities are confidential by design, and the
+ * form reports only a count — but it does say who was paid to *sell*. For a
+ * firm raising its own fund, a competitor's distribution tells you how they
+ * raise: a book of 232 investors at a $1.13M average through accredited-retail
+ * platforms is a different strategy from 40 investors placed direct.
+ */
+export type SalesRecipient = {
+  name: string
+  /** FINRA Central Registration Depository number, zero-padded as filed. */
+  crd: string | null
+  /** The broker-dealer this recipient is associated with, where one is named. */
+  associatedBrokerDealer: string | null
+  /** `City, ST` of the recipient's own address. */
+  location: string | null
+  /** States solicited; the literal "All States" is kept as filed. */
+  states: string[]
+  foreignSolicitation: boolean | null
+}
+
+/** An officer, director or promoter of the issuer. Not an investor. */
+export type RelatedPerson = {
+  /** Either a person's name or, commonly for a fund, the GP entity. */
+  name: string
+  relationships: string[]
+}
+
 export type OfferingRecord = {
   cik: string
   accession: string
@@ -58,6 +89,12 @@ export type OfferingRecord = {
   industryGroup: string | null
   /** e.g. `Other Investment Fund`, `Private Equity Fund`, `Hedge Fund`. */
   fundType: string | null
+  /** True only where the issuer says it accepted non-accredited investors. */
+  hasNonAccreditedInvestors: boolean | null
+  /** Who was paid to sell the offering. Empty where the issuer sold it itself. */
+  salesRecipients: SalesRecipient[]
+  /** Officers, directors and promoters — never investors. */
+  relatedPersons: RelatedPerson[]
 }
 
 /**
@@ -105,6 +142,91 @@ function isoDate(raw: string | null): string | null {
   return m ? m[0] : null
 }
 
+function tagIn(block: string, name: string): string | null {
+  const m = block.match(new RegExp(`<${name}>([\\s\\S]*?)</${name}>`, "i"))
+  if (!m) return null
+  const v = decodeEntities(m[1].replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim()).trim()
+  return v.length ? v : null
+}
+
+function blocks(xml: string, name: string): string[] {
+  return [...xml.matchAll(new RegExp(`<${name}>([\\s\\S]*?)</${name}>`, "gi"))].map((m) => m[1])
+}
+
+function boolOf(raw: string | null): boolean | null {
+  if (raw == null) return null
+  if (/^true$/i.test(raw)) return true
+  if (/^false$/i.test(raw)) return false
+  return null
+}
+
+/**
+ * Placeholders issuers write into optional string fields.
+ *
+ * Form D's own convention is "None", but filers also write "N/A", "NA", a
+ * dash, or a pair of them. Treating these as values produced a broker-dealer
+ * called "N/A" appearing on sixteen funds and $28.9B of associated raises,
+ * which would have led the agent table.
+ */
+const PLACEHOLDERS = /^(none|n\/a|na|n\.a\.|not applicable|-{1,2}|\.)$/i
+
+function notNone(raw: string | null): string | null {
+  return raw == null || PLACEHOLDERS.test(raw.trim()) ? null : raw
+}
+
+function parseSalesRecipients(xml: string): SalesRecipient[] {
+  const list = blocks(xml, "salesCompensationList")[0]
+  if (!list) return []
+  const out: SalesRecipient[] = []
+  for (const block of blocks(list, "recipient")) {
+    const name = notNone(tagIn(block, "recipientName"))
+    if (!name) continue
+    const address = blocks(block, "recipientAddress")[0] ?? ""
+    const city = tagIn(address, "city")
+    const state = tagIn(address, "stateOrCountry")
+    const statesBlock = blocks(block, "statesOfSolicitationList")[0] ?? ""
+    out.push({
+      name,
+      crd: notNone(tagIn(block, "recipientCRDNumber")),
+      associatedBrokerDealer: notNone(tagIn(block, "associatedBDName")),
+      location: city && state ? `${city}, ${state}` : city ?? null,
+      states: [...statesBlock.matchAll(/<value>([\s\S]*?)<\/value>/gi)]
+        .map((m) => decodeEntities(m[1].trim()))
+        .filter(Boolean),
+      foreignSolicitation: boolOf(tagIn(block, "foreignSolicitation")),
+    })
+  }
+  return out
+}
+
+function parseRelatedPersons(xml: string): RelatedPerson[] {
+  const list = blocks(xml, "relatedPersonsList")[0]
+  if (!list) return []
+  const out: RelatedPerson[] = []
+  for (const block of blocks(list, "relatedPersonInfo")) {
+    const nameBlock = blocks(block, "relatedPersonName")[0] ?? block
+    const first = tagIn(nameBlock, "firstName")
+    const last = tagIn(nameBlock, "lastName")
+    // A fund usually files its GP entity here, which arrives with "--" in the
+    // first-name field; keeping both parts and trimming the placeholder gives
+    // the entity name rather than "-- Silverview Credit Partners LP".
+    const name = [first, last]
+      .map((part) => (part && part !== "--" ? part : null))
+      .filter(Boolean)
+      .join(" ")
+      .trim()
+    if (!name) continue
+    const relBlock = blocks(block, "relatedPersonRelationshipList")[0] ?? block
+    out.push({
+      name,
+      relationships: [...relBlock.matchAll(/<relationship>([\s\S]*?)<\/relationship>/gi)]
+        .map((m) => decodeEntities(m[1].trim()))
+        .filter(Boolean),
+    })
+  }
+  return out
+}
+
 /**
  * Parse a Form D `primary_doc.xml`.
  *
@@ -135,6 +257,9 @@ export function parseFormD(
     dateOfFirstSale: isoDate(tag(xml, "dateOfFirstSale")),
     industryGroup: tag(xml, "industryGroupType"),
     fundType: tag(xml, "investmentFundType"),
+    hasNonAccreditedInvestors: boolOf(tag(xml, "hasNonAccreditedInvestors")),
+    salesRecipients: parseSalesRecipients(xml),
+    relatedPersons: parseRelatedPersons(xml),
   }
 }
 
@@ -175,6 +300,12 @@ export type Raise = {
   targetHigh: number | null
   /** Quarters since the last filing, as a staleness measure for the stall signal. */
   quartersSinceFiling: number | null
+  /** Who is paid to sell it, from the newest filing. */
+  salesRecipients: SalesRecipient[]
+  /** Officers, directors and promoters, from the newest filing. Not investors. */
+  relatedPersons: RelatedPerson[]
+  /** Whether the issuer accepted non-accredited investors, per the newest filing. */
+  hasNonAccreditedInvestors: boolean | null
 }
 
 function numericTarget(v: number | "indefinite" | null): number | null {
@@ -248,6 +379,9 @@ export function buildRaise(filings: OfferingRecord[], asOf: string): Raise | nul
     targetCut,
     targetHigh: targetCut ? high : null,
     quartersSinceFiling: months == null ? null : Math.floor(months / 3),
+    salesRecipients: newest.salesRecipients,
+    relatedPersons: newest.relatedPersons,
+    hasNonAccreditedInvestors: newest.hasNonAccreditedInvestors,
   }
 }
 

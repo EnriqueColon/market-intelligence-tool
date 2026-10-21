@@ -34,7 +34,8 @@ function rec(over: Partial<OfferingRecord> & { cik: string; filedAt: string }): 
     accession: accessionFor(over.cik, over.filedAt),
     formType: "D", entityName: "Fund LP", location: "Miami, FL", jurisdiction: "DE",
     offeringAmount: null, totalSold: null, remaining: null, investorCount: null,
-    minimumInvestment: null, dateOfFirstSale: null, industryGroup: null, fundType: null, ...over,
+    minimumInvestment: null, dateOfFirstSale: null, industryGroup: null, fundType: null, hasNonAccreditedInvestors: null, salesRecipients: [], relatedPersons: [],
+    ...over,
   }
 }
 
