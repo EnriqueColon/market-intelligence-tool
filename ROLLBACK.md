@@ -8,14 +8,22 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
 | `main` | `80743b6` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `8f3eda9` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `dev` | `9b8777b` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 This table names the newest commit on each branch that **changes behaviour**; documentation-only
 commits sit on top of it and are deliberately not tracked here, because amending one rotates its
 SHA and the table then reads as stale when nothing has moved. Confirm with
 `git log --format='%h|%ci|%s'` rather than trusting the previous entry — this has drifted twice.
 
-**`dev` carries `8f3eda9` as of 2026-10-21.** `a8855c6` adds the Distribution panel and widens
+**`dev` carries `9b8777b` as of 2026-10-21.** Three commits here change behaviour in production
+code paths, unlike the peer work: `cc087df` makes
+`/api/analytics/v1/behavior-signals` return **413** for a whole-scope request above 4 MB — which the
+national scope now is, so **AMO Tracker must switch to `band=`**; `1b9c212` adds the scoring module
+and its backtest, inert on its own; and `9b8777b` widens `BankBehaviorSummary` with three seller
+fields and bumps the signals cache to `behavior-signals-v2`, so every band entry recomputes on first
+read. Reverting `9b8777b` should take the version bump with it, or v2 entries will be served into v1
+code. Reverting `cc087df` restores the previous behaviour, in which an oversized response fails in
+the platform rather than returning a 413. Before them, **`dev` carries `8f3eda9` as of 2026-10-21.** `a8855c6` adds the Distribution panel and widens
 `OfferingRecord` with `salesRecipients`, `relatedPersons` and `hasNonAccreditedInvestors`;
 `8f3eda9` adds the developments feed and widens `PeerIntelPayload` with `developments`. Both widen
 shapes under the same `peer-intel-v2` key, so **entries written earlier lack the new fields** and

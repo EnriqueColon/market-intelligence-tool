@@ -8,7 +8,83 @@ is it in now, and what is still open.
 
 ---
 
-## 2026-10-21 (latest) — Distribution, and step 7's developments feed
+## 2026-10-21 (latest) — Bank Behaviour step 4: Seller Likelihood, and a backtest that broke it three times
+
+Two items of unaided work, in the order of value established with the user: the response size guard
+(`cc087df`), then Bank Behaviour step 4 — the score and its backtest (`1b9c212`), then the cache and
+drawer wiring that completes it (`9b8777b`).
+
+### The size guard
+
+The whole-scope national behaviour-signals response measured 3.9 MB against Vercel's 4.5 MB ceiling.
+Crossing it does not truncate — the function fails, and the consumer sees an error that says nothing
+about the shape of its request being the cause. AMO Tracker is that consumer, so it would have failed
+silently and far from here. The route now measures the serialised body: over 4 MB it is a **413**
+naming `band=` and listing the bands; between 3.5 and 4 MB it is sent with a `sizeWarning`. A
+truncated 200 was rejected as an option — a consumer receiving fewer institutions with no indication
+computes wrong figures and never finds out.
+
+### Step 4, and why the backtest is the point
+
+Unlike the peer signals, where there is no public record of which managers were *right* to be
+raising, bank failures are published with dates. So these thresholds could be checked against
+outcomes — and they were wrong three times.
+
+**First run: 12 of 13 failed banks flagged.** That looked like a 92% hit rate and was nothing of the
+kind: it labelled **Silicon Valley, Signature and First Republic as active sellers of CRE loans**,
+when all three were deposit runs. One action signal fires on roughly a quarter of the industry — step
+2 measured CRE runoff alone at 12.6% and unexplained exit at 8.6% — so `activeActionCount` went to
+2, where step 2 had measured 166 of 4,603 banks, 3.6%.
+
+**Second: `pre-seller` then covered 45% of the backtest's bank-quarters.** The score is computed over
+*observed* weight so a partial reporter is not read as calm — but that cuts both ways: one component
+at its ceiling scores 100 on 15% confidence, and that was deciding the state. A confidence floor now
+gates the score path, while an absolute rate still works without it.
+
+**Third: against the real national cohort, `pre-seller` was still 29.7%** — a third of all banks,
+which is not a label that means anything. The absolute path now needs corroboration from the overall
+score, and the list floor was chosen by **sweeping the cohort** rather than by taste: at 40 the
+ranked list was 1,005 banks (21.8% of the industry), at 70 it is 288.
+
+| State | Banks | Share |
+| --- | --- | --- |
+| Active seller | 176 | 3.8% |
+| Pre-seller | 419 | 9.1% |
+| Cleaned up | 851 | 18.5% |
+| Stable | 3,157 | 68.6% |
+
+**Ranked list: 288 banks** — 176 biddable today, 112 worth a call. The backtest reports the deposit
+runs apart from the CRE failures, because counting them either way distorts the result: **9 of 10
+CRE-relevant failures were flagged** before the end, and 3 of 3 deposit runs were too, which is a
+false positive rather than a win. It also states that failure is a harsher test than the score is
+built for — this predicts selling, not failing, and a bank that sold its way out and survived is a
+success that never appears in the sample.
+
+### Stored compact, computed in full
+
+Summaries carry three fields and nothing else. The components carry a label and a sentence each,
+which is right for one bank and ruinous for 4,603 — about 900 bytes a bank, 4.1 MB across the
+cohort, against a 2 MB per-entry ceiling. Asset bands measured after the change are unmoved at
+0.16-0.90 MB. The drawer recomputes the full assessment from the institution's own history, with
+percentiles deliberately absent because one bank has no cohort to be ranked against — which is also
+the harsher basis. The table gets the percentile-aware score from the cache, the drawer the absolute
+one, and the panel says so.
+
+Cache version is `behavior-signals-v2`, so v1 entries are not served with the fields missing.
+
+**The guard proved itself immediately.** Adding these fields took the unchunked national cohort from
+3.90 MB to **4.02 MB** — just past the refusal threshold set an hour earlier. So that endpoint now
+returns a 413 naming the bands, which is the guard working on the very next change rather than a
+platform failure a quarter from now.
+
+99 analytics tests; tsc clean with the 132-line baseline unchanged; `next build` passes.
+
+**Step 4 is complete.** The screening-table column and the Pressure-vs-Action scatter belong to step
+7 in the plan, not here.
+
+---
+
+## 2026-10-21 — Distribution, and step 7's developments feed
 
 Two things the user asked for in order: surface the broker-dealers selling a competitor's fund
 (`a8855c6`), then begin step 7 (`8f3eda9`). Open items are on hold at the user's direction.

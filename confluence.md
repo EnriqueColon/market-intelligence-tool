@@ -2245,6 +2245,9 @@ npm run test:peer-intel-panel      # readings: no undefined/NaN/null, self ranki
 npm run test:peer-intel-liquidity  # tier flow, PIK share, the NAV plausibility guard (tsx)
 npm run test:peer-intel-distribution  # sales agents, CRD grouping, placeholder names (tsx)
 npm run test:peer-intel-developments  # name-collision gate, word boundaries, dedup (tsx)
+npm run test:peer-intel-gating     # repurchase cap, table rows, shares outstanding (tsx)
+npm run test:seller-likelihood     # four states, confidence floor, cohort enrichment (tsx)
+npm run backtest:seller            # live: the score against the banks that actually failed
 npm run verify:peer-signals -- --all   # live: all three layers, firing rates, cache size, scope independence
 ```
 
@@ -2310,6 +2313,18 @@ narrative, so strategy terms return nothing. All three facts, with the measureme
 live in `lib/peer-intel/edgar-contract.ts`; the older
 `app/ingestion/competitor_surveillance/connectors/sec_edgar.ts` still has the `keys=` bug and is
 superseded rather than fixed.
+
+**A response can outgrow what the platform will send, and it fails rather than truncating.** The
+whole-scope national behaviour-signals response is 4.02 MB against Vercel's 4.5 MB ceiling, so
+`/api/analytics/v1/behavior-signals` refuses it with a **413** naming `band=` rather than letting the
+function fail with nothing useful to say. The thresholds are in
+`lib/analytics/api-contract.ts`. Anything that widens `BankBehaviorSummary` moves this figure: adding
+the three Seller Likelihood fields took it from 3.90 MB to 4.02 MB and tipped it over.
+
+**A high score on one observed measure is not a high score.** `assessSeller` computes over *observed*
+weight so a partial reporter is not read as calm, which means one component at its ceiling reads 100
+on 15% confidence. Any state or list built on such a score needs a confidence floor — without one,
+`pre-seller` covered 45% of the backtest's bank-quarters. Always show confidence beside the score.
 
 **A field added to `OfferingRecord` is multiplied by every filing in every trail.** Adding
 `relatedPersons` to the Form D record put a copy on all nine filings of sixty-five vehicles — 132 KB
