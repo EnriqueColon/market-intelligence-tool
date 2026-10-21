@@ -235,4 +235,11 @@ test("the figures most open to misreading carry a caveat", () => {
     assert.ok(peerFieldSpec(key)?.caveat, `${key} must say how it can mislead`)
   }
   assert.ok(PRIVATE_FUND_LIMITS.length >= 4)
+  // The reporting limits must not read as "this does not exist": a private fund
+  // computes its portfolio and performance, it just does not publish them.
+  const joined = PRIVATE_FUND_LIMITS.join(" ")
+  assert.match(joined, /not public/, "the limit is publication, not existence")
+  assert.match(joined, /Form PF/, "the confidential SEC filing is named")
+  assert.match(joined, /no redemption programme/, "the one structural limit is stated as such")
+  assert.match(joined, /secondary sales/, "and is not overstated into 'no exit'")
 })

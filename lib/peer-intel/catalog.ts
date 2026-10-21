@@ -210,14 +210,26 @@ export function derivedFields(): PeerFieldSpec[] {
  * What the tracker cannot see, stated once so every panel can say it rather
  * than render an empty chart.
  *
- * Form D covers the raise and nothing else. A private fund discloses no
- * portfolio, no performance, no redemption activity and no valuations at any
- * point in its life — those exist only for vehicles that file periodic reports,
- * and in this registry every one of those is in the national layer.
+ * **Two different reasons are deliberately kept apart here**, because they read
+ * very differently to anyone deciding how much weight to give a blank.
+ *
+ * Most of these are *reporting* limits: the figures exist, the fund computes
+ * them, its auditors check them and its investors receive them — they are
+ * simply not public, because Regulation D carries no public reporting
+ * obligation and the detailed data larger advisers file on Form PF is held
+ * confidentially by the SEC. Saying a private fund "has no" portfolio or
+ * performance would be wrong; it has both and does not publish them.
+ *
+ * Only the redemption line is *structural*: a drawdown fund's partnership
+ * agreement grants no redemption right, so there is genuinely no programme to
+ * report. Even there the limit is narrower than it first appears, since
+ * secondaries and GP-led continuation vehicles move interests without any
+ * filing recording it.
  */
 export const PRIVATE_FUND_LIMITS: readonly string[] = [
-  "Portfolio composition and credit quality are not reported on Form D.",
-  "Performance, IRR and valuations are not reported on Form D.",
-  "Redemption and liquidity activity are not reported on Form D; a drawdown fund has none to report.",
+  "Portfolio composition and credit quality are not public. The fund knows them and its auditors see them — Regulation D simply carries no public reporting obligation.",
+  "Performance, IRR and valuations are not public. A private fund strikes a net asset value quarterly and reports it to its own investors, not to anyone else.",
+  "Larger advisers do file detailed portfolio and leverage data with the SEC on Form PF. The SEC holds it confidentially rather than publishing it, so it cannot be read here.",
+  "A drawdown fund has no redemption programme — its partnership agreement grants no redemption right, which is structural rather than a disclosure choice. That is not the same as its investors having no exit: interests change hands through secondary sales and GP-led continuation vehicles, and no filing records either.",
   "Amount sold is cumulative and self-reported, and is only as current as the latest amendment.",
 ]

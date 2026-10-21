@@ -42,6 +42,31 @@ user's choice until the expansion is finished, so none of it renders in producti
 | Bank Behaviour step 4 | **Done** — score, four states, backtest, cache, drawer |
 | Bank Behaviour steps 5–7 | Not started |
 
+### A factual correction made after stopping, and a lead it produced
+
+The user asked whether the two empty states — evergreen liquidity and portfolio stress — were
+stating legal facts or merely that something need not be reported. The answer is that **they are
+different cases, and the shipped copy conflated them.**
+
+The liquidity one is close to structural: a drawdown fund's partnership agreement grants no
+redemption right, so there is no programme to gate. But the copy drifted into implying its investors
+have no exit, which is wrong — secondary sales and GP-led continuation vehicles are real liquidity
+events that no filing records. Now worded as "no redemption programme, not no liquidity".
+
+The portfolio one was simply wrong. It read as though a private fund's holdings, valuations and
+performance do not exist. They do: the fund strikes a NAV quarterly, measures its own performance and
+is audited annually. They are **not public** — Regulation D carries no public reporting obligation,
+and the detailed data larger advisers file on **Form PF** is held confidentially by the SEC rather
+than published. Corrected in the panel, in `PRIVATE_FUND_LIMITS`, and in both components' doc
+comments, with a test asserting the distinction survives future edits.
+
+**The lead:** Form ADV Part 1A Schedule D requires a registered adviser to list each private fund it
+manages with that fund's **gross asset value**, and ADV filings are public. That would give fund size
+for the private peers, which the tab currently treats as unavailable — it derives size only from Form
+D's cumulative `totalAmountSold`. Logged in `docs/PEER_TRACKER_STATUS.md` §3; the filing requirement
+is not in doubt but the retrieval path is unverified, and coverage depends on each adviser being
+registered.
+
 ### Pick up with, in order
 
 1. **Bank Behaviour step 5** — enforcement actions (FDIC / OCC / Fed, monthly). The next numbered

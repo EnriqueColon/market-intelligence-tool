@@ -23,6 +23,14 @@ import { metricSpec } from "@/lib/peer-intel/xbrl"
  * is tagged by only two of the twelve vehicles in the registry. A figure that is
  * not reported shows as a dash with the reason on hover, never as a zero and
  * never estimated.
+ *
+ * **Why a private fund shows nothing here is a reporting rule, not a structural
+ * one** — a distinction the empty state has to make, because the two read very
+ * differently. A drawdown fund genuinely has no redemption mechanism, which is
+ * structural; but it does strike a NAV quarterly, does measure performance, and
+ * is audited, so those figures exist. They are simply not public: Regulation D
+ * carries no public reporting obligation, and the detailed data larger advisers
+ * do file with the SEC on Form PF is held confidentially rather than published.
  */
 
 const HEAD = "px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500"
@@ -72,10 +80,14 @@ export function PortfolioStress({
       <Card className="p-6 surface-primary">
         <h3 className="text-base font-semibold text-slate-800">Portfolio stress</h3>
         <p className="mt-2 text-sm text-slate-600">
-          <strong>No peer in {layerName(cohort.layer)} reports a portfolio</strong> — again a structural fact rather
-          than a gap. A private fund discloses no holdings, no valuations and no performance at any point in its life:
-          not at a close, not quarterly, not at the end. What it raised is the whole of what is public, and that is on
-          the panels above. Switch to the US layer for the twelve vehicles that file quarterly reports.
+          <strong>No peer in {layerName(cohort.layer)} reports a portfolio publicly.</strong> Unlike the liquidity
+          panel, this is a reporting rule rather than a structural one: these funds do strike a net asset value every
+          quarter, do measure their own performance, and are audited annually — the figures exist. They go to the
+          fund&apos;s own investors, not to the public. A fund raising under Regulation D has no public reporting
+          obligation for any of it, and larger advisers file detailed portfolio and leverage data with the SEC on Form
+          PF, which the SEC holds <em>confidentially</em> rather than publishing. So what a private fund raised is the
+          whole of what is public, and that is on the panels above. Switch to the US layer for the twelve vehicles that
+          file quarterly reports.
         </p>
       </Card>
     )

@@ -87,6 +87,25 @@ zero.
 - [ ] **Net outflow fires on 60% of judged managers nationally**, which is high — but over only five
   judged managers, and it is true. If the registered tier grows, check the rate again.
 
+**A lead worth chasing: Form ADV as a size source for private peers.**
+
+- [ ] **Form ADV may give per-fund size for the private managers**, which the tab currently treats as
+  unavailable. Part 1A Schedule D, Section 7.B.(1) requires a registered investment adviser to list
+  **each private fund it manages together with that fund's gross asset value**, and ADV filings are
+  public through IAPD. If that holds for these peers it closes a real gap: fund size is presently
+  derived only from Form D's `totalAmountSold`, which is cumulative subscriptions rather than assets,
+  and says nothing at all once a fund stops amending.
+
+  Two things to establish before relying on it. **The retrieval path is unverified** — the two SEC
+  endpoints tried on 2026-10-21 returned a 403 and a redirect, so while the filing requirement is not
+  in doubt, how to read it programmatically is. The SEC publishes ADV bulk data, and IAPD serves
+  individual advisers; one of those is the way in. And **coverage depends on registration**: an
+  adviser below the threshold, or exempt, files no ADV or only a shortened one, so a small
+  Miami-Dade manager may be absent where Rialto and Bayview are present.
+
+  Noted after a question about whether the panels' empty states were legal facts or reporting facts —
+  which turned out to be the right question, and produced this.
+
 **Deferred by design.**
 
 - [ ] **Gating is still not shown as a figure.** Whether repurchase requests exceeded what was

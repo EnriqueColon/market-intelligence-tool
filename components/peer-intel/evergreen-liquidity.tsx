@@ -20,6 +20,13 @@ import type { PeerIntelPayload } from "@/app/services/peer-intel"
  * Only non-traded vehicles appear. For a listed REIT the same two tags are a
  * buyback and an equity raise, which say almost nothing about investor demand:
  * someone wanting out of a listed vehicle sells the stock.
+ *
+ * **A drawdown fund's absence here is structural, which is not the same as the
+ * portfolio panel's silence.** Its partnership agreement grants no redemption
+ * right, so there is no programme to report — that is the fund's own terms. But
+ * the empty state must not claim its investors have no exit: secondary sales and
+ * GP-led continuation vehicles are real liquidity events that no filing records.
+ * What is missing is a redemption programme, not liquidity.
  */
 
 const TOOLTIP_STYLE = {
@@ -62,11 +69,16 @@ export function EvergreenLiquidity({
           missing data.{" "}
           {cohort.coverage.registeredVehicles === 0 ? (
             <>
-              Every manager in this layer raises drawdown funds, where an investor commits for the fund&apos;s life.
-              There is no quarterly redemption window, no cap and nothing to gate, so there is no redemption activity
-              that could be reported. Of the 20 direct peers in the registry, only Blackstone and Starwood run a
-              redeemable vehicle at all; the rest raise drawdown funds exclusively. Switch to the US layer to see the
-              seven that do.
+              Every manager in this layer raises drawdown funds, whose partnership agreements grant investors no
+              redemption right at all — so there is no quarterly window, no cap and <strong>no redemption programme
+              to gate</strong>. That is the fund&apos;s own structure rather than a disclosure choice. Of the 20 direct
+              peers in the registry, only Blackstone and Starwood run a redeemable vehicle; the rest raise drawdown
+              funds exclusively. Switch to the US layer to see the seven that do.
+              <br />
+              <br />
+              It does not follow that these investors have no way out. Interests change hands through secondary sales,
+              and increasingly through GP-led continuation vehicles — both real liquidity events, and both invisible,
+              because no filing records them. What is absent here is a redemption programme, not liquidity.
             </>
           ) : (
             <>
