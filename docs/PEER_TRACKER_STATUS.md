@@ -1,7 +1,8 @@
 # Peer & Private Credit Tracker — status and open items
 
-*As of 2026-10-21. `dev` at `b6369f5` (behavioural head `8cb6fa9`); `main` unchanged at `fe0ad1b`.
-Steps 1–3 are committed and verified live. **Nothing renders yet** — no tab, no cache, no cron.*
+*As of 2026-10-21. `dev` at `04bcd92`; `main` unchanged at `fe0ad1b`. Steps 1–4 are committed and
+verified live. **Nothing renders yet** — there is no tab. Step 4 does add three `warm-cache` entries,
+so the cron now builds and stores them; nothing reads them.*
 
 The running list of what is still open. Update it at the end of every session alongside
 `SESSION.md`, `ROLLBACK.md`, `README.md` and `confluence.md`.
@@ -15,13 +16,17 @@ The running list of what is still open. Update it at the end of every session al
 | 1 | Three-layer registry, EDGAR access contract, Form D parsing | **Done** (`203b818`), extended by targeted lookups (`f310c1a`) |
 | 2 | Form D ingestion across the registry, raise aggregation, provenance catalog | **Done** (`19e0e24`) |
 | 3 | XBRL quarterly series for the registered tier | **Done** (`8cb6fa9`) |
-| 4 | Signals and the layer aggregate, cached weekly, cron entries | **In progress** |
-| 5 | The tab: Raise Environment, Active Raises, New Launches, manager drawer | Not started |
+| 4 | Signals and the layer aggregate, cached weekly, cron entries | **Done** (`04bcd92`) |
+| 5 | The tab: Raise Environment, Active Raises, New Launches, manager drawer | **Next** |
 | 6 | Evergreen Liquidity and Portfolio Stress panels | Not started |
 | 7 | Developments feed, gating narrative, alerts digest | Not started |
 
 Registry today: **26 managers, 65 vehicles, 59 distinct raises**; 25 / 39 / 65 vehicles by layer;
 12 registered vehicles (7 non-traded, 5 listed), all national.
+
+Cache entries written by `warm-cache`: `peers:national` (~144 KB, 73s, 340 requests),
+`peers:florida` (~110 KB), `peers:miami` (~81 KB) — all far inside the 2 MB per-entry limit, so no
+chunking is needed.
 
 ---
 
@@ -55,6 +60,12 @@ zero.
   remainder and must always show the excluded count beside it.
 - [ ] **`isLikelyOpen` is inferred from four quarters of silence**, because Form D has no closed
   flag. A fund that closed the day after its last amendment reads as open for a year.
+- [ ] **The signal thresholds have no backtest**, unlike the bank signals. There is no public record
+  of which managers were "right" to be raising, so `PEER_SIGNAL_THRESHOLDS` holds deliberately
+  conservative starting values. Worth revisiting once the tab has been read against a few quarters:
+  the `dormantQuarters: 12` cutoff and the 40% acceleration share are the two most likely to move.
+- [ ] **Net outflow fires on 60% of judged managers nationally**, which is high — but over only five
+  judged managers, and it is true. If the registered tier grows, check the rate again.
 
 **Deferred by design.**
 

@@ -8,14 +8,21 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
 | `main` | `80743b6` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `8cb6fa9` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `dev` | `04bcd92` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 This table names the newest commit on each branch that **changes behaviour**; documentation-only
 commits sit on top of it and are deliberately not tracked here, because amending one rotates its
 SHA and the table then reads as stale when nothing has moved. Confirm with
 `git log --format='%h|%ci|%s'` rather than trusting the previous entry — this has drifted twice.
 
-**`dev` carries `8cb6fa9` as of 2026-10-21.** Step 3: `lib/peer-intel/xbrl.ts`, the XBRL fetchers on
+**`dev` carries `04bcd92` as of 2026-10-21.** Step 4: `lib/peer-intel/signals.ts`, the payload
+builder on the service, the cached action `app/actions/peer-intel.ts`, and **three new
+`warm-cache` entries** (`peers:national`, `peers:florida`, `peers:miami`). This is the first peer
+commit that is *not* inert: the cron will build and store three cache entries on its next run, and
+`warm-cache` gains an import plus a `throwIfFailed` helper. Nothing reads those entries — there is
+still no tab — so the only effect is cron time (73s for the national layer, inside the 300s ceiling)
+and three Data Cache entries of 81-144 KB. `git revert 04bcd92` removes the entries and the cron
+lines together; the stored entries then expire on their own weekly revalidate. Before it, **`dev` carries `8cb6fa9` as of 2026-10-21.** Step 3: `lib/peer-intel/xbrl.ts`, the XBRL fetchers on
 the service, `PeerVehicle.quoted` on the registry, and a verify script. Still inert — nothing
 imported by any route, no cache entry, no cron change, no tab — so `git revert 8cb6fa9` is the whole
 procedure. Note it touches `registry.ts` (adding `quoted` to the twelve registered vehicles), so

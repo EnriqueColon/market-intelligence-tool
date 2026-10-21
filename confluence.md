@@ -1985,6 +1985,26 @@ selector without adding its scopes here quietly restores a fifty-second cold loa
 
 `/api/cron` is exempt from the auth middleware and protected by bearer token instead.
 
+### Peer tracker cache entries
+
+Three entries, one per layer, written by `warm-cache` and keyed
+`["peer-intel-v1", layer, isoWeek]`. The key carries an **ISO week** rather than a published quarter,
+because SEC filings arrive continuously and there is no quarter to key on; a new week is a new entry
+and the old one expires on its weekly revalidate.
+
+| Entry | Build time | Requests | Stored size |
+| --- | --- | --- | --- |
+| `peers:national` | ~73s | 340 (244 Form D, 96 XBRL) | ~144 KB |
+| `peers:florida` | ~45s | ~210 | ~110 KB |
+| `peers:miami` | ~28s | 139 | ~81 KB |
+
+All three are far inside the 2 MB per-entry Data Cache limit, so unlike the bank cohort they need no
+chunking. Successes only: a failed build throws inside the cached function, so nothing is stored.
+
+**`warmWithLabel` treats any resolved promise as a success.** `getPeerIntel` reports failure in its
+return value rather than by throwing, so the cron wraps it in `throwIfFailed` — without that, a layer
+that failed to build would be recorded as `ok` and the failure would be invisible.
+
 ## 6. Persistence
 
 **Postgres** (Neon, via Vercel Marketplace; gated by `POSTGRES_URL` and `isDbEnabled()` in
@@ -2194,7 +2214,9 @@ npm run test:peer-intel-cohort     # raise aggregation: sleeve counting, coverag
 npm run verify:peer-registry       # live: all 65 vehicles resolve; Fund 4 reproduces exactly
 npm run test:peer-intel-xbrl       # XBRL: dedup, YTD differencing, reported-wins, net flow (tsx)
 npm run verify:peer-raises -- --layer national   # live: pulls every trail, checks the invariants
+npm run test:peer-intel-signals    # signals: own-history rules, unjudged, scope independence (tsx)
 npm run verify:peer-metrics        # live: reproduces Blue Owl's quarterly series by hand-checked figures
+npm run verify:peer-signals -- --all   # live: all three layers, firing rates, cache size, scope independence
 ```
 
 `test:allowlist` runs under `tsx` rather than Node's type stripping, because `lib/domain-allowlist.ts`

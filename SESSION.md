@@ -8,7 +8,75 @@ is it in now, and what is still open.
 
 ---
 
-## 2026-10-21 (latest) — Peer tracker, step 3: the registered tier, and a market in net outflow
+## 2026-10-21 (latest) — Peer tracker, step 4: signals, and the first thing in a cache
+
+Step 4 is committed as `04bcd92`. Eight signals judged on each manager's own trail, rolled up per
+manager, cached per layer for a week, with three `warm-cache` entries. The user also asked for a
+tracked open-items list, which now lives at `docs/PEER_TRACKER_STATUS.md` (`8e78ff1`).
+
+**The acceptance rule holds against live data.** A manager's signals are identical in every layer it
+appears in — 20 comparisons, 0 differences. Every rule fires on absolute floors and the manager's own
+history, never on peer rank, which is what lets three cumulative layers agree about one firm.
+
+**The verification caught a signal that was wrong rather than broken.** Safe Harbor's "raise
+accelerating" fired on **Fund 3, last filed October 2022**, because `soldLastYear` measures between
+*filings* rather than against today — so a fund whose last two filings were a year apart in 2021 and
+2022 reads as accelerating for ever. The pace signals are now unjudged on a trail silent for four
+quarters, and the detail reads "in the twelve months to 2026-07-23" rather than implying recency.
+The same gate fixed "raise stalled", which an indefinite-target fund would otherwise trip
+permanently: past twelve quarters a fund is **closed, not stalled**. Firing rates fell to sensible
+levels and Safe Harbor's row now reads off the live Fund 4 — one signal fired, the offering cut, at
+18% of its total raised arriving in the last year against a 40% threshold.
+
+| Signal | Miami-Dade | National | Family |
+| --- | --- | --- | --- |
+| New vehicle | 50% | 45% | fundraising |
+| Raise accelerating | 33% | 45% | fundraising |
+| Raise stalled | 30% | 25% | fundraising |
+| Offering cut | 10% | 10% | fundraising |
+| Redemptions accelerating | — | 20% | liquidity |
+| Net outflow | — | 60% | liquidity |
+| PIK build | — | 0% | portfolio |
+| Portfolio shrinking | — | 0% | portfolio |
+
+Rates are over *judged* managers, so the unjudged tier does not deflate them; the dash means nothing
+in that layer can be judged at all, which is the honest answer for a layer with no registered
+vehicle. Net outflow at 60% is over five judged managers and is simply true — the semi-liquid
+complex is paying out.
+
+**`unjudged` is a real third state**, not a styling choice. A manager that does not tag
+payment-in-kind income has no PIK verdict rather than a quiet one, and ten of the twelve registered
+vehicles are in that position. A manager is unjudged on a signal only when *no* vehicle can judge it,
+so one untagged fund cannot silence a verdict its siblings support. Sleeves contribute no fundraising
+signals, or a sleeve restating the same ask would read as the manager cutting it.
+
+**Sizing, and why this needs no chunking.** The national layer builds in **73s over 340 requests**
+(244 Form D, 96 XBRL) against `warm-cache`'s 300s ceiling, and the cached entry is **144 KB of the
+2 MB per-entry limit** — 7%. Miami-Dade is 81 KB in 28s. The bank cohort had to be split into asset
+bands for exactly this reason; this does not, because the registry is 65 vehicles rather than 4,600
+institutions.
+
+**Two structural notes.** The cache key carries an **ISO week** rather than a published quarter,
+because SEC filings arrive continuously and there is no quarter to key on. And `warmWithLabel` treats
+any resolved promise as a success, so the cron unwraps `getPeerIntel`'s result object and re-throws —
+otherwise a failed layer would be recorded as `ok` and nobody would know.
+
+**One bug worth remembering.** CIK-to-manager resolution has to come from the registry, not from a
+manager's `raises`: a registered vehicle files no Form D and so never appears there. Matching that
+way silently dropped every liquidity and portfolio signal, because the series reached no manager.
+
+107 unit tests; tsc clean on the new files; `next build` passes. **Nothing renders yet** — the tab is
+step 5.
+
+**Next:** step 5, the tab — Raise Environment header, Active Raises with Safe Harbor's row pinned,
+New Launches, and the manager drawer. It needs `peer-intel` added to `ENABLED_TABS` on Vercel before
+it shows in production.
+
+**Open items are now tracked in `docs/PEER_TRACKER_STATUS.md`** rather than carried in prose here.
+
+---
+
+## 2026-10-21 — Peer tracker, step 3: the registered tier, and a market in net outflow
 
 Step 3 is committed as `8cb6fa9`: XBRL quarterly series for the twelve registered vehicles, which
 are the only peers whose redemption activity and portfolio are observable at all. Everything else in
