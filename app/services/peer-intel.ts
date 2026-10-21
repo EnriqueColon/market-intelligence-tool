@@ -13,6 +13,7 @@ import {
   type PeerLayer,
 } from "@/lib/peer-intel/edgar-contract"
 import { parseFormD, type OfferingRecord } from "@/lib/peer-intel/form-d"
+import { vehiclesInScope } from "@/lib/peer-intel/registry"
 
 /**
  * SEC EDGAR fetchers for the peer tracker.
@@ -279,4 +280,79 @@ export async function fetchOfferingHistory(profile: FilerProfile): Promise<Offer
     }
   }
   return records
+}
+
+export type CohortOfferings = {
+  /** Offering records per vehicle CIK, oldest filing first. */
+  byCik: Map<string, OfferingRecord[]>
+  /**
+   * Vehicles that genuinely could not be read, with the reason. A Reg D fund
+   * must have a Form D, so an entry here means a fetch failed or the registry
+   * holds the wrong CIK — either way it needs looking at.
+   */
+  failures: Array<{ cik: string; manager: string; reason: string }>
+  /**
+   * Registered vehicles with no Form D. **Expected, not a failure**: a listed
+   * REIT or non-traded BDC raises through a registered offering rather than
+   * Regulation D. Their fundraising is share issuance in the periodic reports
+   * step 3 reads. Kept separate so a panel does not report nine problems where
+   * there are none.
+   */
+  noFormD: Array<{ cik: string; manager: string }>
+  /** Requests issued, for the cron's budget — see `maxDuration` on warm-cache. */
+  requests: number
+}
+
+/**
+ * Every Form D offering record for every vehicle in a layer.
+ *
+ * This is the one expensive call in the tracker. Each vehicle needs one
+ * submissions request plus one per Form D filing, because the offering figures
+ * live in each filing's own XML and there is no bulk form of them. For the
+ * national layer that is roughly 65 vehicles and 250-350 requests; at the
+ * rate-limit spacing in `edgar-contract.ts` it runs in about a minute, which
+ * fits inside warm-cache's 300-second ceiling with room to spare.
+ *
+ * A vehicle that fails is recorded in `failures` and omitted from `byCik`, so
+ * the aggregation skips it rather than reading it as a manager who raised
+ * nothing. The caller decides whether a partial cohort is worth caching.
+ */
+export async function fetchCohortOfferings(layer: PeerLayer): Promise<CohortOfferings> {
+  const byCik = new Map<string, OfferingRecord[]>()
+  const failures: CohortOfferings["failures"] = []
+  const noFormD: CohortOfferings["noFormD"] = []
+  let requests = 0
+
+  for (const vehicle of vehiclesInScope(layer)) {
+    try {
+      const profile = await fetchFilerProfile(vehicle.cik)
+      requests++
+      if (!profile.formD.length) {
+        // A registered vehicle without a Form D is raising through a
+        // registered offering, which is normal; a private one without a Form D
+        // should not exist.
+        if (vehicle.kind === "registered" || profile.kind === "registered") {
+          noFormD.push({ cik: vehicle.cik, manager: vehicle.manager })
+        } else {
+          failures.push({ cik: vehicle.cik, manager: vehicle.manager, reason: "no Form D filings" })
+        }
+        continue
+      }
+      const records = await fetchOfferingHistory(profile)
+      requests += profile.formD.length
+      if (!records.length) {
+        failures.push({ cik: vehicle.cik, manager: vehicle.manager, reason: "no readable Form D" })
+        continue
+      }
+      byCik.set(vehicle.cik, records)
+    } catch (error) {
+      failures.push({
+        cik: vehicle.cik,
+        manager: vehicle.manager,
+        reason: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
+  return { byCik, failures, noFormD, requests }
 }
