@@ -12,12 +12,13 @@ is it in now, and what is still open.
 
 Read this first. Everything below is the running record; this is the state to pick up from.
 
-**`dev` is 10 commits ahead of `origin/dev` and nothing is pushed.** Production is untouched at
-`fe0ad1b`. The working tree is clean apart from `.DS_Store` and the untracked `.claude/`.
+**`dev` is pushed and level with `origin/dev` at `10160b3`.** Production is untouched at
+`fe0ad1b` — nothing here has been merged to `main`. The working tree is clean apart from
+`.DS_Store` and the untracked `.claude/`.
 
-```bash
-git push origin dev          # then the preview rebuilds with everything below
-```
+A preview deployment of `10160b3` rebuilds automatically; the GitHub deployment record appears a
+minute or two after the push, and the URL is in its deployment status. Previews sit behind Vercel
+Deployment Protection, so only a signed-in team member can open one.
 
 ### The one thing with an impact outside this repo
 

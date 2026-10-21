@@ -1,7 +1,7 @@
 # Peer & Private Credit Tracker — status and open items
 
-*As of 2026-10-21, session stopped here. `dev` at `6077201`, **10 commits unpushed**; `main`
-unchanged at `fe0ad1b`. Steps 1–6 are done and step 7's developments feed with them; gating is
+*As of 2026-10-21, session stopped here. `dev` pushed and level at `10160b3`; `main` unchanged
+at `fe0ad1b`, so none of this is in production. Steps 1–6 are done and step 7's developments feed with them; gating is
 assessed but withheld, and the alerts digest is not started. The user has reviewed the tab in a
 preview and confirmed it looks correct. It stays invisible in production until they add `peer-intel`
 to `ENABLED_TABS`, which they are doing deliberately once the expansion is finished.*
@@ -144,8 +144,8 @@ Not part of this expansion, still open.
 
 ## 5. Housekeeping and risks found along the way
 
-- [x] ~~`dev` is ahead of `origin/dev`.~~ Pushed 2026-10-21 through `2258a34`. `eb2b140` is newer
-  and unpushed. Production remains untouched at `fe0ad1b`.
+- [x] ~~`dev` is ahead of `origin/dev`.~~ Fully pushed 2026-10-21 at `10160b3`. Production remains
+  untouched at `fe0ad1b`; nothing has been merged to `main`.
 - [x] **A credential was embedded in plaintext in the `origin` URL** until 2026-10-21, when it was
   removed. The user has decided not to pursue it, on the basis that the repository's data is public
   (2026-10-21). Recorded rather than re-argued, with one distinction noted for whoever reads this
