@@ -70,7 +70,8 @@
     "test:peer-intel-xbrl": "tsx --test --tsconfig tsconfig.json lib/peer-intel/xbrl.test.ts",
     "verify:peer-metrics": "tsx --conditions=react-server scripts/verify-peer-metrics.ts",
     "test:peer-intel-signals": "tsx --test --tsconfig tsconfig.json lib/peer-intel/signals.test.ts",
-    "verify:peer-signals": "tsx --conditions=react-server scripts/verify-peer-signals.ts"
+    "verify:peer-signals": "tsx --conditions=react-server scripts/verify-peer-signals.ts",
+    "test:peer-intel-panel": "tsx --test --tsconfig tsconfig.json lib/peer-intel/panel.test.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

@@ -25,6 +25,7 @@ export default async function Page() {
     marketAnalytics: isFeatureEnabled("market-analytics"),
     marketResearch: isFeatureEnabled("market-research"),
     legal: isFeatureEnabled("legal"),
+    peerIntel: isFeatureEnabled("peer-intel"),
   }
 
   // Resolved here because isFeatureEnabled reads server-only env; the dashboard
