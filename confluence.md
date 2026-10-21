@@ -2192,7 +2192,9 @@ npm run discover:peers             # proposes peer candidates from EDGAR by loca
 npm run lookup:peer -- "Rialto"     # finds one named manager's vehicles (names, not patterns)
 npm run test:peer-intel-cohort     # raise aggregation: sleeve counting, coverage, positioning (tsx)
 npm run verify:peer-registry       # live: all 65 vehicles resolve; Fund 4 reproduces exactly
+npm run test:peer-intel-xbrl       # XBRL: dedup, YTD differencing, reported-wins, net flow (tsx)
 npm run verify:peer-raises -- --layer national   # live: pulls every trail, checks the invariants
+npm run verify:peer-metrics        # live: reproduces Blue Owl's quarterly series by hand-checked figures
 ```
 
 `test:allowlist` runs under `tsx` rather than Node's type stripping, because `lib/domain-allowlist.ts`
@@ -2257,6 +2259,21 @@ narrative, so strategy terms return nothing. All three facts, with the measureme
 live in `lib/peer-intel/edgar-contract.ts`; the older
 `app/ingestion/competitor_surveillance/connectors/sec_edgar.ts` still has the `keys=` bug and is
 superseded rather than fixed.
+
+**An SEC filer tags the same period twice, as year-to-date and as a standalone quarter.** Blue Owl's
+Q2 2026 investment income appears both as a 181-day year-to-date figure and as a 91-day quarter, and
+the two reconcile. Grouping duration facts by their `start` alone therefore emits two points for one
+period. `lib/peer-intel/xbrl.ts` prefers the directly reported quarter and marks it
+`origin: "reported"`. Related: measure a fact's span in **days**, not calendar months —
+2026-04-01 to 2026-06-30 crosses two month boundaries but is three months of activity, and month
+arithmetic silently files quarterly facts into the year-to-date series.
+
+**Share repurchases mean opposite things for listed and non-traded vehicles.** For a non-traded BDC
+or REIT, `PaymentsForRepurchaseOfCommonStock` is the redemption programme paying investors out — the
+liquidity signal. For a listed company it is a buyback, and issuance is an equity raise: both
+capital-markets decisions that say little about investor demand, since an investor wanting out just
+sells the stock. `PeerVehicle.quoted` carries the distinction and net flow is computed only for
+non-traded vehicles. Five of the twelve registered vehicles in the registry are listed.
 
 **A registered vehicle files no Form D, and that is not a gap.** A listed REIT or non-traded BDC
 raises through a registered offering rather than Regulation D, so nine of the twelve registered

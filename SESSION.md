@@ -8,7 +8,75 @@ is it in now, and what is still open.
 
 ---
 
-## 2026-10-21 (latest) — Peer tracker, step 2: the raise environment
+## 2026-10-21 (latest) — Peer tracker, step 3: the registered tier, and a market in net outflow
+
+Step 3 is committed as `8cb6fa9`: XBRL quarterly series for the twelve registered vehicles, which
+are the only peers whose redemption activity and portfolio are observable at all. Everything else in
+the tracker stops at the raise. Still nothing rendered.
+
+**The headline finding is in the data, not the code.** Blue Owl Credit Income's net flow — capital
+in less capital out, per quarter:
+
+| Quarter | Capital in | Capital out | Net |
+| --- | --- | --- | --- |
+| Q1 2025 | $1.93B | $193.2M | **+$1.73B** |
+| Q2 2025 | $1.57B | $203.9M | +$1.37B |
+| Q3 2025 | $2.04B | $464.2M | +$1.58B |
+| Q4 2025 | $1.37B | $317.6M | +$1.05B |
+| Q1 2026 | $670.4M | $1.01B | **−$338.6M** |
+| Q2 2026 | $117.5M | $963.5M | **−$846.1M** |
+
+Subscriptions fell 94% while redemptions rose 5.2x, turning +$1.7B a quarter into −$846M a quarter
+in five quarters. And it is not one fund: in Q2 2026 **every non-traded vehicle in the tier is in net
+outflow** — BCRED −$2.78B, Blue Owl −$846.1M, Ares −$308.8M, HPS −$300.0M, BREIT −$158.9M, SREIT
+−$62.5M. That is the semi-liquid private credit complex paying out faster than it is taking in, and
+it is the context for every LP conversation the tab is meant to support.
+
+**The verification caught a real bug before it reached anything.** Filers tag *both* forms for the
+same period — Blue Owl's Q2 2026 investment income appears as a 181-day year-to-date figure and again
+as a 91-day quarter, and the two reconcile — so grouping by `start` alone put two points on one
+period, across ten years and nine vehicles. Directly reported quarters now win over derived ones and
+carry `origin: "reported"`, which is the better provenance anyway. The cause underneath it was
+measuring spans in calendar months: 2026-04-01 to 2026-06-30 crosses two month boundaries but is
+three months of activity, so quarterly facts were being filed into the year-to-date series. Spans are
+now counted in days.
+
+**The second finding was a modelling gap.** For a **listed** REIT,
+`PaymentsForRepurchaseOfCommonStock` is a buyback and issuance is an equity raise — capital-markets
+decisions that say close to the opposite of investor demand, and that an investor wanting out would
+not use at all, because they would sell the stock. So `PeerVehicle` gained `quoted`, net flow is
+computed only for non-traded vehicles, and a test asserts every registered vehicle declares which it
+is. Five of the twelve are listed (BXMT, BXSL, STWD, BRSP, LADR); seven are non-traded.
+
+**Negative flow quarters are left faithful to the filing rather than clamped.** Ladder tags a
+−1,000 reversal outright, and its year-to-date series is non-monotonic on amounts of a few thousand
+dollars, so differencing faithfully yields a negative. Eight such quarters are reported as notes with
+their origin, because clamping would hide a filer's own correction.
+
+**Concept coverage is patchy, measured, and never assumed** — share issuance 12/12, repurchases
+11/12, investment income 11/12 across two candidate concepts, unrealised gains 7/12, investments at
+fair value and net investment income 6/12, NAV per share 5/12, and **payment-in-kind income only
+2/12**. So the PIK-build signal the plan wanted is available for two vehicles and absent elsewhere,
+never inferred. Filers also use extension tags in their own namespace, which `companyconcept` under
+`us-gaap` cannot see at all. Each metric lists candidates in preference order and records which
+answered.
+
+**Verified live** (`npm run verify:peer-metrics`): every figure read by hand from Blue Owl's filings
+reproduces, the four 2025 quarters sum back to the reported full year, and the tier fetch is ~96
+requests in 23s against warm-cache's 300s ceiling.
+
+85 unit tests; tsc clean on the new files; `next build` passes.
+
+**Next:** step 4 — signals and the layer aggregate, cached weekly, with the cron entries. The
+redemption-acceleration signal now has data behind it; the PIK-build signal has data for two
+vehicles and must say so.
+
+**Open, carried.** The two `adjacent` calls in Miami-Dade (Integra, SEGLO) and whether Rialto's
+Property funds should stay excluded as equity.
+
+---
+
+## 2026-10-21 — Peer tracker, step 2: the raise environment
 
 Step 2 is committed as `19e0e24`: Form D ingestion across the registry, manager- and layer-level
 aggregation, and the provenance catalog. The user declined a Vercel preview once it was clear step 1

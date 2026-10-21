@@ -8,14 +8,19 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
 | `main` | `80743b6` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `19e0e24` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `dev` | `8cb6fa9` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 This table names the newest commit on each branch that **changes behaviour**; documentation-only
 commits sit on top of it and are deliberately not tracked here, because amending one rotates its
 SHA and the table then reads as stale when nothing has moved. Confirm with
 `git log --format='%h|%ci|%s'` rather than trusting the previous entry — this has drifted twice.
 
-**`dev` carries `19e0e24` as of 2026-10-21.** Step 2 of the peer tracker: the provenance catalog,
+**`dev` carries `8cb6fa9` as of 2026-10-21.** Step 3: `lib/peer-intel/xbrl.ts`, the XBRL fetchers on
+the service, `PeerVehicle.quoted` on the registry, and a verify script. Still inert — nothing
+imported by any route, no cache entry, no cron change, no tab — so `git revert 8cb6fa9` is the whole
+procedure. Note it touches `registry.ts` (adding `quoted` to the twelve registered vehicles), so
+reverting it also drops that field; step 2's aggregation does not read it and keeps working. Before
+it, **`dev` carries `19e0e24` as of 2026-10-21.** Step 2 of the peer tracker: the provenance catalog,
 manager- and layer-level raise aggregation, a cohort fetcher on the service, and a verify script.
 Still inert — new files plus two `package.json` entries, nothing imported by any route, no cache
 entry, no cron change, no tab — so `git revert 19e0e24` is the whole procedure and leaves step 1's
