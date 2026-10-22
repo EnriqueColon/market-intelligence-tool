@@ -2314,6 +2314,33 @@ live in `lib/peer-intel/edgar-contract.ts`; the older
 `app/ingestion/competitor_surveillance/connectors/sec_edgar.ts` still has the `keys=` bug and is
 superseded rather than fixed.
 
+**`SC TO` is not `SC TO-I`, and the difference is an activist's bid.** `SC TO-I` is an *issuer*
+tender offer — the fund buying its own shares, which is how a non-traded BDC runs its redemption
+programme. `SC TO-T` is a *third party* bidding for the fund's shares. SREIT's only five Schedule
+TO filings are `SC TO-T`, filed by Cox Capital and Saba Capital against it in a March–April 2026
+mini-tender; SREIT itself has never run a tender and redeems through a share repurchase plan. A
+prefix match on `SC TO` reads that hostile bid as the fund's own gating. Established 2026-10-21 by
+counting every Schedule TO the seven non-traded vehicles have filed and reading each cover page's
+"Subject Company" and "Offeror" lines. BREIT has filed none at all, in 688 filings.
+
+**A Schedule TO final amendment cannot be identified from its form type or its cover page.** The
+newest `SC TO-I/A` is usually not the final one — BCRED's is a Rule 13e-4(c)**(1)** amendment
+filing a written communication, with no figures in it. And the cover-page checkbox is no help
+either: the *label* "Check the following box if the filing is a final amendment reporting the
+results of the tender offer" appears in **every** Schedule TO whether ticked or not, and stripping
+tags discards the tick — Blue Owl's survives as `&#9746;`, BCRED's does not survive at all. Select
+the final amendment by the presence of the result figures themselves, which is self-validating
+since those figures are the point, or secondarily by a 13e-4(c)(4) citation, which four of the five
+BDCs carry and Blue Owl does not.
+
+**In a tender offer's results, "representing X%" has no fixed denominator.** It is
+accepted-over-tendered — the fulfilment rate — for Blue Owl and Ares, and accepted-over-outstanding
+— the cap — for BCRED, Apollo and HPS. Taking it as one field reports Apollo's Q2 2026 fulfilment
+as 5% when it was 29.8%, wrong by six times and in the direction that makes gating look worse than
+it was. All five give shares tendered and shares accepted as absolute counts, so compute the rate
+and ignore the sentence. Blue Owl's counts are per share class and must be summed first. See
+`docs/PEER_TRACKER_STATUS.md` §3 for the five vehicles' figures.
+
 **A response can outgrow what the platform will send, and it fails rather than truncating.** The
 whole-scope national behaviour-signals response is 4.02 MB against Vercel's 4.5 MB ceiling, so
 `/api/analytics/v1/behavior-signals` refuses it with a **413** naming `band=` rather than letting the

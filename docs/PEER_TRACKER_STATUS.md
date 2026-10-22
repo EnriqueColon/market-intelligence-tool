@@ -124,10 +124,86 @@ zero.
   history per fund.
 
   `lib/peer-intel/gating.ts` and its 15 tests still work against the 10-Q and stay for now, but
-  **Schedule TO is the source to move to.** Two things to confirm first: whether the other six
-  non-traded vehicles use tender offers the same way — BREIT and SREIT are REITs and may run share
-  repurchase *plans* rather than tenders — and how consistent the Rule 13e-4(c)(4) wording is across
-  sponsors.
+  **Schedule TO is the source to move to** for the five BDCs. The two confirmation questions were
+  answered on 2026-10-21 against live EDGAR — see the item below.
+
+- [ ] **Gating coverage is 7 of 7, from two sources, not five of seven.** Checked 2026-10-21 against
+  live EDGAR; scripts in this session's scratchpad, worth promoting to `verify:peer-gating` if the
+  feature is built.
+
+  **Question 1 — do all seven run tender offers? No, and the split is clean.** Every Schedule TO
+  each of the seven has ever filed was counted, from the full submissions history:
+
+  | Vehicle | Schedule TO filings | Reading |
+  | --- | --- | --- |
+  | BCRED | `SC TO-I` 22, `SC TO-I/A` 37 | Quarterly issuer tender, 2021→ |
+  | Blue Owl OCIC | `SC TO-I` 21, `SC TO-I/A` 26 | Quarterly issuer tender, 2021→ |
+  | Apollo ADS | `SC TO-I` 18, `SC TO-I/A` 17 | Quarterly issuer tender, 2022→ |
+  | HPS HLEND | `SC TO-I` 18, `SC TO-I/A` 17 | Quarterly issuer tender, 2022→ |
+  | Ares ASIF | `SC TO-I` 12, `SC TO-I/A` 17 | Quarterly issuer tender, 2023→ |
+  | **BREIT** | **none, ever** (688 filings on record) | Share repurchase **plan** |
+  | **SREIT** | `SC TO-T` 1, `SC TO-T/A` 4 — **not its own** | Share repurchase **plan** |
+
+  **SREIT's Schedule TOs are somebody else's bid.** `SC TO-T` is the *third-party* form. The cover
+  page names Starwood Real Estate Income Trust as "Subject Company (Issuer)" and **Cox Capital and
+  Saba Capital as the Offeror** — a hostile mini-tender run March–April 2026, nothing to do with
+  SREIT's own redemption programme. Treating `SC TO` presence as evidence of an issuer tender would
+  have read an activist's bid as the fund's own gating. **Filter on `SC TO-I`, never `SC TO`.**
+
+  **But both REITs disclose it anyway, in the 10-Q, and BREIT's is the best disclosure of all
+  seven.** BREIT states the cap used *and* the fulfilment rate, monthly, in MD&A and again in the
+  repurchase-table footnote — Q3 2023: *"the Company fulfilled repurchases equal to 2.0%, 2.0% and
+  1.0% of NAV, or 34%, 43% and 29% of repurchase requests, respectively."* That is **both of
+  Stanger's two metrics, monthly, per vehicle.** In an unprorated period the sentence instead reads
+  *"we fulfilled $2.1 billion of repurchases requested, which represents all repurchase requests
+  received"* (Q2 2026) — so dollars-and-all rather than a percentage, and the extractor must handle
+  both shapes.
+
+  SREIT discloses a **monthly** fulfilment percentage in the footnotes to the Item 2(c) table, but
+  only in months it prorated: *"approximately 37% of each stockholder's April repurchase request was
+  satisfied"*, then 3% in May, 4% in June, 4% in July, 4% in August 2024. Its Q2 2026 10-Q carries
+  no such footnote, which on this pattern means nothing was prorated — **but absence-means-full is
+  an inference, not a statement, and must be labelled as one on the panel.** SREIT never uses the
+  phrase "we fulfilled", so BREIT's and SREIT's extractors cannot share a pattern.
+
+  **Question 2 — how consistent is the Rule 13e-4(c)(4) wording across the five BDCs? Consistent in
+  structure, and there is one trap in it.** All five give, as absolute share counts, the shares
+  validly tendered and the shares accepted, both in a short numbered list in a filing under ~5,200
+  characters. Four of five cite 13e-4(c)(4) explicitly; Blue Owl does not.
+
+  **The trap: "representing X%" means two different things.** It is accepted-over-tendered for two
+  sponsors and accepted-over-outstanding — i.e. the cap, not the fulfilment rate — for three:
+
+  | Vehicle | Tendered | Accepted | Computed accepted/tendered | What the filing's "representing X%" refers to |
+  | --- | --- | --- | --- | --- |
+  | BCRED | 191,782,834 | 93,100,272 | **48.5%** | 5% of shares outstanding — the **cap** |
+  | Blue Owl OCIC | 395,428,504 | 105,249,082 | **26.6%** | 26.6% of validly tendered — the **fulfilment rate** |
+  | Apollo ADS | 101,541,297 | 30,224,152 | **29.8%** | 5% of shares outstanding — the **cap** |
+  | Ares ASIF | 50,400,325 | 19,264,139 | **38.2%** | 38.2% of validly tendered — the **fulfilment rate** |
+  | HPS HLEND | 66,718,586 | 25,076,907 | **37.6%** | 5% of shares outstanding — the **cap** |
+
+  Reading that percentage as one field would report Apollo's fulfilment as 5% when it was 29.8%, and
+  in the direction that makes gating look far worse than it was. **Never parse the percentage;
+  compute fulfilment from the two share counts, which all five give.** Blue Owl's multi-class
+  tendered figure must be summed across Class S, D and I first, as the existing 10-Q module already
+  does for its repurchase rows. Ares adds odd-lot priority for holders of fewer than 100 shares,
+  which perturbs strict proration slightly and should be noted rather than modelled.
+
+  **The weighted five-BDC fulfilment rate is 33.9%** — 272,914,552 accepted of 805,871,546 tendered
+  — against **Stanger's 38% sector figure**. Third independent corroboration of their published
+  numbers, and the second-closest. Not quarter-aligned, though: these five offers expired 8 June,
+  15 June, 30 June and 18 September 2026, so any aggregate must key on the expiry or valuation date
+  rather than assuming a common quarter.
+
+  **One more trap, which cost time here: the newest `SC TO-I/A` is usually not the final amendment.**
+  BCRED's newest, filed 2026-09-03, is a Rule 13e-4(c)**(1)** amendment filing a written
+  communication, and carries no figures at all. Nor can the final amendment be told from the cover
+  page: the checkbox label *"Check the following box if the filing is a final amendment reporting
+  the results of the tender offer"* is present in **every** Schedule TO whether ticked or not, and
+  stripping tags discards the tick. Blue Owl's ticked box survives as `&#9746;`, BCRED's does not
+  survive at all. **Select the final amendment by the presence of the result figures themselves** —
+  self-validating, since the figures are what is wanted — or secondarily by a 13e-4(c)(4) citation,
+  which four of five carry. BCRED's quarterly finals are 2026-08-04, 2026-05-01 and 2026-02-02.
 
 - [ ] **The alerts digest** is the other half of step 7 and is not started.
 - [ ] **A NAV plausibility guard exists only for NAV.** `looksLikeNav` rejects a net asset value that
@@ -166,7 +242,7 @@ scratch.
 | --- | --- | --- |
 | Fundraising, fund sizes, progress | Preqin, PitchBook | Better nationally |
 | New fund launches | Preqin "funds in market" | Better |
-| Evergreen liquidity and gating | **Stanger** | **Much** better |
+| Evergreen liquidity and gating | **Stanger** | Better on breadth and cadence — **but no longer on access or granularity**, see §3 |
 | Portfolio performance | Preqin (IRR/TVPI from LP disclosures) | Better |
 | Other developments | With Intelligence, PEI titles | Comparable |
 
@@ -176,13 +252,17 @@ year; **repurchase requests equalled 12.4% of NAV, a Stanger record, and sponsor
 They also carry per-fund detail — BCRED's Q1 2026 requests were ~7.9% of NAV and it **raised its
 repurchase limit from 5% to 7%** to meet them.
 
-They have it because **sponsors tell them**. That is a data-acquisition advantage, not a software
-one, and no amount of engineering closes it.
+It was first assumed they have it because **sponsors tell them**, which would be a data-acquisition
+advantage no engineering closes. **That is now known to be wrong on the requests figure**: every
+sponsor is obliged to publish it, and the 2026-10-21 checks in §3 found it for all seven vehicles.
+What Stanger actually has is **breadth and cadence** — all public non-listed BDCs plus REITs and
+DSTs, assembled quarterly — and that is a labour advantage, which engineering does close.
 
-**Our figures corroborate theirs**, which is worth knowing: step 6 measured the non-traded tier at
-−$4.45B net in Q2 2026 against Stanger's ~−$3.8B sector-wide. Different vehicle sets — they cover
-all public non-listed BDCs, we cover seven — so the same direction and magnitude from two
-independent methods.
+**Our figures corroborate theirs, now twice over.** Step 6 measured the non-traded tier at −$4.45B
+net in Q2 2026 against Stanger's ~−$3.8B sector-wide. And the five BDC final amendments give a
+weighted fulfilment rate of **33.9%** against their **38%** sector figure (§3). Different vehicle
+sets — they cover all public non-listed BDCs, we cover seven — so the same direction and magnitude
+from two independent methods, on two separate metrics.
 
 ### Where this tool genuinely wins, and should stay
 
@@ -204,11 +284,18 @@ service. Everything below is derived from public filings or from publicly publis
 ### Framings worth borrowing
 
 **From Stanger.** Requests as a share of NAV and a fulfilment rate are better metrics than
-repurchases-over-portfolio, but neither is derivable without requests received. **Cap changes are
-derivable** — a sponsor raising its repurchase limit is a gating signal that does appear in filings,
-and would partially rescue the withheld gating work. They also keep non-listed BDCs, non-traded
-REITs and DSTs separate, where this tool has a single `non-traded` bucket that mixes BDCs with
-REITs and makes the aggregate less meaningful.
+repurchases-over-portfolio. This previously read "neither is derivable without requests received";
+**both are derivable, for all seven vehicles** — confirmed 2026-10-21, see §3. The fulfilment rate
+comes from the two share counts in each BDC's Schedule TO final amendment and from BREIT's and
+SREIT's 10-Q prose; requests-as-a-share-of-NAV is stated outright by BREIT and Blue Owl and follows
+for the rest from requests against the cap. **Cap changes are derivable** too — a sponsor raising
+its repurchase limit is a gating signal that does appear in filings.
+
+They also keep non-listed BDCs, non-traded REITs and DSTs separate, where this tool has a single
+`non-traded` bucket that mixes BDCs with REITs and makes the aggregate less meaningful. **The
+gating work has now made that split structural rather than cosmetic:** the five BDCs are read from
+Schedule TO and the two REITs from 10-Q prose, on different periodicities — quarterly against
+monthly — so the two kinds cannot share an extractor, a cadence or a column.
 
 **From Preqin.** "Funds in market" with *interim closes* — our Form D/A amendments **are** interim
 closes and are simply not labelled as such. Target versus hard cap as distinct fields, where Form D
@@ -235,23 +322,39 @@ months apart. The curve shows direction, not a smooth trajectory, and any panel 
 
 ### Cannot be derived, at any effort
 
-- ~~**Requests received.**~~ **Struck 2026-10-21 — it can be.** Rule 13e-4(c)(4) obliges a Schedule
-  TO final amendment to report tender results: shares tendered, shares accepted, and whether
-  acceptance was pro rata. See §3's gating item. This also narrows the build-versus-buy case:
-  Stanger's advantage on this metric is **aggregation and cadence, not access**.
+- ~~**Requests received.**~~ **Struck 2026-10-21 — it can be, for all seven vehicles.** Rule
+  13e-4(c)(4) obliges a Schedule TO final amendment to report tender results: shares tendered,
+  shares accepted, and whether acceptance was pro rata. That covers the five BDCs. The two REITs
+  file no issuer tender at all, but disclose requests and fulfilment in 10-Q prose, BREIT monthly
+  and with the cap used alongside. See §3's gating coverage item. This narrows the build-versus-buy
+  case further than first thought: Stanger's advantage on this metric is **aggregation and cadence
+  across a wider vehicle set, not access, and not granularity** — BREIT's own monthly disclosure is
+  finer than Stanger's quarterly sector figure.
 - **LP identities.** No filing discloses them — but the legitimate route exists and is how Preqin
   builds its commitments data: public pension and endowment disclosures, from the LP side. Public
   record, real work.
 
 ### Proposed order, if the discussion lands on building
 
-1. **Vintage-over-vintage pacing** — proven above, free, the clearest win. About half a day.
-2. **Cap-change detection** — in filings, and partially rescues the withheld gating work.
-3. **Split the `non-traded` bucket** into BDC and REIT so the aggregate means something.
-4. **Label Form D/A amendments as interim closes** — wording, an hour.
+Revised 2026-10-21 after the gating checks, which moved gating from "partially rescuable" to
+"buildable at full coverage" and made the bucket split a precondition rather than a nicety.
 
-And the standing alternative: **subscribe to Stanger for the evergreen piece and delete our worse
-version**, keeping it only as the free corroboration it has already proven to be.
+1. **Vintage-over-vintage pacing** — proven above, free, the clearest win. About half a day.
+2. **Split the `non-traded` bucket** into BDC and REIT. Promoted from third: the two kinds are read
+   from different forms on different periodicities, so gating cannot be built until they are apart.
+3. **Gating on Schedule TO for the five BDCs**, computing fulfilment from the share counts and never
+   from the "representing X%" phrase. The traps are enumerated in §3.
+4. **Gating on 10-Q prose for BREIT and SREIT**, separately, handling both the prorated and the
+   fully-met wordings, and labelling SREIT's silent months as an inference.
+5. **Cap-change detection** — in filings, and a genuine Stanger framing. No longer a consolation
+   prize for gating, so it drops below it.
+6. **Label Form D/A amendments as interim closes** — wording, an hour.
+
+The standing alternative — **subscribe to Stanger for the evergreen piece and delete our worse
+version** — is weaker than it was. Their edge is now known to be breadth and cadence rather than
+access, our figures have corroborated theirs on two separate metrics, and BREIT's monthly
+disclosure is finer than anything they publish. Still worth pricing, but no longer the obvious
+answer on this ask.
 
 ### One caveat on the market picture
 

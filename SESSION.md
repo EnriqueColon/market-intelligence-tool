@@ -8,14 +8,44 @@ is it in now, and what is still open.
 
 ---
 
-## STOPPED HERE — 2026-10-21, resuming later today
+## STOPPED HERE — 2026-10-21, after the gating checks; resuming the morning of 2026-10-22
 
 Read `CLAUDE.md` first for orientation, then this block. Everything below it is the running record —
 reverse-chronological, and worth reading only when you need the reasoning behind something specific.
 
-**`dev` is pushed and level with `origin/dev`.** Confirm the head with `git log --oneline -1` rather than trusting a SHA written here. Production is untouched at
-`fe0ad1b` — nothing here has been merged to `main`. The working tree is clean apart from
-`.DS_Store` and the untracked `.claude/`.
+**There are uncommitted changes in the working tree.** `dev` is at `eb179f3` and level with
+`origin/dev`; production is untouched at `fe0ad1b`, and nothing here has been merged to `main`.
+Confirm the head with `git log --oneline -1` rather than trusting a SHA written here.
+
+**Modified and not committed**, all from the gating checks of 2026-10-21:
+`docs/PEER_TRACKER_STATUS.md`, `SESSION.md`, `confluence.md` and a comment-only change to
+`lib/peer-intel/gating.ts`. No behaviour changed; 69 peer-intel tests pass and `tsc` reports the
+same 91 pre-existing errors as before, none in `peer-intel`. **The user had not yet decided whether
+to commit these when the session ended** — ask before assuming either way. `ROLLBACK.md` is
+deliberately untouched, since its table tracks only behaviour-changing commits.
+
+### What tomorrow morning is for
+
+The user's words: **to see what can be pushed forward on the expansion before next week, with
+confidence.** So the conversation is a scoping one — which pieces are solid enough to build now, not
+which are most interesting. Three things bear on that and are all written up already:
+
+1. **Gating is now a 7-of-7 feature** rather than the 5-of-7 that was feared, but it needs **two
+   extractors** on two cadences, and the `non-traded` bucket split has to come first. §3 of the peer
+   status doc has the counts, the four traps and the revised build order.
+2. **The two accuracy caveats**, which matter for "with confidence": the 33.9% aggregate is not
+   quarter-aligned and so is a sanity check rather than a match, and the wording findings rest on
+   **one quarter per fund** — five documents — so a fund's consistency across its own history is
+   unverified. A spot-check of two or three earlier quarters per fund is the cheapest way to firm
+   that up before committing to an extractor.
+3. **The §3b build-versus-buy discussion is still open and still unbuilt.** It moved today: Stanger's
+   edge is breadth and cadence rather than access, and the subscribe-instead alternative is weaker
+   than it was. The one item already proven and free — **vintage-over-vintage pacing**, about half a
+   day — remains the clearest thing to ship first.
+
+Also undecided: whether to promote the four live-EDGAR check scripts into a `verify:peer-gating`
+command. They were written to this session's scratchpad, which is **ephemeral and will be gone**;
+§3 records enough to rebuild them in minutes, but the next session cannot run them as they are.
 
 A preview deployment of `10160b3` rebuilds automatically; the GitHub deployment record appears a
 minute or two after the push, and the URL is in its deployment status. Previews sit behind Vercel
@@ -90,36 +120,74 @@ is the story behind the $500M → $300M cut and suggests $300M is still ambitiou
 Both are written up in full in `docs/PEER_TRACKER_STATUS.md` §3b, including the vintage table, what
 cannot be derived at any effort, and a proposed build order if the discussion lands that way.
 
-### The two questions the next conversation should start from
+### The two questions are answered — gating is a full-coverage feature
 
-Both are about the Schedule TO finding and both are ~20 minutes of checking, not building:
+Both were checked against live EDGAR on 2026-10-21. **Gating is buildable for all seven vehicles**,
+from two sources rather than one, and the checks turned up four traps that would each have produced
+a confidently wrong number. The detail, with the counts and the arithmetic, is
+`docs/PEER_TRACKER_STATUS.md` §3.
 
-1. **Do BREIT and SREIT use tender offers?** They are REITs and may run share repurchase *plans*
-   rather than tenders, which would mean Schedule TO gives five of seven vehicles rather than all
-   seven.
-2. **How consistent is the Rule 13e-4(c)(4) wording across sponsors?** BCRED's is clean; if Blue
-   Owl, Apollo, Ares and HPS phrase it the same way, extraction is near-trivial.
+**1. Do BREIT and SREIT use tender offers? No — and neither matters, because both disclose anyway.**
+The five BDCs run quarterly issuer tenders: BCRED 22 `SC TO-I` and 37 amendments, Blue Owl 21/26,
+Apollo 18/17, HPS 18/17, Ares 12/17. **BREIT has never filed a Schedule TO at all** in 688 filings.
+**SREIT's five are `SC TO-T`** — the *third-party* form, filed by Cox Capital and Saba Capital
+against it in a March–April 2026 mini-tender. Reading `SC TO` presence as an issuer tender would
+have reported an activist's hostile bid as SREIT's own redemption programme. Filter on `SC TO-I`.
 
-Answering these decides whether gating is a full-coverage feature or a partial one, and it feeds the
-approach discussion rather than pre-empting it.
+Both REITs instead disclose requests and fulfilment in 10-Q prose, and **BREIT's is the best
+disclosure of any of the seven** — monthly, with the cap used beside the fulfilment rate: *"the
+Company fulfilled repurchases equal to 2.0%, 2.0% and 1.0% of NAV, or 34%, 43% and 29% of
+repurchase requests, respectively"* (Q3 2023). That is both of Stanger's headline metrics, monthly,
+per vehicle. SREIT gives a monthly fulfilment percentage too, but only in months it prorated — 37%,
+3%, 4%, 4%, 4% through April–August 2024 — so a silent month has to be read as full fulfilment,
+which is an inference and must be labelled as one.
+
+**2. How consistent is the 13e-4(c)(4) wording? Consistent in structure, with one trap in it.** All
+five BDCs give shares tendered and shares accepted as absolute counts, in a numbered list, in a
+filing under ~5,200 characters. Four cite the rule explicitly; Blue Owl does not. **But
+"representing X%" means two different things:** the fulfilment rate for Blue Owl and Ares, and the
+*cap* for BCRED, Apollo and HPS. Parsing it as one field would report Apollo's fulfilment as 5%
+when it was 29.8% — wrong by six times, in the direction that makes gating look worse than it was.
+Compute it from the two share counts instead, which all five give.
+
+**The other trap, which cost the most time here: the newest `SC TO-I/A` is usually not the final
+amendment.** BCRED's newest is a Rule 13e-4(c)**(1)** communication amendment carrying no figures.
+And the final amendment cannot be identified from the cover page, because the checkbox *label* is
+present in every Schedule TO whether ticked or not and stripping tags discards the tick. Select on
+the presence of the result figures themselves.
+
+**A third corroboration of Stanger, incidentally.** The five BDCs' weighted fulfilment rate is
+**33.9%** — 272.9M shares accepted of 805.9M tendered — against their published 38% sector figure.
+Not quarter-aligned, since the five offers expired on four different dates, so it is a sanity check
+rather than a match.
+
+**What this does to the build-versus-buy case in §3b.** It was assumed Stanger has the requests
+figure because sponsors tell them, which would be an access advantage no engineering closes. That
+is wrong: every sponsor is obliged to publish it. Their real edge is breadth and cadence — more
+vehicles, assembled quarterly — which is labour, and which engineering does close. §3b has been
+revised accordingly, and the proposed build order reordered: the `non-traded` bucket split moves up
+to second, because the BDCs and the REITs need different extractors on different periodicities and
+gating cannot be built until they are apart.
 
 ### Pick up with, in order
 
 1. **Bank Behaviour step 5** — enforcement actions (FDIC / OCC / Fed, monthly). The next numbered
    step, and the inputs are a new source rather than a reshaping of existing ones.
-2. **Gating — rebuild it on Schedule TO.** **A correction found 2026-10-21:** the claim that no
-   filing discloses requests received was wrong, and had reached the liquidity panel's copy. Rule
-   13e-4(c)(4) obliges a Schedule TO **final amendment** to report tender results, and BCRED's gives
-   requests, fulfilment, proration and the cap in under 5,000 characters — *191,782,834 tendered,
-   93,100,272 accepted pro rata at 5% of shares outstanding*. The mistake was method: the 10-Q was
-   searched and the figure declared non-existent, rather than asking which form was obliged to carry
-   it. Schedule TO supersedes the 10-Q approach and should give full coverage. Confirm first whether
-   BREIT and SREIT, being REITs, run repurchase *plans* rather than tenders.
-3. **The screening-table column and Pressure-vs-Action scatter**, which the plan puts in step 7 —
+2. **Split the `non-traded` bucket into BDC and REIT.** Promoted ahead of gating on 2026-10-21:
+   the five BDCs are read from Schedule TO quarterly and the two REITs from 10-Q prose monthly, so
+   they cannot share an extractor, a cadence or a column, and gating cannot be built until they are
+   apart. Currently one bucket that mixes them, which also makes the aggregate less meaningful.
+3. **Gating — build it, now unblocked.** Both confirmation questions are answered above and the
+   answer is full coverage across all seven vehicles. Two extractors: Schedule TO final amendments
+   for the five BDCs, computing fulfilment from the share counts and never from the "representing
+   X%" phrase; 10-Q prose for BREIT and SREIT, handling both the prorated and the fully-met
+   wordings. All four traps are written up in `docs/PEER_TRACKER_STATUS.md` §3 — read it before
+   starting, because each one produces a plausible wrong number rather than an error.
+4. **The screening-table column and Pressure-vs-Action scatter**, which the plan puts in step 7 —
    now unblocked, since the summaries carry `sellerState` and `sellerScore`.
-4. **The peer alerts digest**, worth doing only after `peer-intel` is in `ENABLED_TABS` and the user
+5. **The peer alerts digest**, worth doing only after `peer-intel` is in `ENABLED_TABS` and the user
    knows which signals they want pushed.
-5. Smaller: sleeve display grouping, `/api/peers/v1`, the "CRE / Assets" label.
+6. Smaller: sleeve display grouping, `/api/peers/v1`, the "CRE / Assets" label.
 
 The full list is `docs/PEER_TRACKER_STATUS.md` (20 open) and
 `docs/BANK_BEHAVIOR_EXPANSION_STATUS.md` §2.
@@ -133,7 +201,41 @@ broader private credit tier stays, marked `adjacent`. The tab is named **Peers (
 
 ---
 
-## 2026-10-21 (latest) — Bank Behaviour step 4: Seller Likelihood, and a backtest that broke it three times
+## 2026-10-21 (latest) — The two gating questions, answered against live EDGAR
+
+No application code changed. Four scripts were run against live EDGAR to answer the two questions
+the previous stopping point left open, and the findings were written into
+`docs/PEER_TRACKER_STATUS.md` §3 and §3b. One stale comment was corrected.
+
+**What was checked.** Every Schedule TO ever filed by each of the seven non-traded vehicles, read
+from the full submissions history rather than the recent window; the cover page and filer of
+SREIT's five; the newest final amendment of each of the five BDCs, sentence by sentence; BREIT's and
+SREIT's 10-Qs for both a prorated period (2023 and 2024 respectively) and the current one.
+
+**What it found**, in short — the full version is in the stopping-point block above:
+
+- **Gating is a 7-of-7 feature, not 5-of-7**, but from two sources. Five BDCs file issuer tenders;
+  BREIT files none at all and SREIT's are a third party's hostile mini-tender. Both REITs disclose
+  requests and fulfilment in 10-Q prose instead, and BREIT's monthly disclosure is finer than
+  anything Stanger publishes.
+- **Four traps**, each of which yields a plausible wrong number rather than an error: `SC TO` vs
+  `SC TO-I`; the newest amendment not being the final one; the cover-page checkbox being
+  unreadable once tags are stripped; and "representing X%" meaning the fulfilment rate for two
+  sponsors and the cap for three.
+- **A third corroboration of Stanger** — 33.9% weighted fulfilment against their 38%.
+- **The build-versus-buy case shifted.** Their edge is breadth and cadence, not access. §3b and its
+  build order were revised, moving the `non-traded` bucket split ahead of gating.
+
+**The one code change** is a comment. `lib/peer-intel/gating.ts` still closed with "It never claims
+to know requests received, because no filing says" — the original mistaken reasoning, left behind by
+`d04bc4f` when the rest of the comment was corrected, and now contradicted by the body of the same
+comment. Rewritten, along with a note on which vehicles the Schedule TO route covers. Behaviour is
+unchanged: 15 of 15 gating tests pass, and `tsc` reports the same 91 pre-existing errors as before,
+none in `peer-intel`.
+
+---
+
+## 2026-10-21 — Bank Behaviour step 4: Seller Likelihood, and a backtest that broke it three times
 
 Two items of unaided work, in the order of value established with the user: the response size guard
 (`cc087df`), then Bank Behaviour step 4 — the score and its backtest (`1b9c212`), then the cache and

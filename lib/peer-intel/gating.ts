@@ -26,6 +26,15 @@
  * but **`SC TO-I/A` is the better source and the one to move to.** BCRED alone
  * has 59 Schedule TO filings, giving a long per-quarter history per fund.
  *
+ * **Which applies to five of the seven vehicles, not all of them** — checked
+ * against live EDGAR on 2026-10-21. The five BDCs run quarterly issuer tenders.
+ * BREIT has never filed a Schedule TO at all, and SREIT's five are `SC TO-T`,
+ * the *third-party* form, filed by Cox Capital and Saba against it rather than
+ * by it. Both REITs run share repurchase *plans* and disclose requests and
+ * fulfilment in 10-Q prose instead, BREIT monthly and alongside the cap used.
+ * So select on `SC TO-I`, never on `SC TO`, and expect two extractors.
+ * `docs/PEER_TRACKER_STATUS.md` §3 has the counts and the wording traps.
+ *
  * What the filing does state plainly, in words, is the cap: "intends to limit
  * the number of shares to be repurchased in each quarter to no more than 5.00%
  * of its outstanding shares of common stock." And that makes the question
@@ -37,8 +46,11 @@
  * that two of its funds saw requests above 5%.
  *
  * So this module reads the cap and the repurchase rows from the filing and
- * reports utilisation against the cap. It never claims to know requests
- * received, because no filing says.
+ * reports utilisation against the cap. **It does not read requests received** —
+ * not because no filing says, which was the original and mistaken reason, but
+ * because the filings that say are the ones above, which this module does not
+ * yet read. Utilisation against the cap is a weaker proxy than the fulfilment
+ * rate those filings state outright.
  *
  * Pure: document text in, figures out.
  */
