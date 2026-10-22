@@ -115,8 +115,24 @@ export function VintageLadder({ pacing, compact = false }: { pacing: VintagePaci
               formatter={(value, _name, item) => {
                 if (value == null) return [null, null]
                 const v = drawn.find((d) => d.cik === item.dataKey)
-                const pt = v?.points.find((p) => p.month === item.payload?.month)
-                return [`${money(Number(value))}${pt ? ` · filed ${pt.filedAt}` : ""}`, v?.vehicleName ?? String(item.dataKey)]
+                const idx = v?.points.findIndex((p) => p.month === item.payload?.month) ?? -1
+                const pt = idx >= 0 ? v!.points[idx] : null
+                const prev = idx > 0 ? v!.points[idx - 1] : null
+                // The same reading the drawer's trail gives: a rise is an interim
+                // close, no rise is the annual re-file, the first point is the start.
+                const what = !pt
+                  ? ""
+                  : idx === 0
+                    ? "first filing"
+                    : prev && pt.sold > prev.sold
+                      ? `interim close, +${money(pt.sold - prev.sold)}`
+                      : prev && pt.sold < prev.sold
+                        ? "amount restated"
+                        : "annual amendment"
+                return [
+                  `${money(Number(value))}${pt ? ` · ${what} · filed ${pt.filedAt}` : ""}`,
+                  v?.vehicleName ?? String(item.dataKey),
+                ]
               }}
               contentStyle={{ fontSize: 11, borderRadius: 6, borderColor: "#e2e8f0" }}
             />

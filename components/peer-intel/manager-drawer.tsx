@@ -7,6 +7,7 @@ import type { PeerCohort } from "@/lib/peer-intel/cohort"
 import {
   buildManagerReading,
   buildManagerSnapshot,
+  closeLabel,
   filingTrail,
   money,
   orderedSignals,
@@ -307,9 +308,27 @@ export function ManagerDrawer({
                     {manager.raises.map((r) => (
                       <div key={`trail-${r.cik}`}>
                         <div className="text-xs font-medium text-slate-700">{r.vehicleName}</div>
-                        <ul className="mt-0.5 flex flex-wrap gap-x-3 gap-y-1">
+                        <ul className="mt-0.5 space-y-0.5">
                           {filingTrail(r.raise).map((f) => (
                             <li key={`${r.cik}-${f.filedAt}-${f.formType}`} className="text-[11px] text-slate-600">
+                              <span
+                                className={
+                                  f.close.kind === "interim"
+                                    ? "font-medium text-slate-700"
+                                    : f.close.kind === "restated"
+                                      ? "font-medium text-amber-800"
+                                      : "text-slate-500"
+                                }
+                              >
+                                {closeLabel(f.close)}
+                              </span>
+                              {f.close.offeringFrom != null && typeof f.target === "number" && (
+                                <span className="ml-1 text-amber-800">
+                                  · offering {f.target < f.close.offeringFrom ? "cut" : "raised"} from {money(f.close.offeringFrom)} to{" "}
+                                  {money(f.target)}
+                                </span>
+                              )}
+                              <span className="ml-1 text-slate-400">· {money(f.sold)} sold to date ·</span>{" "}
                               {f.url ? (
                                 <a
                                   href={f.url}
@@ -325,7 +344,6 @@ export function ManagerDrawer({
                                   {f.formType} · {f.filedAt}
                                 </span>
                               )}
-                              <span className="ml-1 text-slate-400">{money(f.sold)}</span>
                             </li>
                           ))}
                         </ul>
@@ -334,8 +352,10 @@ export function ManagerDrawer({
                   </div>
                 )}
                 <p className="mt-2 text-[11px] text-slate-500">
-                  Every amendment, newest first, with the amount sold as at that filing. Each links to the document on
-                  sec.gov — these are the filings every figure in this drawer was read from.
+                  Every filing, newest first, read as what it was: an amendment whose amount sold rose is an interim
+                  close, one whose amount did not move is the mandatory annual re-file. The figure is cumulative and an
+                  amendment need only follow a material change, so one filing can bundle several closes. Each links to
+                  the document on sec.gov — these are the filings every figure in this drawer was read from.
                 </p>
               </Section>
 

@@ -78,7 +78,8 @@
     "test:peer-intel-gating": "tsx --test --tsconfig tsconfig.json lib/peer-intel/gating.test.ts",
     "test:seller-likelihood": "tsx --test --tsconfig tsconfig.json lib/analytics/seller-likelihood.test.ts",
     "backtest:seller": "tsx --conditions=react-server scripts/backtest-seller-likelihood.ts",
-    "test:peer-intel-vintage": "tsx --test --tsconfig tsconfig.json lib/peer-intel/vintage.test.ts"
+    "test:peer-intel-vintage": "tsx --test --tsconfig tsconfig.json lib/peer-intel/vintage.test.ts",
+    "verify:peer-gating": "tsx --conditions=react-server scripts/verify-peer-gating.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

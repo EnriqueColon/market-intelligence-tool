@@ -8,38 +8,39 @@ is it in now, and what is still open.
 
 ---
 
-## STOPPED HERE — 2026-10-22, vintage pacing built
+## STOPPED HERE — 2026-10-22, evening; interim closes and the gating spot-check uncommitted
 
 Read `CLAUDE.md` first for orientation, then this block. Everything below it is the running record —
 reverse-chronological, and worth reading only when you need the reasoning behind something specific.
 
-The gating checks of 2026-10-21 are committed and pushed as `188f74d`. **The vintage pacing panel
-is built and uncommitted** — see the entry below for what it is and what was verified. Confirm the
+On `origin/dev`: the gating checks of 2026-10-21 (`188f74d`) and the vintage pacing panel
+(`71f7ec9`, preview `market-intelligence-tool-inultkm9f.vercel.app`, **not yet looked at**).
+
+**Uncommitted, from the afternoon of 2026-10-22** — see the newest entry below: interim-close labels
+on the filing trail and chart tooltip (`lib/peer-intel/panel.ts`, `catalog.ts`, the drawer, the
+vintage component, one new panel test); the `verify:peer-gating` command
+(`scripts/verify-peer-gating.ts`, `package.json`); and the documentation of both in
+`docs/PEER_TRACKER_STATUS.md` §3, `confluence.md` §10 and here. Plus the `ROLLBACK.md` row for
+`71f7ec9` and this block's pointer to it, both from the morning. The user commits; ask. Confirm the
 head with `git log --oneline -1` rather than trusting a SHA written here; production is untouched at
 `fe0ad1b`, and nothing has been merged to `main`.
 
-### What tomorrow morning is for
+### Where this leaves the expansion
 
-The user's words: **to see what can be pushed forward on the expansion before next week, with
-confidence.** So the conversation is a scoping one — which pieces are solid enough to build now, not
-which are most interesting. Three things bear on that and are all written up already:
+The user's framing for the week: **push forward what can be built with confidence.** Two of the
+morning's three recommendations are done — vintage pacing (`71f7ec9`) and the gating spot-check — and
+the third, the interim-close labels, with them. What the spot-check established is in §3 of the peer
+status doc and is the thing to read before building gating: the wording holds over six quarters per
+fund, but **a fully-met quarter states no accepted count** (three different shapes, HPS silent on
+acceptance altogether), **Ares re-files corrected results for the same offer**, **BREIT's figure is
+year-to-date**, and **SREIT has been closed to ordinary holders since April 2026** in a wording that
+carries no percentage. The first run of the reader saw only the prorated quarters and would have
+reported every fund as gating in every quarter it appeared.
 
-1. **Gating is now a 7-of-7 feature** rather than the 5-of-7 that was feared, but it needs **two
-   extractors** on two cadences, and the `non-traded` bucket split has to come first. §3 of the peer
-   status doc has the counts, the four traps and the revised build order.
-2. **The two accuracy caveats**, which matter for "with confidence": the 33.9% aggregate is not
-   quarter-aligned and so is a sanity check rather than a match, and the wording findings rest on
-   **one quarter per fund** — five documents — so a fund's consistency across its own history is
-   unverified. A spot-check of two or three earlier quarters per fund is the cheapest way to firm
-   that up before committing to an extractor.
-3. **The §3b build-versus-buy discussion is still open and still unbuilt.** It moved today: Stanger's
-   edge is breadth and cadence rather than access, and the subscribe-instead alternative is weaker
-   than it was. The one item already proven and free — **vintage-over-vintage pacing**, about half a
-   day — remains the clearest thing to ship first.
-
-Also undecided: whether to promote the four live-EDGAR check scripts into a `verify:peer-gating`
-command. They were written to this session's scratchpad, which is **ephemeral and will be gone**;
-§3 records enough to rebuild them in minutes, but the next session cannot run them as they are.
+Next, in order: **split the `non-traded` bucket** (precondition), then **gating** on
+`verify:peer-gating`'s reader — the script's `readTenderResult` and `readReitProse` are the extractor
+in all but packaging, tested against 38 live documents. Then cap-change detection and the small tail.
+Bank Behaviour step 5 is independent and can go whenever. AMO and `ENABLED_TABS` stay parked.
 
 A preview deployment of `10160b3` rebuilds automatically; the GitHub deployment record appears a
 minute or two after the push, and the URL is in its deployment status. Previews sit behind Vercel
@@ -205,7 +206,43 @@ broader private credit tier stays, marked `adjacent`. The tab is named **Peers (
 
 ---
 
-## 2026-10-22 (latest) — Vintage pacing: each fund in a series on the same axes
+## 2026-10-22, afternoon (latest) — Interim-close labels, and a spot-check that found the quarters nobody was prorated
+
+Two of the morning's list. Neither changes a fetch, a payload or a cache key.
+
+**Interim closes.** The filing trail showed each Form D by its code — `D`, `D/A` — which says only
+that something was amended. A fund must amend on a material increase in capital and annually
+regardless, so an amendment whose amount sold rose is an interim close, the word every LP uses and
+the unit Preqin's "funds in market" is built on; one whose amount did not move is the mandatory
+re-file. `classifyFilings` in `lib/peer-intel/panel.ts` reads each filing against the one before it
+— *first filing*, *interim close +$52.9M*, *annual amendment, no new capital*, *amount sold
+restated −$2.0M* for the decreases that do occur — and says any offering change beside it. The
+drawer's trail and the vintage chart's tooltip render it; `closeKind` is catalogued with the caveat
+that one amendment can bundle several closes. One new test in `panel.test.ts`, 24 passing.
+
+**The spot-check.** Yesterday's finding rested on one results filing per fund. `npm run
+verify:peer-gating` (`scripts/verify-peer-gating.ts`) now walks `--depth` results filings per BDC,
+found by their figures rather than by form type, and `--quarters` 10-Qs per REIT, and checks what an
+extractor would rely on: both share counts present, computed rate agreeing with the stated one where
+one is stated, the "representing X%" denominator constant within a sponsor, a fully-met quarter
+reading 100% and a prorated one below it. The first run passed section 1 and failed four of five
+funds on count — one BCRED final found in 37 amendments — and that failure was the finding. **The
+reader had demanded an accepted share count, and no sponsor gives one when it accepted everything.**
+Three fully-met shapes, HPS's being no acceptance sentence at all; the rule that holds is that an
+accepted count means prorated and no "pro rata" means all bought. Two more runs surfaced Ares's
+corrected re-files for the same expiry, BREIT's year-to-date figures with 2025's "including all"
+wording, and SREIT's April 2026 plan restriction — "no repurchase requests will be accepted except"
+hardship cases — which carries no percentage and so read as *nothing to report* for the most gated
+vehicle of the seven. The final run, six quarters per BDC and four per REIT, passes every check; the
+table is in `docs/PEER_TRACKER_STATUS.md` §3. All five BDCs met every request through 2025; four
+crossed into proration in Q1 2026 and BCRED in Q2.
+
+**Verified.** 24 panel, 16 cohort, 13 vintage tests pass; `tsc` clean on every touched file; a
+production `next build` run as the pre-Vercel gate. Nothing here has been looked at in a browser.
+
+---
+
+## 2026-10-22, morning — Vintage pacing: each fund in a series on the same axes
 
 The first item on §3b's build order, chosen because it needed no new data: every raise in the
 cached cohort already carries its full Form D filing trail, and a trail — cumulative amount sold at

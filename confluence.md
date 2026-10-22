@@ -2344,6 +2344,26 @@ the final amendment by the presence of the result figures themselves, which is s
 since those figures are the point, or secondarily by a 13e-4(c)(4) citation, which four of the five
 BDCs carry and Blue Owl does not.
 
+**A fully-met tender quarter states no accepted count, and HPS states nothing about acceptance at
+all.** When requests fit under the cap no sponsor says how many shares it accepted, because the answer
+is all of them: BCRED and Apollo write "accepted for purchase 100% of the Shares", Blue Owl "purchased
+all validly tendered Shares", and HPS only that it paid "the net asset value of the total amount of
+Shares tendered". A reader that requires a number sees only the prorated quarters and produces a
+series in which every fund gates every quarter it appears — the first run of `verify:peer-gating` did
+exactly that. The rule that holds for all five: an accepted count means prorated; no count and no
+"pro rata" in the results means everything tendered was bought. Ares also files a results amendment
+and then a corrected one for the same offer a month later, differing in the last digits, so key a
+series on the offer's expiry and keep the later filing, never on filing date.
+
+**SREIT's most gated state carries no percentage.** From April 2026 its plan accepts "no repurchase
+requests except" death, disability and sub-$5,000 accounts, up to $5M a month. There is no fulfilment
+percentage because ordinary holders get nothing, so a reader keyed on "approximately N% of each
+stockholder's request was satisfied" scores the quarter as nothing to report. Check for the
+plan-restriction wording first; the Q1 2026 10-Q carries both it and the January–March percentages.
+BREIT's fully-met figure is year-to-date — three, six or nine months — and its 2025 wording is
+"including all repurchase requests received" where 2026 says "which represents all", so a quarterly
+series differences consecutive 10-Qs and must match both.
+
 **In a tender offer's results, "representing X%" has no fixed denominator.** It is
 accepted-over-tendered — the fulfilment rate — for Blue Owl and Ares, and accepted-over-outstanding
 — the cap — for BCRED, Apollo and HPS. Taking it as one field reports Apollo's Q2 2026 fulfilment

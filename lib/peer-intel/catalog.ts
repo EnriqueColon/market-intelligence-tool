@@ -163,6 +163,14 @@ export const PEER_FIELD_CATALOG: readonly PeerFieldSpec[] = [
     "trail"
   ),
 
+  derived(
+    "closeKind",
+    "totalSold of a filing against the filing before it: rose → interim close; unchanged → annual amendment; fell → restated; the oldest filing is the first",
+    "What the filing was",
+    "trail",
+    "An amendment is mandatory on a material increase in capital and once a year regardless, so a rise is a close and no rise is the annual re-file. The figure is cumulative and the filing only has to follow the change, so one amendment can bundle several closes — \"interim close\" is the right word, \"one amendment is one close\" is not guaranteed."
+  ),
+
   // ------------------------------------------------- vintage pacing, per manager
   derived(
     "vintageOrdinal",

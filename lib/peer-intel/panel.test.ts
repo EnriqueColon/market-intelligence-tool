@@ -13,6 +13,8 @@ import {
   buildManagerReading,
   buildManagerSnapshot,
   buildSelfReading,
+  classifyFilings,
+  closeLabel,
   layerName,
   money,
   monthYear,
@@ -239,6 +241,36 @@ test("the filing trail is newest first and carries each filing's own figures", (
   assert.equal(trail[1].sold, 0, "the original filing's own figure, not the latest")
   assert.equal(trail[1].target, 500_000_000, "and its own offering amount, before the cut")
   for (const f of trail) assert.match(f.url ?? "", /sec\.gov/)
+
+  // Read as closes: the original is the first filing, the amendment took $64.2M and cut the offering.
+  assert.deepEqual(trail[1].close, { kind: "first", delta: null, offeringFrom: null })
+  assert.deepEqual(trail[0].close, { kind: "interim", delta: 64_168_863, offeringFrom: 500_000_000 })
+  assert.equal(closeLabel(trail[0].close), "Interim close, +$64.2M")
+  assert.equal(closeLabel(trail[1].close), "First filing")
+})
+
+test("each amendment is read against the one before it: a rise is a close, no rise is the annual re-file", () => {
+  const filings = [
+    rec({ cik: "1", filedAt: "2023-01-10", offeringAmount: 100_000_000, totalSold: 10_000_000 }),
+    rec({ cik: "1", filedAt: "2023-09-10", formType: "D/A", offeringAmount: 100_000_000, totalSold: 40_000_000 }),
+    rec({ cik: "1", filedAt: "2024-09-10", formType: "D/A", offeringAmount: 100_000_000, totalSold: 40_000_000 }),
+    rec({ cik: "1", filedAt: "2025-03-10", formType: "D/A", offeringAmount: 100_000_000, totalSold: 38_000_000 }),
+    rec({ cik: "1", filedAt: "2025-09-10", formType: "D/A", offeringAmount: 100_000_000, totalSold: null }),
+    rec({ cik: "1", filedAt: "2026-03-10", formType: "D/A", offeringAmount: 150_000_000, totalSold: 70_000_000 }),
+  ]
+  const closes = classifyFilings(filings)
+  assert.deepEqual(closes.map((c) => c.kind), ["first", "interim", "annual", "restated", "unknown", "unknown"])
+  assert.equal(closes[1].delta, 30_000_000)
+  assert.equal(closes[2].delta, 0, "the annual re-file reports the same cumulative figure")
+  assert.equal(closes[3].delta, -2_000_000, "a decrease is a restatement, said rather than hidden")
+  assert.equal(closes[4].delta, null, "no figure on this filing, so nothing to compare")
+  assert.equal(closes[5].delta, null, "no figure on the previous filing either")
+  assert.equal(closes[5].offeringFrom, 100_000_000, "the offering change is still read when the sold figure cannot be")
+
+  assert.equal(closeLabel(closes[2]), "Annual amendment, no new capital")
+  assert.equal(closeLabel(closes[3]), "Amount sold restated, −$2.0M")
+  assert.equal(closeLabel(closes[4]), "Amendment")
+  assert.deepEqual(classifyFilings([]), [])
 })
 
 test("the roster reaches every tracked manager, not just those raising", () => {

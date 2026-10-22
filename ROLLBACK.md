@@ -8,15 +8,21 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
 | `main` | `80743b6` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `9b8777b` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `dev` | `71f7ec9` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 This table names the newest commit on each branch that **changes behaviour**; documentation-only
 commits sit on top of it and are deliberately not tracked here, because amending one rotates its
 SHA and the table then reads as stale when nothing has moved. Confirm with
 `git log --format='%h|%ci|%s'` rather than trusting the previous entry — this has drifted twice.
 
-**`dev` carries `9b8777b` as of 2026-10-21.** Three commits here change behaviour in production
-code paths, unlike the peer work: `cc087df` makes
+**`dev` carries `71f7ec9` as of 2026-10-22.** The vintage pacing panel: `lib/peer-intel/vintage.ts`,
+`components/peer-intel/vintage-pacing.tsx`, a card on the Peers tab and a section in the manager
+drawer, plus `CATEGORICAL_SERIES` in `lib/chart-theme.tsx` and three `PEER_FIELD_CATALOG` entries.
+Pure additions over the cohort already in the cache — **no fetch, payload or cache-key change**, so
+reverting is a clean `git revert` with nothing stored to expire. Invisible in production regardless,
+since `peer-intel` is not in `ENABLED_TABS`. `monthsBetween` in `form-d.ts` is now exported; nothing
+else there moved. Before it, **`dev` carries `9b8777b` as of 2026-10-21.** Three commits there change
+behaviour in production code paths, unlike the peer work: `cc087df` makes
 `/api/analytics/v1/behavior-signals` return **413** for a whole-scope request above 4 MB — which the
 national scope now is, so **AMO Tracker must switch to `band=`**; `1b9c212` adds the scoring module
 and its backtest, inert on its own; and `9b8777b` widens `BankBehaviorSummary` with three seller
@@ -261,6 +267,7 @@ to `4ca86dc`. It is kept as the record of what each commit does and what reverti
 
 | Commit | Date | Summary |
 | --- | --- | --- |
+| `71f7ec9` | 10-22 | Vintage pacing on the Peers tab: each fund in a manager's series on one chart, months since first sale against cumulative raised, the newest read against its predecessor at the same month with interpolation stated. From the Form D trails already in the cohort; no fetch, payload or cache change. Also adds `CATEGORICAL_SERIES` to `lib/chart-theme.tsx`. Clean revert; invisible in production while `peer-intel` is absent from `ENABLED_TABS`. |
 | `80743b6` | 10-07 | Market Analytics data API. Six read-only routes under `/api/analytics/v1/` (meta, screening, visuals, cohort-watch, behavior-signals with optional band, institution/CERT) return the tab's cached objects to other tools — AMO Tracker is the consumer. `Authorization: Bearer $ANALYTICS_API_KEY`, constant-time, 503 when the key is unset; `middleware.ts` adds `/api/analytics` to `PUBLIC_PATHS`. **Revertable in isolation** and inert until the env var is set. Reverting it breaks AMO Tracker's FDIC page once that page has been switched over, and nothing here. |
 | `0d90a59` | 10-07 | Bank Behaviour expansion, step 3 (drawer panel). The institution drawer gains a Balance-Sheet Actions section under the Eight-Quarter Trend: signal chips, HFS/OREO/modifications chart, CRE nonaccrual roll-forward waterfall and table, charge-offs and loan-sale bars, signals-by-quarter strip, deterministic actions reading; Copy Snapshot gains the signals and reading. `getInstitutionBehavior(cert)` cached `institution-behavior-v1` + CERT + quarter. **Revertable in isolation**: the section and its action go, the step 1–2 layers stay with no UI caller. |
 | `4ab576f` | 10-07 | Bank Behaviour expansion, step 2 (signals). `lib/analytics/bank-behavior-signals.ts`: HFS transfer, realized sale, CRE charge-off spike, unexplained nonaccrual exit, foreclosure route, modification build, CRE runoff, each on absolute floors and the bank's own history so Florida and national judge a bank identically; the per-category nonaccrual roll-forward. `app/actions/bank-behavior-signals.ts` caches per asset band (`behavior-signals-v1` + scope + band + quarter, seven days; largest entry 0.90 MB). `warm-cache` gains `behavior:national` / `behavior:florida`. Adds five RC-C fields to `FDIC_FIELDS.behavior` and `creLoans` to `BehaviorQuarter`. No UI; reverting removes two cron entries and files nothing else imports. |

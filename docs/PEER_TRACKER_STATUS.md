@@ -211,6 +211,61 @@ zero.
   self-validating, since the figures are what is wanted — or secondarily by a 13e-4(c)(4) citation,
   which four of five carry. BCRED's quarterly finals are 2026-08-04, 2026-05-01 and 2026-02-02.
 
+- [x] **Spot-check over history: the wording holds, and it showed four more things.** Done
+  2026-10-22 with `npm run verify:peer-gating -- --depth 6 --quarters 4`, now a standing command.
+  Thirty results filings read — six per BDC, back to Q1 2025 — plus four 10-Qs per REIT. Every
+  check passes. The one-quarter observation of 2026-10-21 was right as far as it went; it had seen
+  only the bad quarters.
+
+  **Fully-met quarters carry no accepted count, in three different shapes.** When requests fit under
+  the cap, no sponsor states how many shares it accepted, because the answer is all of them. BCRED
+  and Apollo say *"accepted for purchase 100% of the Shares … validly tendered"*; Blue Owl says
+  *"purchased all validly tendered … Shares"*; **HPS says nothing about acceptance at all**, only
+  that it paid *"the net asset value … of the total amount of Shares tendered"*. A reader that demands
+  a number finds only prorated quarters — which is what happened on the first run, and why it is a
+  trap: the resulting series would show a fund gating in every quarter it appears. The rule that
+  holds across all five: an accepted count means prorated; no count and no "pro rata" anywhere in
+  the results means everything tendered was bought.
+
+  **With that fixed, the history is the gating story itself.** Shares tendered, by expiry, with the
+  rate computed from the counts (all five sponsors' own stated rates, where stated, agree to the
+  first decimal):
+
+  | Vehicle | Q1 25 | Q2 25 | Q3 25 | Q4 25 | Q1 26 | Q2 26 | Q3 26 |
+  | --- | --- | --- | --- | --- | --- | --- | --- |
+  | BCRED | 23.0M · all | 43.6M · all | 31.8M · all | 85.0M · all | 133.7M · all | **191.8M · 48.5%** | — |
+  | Blue Owl OCIC | 21.3M · all | 49.2M · all | 33.8M · all | 108.2M · all | **463.8M · 22.8%** | **395.4M · 26.6%** | — |
+  | Apollo ADS | 5.3M · all | 8.4M · all | 16.3M · all | 28.2M · all | **66.9M · 45.2%** | **101.5M · 29.8%** | — |
+  | Ares ASIF | — | — | — | 21.6M · all | **45.3M · 43.1%** | **56.9M · 34.7%** | **50.4M · 38.2%** |
+  | HPS HLEND | 8.3M · all | 7.4M · all | 7.0M · all | 18.9M · all | **45.6M · 54.0%** | **66.7M · 37.6%** | — |
+
+  Every one of the five met every request through 2025. **Four crossed into proration in Q1 2026 and
+  BCRED in Q2** — Apollo's requests rose nineteen-fold in five quarters, BCRED's eight-fold. That is
+  the sector turn Stanger reports as a Q2 2026 record, read directly from the filings and a quarter
+  earlier for four of five. Expiry dates differ by sponsor (BCRED early in the quarter, Blue Owl the
+  last day, HPS and Apollo mid-way), so the columns above are by the quarter the offer expired in.
+
+  **Ares files two results amendments for the same offer**, a month apart and differing in the last
+  digits — June 18 2026 on 2026-06-26 and again 2026-07-28; March 20 on 03-27 and 04-17 — a results
+  filing and then a corrected one. Keyed on filing date that is two quarters; **key on expiry and
+  keep the later filing.** The `representing X%` denominator is consistent within every sponsor over
+  the window, and the figures survived every filing-agent template change (Blue Owl used five).
+
+  **BREIT's figure is year-to-date, and the 2025 wording differs.** *"we fulfilled $4.9 billion of
+  repurchases requested, including all repurchase requests received for the nine months ended"* —
+  "including", where 2026 says "which represents". Three, six and nine-month figures, so a quarterly
+  series must difference consecutive 10-Qs and take the 10-K for Q4.
+
+  **SREIT has been closed to ordinary holders since April 2026, and a percentage-keyed reader calls
+  that "nothing to report".** Its plan was amended on 2026-04-29 so that *"no repurchase requests
+  will be accepted except"* those on death or qualifying disability and accounts under $5,000, up to
+  $5.0M a month; it repurchased $4.8M, $2.3M and $2.5M in April–June. No fulfilment percentage
+  appears because ordinary holders get nothing. The 10-Q also states, as a standing sentence, that
+  requests have exceeded the plan's limits since October 2022. So SREIT needs a fourth shape,
+  `plan-restricted`, checked *before* the per-month footnotes — the Q1 2026 10-Q carries both, the
+  amendment and the January–March proration percentages. The most gated vehicle of the seven was the
+  one the first reader scored as having no gating at all.
+
 - [ ] **The alerts digest** is the other half of step 7 and is not started.
 - [ ] **A NAV plausibility guard exists only for NAV.** `looksLikeNav` rejects a net asset value that
   never moves, after HPS was found tagging exactly 1000.00 across six filings. Every other concept
@@ -355,7 +410,11 @@ Revised 2026-10-21 after the gating checks, which moved gating from "partially r
    fully-met wordings, and labelling SREIT's silent months as an inference.
 5. **Cap-change detection** — in filings, and a genuine Stanger framing. No longer a consolation
    prize for gating, so it drops below it.
-6. **Label Form D/A amendments as interim closes** — wording, an hour.
+6. ~~**Label Form D/A amendments as interim closes**~~ — **Done 2026-10-22.** The drawer's filing
+   trail and the vintage chart's tooltip now read each amendment against the one before it: a rise
+   in amount sold is an interim close with its delta, no rise is the annual re-file, a fall is a
+   restatement, and an offering change is said beside it. `classifyFilings` in
+   `lib/peer-intel/panel.ts`, catalogued as `closeKind` with the bundling caveat.
 
 The standing alternative — **subscribe to Stanger for the evergreen piece and delete our worse
 version** — is weaker than it was. Their edge is now known to be breadth and cadence rather than

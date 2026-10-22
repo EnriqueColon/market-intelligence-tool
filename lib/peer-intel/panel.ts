@@ -320,6 +320,63 @@ export function filingUrl(raise: VehicleRaise["raise"]): string | null {
   }
 }
 
+/**
+ * What a filing *was*, in fundraising terms rather than the SEC's.
+ *
+ * "D/A" says only that a Form D was amended. A fund must amend whenever it
+ * takes materially more capital and once a year regardless, so an amendment
+ * whose amount sold rose is an **interim close** — the word every LP uses, and
+ * the unit Preqin's "funds in market" is organised around — while one whose
+ * amount sold did not move is the mandatory annual re-file. The figure is
+ * cumulative, so the difference between two filings is the capital taken in
+ * between them; a single amendment may bundle several closes, which the
+ * catalogue entry says.
+ *
+ * `restated` is a decrease, which does happen — an issuer correcting a prior
+ * figure — and is labelled as what it is rather than hidden as "no change".
+ */
+export type FilingClose = {
+  kind: "first" | "interim" | "annual" | "restated" | "unknown"
+  /** Change in amount sold since the previous filing; null for the first or where either side is missing. */
+  delta: number | null
+  /** The previous filing's offering amount when this one states a different numeric one. */
+  offeringFrom: number | null
+}
+
+/** Classify each filing against the one before it. `filings` oldest-first, as on `Raise`. */
+export function classifyFilings(filings: readonly VehicleRaise["raise"]["filings"][number][]): FilingClose[] {
+  return filings.map((f, i) => {
+    if (i === 0) return { kind: "first", delta: null, offeringFrom: null }
+    const prev = filings[i - 1]
+    const offeringFrom =
+      typeof prev.offeringAmount === "number" &&
+      typeof f.offeringAmount === "number" &&
+      prev.offeringAmount !== f.offeringAmount
+        ? prev.offeringAmount
+        : null
+    if (f.totalSold == null || prev.totalSold == null) return { kind: "unknown", delta: null, offeringFrom }
+    const delta = f.totalSold - prev.totalSold
+    const kind: FilingClose["kind"] = delta > 0 ? "interim" : delta < 0 ? "restated" : "annual"
+    return { kind, delta, offeringFrom }
+  })
+}
+
+/** Plain words for a close, for the trail and the chart. */
+export function closeLabel(close: FilingClose): string {
+  switch (close.kind) {
+    case "first":
+      return "First filing"
+    case "interim":
+      return `Interim close, +${money(close.delta)}`
+    case "annual":
+      return "Annual amendment, no new capital"
+    case "restated":
+      return `Amount sold restated, ${money(close.delta)}`
+    default:
+      return "Amendment"
+  }
+}
+
 /** Every filing behind a raise, newest first, for the drawer's trail. */
 export function filingTrail(raise: VehicleRaise["raise"]): Array<{
   formType: string
@@ -327,16 +384,20 @@ export function filingTrail(raise: VehicleRaise["raise"]): Array<{
   url: string | null
   sold: number | null
   target: number | "indefinite" | null
+  close: FilingClose
 }> {
-  return [...raise.filings].reverse().map((f) => {
-    let url: string | null = null
-    try {
-      url = f.accession && f.cik ? buildFilingIndexUrl(f.cik, f.accession) : null
-    } catch {
-      url = null
-    }
-    return { formType: f.formType, filedAt: f.filedAt, url, sold: f.totalSold, target: f.offeringAmount }
-  })
+  const closes = classifyFilings(raise.filings)
+  return raise.filings
+    .map((f, i) => {
+      let url: string | null = null
+      try {
+        url = f.accession && f.cik ? buildFilingIndexUrl(f.cik, f.accession) : null
+      } catch {
+        url = null
+      }
+      return { formType: f.formType, filedAt: f.filedAt, url, sold: f.totalSold, target: f.offeringAmount, close: closes[i] }
+    })
+    .reverse()
 }
 
 export function newLaunchRows(cohort: PeerCohort): Array<VehicleRaise & { manager: string; peerId: string }> {
