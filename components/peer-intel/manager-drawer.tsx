@@ -15,6 +15,8 @@ import {
 import { agentsForManager } from "@/lib/peer-intel/distribution"
 import { peerById } from "@/lib/peer-intel/registry"
 import { peerSignalSpec, type ManagerSignals, type SignalState } from "@/lib/peer-intel/signals"
+import { buildVintagePacing } from "@/lib/peer-intel/vintage"
+import { VintageLadder } from "@/components/peer-intel/vintage-pacing"
 
 /**
  * One manager, in full.
@@ -97,6 +99,10 @@ export function ManagerDrawer({
     [signals, peerId]
   )
   const registryEntry = peerId ? peerById(peerId) : undefined
+  const pacing = useMemo(() => (manager ? buildVintagePacing(manager) : null), [manager])
+  // The ladder needs two funds with a curve to say anything; a single-fund
+  // manager gets no section rather than a chart with one line and a caveat.
+  const showLadder = (pacing?.vintages.filter((v) => v.points.length > 0).length ?? 0) >= 2
 
   async function copySnapshot() {
     if (!manager || !managerSignalSet) return
@@ -225,6 +231,12 @@ export function ManagerDrawer({
                   </div>
                 )}
               </Section>
+
+              {showLadder && pacing && (
+                <Section title="Vintage pacing">
+                  <VintageLadder pacing={pacing} compact />
+                </Section>
+              )}
 
               <Section title="How it raises">
                 {(() => {

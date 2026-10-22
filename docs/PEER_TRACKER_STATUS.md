@@ -32,7 +32,13 @@ Registry today: **26 managers, 65 vehicles, 59 distinct raises**; 25 / 39 / 65 v
 
 Also shipped outside the numbered steps: a **Distribution** panel (`a8855c6`) showing the
 broker-dealers each manager pays to sell, with CRD numbers — the answer to "who are the investors?",
-which no filing discloses.
+which no filing discloses. And **Vintage Pacing** (2026-10-22): each of a manager's funds on the
+same axes, months since first sale against cumulative capital raised, with the newest read against
+its predecessor at the same month. The firm's own ladder is a card on the tab; any peer with two or
+more vintages gets the same chart in its drawer. Built entirely from the Form D trails already in the
+cached cohort — no new fetch, no payload change. `lib/peer-intel/vintage.ts`, 13 tests. Vintages are
+ordered by first-sale date rather than name, sleeves are omitted and counted, and where the prior
+fund's figure at that month falls between two filings the reading says which two.
 
 Cache entries written by `warm-cache`: `peers:national` (~250 KB, 43s, 340 SEC requests plus 26 news
 feeds), with Florida and Miami-Dade smaller — all far inside the 2 MB per-entry limit, so no chunking
@@ -339,7 +345,8 @@ months apart. The curve shows direction, not a smooth trajectory, and any panel 
 Revised 2026-10-21 after the gating checks, which moved gating from "partially rescuable" to
 "buildable at full coverage" and made the bucket split a precondition rather than a nicety.
 
-1. **Vintage-over-vintage pacing** — proven above, free, the clearest win. About half a day.
+1. ~~**Vintage-over-vintage pacing**~~ — **Done 2026-10-22**, see §1. The one thing on this list
+   that needed no new data.
 2. **Split the `non-traded` bucket** into BDC and REIT. Promoted from third: the two kinds are read
    from different forms on different periodicities, so gating cannot be built until they are apart.
 3. **Gating on Schedule TO for the five BDCs**, computing fulfilment from the share counts and never

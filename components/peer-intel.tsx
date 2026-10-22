@@ -17,6 +17,7 @@ import { ManagerRoster } from "@/components/peer-intel/manager-roster"
 import { PortfolioStress } from "@/components/peer-intel/portfolio-stress"
 import { ManagerDrawer } from "@/components/peer-intel/manager-drawer"
 import { RaiseEnvironment } from "@/components/peer-intel/raise-environment"
+import { VintagePacingPanel } from "@/components/peer-intel/vintage-pacing"
 
 /**
  * Peers — what competing managers are doing about raising capital.
@@ -216,6 +217,7 @@ export function PeerIntel() {
       {!loading && !error && payload && (
         <>
           <RaiseEnvironment cohort={payload.cohort} />
+          <VintagePacingPanel cohort={payload.cohort} />
           <ActiveRaises cohort={payload.cohort} onSelectManager={setSelectedManager} />
           <NewLaunches cohort={payload.cohort} onSelectManager={setSelectedManager} />
           <Distribution cohort={payload.cohort} onSelectManager={setSelectedManager} />

@@ -778,8 +778,19 @@ production**, which is the state at the time of writing.
 
 A three-layer selector — Miami-Dade, Florida, the US — cumulative upward and matching the scopes
 Market Analytics uses. Each layer is one cached entry (see the caching section). Panels, in order:
-Raise Environment with the firm's own position against the layer, Open Raises with the firm's row
-pinned, Launched in the last twelve months, and a manager drawer.
+Raise Environment with the firm's own position against the layer, **Vintage Pacing** (the firm's
+funds on one chart, months since first sale against cumulative raised, the newest read against its
+predecessor — `lib/peer-intel/vintage.ts`, from the Form D trails already in the cohort), Open
+Raises with the firm's row pinned, Launched in the last twelve months, and a manager drawer, which
+carries the same vintage chart for any peer with two or more vintages on file.
+
+**Vintages are ordered by first-sale date, never by name**, sleeves are omitted because the registry
+holds no parent link, and the prior fund's figure at the newest's month is interpolated between its
+two bracketing filings and said to be. The chart uses `CATEGORICAL_SERIES` from `lib/chart-theme.tsx`
+rather than `CHART_SERIES`: the five blues are indistinguishable to a reader (adjacent ΔE 8.5), which
+is fine for a trend panel with one leading line and wrong for a chart whose point is which line is
+which. The four-hue set was validated for colour-vision deficiency on 2026-10-22; a chart needing a
+fifth identity needs small multiples, not a fifth colour.
 
 Everything comes from SEC EDGAR: Form D for the raise, XBRL company facts for the vehicles that file
 periodic reports. The readings are built from the figures on the panel (`lib/peer-intel/panel.ts`)

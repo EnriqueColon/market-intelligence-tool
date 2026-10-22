@@ -163,6 +163,29 @@ export const PEER_FIELD_CATALOG: readonly PeerFieldSpec[] = [
     "trail"
   ),
 
+  // ------------------------------------------------- vintage pacing, per manager
+  derived(
+    "vintageOrdinal",
+    "rank of the fund by dateOfFirstSale (or first filing) among the manager's fund-role vehicles",
+    "Vintage",
+    "trail",
+    "Derived from dates, never read from the name — a manager's \"Fund VI\" may be its fourth filer, and its \"Fund 1\" may be the newest. Sleeves are left out, because the registry holds no link to their parent fund."
+  ),
+  derived(
+    "monthsIn",
+    "whole months from dateOfFirstSale (or first filing) to the newest filing that reports totalSold",
+    "Months in market",
+    "trail",
+    "A filing dated before the first sale reads as month 0."
+  ),
+  derived(
+    "pace",
+    "sold (newest vintage) ÷ sold (prior vintage at the same month, read from a filing at that month or a straight line between the two filings either side of it)",
+    "Pace against the prior vintage",
+    "trail",
+    "Trails are sparse, so the prior's figure is usually interpolated; the panel says which two filings it sits between. Null when the prior's trail does not reach that month — nothing is extrapolated."
+  ),
+
   // --------------------------------------------- computed across a manager/layer
   derived(
     "totalRaised",

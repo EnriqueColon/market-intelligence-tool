@@ -313,7 +313,7 @@ function numericTarget(v: number | "indefinite" | null): number | null {
 }
 
 /** Whole months between two ISO dates, positive when `b` is later. */
-function monthsBetween(a: string, b: string): number {
+export function monthsBetween(a: string, b: string): number {
   const [ay, am, ad] = a.split("-").map(Number)
   const [by, bm, bd] = b.split("-").map(Number)
   return (by - ay) * 12 + (bm - am) - (bd < ad ? 1 : 0)

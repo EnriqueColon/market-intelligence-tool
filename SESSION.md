@@ -8,21 +8,15 @@ is it in now, and what is still open.
 
 ---
 
-## STOPPED HERE — 2026-10-21, after the gating checks; resuming the morning of 2026-10-22
+## STOPPED HERE — 2026-10-22, vintage pacing built
 
 Read `CLAUDE.md` first for orientation, then this block. Everything below it is the running record —
 reverse-chronological, and worth reading only when you need the reasoning behind something specific.
 
-**There are uncommitted changes in the working tree.** `dev` is at `eb179f3` and level with
-`origin/dev`; production is untouched at `fe0ad1b`, and nothing here has been merged to `main`.
-Confirm the head with `git log --oneline -1` rather than trusting a SHA written here.
-
-**Modified and not committed**, all from the gating checks of 2026-10-21:
-`docs/PEER_TRACKER_STATUS.md`, `SESSION.md`, `confluence.md` and a comment-only change to
-`lib/peer-intel/gating.ts`. No behaviour changed; 69 peer-intel tests pass and `tsc` reports the
-same 91 pre-existing errors as before, none in `peer-intel`. **The user had not yet decided whether
-to commit these when the session ended** — ask before assuming either way. `ROLLBACK.md` is
-deliberately untouched, since its table tracks only behaviour-changing commits.
+The gating checks of 2026-10-21 are committed and pushed as `188f74d`. **The vintage pacing panel
+is built and uncommitted** — see the entry below for what it is and what was verified. Confirm the
+head with `git log --oneline -1` rather than trusting a SHA written here; production is untouched at
+`fe0ad1b`, and nothing has been merged to `main`.
 
 ### What tomorrow morning is for
 
@@ -194,6 +188,16 @@ The full list is `docs/PEER_TRACKER_STATUS.md` (20 open) and
 
 ### Decisions the user has already taken, so they need no revisiting
 
+**AMO Tracker is parked until the expansion is finished** (decided 2026-10-22). The question raised
+was whether AMO should keep its FDIC Data Analytics page at all, given that it is the only consumer
+of `/api/analytics/v1/*`, the integration is one-way, and the page's existence is what makes the
+whole-scope 413 a merge blocker. The three options — keep and brief AMO to use `band=`; drop the
+page from AMO and remove the coupling; or deepen it — were laid out, and the deciding fact is what
+AMO is for and who opens it, which was not settled. **Do not reopen this until the remaining
+expansion items are done**; until then the merge of `dev` to `main` stays held, which is the
+existing instruction anyway. AMO Tracker (`EnriqueColon/amo-dashboard`, a separate droplet app)
+is unrelated to the AOM material inside this repo.
+
 `ANALYTICS_API_KEY` rotation is theirs. The preview has been reviewed and looks correct.
 `peer-intel` goes into `ENABLED_TABS` when the expansion is finished, not before. The credential that
 was in the `origin` URL is not being pursued, on the basis that the repository's data is public. The
@@ -201,7 +205,50 @@ broader private credit tier stays, marked `adjacent`. The tab is named **Peers (
 
 ---
 
-## 2026-10-21 (latest) — The two gating questions, answered against live EDGAR
+## 2026-10-22 (latest) — Vintage pacing: each fund in a series on the same axes
+
+The first item on §3b's build order, chosen because it needed no new data: every raise in the
+cached cohort already carries its full Form D filing trail, and a trail — cumulative amount sold at
+each amendment — is a fundraising curve once it is laid out by months since first sale instead of by
+calendar date.
+
+**What was built.** `lib/peer-intel/vintage.ts`, pure, with 13 tests beside it. It takes one
+manager's raises, keeps the fund-role vehicles, orders them into vintages **by first-sale date, never
+by name** (a test names a fund "Fund 1" and starts it last), builds each one's curve, and compares
+the newest with its predecessor at the same month. Where that month falls between two of the prior's
+filings the figure is a straight line between them and the comparison records which two, so the
+reading can say "about $43M — a figure between its filings at 20 months and 40 months, not a reported
+one." Where the prior's trail does not reach that month nothing is extrapolated; the reading says the
+two cannot be compared at the same point and whether the newer fund has already passed the prior's
+last figure. Three catalogue entries carry the formulas.
+
+Two surfaces share one component, `components/peer-intel/vintage-pacing.tsx`: a card on the tab for
+the firm's own ladder, directly under Raise Environment, and a section in the manager drawer for any
+peer with two or more vintages that have a curve. The chart is markers joined by straight segments —
+a fund files only when it takes money, so a trail is two to five points, and a smoothed curve would
+claim knowledge of the months in between. A legend-table under it gives each vintage's start,
+offering (with any cut), raised, months in, subscribed share and a link to its newest filing.
+
+**One design decision worth knowing.** The repo's `CHART_SERIES` is five steps of one blue, and the
+palette validator fails it for exactly this use: adjacent steps differ by ΔE 8.5, under the 15 a
+full-colour reader needs to tell two lines apart. That suits a trend panel with one leading line; it
+cannot carry a chart whose whole point is which line is which. So `lib/chart-theme.tsx` gains
+`CATEGORICAL_SERIES`, four hues at one lightness with the brand blue first, validated on 2026-10-22
+(worst pair ΔE 17.7 protan, 21.4 tritan, 25.4 normal; all ≥ 3:1 on white). Colour is assigned by
+position from the newest, so the subject of the reading is always blue whatever its ordinal. Four is
+the ceiling — a fifth distinguishable hue is not available at that lightness.
+
+**Verified.** 229 tests across the twelve peer-intel suites pass; `tsc` is clean on every touched
+file and reports the same 91 pre-existing errors elsewhere. A production `next build` was run as the
+pre-Vercel gate. **The chart itself has not been looked at** — the standing instruction is to verify
+on a Vercel preview, which only a signed-in team member can open, so the visual check is the user's
+on the next push of `dev`. Things to look for there: label collisions on the legend-table at the
+drawer's compact width, and whether Safe Harbor's reading matches §3b's figures ($64.2M at month 28
+against Fund 3's $61.7M at month 40, offering 3.0× and cut from $500M).
+
+---
+
+## 2026-10-21 — The two gating questions, answered against live EDGAR
 
 No application code changed. Four scripts were run against live EDGAR to answer the two questions
 the previous stopping point left open, and the findings were written into
