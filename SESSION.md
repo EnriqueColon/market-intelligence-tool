@@ -8,7 +8,7 @@ is it in now, and what is still open.
 
 ---
 
-## STOPPED HERE — 2026-10-22, evening; interim closes and the gating spot-check uncommitted
+## STOPPED HERE — 2026-10-22, evening
 
 Read `CLAUDE.md` first for orientation, then this block. Everything below it is the running record —
 reverse-chronological, and worth reading only when you need the reasoning behind something specific.
@@ -16,12 +16,11 @@ reverse-chronological, and worth reading only when you need the reasoning behind
 On `origin/dev`: the gating checks of 2026-10-21 (`188f74d`) and the vintage pacing panel
 (`71f7ec9`, preview `market-intelligence-tool-inultkm9f.vercel.app`, **not yet looked at**).
 
-**Uncommitted, from the afternoon of 2026-10-22** — see the newest entry below: interim-close labels
-on the filing trail and chart tooltip (`lib/peer-intel/panel.ts`, `catalog.ts`, the drawer, the
-vintage component, one new panel test); the `verify:peer-gating` command
-(`scripts/verify-peer-gating.ts`, `package.json`); and the documentation of both in
-`docs/PEER_TRACKER_STATUS.md` §3, `confluence.md` §10 and here. Plus the `ROLLBACK.md` row for
-`71f7ec9` and this block's pointer to it, both from the morning. The user commits; ask. Confirm the
+Also on `origin/dev`: **`ac560a8`**, the interim-close labels and the `verify:peer-gating` command —
+see the newest entry below. Neither `71f7ec9` nor `ac560a8` has been looked at in a browser; both
+are on the Peers tab, which previews show regardless of `ENABLED_TABS`. The working tree is clean
+apart from `.DS_Store` and the untracked `.claude/`, except for the `ROLLBACK.md` row and this
+paragraph, written after the push. Confirm the
 head with `git log --oneline -1` rather than trusting a SHA written here; production is untouched at
 `fe0ad1b`, and nothing has been merged to `main`.
 

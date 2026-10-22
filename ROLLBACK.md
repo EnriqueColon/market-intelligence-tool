@@ -8,14 +8,19 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
 | `main` | `80743b6` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `71f7ec9` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `dev` | `ac560a8` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 This table names the newest commit on each branch that **changes behaviour**; documentation-only
 commits sit on top of it and are deliberately not tracked here, because amending one rotates its
 SHA and the table then reads as stale when nothing has moved. Confirm with
 `git log --format='%h|%ci|%s'` rather than trusting the previous entry — this has drifted twice.
 
-**`dev` carries `71f7ec9` as of 2026-10-22.** The vintage pacing panel: `lib/peer-intel/vintage.ts`,
+**`dev` carries `ac560a8` as of 2026-10-22.** Interim-close labels on the drawer's filing trail and
+the vintage chart's tooltip (`classifyFilings` in `lib/peer-intel/panel.ts`, a `closeKind` catalogue
+entry), and the `verify:peer-gating` command (`scripts/verify-peer-gating.ts`) — a read-only live
+check against EDGAR that touches no cache. Display and tooling only; a clean `git revert`, and
+invisible in production while `peer-intel` is absent from `ENABLED_TABS`. Before it, **`dev` carries
+`71f7ec9` as of 2026-10-22.** The vintage pacing panel: `lib/peer-intel/vintage.ts`,
 `components/peer-intel/vintage-pacing.tsx`, a card on the Peers tab and a section in the manager
 drawer, plus `CATEGORICAL_SERIES` in `lib/chart-theme.tsx` and three `PEER_FIELD_CATALOG` entries.
 Pure additions over the cohort already in the cache — **no fetch, payload or cache-key change**, so
@@ -267,6 +272,7 @@ to `4ca86dc`. It is kept as the record of what each commit does and what reverti
 
 | Commit | Date | Summary |
 | --- | --- | --- |
+| `ac560a8` | 10-22 | Interim-close labels: each Form D filing in the drawer's trail and the vintage tooltip read against the one before it — first filing, interim close with delta, annual re-file, restatement — with offering changes beside. Plus `npm run verify:peer-gating`, a repeatable live check of the gating sources over six quarters per BDC and four 10-Qs per REIT. Display and tooling; clean revert; invisible in production while `peer-intel` is absent from `ENABLED_TABS`. |
 | `71f7ec9` | 10-22 | Vintage pacing on the Peers tab: each fund in a manager's series on one chart, months since first sale against cumulative raised, the newest read against its predecessor at the same month with interpolation stated. From the Form D trails already in the cohort; no fetch, payload or cache change. Also adds `CATEGORICAL_SERIES` to `lib/chart-theme.tsx`. Clean revert; invisible in production while `peer-intel` is absent from `ENABLED_TABS`. |
 | `80743b6` | 10-07 | Market Analytics data API. Six read-only routes under `/api/analytics/v1/` (meta, screening, visuals, cohort-watch, behavior-signals with optional band, institution/CERT) return the tab's cached objects to other tools — AMO Tracker is the consumer. `Authorization: Bearer $ANALYTICS_API_KEY`, constant-time, 503 when the key is unset; `middleware.ts` adds `/api/analytics` to `PUBLIC_PATHS`. **Revertable in isolation** and inert until the env var is set. Reverting it breaks AMO Tracker's FDIC page once that page has been switched over, and nothing here. |
 | `0d90a59` | 10-07 | Bank Behaviour expansion, step 3 (drawer panel). The institution drawer gains a Balance-Sheet Actions section under the Eight-Quarter Trend: signal chips, HFS/OREO/modifications chart, CRE nonaccrual roll-forward waterfall and table, charge-offs and loan-sale bars, signals-by-quarter strip, deterministic actions reading; Copy Snapshot gains the signals and reading. `getInstitutionBehavior(cert)` cached `institution-behavior-v1` + CERT + quarter. **Revertable in isolation**: the section and its action go, the step 1–2 layers stay with no UI caller. |
