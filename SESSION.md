@@ -10,9 +10,10 @@ is it in now, and what is still open.
 
 ## STOPPED HERE — 2026-10-21, resuming later today
 
-Read this first. Everything below is the running record; this is the state to pick up from.
+Read `CLAUDE.md` first for orientation, then this block. Everything below it is the running record —
+reverse-chronological, and worth reading only when you need the reasoning behind something specific.
 
-**`dev` is at `d04bc4f`; `origin/dev` is at `64a27fc`, so the final correction commit is unpushed.** Production is untouched at
+**`dev` is pushed and level with `origin/dev`.** Confirm the head with `git log --oneline -1` rather than trusting a SHA written here. Production is untouched at
 `fe0ad1b` — nothing here has been merged to `main`. The working tree is clean apart from
 `.DS_Store` and the untracked `.claude/`.
 

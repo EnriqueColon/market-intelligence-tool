@@ -21,18 +21,23 @@ deployment, and `main` is deployed automatically on push.
 
 ## Documentation map
 
-Four files are maintained together, and each answers a different question. Read the one that matches
-what you need rather than starting at the top.
+Start with `CLAUDE.md`. It is short, kept current, and names the traps — it exists so a session does
+not spend its first thousand tokens rediscovering the project. Everything below is what it points at.
 
 | File | Answers | Kind |
 | --- | --- | --- |
+| `CLAUDE.md` | Where do I start, what should I read, what will bite me? | Entry point |
 | `README.md` (this file) | What is this, how do I run it, how do I change it safely? | Orientation |
 | `confluence.md` | How does the system behave *right now*, in detail? | Technical reference |
 | `SESSION.md` | What changed, when, and why was it done that way? | Dated history |
 | `ROLLBACK.md` | Which commit do I go back to, and how? | Recovery |
 
-`docs/` holds narrower guides, of which `docs/DEV_ENVIRONMENT.md` is the one most worth reading
-early. `docs/NEXT_VERSION_PLAN.md` describes where the tool is going — serving underwriting, investor
+`SESSION.md` is long and reverse-chronological; its **"STOPPED HERE" block at the top** carries the
+current state and the pick-up list, and is the only part worth reading in full to resume.
+
+`docs/` holds narrower guides. `docs/PEER_TRACKER_STATUS.md` and
+`docs/BANK_BEHAVIOR_EXPANSION_STATUS.md` are the live open-item lists for the two expansions in
+progress; `docs/DEV_ENVIRONMENT.md` is the one most worth reading early. `docs/NEXT_VERSION_PLAN.md` describes where the tool is going — serving underwriting, investor
 relations, finance and executives from one data layer — and is the place to check before starting
 anything substantial, since it records which decisions are already settled.
 `EXEC_SUMMARY_WITH_KEYWORDS.md` is an older file recording the search keyword criteria behind the
