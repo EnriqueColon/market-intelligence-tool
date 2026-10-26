@@ -783,10 +783,14 @@ Raise Environment with the firm's own position against the layer, **Vintage Paci
 funds on one chart, months since first sale against cumulative raised, the newest read against its
 predecessor — `lib/peer-intel/vintage.ts`, from the Form D trails already in the cohort), Open
 Raises with the firm's row pinned, Launched in the last twelve months, and a manager drawer, which
-carries the same vintage chart for any peer with two or more vintages on file, and two sections from
-the rest of Form D: **Structure & terms** (formation, co-issuers, exemptions and their changes,
-securities, minimum and its history, commissions, payments to insiders, with the filer's own notes
-quoted) and **People** (the related persons, and any name found at another manager).
+carries the same vintage chart for any peer with two or more vintages on file. **Each fund's row in
+the drawer's Raises table expands** to show, from the rest of Form D, its structure and terms
+(formation, co-issuers, exemptions and their changes, securities, minimum and its history,
+commissions, payments to insiders, with the filer's own notes quoted) beside its people (the related
+persons, and any name found at another manager). A fund clicked in Open Raises or New Launches opens
+the drawer with that fund expanded and scrolled into view; a single-fund manager opens expanded. The
+page passes the fund's CIK with the manager (`onSelectManager(peerId, cik)`), and the drawer resets
+its expanded row on every open so one manager's choice never carries to the next.
 
 **Two rules the structure and people code depends on.** A Form D filed jointly by several issuers
 reports the offering as a whole, so a co-issuer's capital is *inside* the filing's totals; the risk is

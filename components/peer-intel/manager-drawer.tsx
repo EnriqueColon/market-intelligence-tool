@@ -1,6 +1,7 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { Fragment, useEffect, useMemo, useRef, useState } from "react"
+import { ChevronRight } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import type { PeerCohort } from "@/lib/peer-intel/cohort"
@@ -18,7 +19,7 @@ import { peerById } from "@/lib/peer-intel/registry"
 import { peerSignalSpec, type ManagerSignals, type SignalState } from "@/lib/peer-intel/signals"
 import { buildVintagePacing } from "@/lib/peer-intel/vintage"
 import { VintageLadder } from "@/components/peer-intel/vintage-pacing"
-import { PeopleSection, StructureSection } from "@/components/peer-intel/structure-people"
+import { FundDetail, FundDetailNote } from "@/components/peer-intel/structure-people"
 
 /**
  * One manager, in full.
@@ -83,14 +84,19 @@ export function ManagerDrawer({
   cohort,
   signals,
   peerId,
+  focusCik = null,
   onClose,
 }: {
   cohort: PeerCohort
   signals: ManagerSignals[]
   peerId: string | null
+  /** A fund to open expanded, when the drawer was opened from that fund's row on the tab. */
+  focusCik?: string | null
   onClose: () => void
 }) {
   const [copied, setCopied] = useState(false)
+  const [expanded, setExpanded] = useState<string | null>(null)
+  const rowRefs = useRef(new Map<string, HTMLTableRowElement>())
 
   const manager = useMemo(
     () => (peerId ? cohort.managers.find((m) => m.peerId === peerId) ?? null : null),
@@ -105,6 +111,24 @@ export function ManagerDrawer({
   // The ladder needs two funds with a curve to say anything; a single-fund
   // manager gets no section rather than a chart with one line and a caveat.
   const showLadder = (pacing?.vintages.filter((v) => v.points.length > 0).length ?? 0) >= 2
+
+  // Which fund opens expanded: the one clicked on the tab, or — for a manager
+  // with a single fund — that fund, since there is nothing to choose between.
+  // Reset on every open so a previous manager's choice never carries over.
+  useEffect(() => {
+    if (!manager) {
+      setExpanded(null)
+      return
+    }
+    const focused = focusCik && manager.raises.some((r) => r.cik === focusCik) ? focusCik : null
+    const initial = focused ?? (manager.raises.length === 1 ? manager.raises[0].cik : null)
+    setExpanded(initial)
+    if (focused) {
+      // After the dialog has laid out, bring the clicked fund into view.
+      const id = window.setTimeout(() => rowRefs.current.get(focused)?.scrollIntoView({ block: "start", behavior: "smooth" }), 150)
+      return () => window.clearTimeout(id)
+    }
+  }, [manager, focusCik])
 
   async function copySnapshot() {
     if (!manager || !managerSignalSet) return
@@ -187,9 +211,33 @@ export function ManagerDrawer({
                         </tr>
                       </thead>
                       <tbody>
-                        {manager.raises.map((r) => (
-                          <tr key={r.cik} className="border-b border-slate-100 last:border-0">
+                        {manager.raises.map((r) => {
+                          const open = expanded === r.cik
+                          const toggle = () => setExpanded(open ? null : r.cik)
+                          return (
+                          <Fragment key={r.cik}>
+                          <tr
+                            ref={(el) => {
+                              if (el) rowRefs.current.set(r.cik, el)
+                              else rowRefs.current.delete(r.cik)
+                            }}
+                            onClick={toggle}
+                            className={`cursor-pointer border-b border-slate-100 hover:bg-slate-50 ${open ? "bg-slate-50" : ""}`}
+                          >
                             <td className="px-2 py-1.5 text-sm text-slate-700">
+                              <button
+                                type="button"
+                                aria-expanded={open}
+                                aria-label={`${open ? "Hide" : "Show"} structure, terms and people for ${r.vehicleName}`}
+                                onClick={(e) => {
+                                  // The row handles the click; the button exists for keyboard and screen readers.
+                                  e.stopPropagation()
+                                  toggle()
+                                }}
+                                className="mr-1 inline-flex align-[-2px] text-slate-400 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#006D95]/40 rounded"
+                              >
+                                <ChevronRight className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-90" : ""}`} />
+                              </button>
                               {r.vehicleName}
                               {r.role === "sleeve" && (
                                 <span
@@ -218,6 +266,7 @@ export function ManagerDrawer({
                                     href={filingTrail(r.raise)[0].url as string}
                                     target="_blank"
                                     rel="noopener noreferrer"
+                                    onClick={(e) => e.stopPropagation()}
                                     className="text-xs text-[#006D95] underline"
                                     title="Open on sec.gov"
                                   >
@@ -227,11 +276,21 @@ export function ManagerDrawer({
                               )}
                             </td>
                           </tr>
-                        ))}
+                          {open && (
+                            <tr className="border-b border-slate-200 bg-slate-50">
+                              <td colSpan={6} className="px-3 pb-3 pt-1">
+                                <FundDetail manager={manager} cik={r.cik} allManagers={cohort.managers} />
+                              </td>
+                            </tr>
+                          )}
+                          </Fragment>
+                          )
+                        })}
                       </tbody>
                     </table>
                   </div>
                 )}
+                {manager.raises.length > 0 && <FundDetailNote allManagers={cohort.managers} />}
               </Section>
 
               {showLadder && pacing && (
@@ -299,14 +358,6 @@ export function ManagerDrawer({
                     </>
                   )
                 })()}
-              </Section>
-
-              <Section title="Structure & terms">
-                <StructureSection manager={manager} allManagers={cohort.managers} />
-              </Section>
-
-              <Section title="People">
-                <PeopleSection manager={manager} allManagers={cohort.managers} />
               </Section>
 
               <Section title="Filing trail">

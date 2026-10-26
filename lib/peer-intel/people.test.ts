@@ -63,3 +63,18 @@ test("entries cached before `kind` existed are read as people, and a manager wit
   const empty = manager("none", "No Filings", [])
   assert.deepEqual(managerPeople(empty, buildPeopleIndex([empty])), [])
 })
+
+test("one fund's people, as its expanded row shows them: that fund only, with matches elsewhere kept", () => {
+  const a = manager("alpha", "Alpha Credit", [
+    ["Alpha Fund I", [person("Dana Whitfield", ["Executive Officer"])]],
+    ["Alpha Fund II", [person("Sam Ortiz", ["Director"])]],
+  ])
+  const b = manager("beta", "Beta Lending", [["Beta Fund II", [person("Dana Whitfield", ["Promoter"])]]])
+  const index = buildPeopleIndex([a, b])
+  // The drawer passes the manager narrowed to the clicked fund.
+  const fundOne = managerPeople({ ...a, raises: [a.raises[0]] }, index)
+  assert.deepEqual(fundOne.map((p) => p.name), ["Dana Whitfield"], "Fund II's people are not listed under Fund I")
+  assert.equal(fundOne[0].elsewhere[0]?.manager, "Beta Lending", "the cross-manager match still shows")
+  const fundTwo = managerPeople({ ...a, raises: [a.raises[1]] }, index)
+  assert.deepEqual(fundTwo[0].elsewhere, [], "and its own sibling fund is not reported as 'elsewhere'")
+})

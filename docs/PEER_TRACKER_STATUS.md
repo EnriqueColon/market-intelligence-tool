@@ -40,8 +40,12 @@ cached cohort — no new fetch, no payload change. `lib/peer-intel/vintage.ts`, 
 ordered by first-sale date rather than name, sleeves are omitted and counted, and where the prior
 fund's figure at that month falls between two filings the reading says which two.
 
-And **Structure & terms** and **People** in the manager drawer (2026-10-26, at the user's request),
-from the parts of Form D the raise figures do not use — no new fetch, ~31 KB more in the US entry,
+And **Structure & terms** and **People** for each fund (2026-10-26, at the user's request). First built as
+two drawer sections; the same day, at the user's request, **moved into the Raises table**: clicking a
+fund's row opens its structure and terms beside its people, a fund clicked in Open Raises or New
+Launches opens the drawer with that fund already expanded, and a single-fund manager opens expanded.
+`FundDetail` in `components/peer-intel/structure-people.tsx`. Built from the parts of Form D the
+raise figures do not use — no new fetch, ~31 KB more in the US entry,
 cache key `peer-intel-v3`. `parseTerms` in `form-d.ts`, `lib/peer-intel/structure.ts` and
 `people.ts`, with 31 new and amended tests; `npm run verify:peer-structure` checks a whole layer
 live. What the first run over all 26 managers and 56 vehicles established:

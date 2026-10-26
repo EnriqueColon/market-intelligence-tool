@@ -8,7 +8,7 @@ is it in now, and what is still open.
 
 ---
 
-## STOPPED HERE — 2026-10-26, Structure & terms and People built (uncommitted)
+## STOPPED HERE — 2026-10-26, fund rows expand to structure and people (uncommitted)
 
 Read `CLAUDE.md` first for orientation, then this block. Everything below it is the running record —
 reverse-chronological, and worth reading only when you need the reasoning behind something specific.
@@ -228,7 +228,25 @@ broader private credit tier stays, marked `adjacent`. The tab is named **Peers (
 
 ---
 
-## 2026-10-26, evening (latest) — Structure & terms, and People, in the manager drawer
+## 2026-10-26, night (latest) — Each fund's structure and people, opened from its row
+
+After `d3acaff` was pushed to a preview, the user asked for the structure, terms and people to sit
+on the fund itself — click a fund, see its details — rather than in two sections further down the
+drawer. So each row of the drawer's Raises table now expands in place: structure and terms on the
+left, that fund's people on the right (`FundDetail`), with one shared explanatory note under the
+table (`FundDetailNote`). The two standalone sections are gone, so nothing is shown twice. Clicking a
+fund in Open Raises or New Launches opens the drawer with that fund expanded and scrolled to; a
+manager with a single fund opens expanded. The row is clickable, with a real button inside it for
+keyboard and screen readers, and the SEC filing link no longer toggles the row.
+
+**Per-fund people** reuse `managerPeople` on the manager narrowed to one fund; a new test pins that
+this lists only that fund's people, keeps a match at another manager, and never reports a sibling fund
+as "elsewhere". **Verified:** `next build`, `tsc` (63, none new), 304 tests across the peer and
+analytics suites. Not yet looked at in a preview; not committed.
+
+---
+
+## 2026-10-26, evening — Structure & terms, and People, in the manager drawer
 
 The user, with the tab live: would minimum investments, securities offered, associated individuals
 and entities help understand fund dynamics? Checked against the real filings before answering —
