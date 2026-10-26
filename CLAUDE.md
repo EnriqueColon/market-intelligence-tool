@@ -54,9 +54,10 @@ expansion is finished.
   response is 4.02 MB against a 4.5 MB platform ceiling. **AMO Tracker consumes this endpoint and is
   deployed against production, which does not yet carry the change.** Pushing `dev` is safe; merging
   to `main` is what breaks it. Brief AMO to use `band=` first.
-- **Do not touch `app/ingestion/competitor_surveillance/` or the AOM material.** Both read
-  `process.cwd()` and cannot run on Vercel; neither has ever worked in production. The user has
-  decided to leave them. `connectors/sec_edgar.ts` is broken (`keys=`) and superseded, not deleted.
+- **Assignment of Mortgage (AOM) work does not belong in this tool.** It lives in AMO Tracker
+  (`EnriqueColon/amo-dashboard`, a separate app). The old AOM / Market Participants code and the
+  `competitor_surveillance` framework were removed on 2026-10-26 at the user's instruction; do not
+  reintroduce AOM sources, panels or data. Ask before touching the AMO droplet.
 
 ## Conventions worth matching
 

@@ -171,7 +171,6 @@ with almost no configuration.
 | **Google Programmable Search** | Market Research search | `GOOGLE_API_KEY` + `GOOGLE_CSE_ID` | Research search unavailable |
 | **OpenFreeMap** | Basemap tiles for the stress map | Keyless | Map renders without a basemap |
 | **Census**, **FFIEC** | Analytics side panels | `CENSUS_API_KEY`, `FFIEC_USER_ID`, `FFIEC_TOKEN` | Sections report `configured: false` |
-| **Elementix** | Participants intel API | `ELEMENTIX_API_KEY` | Returns null; feeds orphaned UI |
 | **govtrack** | Finds federal bills for the Legislative Tracker, and the bill-identity check | Keyless | Federal legislation disappears from the tab rather than becoming unverified. Slow on its first request of the day — see Maintenance notes |
 | **GPO bulk data** (govinfo.gov) | Each federal bill's record, text, committee report and CRS summary, by bill number | Keyless — the bulk files, not the API, which needs one | Federal bill cards show govtrack's four facts and no details |
 | **Federal Register** | Rules and proposed rules for the Regulatory section, with each rule's record facts and full text | Keyless | That section falls back to the model alone, which it also uses anyway for FILs and bulletins |
@@ -419,8 +418,7 @@ scripts/        One-off and ingestion scripts (TypeScript and Python)
 - **Development happens on `dev`**, which deploys as an isolated Vercel preview.
 - Never push feature work directly to `main`. Ship with `git checkout main && git merge dev`.
 - Do not commit unrelated files. This repository carries habitual uncommitted churn in
-  `data/*.sqlite*`, `scripts/import_aom_to_sqlite.py`, `data/README-aom-import.md` and `.DS_Store` —
-  leave it alone.
+  `data/*.sqlite*` and `.DS_Store` — leave it alone.
 
 ### Before you ship
 
@@ -439,9 +437,10 @@ scripts/        One-off and ingestion scripts (TypeScript and Python)
 
 **SEC EDGAR ignores an unknown query parameter instead of rejecting it.** Full-text search takes
 `q`; a request built with `keys=` returns the entire form firehose, newest first, with the search
-term dropped — 10,000+ unrelated Form D filings that look like a successful response.
-`app/ingestion/competitor_surveillance/connectors/sec_edgar.ts` has always passed `keys`, which is
-why it finds almost nothing. The location filter behaves the same way: `locationCodes` (plural)
+term dropped — 10,000+ unrelated Form D filings that look like a successful response. An earlier
+SEC connector in this repo always passed `keys`, which is why it found almost nothing; it was
+removed with the competitor-surveillance framework on 2026-10-26. The location filter behaves the
+same way: `locationCodes` (plural)
 works, `locationCode` is silently ignored. Anything new against EDGAR should go through
 `lib/peer-intel/edgar-contract.ts`, which encodes the working parameters and the measurement behind
 each one. Related: Form D full-text matches **entity names only** (the form has no narrative), so a

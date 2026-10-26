@@ -18,10 +18,11 @@
  *
  * `keys` is **silently ignored**: a request with `keys="Blackstone"&forms=D`
  * returns 10,000+ hits of unrelated Form D filings — the whole firehose,
- * newest first — rather than an error or an empty set. The existing
- * `app/ingestion/competitor_surveillance/connectors/sec_edgar.ts` passes
- * `keys` and then filters client-side, which is why it finds almost nothing.
- * With `q` the same search returns 2,135 scored Blackstone hits.
+ * newest first — rather than an error or an empty set. An earlier SEC
+ * connector in this repo passed `keys` and filtered client-side, which is why
+ * it found almost nothing; it was removed with the competitor-surveillance
+ * framework on 2026-10-26. With `q` the same search returns 2,135 scored
+ * Blackstone hits.
  */
 const FTS_ENDPOINT = "https://efts.sec.gov/LATEST/search-index"
 

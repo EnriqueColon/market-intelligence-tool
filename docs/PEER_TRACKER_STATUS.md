@@ -444,7 +444,8 @@ Not part of this expansion, still open.
   charts 4,313; the fix was discussed and the decision is still pending.
 - [ ] **A cold-cache production look** at Cohort Changes and the institution drawer.
 - [ ] **The "CRE / Assets" label.**
-- [ ] **The AOM export questions** from 2026-10-07 are still with the user.
+- [x] ~~The AOM export questions~~ — **moot 2026-10-26.** The AOM code and data were removed from
+  this tool; assignment-of-mortgage work belongs to AMO Tracker.
 - [x] ~~The cron scope-casing mismatch.~~ **Struck 2026-10-21, not a bug:** the tab deliberately
   sends `"national"` for screening and `"National"` for visuals, watch and behaviour, and
   `app/api/cron/warm-cache/route.ts` matches both exactly.
@@ -466,13 +467,21 @@ Not part of this expansion, still open.
   Switching back with `gh auth switch --user RSronin09` makes pushes 403 again.
 - [x] **A stale local `credential.helper = osxkeychain`** remains in this repo alongside the global
   `gh` helper. Harmless, but it is what would resurface a password prompt if `gh` ever fails.
-- [ ] **`app/ingestion/competitor_surveillance/connectors/sec_edgar.ts` is broken** — it passes
-  `keys=`, which EDGAR silently ignores, so it pulls the whole Form D firehose and filters
-  client-side. Superseded by `lib/peer-intel/`, not deleted; removing it is a separate decision.
-- [ ] **The SQLite `competitor_surveillance` framework and the AOM material are dead weight.** They
-  read `process.cwd()` and cannot run on Vercel, and nothing in the tab reaches them: 606 tracked
-  files, of which 572 are unpacked Apple Numbers internals under `data/aom-csv/.tmp-numbers/`, plus
-  a tracked 4.4 MB `data/aom.sqlite`. The user chose on 2026-10-21 to leave all of it in place.
+- [x] ~~The broken `competitor_surveillance/connectors/sec_edgar.ts`~~ — **removed 2026-10-26**
+  with the framework. Its `keys=` lesson lives on in `lib/peer-intel/edgar-contract.ts`.
+- [x] ~~The SQLite `competitor_surveillance` framework and the AOM material are dead weight~~ —
+  **removed 2026-10-26** at the user's instruction ("we do not need to bring in Assignments of
+  Mortgages into this tool"). 647 tracked files: the AOM / Market Participants cluster (17 code
+  files, the `/api/participants-intel` route), the framework (13 files plus its UI, action and seed
+  script), two AOM-only Python scripts, two AOM docs, and the data — `data/aom.sqlite`,
+  `aom-csv/` (572 of them Apple Numbers internals), `aom-source/`, `participant_intel.sqlite`,
+  `competitor_surveillance.sqlite`, `major-banks-exclude.json`. Nothing outside the set imported
+  any of it; build passes and typecheck fell from 91 errors to 63 with none new. Git history keeps
+  all of it.
+- [ ] **Left orphaned by that removal, deliberately not touched:** `better-sqlite3` and
+  `@types/better-sqlite3` are now imported nowhere (removing them changes `package-lock.json`);
+  `app/actions/fetch-watchlist.ts` lost its only importer; and `ELEMENTIX_API_KEY` is now read by
+  nothing, so it can come off Vercel. Each is the user's call.
 - [x] **`.gitignore` had two entries concatenated onto one line.** Split 2026-10-21 (`eb2b140`). No
   env file was ever exposed — `.env*.local` on the following line always covered them.
 - [ ] **`next-env.d.ts` is tracked**, so the ignore rule above takes effect only once it is

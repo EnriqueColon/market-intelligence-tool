@@ -8,7 +8,7 @@ is it in now, and what is still open.
 
 ---
 
-## STOPPED HERE — 2026-10-22, evening
+## STOPPED HERE — 2026-10-26, AOM removed (uncommitted)
 
 Read `CLAUDE.md` first for orientation, then this block. Everything below it is the running record —
 reverse-chronological, and worth reading only when you need the reasoning behind something specific.
@@ -17,10 +17,15 @@ On `origin/dev`: the gating checks of 2026-10-21 (`188f74d`) and the vintage pac
 (`71f7ec9`, preview `market-intelligence-tool-inultkm9f.vercel.app`, **not yet looked at**).
 
 Also on `origin/dev`: **`ac560a8`**, the interim-close labels and the `verify:peer-gating` command —
-see the newest entry below. Neither `71f7ec9` nor `ac560a8` has been looked at in a browser; both
-are on the Peers tab, which previews show regardless of `ENABLED_TABS`. The working tree is clean
-apart from `.DS_Store` and the untracked `.claude/`, except for the `ROLLBACK.md` row and this
-paragraph, written after the push. Confirm the
+see the newest entry below — and `4b1662e`, its documentation. **`dev` is level with `origin/dev`
+and the working tree is clean** apart from `.DS_Store` and the untracked `.claude/`. Neither
+`71f7ec9` nor `ac560a8` has been looked at in a browser; both are on the Peers tab, which previews
+show regardless of `ENABLED_TABS`. The preview for the current head is
+`market-intelligence-tool-p3z7jctk0.vercel.app`.
+
+**Uncommitted on 2026-10-26: the AOM and competitor-surveillance removal** — 647 staged deletions,
+one edited code comment, and the docs. See the newest entry below. The `non-traded` bucket split
+has still not been started; begin it fresh from the build order in §3b of the peer status doc. Confirm the
 head with `git log --oneline -1` rather than trusting a SHA written here; production is untouched at
 `fe0ad1b`, and nothing has been merged to `main`.
 
@@ -205,7 +210,48 @@ broader private credit tier stays, marked `adjacent`. The tab is named **Peers (
 
 ---
 
-## 2026-10-22, afternoon (latest) — Interim-close labels, and a spot-check that found the quarters nobody was prorated
+## 2026-10-26 (latest) — Assignment of Mortgage code removed from this tool
+
+**Why.** Asked what separates `dev` from production, the conversation turned to AMO Tracker, and the
+user was direct: *"we do not need to bring in Assignments of Mortgages into this tool."* That subject
+belongs to AMO Tracker, a separate app. The repo still carried the April AOM / Market Participants
+work, unmounted and broken on Vercel, which `CLAUDE.md` had said to leave. The user said remove it.
+
+**What went.** 647 tracked files, mapped first with an import graph so nothing live was cut:
+
+- **The AOM / Market Participants cluster** — 17 code files: the Competitor Analysis and Market
+  Participants components, `components/participants-intel/*`, `lib/participants-intel/*`,
+  `lib/participant-intel.ts`, `fetch-aom-data.ts`, the lookup and activity actions, and the
+  **`/api/participants-intel` route**, which was the only piece reachable in production at all —
+  behind login, returning "database not found".
+- **The `competitor_surveillance` framework** — first scoped as "remove only its AOM connector", but
+  AOM ran through its UI, schema, action, seed script and database (17 of its 25 events). The user
+  chose to remove the whole framework, including its six non-AOM connectors, none of which ever ran
+  in production. Its SEC connector was the broken `keys=` one, long since replaced by `peer-intel`.
+- **Data**, 17 MB: `aom.sqlite`, `aom-csv/` (572 files of unpacked Apple Numbers internals),
+  `aom-source/`, `participant_intel.sqlite`, `competitor_surveillance.sqlite`,
+  `major-banks-exclude.json`. Plus the two AOM-only Python scripts and two AOM docs.
+
+**What stayed.** `data/ingestion.sqlite` and the rest of `app/ingestion/` — a separate FFIEC /
+Census / UCC / foreclosure subsystem that live code reads. `data/watchlist*.json`, read by the
+institution watchlist.
+
+**Verified.** Nothing outside the removed set imported any of it. `next build` passes. Typecheck fell
+from 91 errors to 63 with none new — the 28 that went were all in the AOM aggregation code. Peers,
+analytics-API, panel, vintage and cohort suites pass.
+
+**Left for the user, each a separate call:** `better-sqlite3` and its types are now imported
+nowhere; `app/actions/fetch-watchlist.ts` lost its only importer; `ELEMENTIX_API_KEY` is read by
+nothing and can come off Vercel. The "Origination Targeting" idea in `docs/NEXT_VERSION_PLAN.md` was
+withdrawn as framed, since it depended on the AOM data.
+
+**Also this session:** a standing memory now records that AOM work stays in AMO Tracker and that the
+AMO droplet is not to be read without asking. `CLAUDE.md`'s "do not touch" line is replaced to say
+the same.
+
+---
+
+## 2026-10-22, afternoon — Interim-close labels, and a spot-check that found the quarters nobody was prorated
 
 Two of the morning's list. Neither changes a fetch, a payload or a cache key.
 

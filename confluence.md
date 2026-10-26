@@ -2106,9 +2106,6 @@ runtime writes to them.
 
 | Path | Purpose | Written by |
 | --- | --- | --- |
-| `data/aom.sqlite` | Miami-Dade AOM mortgage events | `scripts/import_aom_to_sqlite.py` |
-| `data/competitor_surveillance.sqlite` | Competitor events | `app/ingestion/competitor_surveillance/` |
-| `data/participant_intel.sqlite` | `firm`, `firm_alias`, `firm_entity` lookup | `lib/participant-intel.ts`, `participant-lookup.ts` |
 | `data/ingestion.sqlite` | FFIEC / Census ingested data | `app/ingestion/` |
 | `data/industry_outlook_cache.sqlite` / `.json` | Legacy outlook cache | `fetch-industry-outlook.ts` (dead path) |
 | `data/watchlist.json`, `watchlist-aliases.json` | Curated 45-firm reference list | `app/lib/watchlist.ts` (read-only) |
@@ -2195,7 +2192,6 @@ Every variable referenced in code. Scope matters: `POSTGRES_URL` and `BLOB_READ_
 | `ADMIN_UPLOAD_TOKEN` | Cannot upload or delete reports |
 | `ANALYTICS_API_KEY` | The Market Analytics data API returns 503 to every caller (closed, not open). AMO Tracker's FDIC Data Analytics page cannot load. Set the same value in the consumer's server environment |
 | `INGESTION_TOKEN` | Ingestion endpoint unavailable |
-| `ELEMENTIX_API_KEY` | Participants-intel API returns null (feeds orphaned UI — see §10) |
 | `LEGISCAN_API_KEY` | Legislative Tracker shows federal bills only; a feed note says so. Federal bills come from govtrack and the Federal Register, which need no key |
 | `CENSUS_API_KEY`, `FFIEC_USER_ID`, `FFIEC_TOKEN` | Corresponding analytics sections report `configured: false` |
 | `NEXT_PUBLIC_FDIC_API_KEY`, `FDIC_API_URL`, `FDIC_API_KEY` | All optional; anonymous FDIC access works today. Read by `lib/fdic-client.ts`, the single hardened path to the API (fallback host, timeout, 4xx short-circuit) shared by the analytics actions and the map |
@@ -2321,9 +2317,15 @@ form firehose newest-first; `locationCode=` instead of `locationCodes=` returns 
 look like working responses and both were found only by checking that the results actually matched
 the filter. Form D full-text also indexes **entity names only**, since the form carries no
 narrative, so strategy terms return nothing. All three facts, with the measurements behind them,
-live in `lib/peer-intel/edgar-contract.ts`; the older
-`app/ingestion/competitor_surveillance/connectors/sec_edgar.ts` still has the `keys=` bug and is
-superseded rather than fixed.
+live in `lib/peer-intel/edgar-contract.ts`. An older SEC connector here had the `keys=` bug from
+the start; it was removed with the competitor-surveillance framework on 2026-10-26.
+
+**Assignment of Mortgage work does not belong here.** The AOM / Market Participants code, its
+`/api/participants-intel` route and the SQLite `competitor_surveillance` framework were removed on
+2026-10-26 — 647 tracked files including 17 MB of Miami-Dade Clerk data. That subject lives in
+AMO Tracker, a separate app. None of it had ever run on Vercel, since all of it read local SQLite
+through `process.cwd()`. Do not reintroduce AOM sources or panels; git history has everything if
+the code is ever needed for reference.
 
 **`SC TO` is not `SC TO-I`, and the difference is an activist's bid.** `SC TO-I` is an *issuer*
 tender offer — the fund buying its own shares, which is how a non-traded BDC runs its redemption
@@ -2464,9 +2466,10 @@ their figures are year-to-date durations that do not match a calendar-quarter fr
 - **Cache keys hide fixes.** After changing generation behaviour, bump the cache version or
   production will serve yesterday's output.
 - **A lot of orphaned UI.** None of these are mounted from `app/page.tsx` or the dashboard:
-  `market-participants-intel.tsx` and `components/participants-intel/*` (the tab was removed in
-  `259fa20`), `national-view.tsx`, `florida-view.tsx`, `miami-view.tsx`, `market-research-library.tsx`,
-  `market-research-reports.tsx`, `competitor-analysis.tsx`. Confirm reachability before investing
+  `national-view.tsx`, `florida-view.tsx`, `miami-view.tsx`, `market-research-library.tsx`,
+  `market-research-reports.tsx`. (The Market Participants and Competitor Analysis components were
+  on this list until 2026-10-26, when they were removed with the rest of the AOM code — see below.)
+  Confirm reachability before investing
   effort in any of them. Note the admin upload library is in this list, so the Blob upload path has
   no live UI even though its API routes work.
 - **The daily cron still warms caches for orphaned features** — KPI, insights, price index and

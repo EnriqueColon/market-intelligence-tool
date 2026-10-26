@@ -222,10 +222,11 @@ that second problem and is not wired to it.
 - **Underwriter Workbench** — institution-first; the drawer already carries peer comparison and
   eight-quarter trends. Adds a defined peer cohort (size band, geography, CRE mix), threshold flags,
   and a downside scenario on CRE marks.
-- **Origination Targeting** — a ranked call list with the reason attached. Revives the orphaned AOM
-  assignment-of-mortgage data (`fetch-aom-data.ts`, `competitor-analysis.tsx`), currently
-  SQLite-backed and unreachable in production. Who is selling loans to whom is the only genuine
-  relationship intelligence in the codebase.
+- **Origination Targeting** — a ranked call list with the reason attached. *Withdrawn 2026-10-26 as
+  framed here:* it depended on reviving the orphaned assignment-of-mortgage data, which was removed
+  from this tool at the user's instruction. Assignment-of-mortgage work belongs to AMO Tracker. A
+  version built only on FDIC data — Seller Likelihood already ranks who is likely to sell — remains
+  possible.
 - **Exposure & Reporting** — aggregation with provenance. The export path already paginates fully and
   the appendix already carries definitions; the addition is field-level traceability, which
   `lib/noncurrent-debug.ts` already proves is possible per institution.
