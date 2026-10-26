@@ -8,7 +8,7 @@ is it in now, and what is still open.
 
 ---
 
-## STOPPED HERE — 2026-10-26, AOM removed from dev and production
+## STOPPED HERE — 2026-10-26, Peers released to production as beta
 
 Read `CLAUDE.md` first for orientation, then this block. Everything below it is the running record —
 reverse-chronological, and worth reading only when you need the reasoning behind something specific.
@@ -23,11 +23,22 @@ and the working tree is clean** apart from `.DS_Store` and the untracked `.claud
 show regardless of `ENABLED_TABS`. The preview for the current head is
 `market-intelligence-tool-p3z7jctk0.vercel.app`.
 
-**The AOM removal is on both branches.** `dev` has it as `eb8eef1`; **production has it as
-`9f8a1f9`**, applied directly to `main` so nothing else from `dev` shipped — deployed by Vercel
-(`success`) and checked live. `main` and `dev` now differ by that one commit; a simulated merge was
-clean, so the next release is an ordinary `git merge dev` that produces a merge commit. Production
-otherwise still runs `fe0ad1b`'s code: no Seller Likelihood, no Peers, AMO Tracker unaffected.
+**Production carries `8061ec2`: everything on `dev`, released 2026-10-26 at the user's request.**
+Peers (beta), Seller Likelihood in the bank drawer, the Peers cron warm, the AOM removal, and the
+signals guard raised so AMO Tracker keeps working. Deployed by Vercel (`success`) and checked live.
+`dev` was fast-forwarded to match, so the branches are level and the next release is an ordinary
+fast-forward again.
+
+**One step is the user's: add `peer-intel` to production's `ENABLED_TABS` in Vercel and redeploy.**
+Until then the Peers code is in production but the tab does not render. The variable is a
+comma-separated list read by `lib/features.ts`. After it is set, each Peers layer cold-builds from
+SEC on its first visit (about 17, 22 and 43 seconds; the tab explains the wait) until the 05:00 UTC
+cron warms all three. The Market Analytics drawer recomputes each asset band once on first read,
+because the signals cache moved to `v2`.
+
+**AMO Tracker has about 160 KB of room.** Its whole-scope request is 4,318,145 bytes against a
+refusal at 4,480,000. Run `npm run measure:signals-response` before widening `BankBehaviorSummary`;
+the durable fix is AMO requesting by `band=`.
 
 **Pushing needs `gh`'s active account to be EnriqueColon** — git on this machine asks `gh` for
 GitHub credentials, and RSronin09, which had become active again, gets a 403. Switched on
@@ -217,7 +228,36 @@ broader private credit tier stays, marked `adjacent`. The tab is named **Peers (
 
 ---
 
-## 2026-10-26 (latest) — Assignment of Mortgage code removed from this tool
+## 2026-10-26, later (latest) — Peers released to production, and the size guard that would have broken AMO
+
+The user asked to push the Peers tab's current state to production, which meant merging all of
+`dev` — not only Peers but Seller Likelihood and the 4 MB signals guard that `CLAUDE.md` warned
+would break AMO Tracker. Two decisions, both the user's: the tab ships **visible, as beta**, ahead of
+the expansion's end; and AMO is protected by **raising the guard** rather than holding the release.
+
+**The number had moved.** AMO's whole-scope request was recorded at 4.02 MB on 2026-10-21. Measured
+live before raising anything — with a new `npm run measure:signals-response` that builds the exact
+body the route sends — it was **4,318,145 bytes (4.12 MB)**, about 100 KB more with no code change,
+as FDIC data for the quarter filled in. The "~280 KB of room" quoted to the user on the old figure
+was wrong, and was corrected before they confirmed. The code had also assumed Vercel's "4.5 MB"
+meant 4,718,592 bytes; the documentation does not say, so the ceiling constant now takes the lower
+reading, 4,500,000, and the refusal sits at 4,480,000 — safe either way, leaving AMO ~160 KB.
+
+**The release.** `bee6aea` (the guard) went to `dev` and Vercel built it. The merge, `8061ec2`, was
+made in a separate worktree — the first attempt failed harmlessly because `git merge -F -` does not
+read stdin, and an identical-tree check caught that nothing had merged. The real merge's tree is
+identical to `bee6aea`, so production received exactly the verified build. 304 tests across 17
+suites, `next build` and `tsc` (63, none new) passed beforehand. Vercel deployed production at 13:08
+UTC; the live site redirects to login, serves `/login`, and the data API answers 401 without a key.
+`dev` was fast-forwarded to `8061ec2`.
+
+**Open:** the user adds `peer-intel` to `ENABLED_TABS` and redeploys; vintage pacing and the
+interim-close labels are now user-visible without having been looked at in a preview; AMO should
+move to `band=` before its 160 KB runs out.
+
+---
+
+## 2026-10-26 — Assignment of Mortgage code removed from this tool
 
 **Why.** Asked what separates `dev` from production, the conversation turned to AMO Tracker, and the
 user was direct: *"we do not need to bring in Assignments of Mortgages into this tool."* That subject

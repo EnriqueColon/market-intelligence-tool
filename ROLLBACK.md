@@ -7,15 +7,27 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
-| `main` | `9f8a1f9` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `eb8eef1` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `main` | `8061ec2` | Production | https://market-intelligence-tool-gilt.vercel.app |
+| `dev` | `8061ec2` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 This table names the newest commit on each branch that **changes behaviour**; documentation-only
 commits sit on top of it and are deliberately not tracked here, because amending one rotates its
 SHA and the table then reads as stale when nothing has moved. Confirm with
 `git log --format='%h|%ci|%s'` rather than trusting the previous entry — this has drifted twice.
 
-**Production carries `9f8a1f9` as of 2026-10-26** — the Assignment of Mortgage removal, and nothing
+**Production carries `8061ec2` as of 2026-10-26, 13:08 UTC — the release of everything on `dev`.**
+A `--no-ff` merge of `dev` (`bee6aea`) into `main` (`9f8a1f9`); its tree is identical to `bee6aea`,
+which Vercel built as a preview before the merge, and `dev` was then fast-forwarded so both branches
+sit at `8061ec2`. It ships Peers (beta, rendered once `peer-intel` is in production's `ENABLED_TABS`,
+which the user sets), Seller Likelihood in the bank drawer, the nightly Peers cron warm, and the
+signals size guard raised to 4,480,000 bytes so AMO Tracker's 4.12 MB whole-scope request is still
+sent. Live after deploy: `/` redirects to login, `/login` serves, the data API answers 401 without a
+key. **To roll back:** Vercel's dashboard can promote the previous production deployment instantly,
+which is the fastest route; in git, `git revert -m 1 8061ec2` on `main` returns the code to
+`9f8a1f9`. Reverting leaves the `behavior-signals-v2` and `peer-intel-v2` cache entries in place,
+harmlessly — the reverted code reads `v1` keys and recomputes.
+
+**Before it, production carried `9f8a1f9`** — the Assignment of Mortgage removal, and nothing
 else. It was applied directly to `main` rather than merged from `dev`, so that production lost the
 AOM code without taking `dev`'s 41 other commits (which would break AMO Tracker's FDIC page and
 start the nightly peer cron). **`main` and `dev` have therefore diverged by that one commit.** `dev`
@@ -285,6 +297,7 @@ to `4ca86dc`. It is kept as the record of what each commit does and what reverti
 
 | Commit | Date | Summary |
 | --- | --- | --- |
+| `bee6aea` | 10-26 | The signals size guard moves from 4 MiB to 4,480,000 bytes, and the ceiling constant to the lower reading of Vercel's "4.5 MB", 4,500,000. AMO Tracker's whole-scope national request, measured live at 4,318,145 bytes, is now sent with ~160 KB of room instead of refused. Adds `npm run measure:signals-response`. Reverting restores the 4 MiB refusal and breaks AMO's FDIC page. |
 | `eb8eef1` | 10-26 | Assignment of Mortgage code and the `competitor_surveillance` framework removed, 647 files: the AOM / Market Participants components and data plumbing, `/api/participants-intel`, the framework and its six non-AOM connectors, 17 MB of Miami-Dade Clerk data, two Python scripts, two docs. Nothing outside the set imported it; build passes; tsc 91 → 63 errors, none new. The same deletion reached production separately as `9f8a1f9`. Revert restores everything. |
 | `ac560a8` | 10-22 | Interim-close labels: each Form D filing in the drawer's trail and the vintage tooltip read against the one before it — first filing, interim close with delta, annual re-file, restatement — with offering changes beside. Plus `npm run verify:peer-gating`, a repeatable live check of the gating sources over six quarters per BDC and four 10-Qs per REIT. Display and tooling; clean revert; invisible in production while `peer-intel` is absent from `ENABLED_TABS`. |
 | `71f7ec9` | 10-22 | Vintage pacing on the Peers tab: each fund in a manager's series on one chart, months since first sale against cumulative raised, the newest read against its predecessor at the same month with interpolation stated. From the Form D trails already in the cohort; no fetch, payload or cache change. Also adds `CATEGORICAL_SERIES` to `lib/chart-theme.tsx`. Clean revert; invisible in production while `peer-intel` is absent from `ENABLED_TABS`. |
@@ -336,7 +349,8 @@ rollback notes; see the production table for the current head.
 
 | Commit | Date | Summary |
 | --- | --- | --- |
-| `9f8a1f9` | 10-26 | **Production head.** The Assignment of Mortgage removal only, applied directly on top of `fe0ad1b`: 647 deletions, no documentation edits so the later `dev` merge cannot conflict. Verified on `main`'s own code before pushing — no outside importers, cron and dashboard untouched, `next build` 23/23 pages, tsc 91 → 63 with none new — and on the live site after. Removes `/api/participants-intel`. `git revert 9f8a1f9` restores it all. |
+| `8061ec2` | 10-26 | **Production head.** Release merge of `dev` at `bee6aea`: the Peers tab (beta, behind `ENABLED_TABS`), Seller Likelihood, the Peers cron warm, the raised signals guard, and every commit from `51df060` to `bee6aea` listed under Dev branch commits. Tree identical to the Vercel-verified preview of `bee6aea`. Roll back by promoting the previous deployment in Vercel, or `git revert -m 1 8061ec2`. |
+| `9f8a1f9` | 10-26 | Former production head. The Assignment of Mortgage removal only, applied directly on top of `fe0ad1b`: 647 deletions, no documentation edits so the later `dev` merge cannot conflict. Verified on `main`'s own code before pushing — no outside importers, cron and dashboard untouched, `next build` 23/23 pages, tsc 91 → 63 with none new — and on the live site after. Removes `/api/participants-intel`. `git revert 9f8a1f9` restores it all. |
 | `ad24c30` | 10-06 | Former production head. Documentation on top of `7a3f80e`, so identical in behaviour. The release `8391d1c` → `ad24c30` carries the six 10-06 behavioural commits listed under "Dev branch commits". |
 | `996efa9` | 09-10 | Former production head. Documentation on top of `7b4e2b9`, so identical in behaviour. |
 | `27ef6f1` | 09-08 | Documentation on top of `02e45ae`, so identical in behaviour. |
