@@ -42,9 +42,10 @@ fund's figure at that month falls between two filings the reading says which two
 
 And **Structure & terms** and **People** for each fund (2026-10-26, at the user's request). First built as
 two drawer sections; the same day, at the user's request, **moved into the Raises table**: clicking a
-fund's row opens its structure and terms beside its people, a fund clicked in Open Raises or New
-Launches opens the drawer with that fund already expanded, and a single-fund manager opens expanded.
-`FundDetail` in `components/peer-intel/structure-people.tsx`. Built from the parts of Form D the
+fund's row opens its structure and terms beside its people. **No row opens on its own** — a first
+version pre-expanded the fund clicked on the tab and a single-fund manager's only fund, and the user
+asked for expansion to be the reader's click alone. `FundDetail` in
+`components/peer-intel/structure-people.tsx`. Built from the parts of Form D the
 raise figures do not use — no new fetch, ~31 KB more in the US entry,
 cache key `peer-intel-v3`. `parseTerms` in `form-d.ts`, `lib/peer-intel/structure.ts` and
 `people.ts`, with 31 new and amended tests; `npm run verify:peer-structure` checks a whole layer

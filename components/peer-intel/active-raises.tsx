@@ -25,7 +25,7 @@ export function ActiveRaises({
   onSelectManager,
 }: {
   cohort: PeerCohort
-  onSelectManager?: (peerId: string, cik?: string) => void
+  onSelectManager?: (peerId: string) => void
 }) {
   const rows = activeRaiseRows(cohort)
 
@@ -65,7 +65,7 @@ export function ActiveRaises({
               {rows.map((row) => (
                 <tr
                   key={row.cik}
-                  onClick={onSelectManager ? () => onSelectManager(row.peerId, row.cik) : undefined}
+                  onClick={onSelectManager ? () => onSelectManager(row.peerId) : undefined}
                   className={[
                     "border-b border-slate-100 last:border-0",
                     onSelectManager ? "cursor-pointer hover:bg-slate-50" : "",
@@ -143,7 +143,7 @@ export function NewLaunches({
   onSelectManager,
 }: {
   cohort: PeerCohort
-  onSelectManager?: (peerId: string, cik?: string) => void
+  onSelectManager?: (peerId: string) => void
 }) {
   const rows = newLaunchRows(cohort)
 
@@ -164,7 +164,7 @@ export function NewLaunches({
           {rows.map((row) => (
             <li
               key={row.cik}
-              onClick={onSelectManager ? () => onSelectManager(row.peerId, row.cik) : undefined}
+              onClick={onSelectManager ? () => onSelectManager(row.peerId) : undefined}
               className={`flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-2 ${
                 onSelectManager ? "cursor-pointer hover:bg-slate-50" : ""
               }`}

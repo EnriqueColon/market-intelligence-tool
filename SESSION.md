@@ -8,7 +8,7 @@ is it in now, and what is still open.
 
 ---
 
-## STOPPED HERE — 2026-10-26, fund rows expand to structure and people (uncommitted)
+## STOPPED HERE — 2026-10-26, fund rows expand on click only (uncommitted); sponsor stress monitor research next
 
 Read `CLAUDE.md` first for orientation, then this block. Everything below it is the running record —
 reverse-chronological, and worth reading only when you need the reasoning behind something specific.
@@ -228,7 +228,19 @@ broader private credit tier stays, marked `adjacent`. The tab is named **Peers (
 
 ---
 
-## 2026-10-26, night (latest) — Each fund's structure and people, opened from its row
+## 2026-10-26, night, later (latest) — Rows expand only on the reader's click
+
+The user reviewed the `8e93ead` preview: it works, but a fund must not be expanded for them. So the
+pre-expansion is gone in every form — the fund clicked in Open Raises or New Launches, and a
+single-fund manager's only fund. With it went the plumbing that existed only for it: the `focusCik`
+prop, the row refs and scroll, and the CIK that `onSelectManager` had started to carry, so
+`components/peer-intel.tsx` and `active-raises.tsx` are back to their `d3acaff` state. What stays:
+each Raises row opens on click to that fund's structure and people, and the drawer closes every row
+when a different manager is shown. Verified with the same gate; see the entry below for the feature.
+
+---
+
+## 2026-10-26, night — Each fund's structure and people, opened from its row
 
 After `d3acaff` was pushed to a preview, the user asked for the structure, terms and people to sit
 on the fund itself — click a fund, see its details — rather than in two sections further down the

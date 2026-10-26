@@ -787,10 +787,10 @@ carries the same vintage chart for any peer with two or more vintages on file. *
 the drawer's Raises table expands** to show, from the rest of Form D, its structure and terms
 (formation, co-issuers, exemptions and their changes, securities, minimum and its history,
 commissions, payments to insiders, with the filer's own notes quoted) beside its people (the related
-persons, and any name found at another manager). A fund clicked in Open Raises or New Launches opens
-the drawer with that fund expanded and scrolled into view; a single-fund manager opens expanded. The
-page passes the fund's CIK with the manager (`onSelectManager(peerId, cik)`), and the drawer resets
-its expanded row on every open so one manager's choice never carries to the next.
+persons, and any name found at another manager). **No row opens on its own**: expansion is the
+reader's click, and the drawer closes every row whenever a different manager is shown, so one
+manager's open row never carries to the next. (A first version pre-expanded the fund clicked on the
+tab and a single-fund manager's only fund; the user asked for that to go.)
 
 **Two rules the structure and people code depends on.** A Form D filed jointly by several issuers
 reports the offering as a whole, so a co-issuer's capital is *inside* the filing's totals; the risk is

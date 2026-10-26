@@ -151,17 +151,6 @@ export function PeerIntel() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedManager, setSelectedManager] = useState<string | null>(null)
-  // The fund the drawer was opened from, when a fund row was clicked rather than
-  // a manager — the drawer opens with that fund expanded.
-  const [focusCik, setFocusCik] = useState<string | null>(null)
-  const openManager = (peerId: string, cik?: string) => {
-    setSelectedManager(peerId)
-    setFocusCik(cik ?? null)
-  }
-  const closeManager = () => {
-    setSelectedManager(null)
-    setFocusCik(null)
-  }
 
   useEffect(() => {
     let active = true
@@ -189,7 +178,6 @@ export function PeerIntel() {
   // "manager unavailable" to someone who simply switched scope.
   useEffect(() => {
     setSelectedManager(null)
-    setFocusCik(null)
   }, [layer])
 
   return (
@@ -230,21 +218,21 @@ export function PeerIntel() {
         <>
           <RaiseEnvironment cohort={payload.cohort} />
           <VintagePacingPanel cohort={payload.cohort} />
-          <ActiveRaises cohort={payload.cohort} onSelectManager={openManager} />
-          <NewLaunches cohort={payload.cohort} onSelectManager={openManager} />
-          <Distribution cohort={payload.cohort} onSelectManager={openManager} />
+          <ActiveRaises cohort={payload.cohort} onSelectManager={setSelectedManager} />
+          <NewLaunches cohort={payload.cohort} onSelectManager={setSelectedManager} />
+          <Distribution cohort={payload.cohort} onSelectManager={setSelectedManager} />
           <EvergreenLiquidity
             cohort={payload.cohort}
             tier={payload.tier}
             gating={payload.gating}
-            onSelectManager={openManager}
+            onSelectManager={setSelectedManager}
           />
-          <PortfolioStress cohort={payload.cohort} tier={payload.tier} onSelectManager={openManager} />
-          <Developments layer={layer} developments={payload.developments} onSelectManager={openManager} />
+          <PortfolioStress cohort={payload.cohort} tier={payload.tier} onSelectManager={setSelectedManager} />
+          <Developments layer={layer} developments={payload.developments} onSelectManager={setSelectedManager} />
           <ManagerRoster
             cohort={payload.cohort}
             signals={payload.signals}
-            onSelectManager={openManager}
+            onSelectManager={setSelectedManager}
           />
           <DataSources cohort={payload.cohort} diagnostics={payload.diagnostics} />
 
@@ -252,8 +240,7 @@ export function PeerIntel() {
             cohort={payload.cohort}
             signals={payload.signals}
             peerId={selectedManager}
-            focusCik={focusCik}
-            onClose={closeManager}
+            onClose={() => setSelectedManager(null)}
           />
 
           <p className="text-[11px] leading-snug text-slate-500">

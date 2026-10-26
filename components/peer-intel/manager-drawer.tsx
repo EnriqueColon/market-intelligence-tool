@@ -1,6 +1,6 @@
 "use client"
 
-import { Fragment, useEffect, useMemo, useRef, useState } from "react"
+import { Fragment, useEffect, useMemo, useState } from "react"
 import { ChevronRight } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
@@ -84,19 +84,17 @@ export function ManagerDrawer({
   cohort,
   signals,
   peerId,
-  focusCik = null,
   onClose,
 }: {
   cohort: PeerCohort
   signals: ManagerSignals[]
   peerId: string | null
-  /** A fund to open expanded, when the drawer was opened from that fund's row on the tab. */
-  focusCik?: string | null
   onClose: () => void
 }) {
   const [copied, setCopied] = useState(false)
+  // The fund whose row is open to its structure and people. Only ever set by
+  // a click: no fund opens on its own, however few the manager has.
   const [expanded, setExpanded] = useState<string | null>(null)
-  const rowRefs = useRef(new Map<string, HTMLTableRowElement>())
 
   const manager = useMemo(
     () => (peerId ? cohort.managers.find((m) => m.peerId === peerId) ?? null : null),
@@ -112,23 +110,11 @@ export function ManagerDrawer({
   // manager gets no section rather than a chart with one line and a caveat.
   const showLadder = (pacing?.vintages.filter((v) => v.points.length > 0).length ?? 0) >= 2
 
-  // Which fund opens expanded: the one clicked on the tab, or — for a manager
-  // with a single fund — that fund, since there is nothing to choose between.
-  // Reset on every open so a previous manager's choice never carries over.
+  // Every row starts closed. Reset whenever a different manager is shown, so
+  // one manager's open row never carries over to the next.
   useEffect(() => {
-    if (!manager) {
-      setExpanded(null)
-      return
-    }
-    const focused = focusCik && manager.raises.some((r) => r.cik === focusCik) ? focusCik : null
-    const initial = focused ?? (manager.raises.length === 1 ? manager.raises[0].cik : null)
-    setExpanded(initial)
-    if (focused) {
-      // After the dialog has laid out, bring the clicked fund into view.
-      const id = window.setTimeout(() => rowRefs.current.get(focused)?.scrollIntoView({ block: "start", behavior: "smooth" }), 150)
-      return () => window.clearTimeout(id)
-    }
-  }, [manager, focusCik])
+    setExpanded(null)
+  }, [peerId])
 
   async function copySnapshot() {
     if (!manager || !managerSignalSet) return
@@ -217,10 +203,6 @@ export function ManagerDrawer({
                           return (
                           <Fragment key={r.cik}>
                           <tr
-                            ref={(el) => {
-                              if (el) rowRefs.current.set(r.cik, el)
-                              else rowRefs.current.delete(r.cik)
-                            }}
                             onClick={toggle}
                             className={`cursor-pointer border-b border-slate-100 hover:bg-slate-50 ${open ? "bg-slate-50" : ""}`}
                           >
