@@ -1,14 +1,14 @@
 # Peer & Private Credit Tracker — status and open items
 
-*As of 2026-10-21, session stopped here. `dev` pushed and level at `a379757`; `main` unchanged
-at `fe0ad1b`, so none of this is in production. Steps 1–6 are done and step 7's developments feed with them; gating is
-assessed but withheld, and the alerts digest is not started. The user has reviewed the tab in a
-preview and confirmed it looks correct. It stays invisible in production until they add `peer-intel`
-to `ENABLED_TABS`, which they are doing deliberately once the expansion is finished.*
+*As of 2026-10-26: **merged to production as beta.** Steps 1–6 are done, with step 7's developments
+feed, vintage pacing and interim-close labels; gating is assessed and its reader proven
+(`verify:peer-gating`) but not built, and the alerts digest is not started. The user chose to ship
+the current state rather than wait for the expansion to finish; the tab shows once `peer-intel` is in
+production's `ENABLED_TABS`.*
 
-**Resuming:** see the "STOPPED HERE" block at the top of `SESSION.md` for the ordered pick-up list
-and the one item with an impact outside this repo — the signals endpoint now returns 413 for a
-whole-scope national request, so AMO Tracker must switch to `band=` before `main` takes that change.
+**Resuming:** see the "STOPPED HERE" block at the top of `SESSION.md` for the ordered pick-up list.
+The item with an impact outside this repo is §3a: AMO Tracker's whole-scope signals request now has
+about 160 KB of room, so it should move to `band=` before that runs out.
 
 The running list of what is still open. Update it at the end of every session alongside
 `SESSION.md`, `ROLLBACK.md`, `README.md` and `confluence.md`.
@@ -274,9 +274,9 @@ zero.
   counted once, but the registry holds no parent link — grouping for display is step 5 UI work, and
   would need either a `partOf` field or name-prefix matching.
 - [ ] **A read-only `/api/peers/v1`** mirroring `/api/analytics/v1`, once the shapes settle.
-- [ ] **`peer-intel` to be added to `ENABLED_TABS` on Vercel** when the expansion is finished — the
-  user is doing this deliberately at the end (2026-10-21), so the tab stays invisible in production
-  until then. Previews show it regardless.
+- [ ] **`peer-intel` to be added to `ENABLED_TABS` on Vercel** — the user decided on 2026-10-26 to
+  ship the current state as beta rather than wait for the expansion to finish. The code is merged to
+  production; the variable is the user's to set. Previews show the tab regardless.
 - [x] **The tab has been reviewed in a browser.** The user confirmed the preview looks correct
   (2026-10-21): five-tab bar, drawer width, layer switch and loading states all fine.
 
@@ -284,12 +284,13 @@ zero.
 
 ## 3a. Carries an impact outside this repo
 
-- [ ] **AMO Tracker must switch to `band=` on `/api/analytics/v1/behavior-signals`.** The three
-  Seller Likelihood fields added in `9b8777b` took the whole-scope national response from 3.90 MB to
-  4.02 MB, past the 4 MB refusal threshold added in `cc087df`, so that request now returns a **413**
-  naming the bands. The bands partition the scope, so their union is the whole cohort. AMO is
-  deployed against **production**, which does not yet carry either commit — pushing `dev` is safe,
-  **merging to `main` is what breaks it**. Either brief AMO first or hold the merge.
+- [ ] **AMO Tracker should still switch to `band=` on `/api/analytics/v1/behavior-signals`** — no
+  longer urgent, but the margin is thin. Its whole-scope national request measured **4,318,145
+  bytes (4.12 MB) on 2026-10-26**, past the original 4 MB refusal, which would have broken its FDIC
+  page on merge. To ship Peers without that, the refusal was raised to 4,480,000 bytes — the highest
+  value safe whether Vercel's "4.5 MB" means decimal or binary — leaving AMO about 160 KB of room.
+  The response grows as FDIC data arrives (3.90 → 4.02 → 4.12 MB), so this is a bridge.
+  `npm run measure:signals-response` reports the live figure.
 
 ## 3b. Build versus buy, and what to borrow — FOR DISCUSSION
 

@@ -20,8 +20,9 @@ Five tabs, gated server-side by the `ENABLED_TABS` environment variable:
 | Legal Landscape | deal sourcing | Federal Register, LegiScan, GPO |
 | **Peers (beta)** | **capital raising** — what competing managers are doing | SEC EDGAR |
 
-Peers is the newest and is **absent from production `ENABLED_TABS` by the user's choice** until its
-expansion is finished.
+Peers is the newest. **Its code reached production on 2026-10-26** and it is shown there as beta once
+`peer-intel` is in production's `ENABLED_TABS`, which the user sets in Vercel. Gating and the alerts
+digest are not built yet.
 
 ## Read in this order
 
@@ -50,10 +51,12 @@ expansion is finished.
 - **SEC EDGAR silently ignores unknown query parameters.** Full-text search takes `q`, not `keys`;
   the location filter is `locationCodes`, plural. A wrong name is dropped and the request succeeds
   with the filter absent. Go through `lib/peer-intel/edgar-contract.ts`.
-- **`/api/analytics/v1/behavior-signals` returns 413 for a whole-scope national request** — the
-  response is 4.02 MB against a 4.5 MB platform ceiling. **AMO Tracker consumes this endpoint and is
-  deployed against production, which does not yet carry the change.** Pushing `dev` is safe; merging
-  to `main` is what breaks it. Brief AMO to use `band=` first.
+- **AMO Tracker's whole-scope national signals request is ~160 KB from being refused.**
+  `/api/analytics/v1/behavior-signals` returns 413 at 4,480,000 bytes, just under the lower reading
+  of Vercel's 4.5 MB ceiling. That request measured 4,318,145 bytes on 2026-10-26 and grows as FDIC
+  data arrives — it went 3.90 → 4.02 → 4.12 MB. Anything that widens `BankBehaviorSummary` can tip it
+  over. Run `npm run measure:signals-response` before such a change; the durable fix is AMO
+  requesting by `band=`.
 - **Assignment of Mortgage (AOM) work does not belong in this tool.** It lives in AMO Tracker
   (`EnriqueColon/amo-dashboard`, a separate app). The old AOM / Market Participants code and the
   `competitor_surveillance` framework were removed on 2026-10-26 at the user's instruction; do not

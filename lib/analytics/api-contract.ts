@@ -47,18 +47,27 @@ export function authorize(authorizationHeader: string | null, configuredKey: str
  * Crossing it does not truncate — the function fails and the consumer gets an
  * error with no indication that the shape of its request was the cause.
  */
-export const RESPONSE_BYTE_LIMIT = 4.5 * 1024 * 1024
+export const RESPONSE_BYTE_LIMIT = 4_500_000
 
 /**
  * Where we refuse rather than risk it.
  *
- * The whole-scope national behaviour-signals response measured 3.9 MB when the
- * API shipped, against a 4.5 MB ceiling — about 13% of headroom, closing as
- * banks are added and as signals gain fields. Refusing at 4.0 MB turns a
- * confusing platform failure into a 413 that names the fix, and leaves room for
- * the response to grow between deployments without anyone watching it.
+ * Vercel states the ceiling as "4.5 MB" without saying whether that is
+ * 4,500,000 bytes or 4,718,592, so `RESPONSE_BYTE_LIMIT` takes the lower
+ * reading and the refusal sits below it. Anything sent is then safe whichever
+ * the platform means.
+ *
+ * It was 4.0 MB until 2026-10-26. The whole-scope national response measured
+ * 3.9 MB when the API shipped, 4.02 MB once Seller Likelihood was added, and
+ * **4,318,145 bytes (4.12 MB) on 2026-10-26** — over the old refusal, which
+ * would have broken AMO Tracker, the one consumer that requests the whole
+ * scope in one call. Raised to 4,480,000, the highest value safe under either
+ * reading, which leaves that request about 160 KB of room. That is a bridge,
+ * not a fix: the response grows as FDIC data arrives, and the durable answer is
+ * the consumer requesting by `band=`. `npm run measure:signals-response`
+ * reports the live figure against these thresholds.
  */
-export const RESPONSE_REFUSE_BYTES = 4 * 1024 * 1024
+export const RESPONSE_REFUSE_BYTES = 4_480_000
 
 /** Where it is worth telling a consumer the ceiling is coming. */
 export const RESPONSE_WARN_BYTES = 3.5 * 1024 * 1024

@@ -774,7 +774,8 @@ shows the status per article and the detail view carries a banner for anything n
 
 Flag `peer-intel` in `ENABLED_TABS`; tab value `peers`; component
 `components/peer-intel.tsx`. **Absent from `ENABLED_TABS` means the tab does not render in
-production**, which is the state at the time of writing.
+production.** The code shipped to production on 2026-10-26, by the user's choice, as beta and ahead of
+the expansion's end; it renders there once `peer-intel` is in production's `ENABLED_TABS`.
 
 A three-layer selector — Miami-Dade, Florida, the US — cumulative upward and matching the scopes
 Market Analytics uses. Each layer is one cached entry (see the caching section). Panels, in order:
@@ -1292,6 +1293,10 @@ National: screening 1.4 MB (5.8 s cold), visuals 567 KB, signals **3.9 MB for th
 cold), one band about 0.6 MB. Vercel's function response ceiling is 4.5 MB, so consumers fetch national
 signals per band; the full-scope response will cross the ceiling as signals are added, at which point
 the route should refuse it rather than let it grow. `maxDuration` is 120 s on the data routes.
+
+**Measured again 2026-10-26: whole-scope national signals 4,318,145 bytes (4.12 MB)**, up from
+3.9 MB at launch and 4.02 MB with Seller Likelihood. `npm run measure:signals-response` builds the
+exact body the route sends from live FDIC data and reports it against the thresholds.
 
 **Checks.** `npm run test:analytics-api` (5 tests: the auth decision including fail-closed, scope and
 CERT normalisation, the envelope). `BASE_URL=… ANALYTICS_API_KEY=… npm run verify:analytics-api
@@ -2374,12 +2379,16 @@ it was. All five give shares tendered and shares accepted as absolute counts, so
 and ignore the sentence. Blue Owl's counts are per share class and must be summed first. See
 `docs/PEER_TRACKER_STATUS.md` §3 for the five vehicles' figures.
 
-**A response can outgrow what the platform will send, and it fails rather than truncating.** The
-whole-scope national behaviour-signals response is 4.02 MB against Vercel's 4.5 MB ceiling, so
-`/api/analytics/v1/behavior-signals` refuses it with a **413** naming `band=` rather than letting the
-function fail with nothing useful to say. The thresholds are in
-`lib/analytics/api-contract.ts`. Anything that widens `BankBehaviorSummary` moves this figure: adding
-the three Seller Likelihood fields took it from 3.90 MB to 4.02 MB and tipped it over.
+**A response can outgrow what the platform will send, and it fails rather than truncating.**
+`/api/analytics/v1/behavior-signals` measures its body and returns a **413** naming `band=` at
+4,480,000 bytes, rather than letting the function fail with nothing useful to say. Two things about
+that number. Vercel states its ceiling as "4.5 MB" without a unit, so the code takes the lower
+reading, 4,500,000 bytes, and refuses below it — the earlier code assumed 4,718,592, which would have
+been unsafe to raise towards. And the threshold was 4.0 MB until 2026-10-26: the whole-scope national
+response, which AMO Tracker requests in one call, had grown to 4,318,145 bytes and would have been
+refused on merge. It now has about 160 KB of room, and it grows as FDIC data arrives (3.90 → 4.02 →
+4.12 MB); anything that widens `BankBehaviorSummary` can tip it. Run
+`npm run measure:signals-response` before such a change. The durable fix is AMO requesting by band.
 
 **A high score on one observed measure is not a high score.** `assessSeller` computes over *observed*
 weight so a partial reporter is not read as calm, which means one component at its ceiling reads 100

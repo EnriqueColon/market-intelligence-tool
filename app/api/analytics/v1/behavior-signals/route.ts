@@ -25,10 +25,12 @@ export const maxDuration = 120
  * send.** It measured 3.9 MB against Vercel's 4.5 MB ceiling when this API
  * shipped, and crossing that ceiling does not truncate the body — the function
  * fails, and the consumer sees an error that says nothing about the shape of
- * its request being the cause. So the body is measured before it is sent: over
- * 4 MB it becomes a 413 naming `band=` and listing the bands, and between
- * 3.5 MB and 4 MB it is sent with its size in the envelope so a consumer can
- * see the ceiling approaching rather than meet it one quarter later.
+ * its request being the cause. So the body is measured before it is sent: at
+ * 4,480,000 bytes it becomes a 413 naming `band=` and listing the bands, and
+ * between 3.5 MB and that it is sent with its size in the envelope so a
+ * consumer can see the ceiling approaching rather than meet it one quarter
+ * later. The thresholds, and why they moved on 2026-10-26, are in
+ * `lib/analytics/api-contract.ts`.
  */
 export async function GET(request: Request) {
   const denied = requireApiKey(request)

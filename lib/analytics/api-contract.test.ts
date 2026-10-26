@@ -62,12 +62,21 @@ test("buildMeta carries version, quarter and the scope string verbatim", () => {
   assert.equal("scope" in buildMeta("20260630"), false)
 })
 
-test("the refusal threshold sits below the platform ceiling, with headroom", () => {
+test("the refusal threshold sits below the platform ceiling under either reading of it", () => {
   // Crossing the ceiling fails the function rather than truncating the body, so
-  // the refusal has to come first and leave room for growth between deploys.
+  // the refusal has to come first. Vercel's "4.5 MB" may be decimal or binary;
+  // the refusal must be below the smaller, so nothing sent can ever cross it.
   assert.ok(RESPONSE_WARN_BYTES < RESPONSE_REFUSE_BYTES)
   assert.ok(RESPONSE_REFUSE_BYTES < RESPONSE_BYTE_LIMIT)
-  assert.ok(RESPONSE_BYTE_LIMIT - RESPONSE_REFUSE_BYTES >= 0.4 * 1024 * 1024, "at least 400 KB of headroom")
+  assert.equal(RESPONSE_BYTE_LIMIT, 4_500_000, "the lower reading of Vercel's 4.5 MB")
+  assert.ok(RESPONSE_REFUSE_BYTES < 4.5 * 1024 * 1024, "and below the higher one, trivially")
+})
+
+test("AMO Tracker's whole-scope national request, as measured 2026-10-26, is sent", () => {
+  // 4,318,145 bytes. Refused under the old 4.0 MB threshold, which is what would
+  // have broken AMO's FDIC page on merge; sent now, with the size warning.
+  assert.equal(responseSizeVerdict(4_318_145), "near-limit")
+  assert.ok(RESPONSE_REFUSE_BYTES - 4_318_145 >= 150_000, "with at least 150 KB of room to grow")
 })
 
 test("a response is refused above the threshold and sent below it", () => {
@@ -90,7 +99,7 @@ test("a banded response stays comfortably inside the limit", () => {
 
 test("the share of the ceiling is reported as a fraction", () => {
   assert.equal(responseSizeShare(RESPONSE_BYTE_LIMIT), 1)
-  assert.equal(Math.round(responseSizeShare(3.9 * 1024 * 1024) * 100), 87)
+  assert.equal(Math.round(responseSizeShare(3.9 * 1024 * 1024) * 100), 91, "of the 4,500,000-byte reading")
 })
 
 test("sizes read as megabytes or kilobytes, never as raw bytes", () => {
