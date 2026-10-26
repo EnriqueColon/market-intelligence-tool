@@ -770,6 +770,43 @@ paywalled by default (extraction is still attempted).
 transparent about what was actually accessible. Keep that property when changing it. The list view
 shows the status per article and the detail view carries a banner for anything not `open`.
 
+### Peers & Private Credit tab
+
+Flag `peer-intel` in `ENABLED_TABS`; tab value `peers`; component
+`components/peer-intel.tsx`. **Absent from `ENABLED_TABS` means the tab does not render in
+production.** The code shipped to production on 2026-10-26, by the user's choice, as beta and ahead of
+the expansion's end; it renders there once `peer-intel` is in production's `ENABLED_TABS`.
+
+A three-layer selector — Miami-Dade, Florida, the US — cumulative upward and matching the scopes
+Market Analytics uses. Each layer is one cached entry (see the caching section). Panels, in order:
+Raise Environment with the firm's own position against the layer, **Vintage Pacing** (the firm's
+funds on one chart, months since first sale against cumulative raised, the newest read against its
+predecessor — `lib/peer-intel/vintage.ts`, from the Form D trails already in the cohort), Open
+Raises with the firm's row pinned, Launched in the last twelve months, and a manager drawer, which
+carries the same vintage chart for any peer with two or more vintages on file.
+
+**Vintages are ordered by first-sale date, never by name**, sleeves are omitted because the registry
+holds no parent link, and the prior fund's figure at the newest's month is interpolated between its
+two bracketing filings and said to be. The chart uses `CATEGORICAL_SERIES` from `lib/chart-theme.tsx`
+rather than `CHART_SERIES`: the five blues are indistinguishable to a reader (adjacent ΔE 8.5), which
+is fine for a trend panel with one leading line and wrong for a chart whose point is which line is
+which. The four-hue set was validated for colour-vision deficiency on 2026-10-22; a chart needing a
+fifth identity needs small multiples, not a fifth colour.
+
+Everything comes from SEC EDGAR: Form D for the raise, XBRL company facts for the vehicles that file
+periodic reports. The readings are built from the figures on the panel (`lib/peer-intel/panel.ts`)
+rather than written by a model, so no figure-checker is needed.
+
+**Provenance is part of the tab, not a footnote.** Every raise links to the SEC filing its headline
+figures were read from, and a "Where this data comes from" panel surfaces `PEER_FIELD_CATALOG`,
+`PEER_METRICS` coverage and every signal's firing rule. When a figure or signal is added, add its
+catalogue entry too — the panel renders the catalogue, so an uncatalogued figure appears on screen
+with no stated source.
+
+**`TAB_GRID_COLS` must carry an entry for the number of visible tabs.** Tailwind only ships classes
+it can see in the source, so `grid-cols-${n}` compiles to nothing; adding a fifth tab without adding
+`5: "grid-cols-5"` leaves the tab bar laid out for four. Check the built CSS after adding a tab.
+
 ## 4. The Industry Outlook / Key Signals pipeline
 
 The most complex and most failure-prone part of the system. It generates the memo whose Executive
@@ -1256,6 +1293,10 @@ National: screening 1.4 MB (5.8 s cold), visuals 567 KB, signals **3.9 MB for th
 cold), one band about 0.6 MB. Vercel's function response ceiling is 4.5 MB, so consumers fetch national
 signals per band; the full-scope response will cross the ceiling as signals are added, at which point
 the route should refuse it rather than let it grow. `maxDuration` is 120 s on the data routes.
+
+**Measured again 2026-10-26: whole-scope national signals 4,318,145 bytes (4.12 MB)**, up from
+3.9 MB at launch and 4.02 MB with Seller Likelihood. `npm run measure:signals-response` builds the
+exact body the route sends from live FDIC data and reports it against the thresholds.
 
 **Checks.** `npm run test:analytics-api` (5 tests: the auth decision including fail-closed, scope and
 CERT normalisation, the envelope). `BASE_URL=… ANALYTICS_API_KEY=… npm run verify:analytics-api
@@ -1985,6 +2026,26 @@ selector without adding its scopes here quietly restores a fifty-second cold loa
 
 `/api/cron` is exempt from the auth middleware and protected by bearer token instead.
 
+### Peer tracker cache entries
+
+Three entries, one per layer, written by `warm-cache` and keyed
+`["peer-intel-v1", layer, isoWeek]`. The key carries an **ISO week** rather than a published quarter,
+because SEC filings arrive continuously and there is no quarter to key on; a new week is a new entry
+and the old one expires on its weekly revalidate.
+
+| Entry | Build time | Requests | Stored size |
+| --- | --- | --- | --- |
+| `peers:national` | ~73s | 340 (244 Form D, 96 XBRL) | ~144 KB |
+| `peers:florida` | ~45s | ~210 | ~110 KB |
+| `peers:miami` | ~28s | 139 | ~81 KB |
+
+All three are far inside the 2 MB per-entry Data Cache limit, so unlike the bank cohort they need no
+chunking. Successes only: a failed build throws inside the cached function, so nothing is stored.
+
+**`warmWithLabel` treats any resolved promise as a success.** `getPeerIntel` reports failure in its
+return value rather than by throwing, so the cron wraps it in `throwIfFailed` — without that, a layer
+that failed to build would be recorded as `ok` and the failure would be invisible.
+
 ## 6. Persistence
 
 **Postgres** (Neon, via Vercel Marketplace; gated by `POSTGRES_URL` and `isDbEnabled()` in
@@ -2050,9 +2111,6 @@ runtime writes to them.
 
 | Path | Purpose | Written by |
 | --- | --- | --- |
-| `data/aom.sqlite` | Miami-Dade AOM mortgage events | `scripts/import_aom_to_sqlite.py` |
-| `data/competitor_surveillance.sqlite` | Competitor events | `app/ingestion/competitor_surveillance/` |
-| `data/participant_intel.sqlite` | `firm`, `firm_alias`, `firm_entity` lookup | `lib/participant-intel.ts`, `participant-lookup.ts` |
 | `data/ingestion.sqlite` | FFIEC / Census ingested data | `app/ingestion/` |
 | `data/industry_outlook_cache.sqlite` / `.json` | Legacy outlook cache | `fetch-industry-outlook.ts` (dead path) |
 | `data/watchlist.json`, `watchlist-aliases.json` | Curated 45-firm reference list | `app/lib/watchlist.ts` (read-only) |
@@ -2139,7 +2197,6 @@ Every variable referenced in code. Scope matters: `POSTGRES_URL` and `BLOB_READ_
 | `ADMIN_UPLOAD_TOKEN` | Cannot upload or delete reports |
 | `ANALYTICS_API_KEY` | The Market Analytics data API returns 503 to every caller (closed, not open). AMO Tracker's FDIC Data Analytics page cannot load. Set the same value in the consumer's server environment |
 | `INGESTION_TOKEN` | Ingestion endpoint unavailable |
-| `ELEMENTIX_API_KEY` | Participants-intel API returns null (feeds orphaned UI — see §10) |
 | `LEGISCAN_API_KEY` | Legislative Tracker shows federal bills only; a feed note says so. Federal bills come from govtrack and the Federal Register, which need no key |
 | `CENSUS_API_KEY`, `FFIEC_USER_ID`, `FFIEC_TOKEN` | Corresponding analytics sections report `configured: false` |
 | `NEXT_PUBLIC_FDIC_API_KEY`, `FDIC_API_URL`, `FDIC_API_KEY` | All optional; anonymous FDIC access works today. Read by `lib/fdic-client.ts`, the single hardened path to the API (fallback host, timeout, 4xx short-circuit) shared by the analytics actions and the map |
@@ -2185,6 +2242,25 @@ npm run test:bank-behavior         # behaviour fields: catalogue, nulls, YTD→q
 npm run test:bank-behavior-signals # behaviour signals: roll-forward, each rule, unjudged, bands, scope independence (tsx)
 npm run test:bank-behavior-panel   # drawer's Balance-Sheet Actions: points, roll-forward, signals by quarter, the reading (tsx)
 npm run test:analytics-api         # data API: fail-closed auth, scope and CERT normalisation, envelope (tsx)
+npm run test:peer-intel-edgar      # EDGAR contract: q= not keys=, locationCodes, CIKs, retry, layers (tsx)
+npm run test:peer-intel-formd      # Form D: entities, "Indefinite", the Safe Harbor Fund 4 trail (tsx)
+npm run test:peer-intel-registry   # peer registry: unique CIKs, cumulative layers, evidence (tsx)
+npm run discover:peers             # proposes peer candidates from EDGAR by location and name
+npm run lookup:peer -- "Rialto"     # finds one named manager's vehicles (names, not patterns)
+npm run test:peer-intel-cohort     # raise aggregation: sleeve counting, coverage, positioning (tsx)
+npm run verify:peer-registry       # live: all 65 vehicles resolve; Fund 4 reproduces exactly
+npm run test:peer-intel-xbrl       # XBRL: dedup, YTD differencing, reported-wins, net flow (tsx)
+npm run verify:peer-raises -- --layer national   # live: pulls every trail, checks the invariants
+npm run test:peer-intel-signals    # signals: own-history rules, unjudged, scope independence (tsx)
+npm run verify:peer-metrics        # live: reproduces Blue Owl's quarterly series by hand-checked figures
+npm run test:peer-intel-panel      # readings: no undefined/NaN/null, self ranking, snapshot (tsx)
+npm run test:peer-intel-liquidity  # tier flow, PIK share, the NAV plausibility guard (tsx)
+npm run test:peer-intel-distribution  # sales agents, CRD grouping, placeholder names (tsx)
+npm run test:peer-intel-developments  # name-collision gate, word boundaries, dedup (tsx)
+npm run test:peer-intel-gating     # repurchase cap, table rows, shares outstanding (tsx)
+npm run test:seller-likelihood     # four states, confidence floor, cohort enrichment (tsx)
+npm run backtest:seller            # live: the score against the banks that actually failed
+npm run verify:peer-signals -- --all   # live: all three layers, firing rates, cache size, scope independence
 ```
 
 `test:allowlist` runs under `tsx` rather than Node's type stripping, because `lib/domain-allowlist.ts`
@@ -2240,6 +2316,154 @@ changing code, check that *your* files are clean rather than expecting a clean o
 
 ## 10. Known fragility
 
+**SEC EDGAR silently ignores unknown query parameters.** A misnamed filter does not error — it is
+dropped, and the request succeeds with the filter absent. `keys=` instead of `q=` returns the whole
+form firehose newest-first; `locationCode=` instead of `locationCodes=` returns every state. Both
+look like working responses and both were found only by checking that the results actually matched
+the filter. Form D full-text also indexes **entity names only**, since the form carries no
+narrative, so strategy terms return nothing. All three facts, with the measurements behind them,
+live in `lib/peer-intel/edgar-contract.ts`. An older SEC connector here had the `keys=` bug from
+the start; it was removed with the competitor-surveillance framework on 2026-10-26.
+
+**Assignment of Mortgage work does not belong here.** The AOM / Market Participants code, its
+`/api/participants-intel` route and the SQLite `competitor_surveillance` framework were removed on
+2026-10-26 — 647 tracked files including 17 MB of Miami-Dade Clerk data. That subject lives in
+AMO Tracker, a separate app. None of it had ever run on Vercel, since all of it read local SQLite
+through `process.cwd()`. Do not reintroduce AOM sources or panels; git history has everything if
+the code is ever needed for reference.
+
+**`SC TO` is not `SC TO-I`, and the difference is an activist's bid.** `SC TO-I` is an *issuer*
+tender offer — the fund buying its own shares, which is how a non-traded BDC runs its redemption
+programme. `SC TO-T` is a *third party* bidding for the fund's shares. SREIT's only five Schedule
+TO filings are `SC TO-T`, filed by Cox Capital and Saba Capital against it in a March–April 2026
+mini-tender; SREIT itself has never run a tender and redeems through a share repurchase plan. A
+prefix match on `SC TO` reads that hostile bid as the fund's own gating. Established 2026-10-21 by
+counting every Schedule TO the seven non-traded vehicles have filed and reading each cover page's
+"Subject Company" and "Offeror" lines. BREIT has filed none at all, in 688 filings.
+
+**A Schedule TO final amendment cannot be identified from its form type or its cover page.** The
+newest `SC TO-I/A` is usually not the final one — BCRED's is a Rule 13e-4(c)**(1)** amendment
+filing a written communication, with no figures in it. And the cover-page checkbox is no help
+either: the *label* "Check the following box if the filing is a final amendment reporting the
+results of the tender offer" appears in **every** Schedule TO whether ticked or not, and stripping
+tags discards the tick — Blue Owl's survives as `&#9746;`, BCRED's does not survive at all. Select
+the final amendment by the presence of the result figures themselves, which is self-validating
+since those figures are the point, or secondarily by a 13e-4(c)(4) citation, which four of the five
+BDCs carry and Blue Owl does not.
+
+**A fully-met tender quarter states no accepted count, and HPS states nothing about acceptance at
+all.** When requests fit under the cap no sponsor says how many shares it accepted, because the answer
+is all of them: BCRED and Apollo write "accepted for purchase 100% of the Shares", Blue Owl "purchased
+all validly tendered Shares", and HPS only that it paid "the net asset value of the total amount of
+Shares tendered". A reader that requires a number sees only the prorated quarters and produces a
+series in which every fund gates every quarter it appears — the first run of `verify:peer-gating` did
+exactly that. The rule that holds for all five: an accepted count means prorated; no count and no
+"pro rata" in the results means everything tendered was bought. Ares also files a results amendment
+and then a corrected one for the same offer a month later, differing in the last digits, so key a
+series on the offer's expiry and keep the later filing, never on filing date.
+
+**SREIT's most gated state carries no percentage.** From April 2026 its plan accepts "no repurchase
+requests except" death, disability and sub-$5,000 accounts, up to $5M a month. There is no fulfilment
+percentage because ordinary holders get nothing, so a reader keyed on "approximately N% of each
+stockholder's request was satisfied" scores the quarter as nothing to report. Check for the
+plan-restriction wording first; the Q1 2026 10-Q carries both it and the January–March percentages.
+BREIT's fully-met figure is year-to-date — three, six or nine months — and its 2025 wording is
+"including all repurchase requests received" where 2026 says "which represents all", so a quarterly
+series differences consecutive 10-Qs and must match both.
+
+**In a tender offer's results, "representing X%" has no fixed denominator.** It is
+accepted-over-tendered — the fulfilment rate — for Blue Owl and Ares, and accepted-over-outstanding
+— the cap — for BCRED, Apollo and HPS. Taking it as one field reports Apollo's Q2 2026 fulfilment
+as 5% when it was 29.8%, wrong by six times and in the direction that makes gating look worse than
+it was. All five give shares tendered and shares accepted as absolute counts, so compute the rate
+and ignore the sentence. Blue Owl's counts are per share class and must be summed first. See
+`docs/PEER_TRACKER_STATUS.md` §3 for the five vehicles' figures.
+
+**A response can outgrow what the platform will send, and it fails rather than truncating.**
+`/api/analytics/v1/behavior-signals` measures its body and returns a **413** naming `band=` at
+4,480,000 bytes, rather than letting the function fail with nothing useful to say. Two things about
+that number. Vercel states its ceiling as "4.5 MB" without a unit, so the code takes the lower
+reading, 4,500,000 bytes, and refuses below it — the earlier code assumed 4,718,592, which would have
+been unsafe to raise towards. And the threshold was 4.0 MB until 2026-10-26: the whole-scope national
+response, which AMO Tracker requests in one call, had grown to 4,318,145 bytes and would have been
+refused on merge. It now has about 160 KB of room, and it grows as FDIC data arrives (3.90 → 4.02 →
+4.12 MB); anything that widens `BankBehaviorSummary` can tip it. Run
+`npm run measure:signals-response` before such a change. The durable fix is AMO requesting by band.
+
+**A high score on one observed measure is not a high score.** `assessSeller` computes over *observed*
+weight so a partial reporter is not read as calm, which means one component at its ceiling reads 100
+on 15% confidence. Any state or list built on such a score needs a confidence floor — without one,
+`pre-seller` covered 45% of the backtest's bank-quarters. Always show confidence beside the score.
+
+**A field added to `OfferingRecord` is multiplied by every filing in every trail.** Adding
+`relatedPersons` to the Form D record put a copy on all nine filings of sixty-five vehicles — 132 KB
+in the weekly cache for data no panel displays, taking the entry from 191 KB to 406 KB. Anything only
+the newest filing needs belongs on `Raise`, hoisted once, and the stored filings should carry only
+what the filing trail renders.
+
+**Peer news must match a manager's full name, never a token.** The peer registry contains firms
+called Bridge, Ladder, Camden, Integra, Omnia, Naso, Apollo, Ares, Pretium and Safe Harbor. Matching
+on a short name attributes other firms' news — and bridges, theatres and spacecraft — to a
+competitor. `lib/peer-intel/developments.ts` requires an exact phrase of two words or more, refuses
+one-word aliases outright, matches the headline rather than the URL, and records which phrase matched
+so a wrong attribution is visible. Match terms on word boundaries too: "Issues" contains "sues".
+
+**A tagged figure can be faithful and still wrong.** HPS Corporate Lending Fund tags
+`NetAssetValuePerShare` as exactly 1000.00 in six consecutive filings while its real NAV is about
+$25 — a par or subscription price under the NAV concept. XBRL guarantees only that a filer used a
+tag, not that it meant what the tag says. `looksLikeNav` in `lib/peer-intel/liquidity.ts` rejects a
+NAV that never moves across the quarters reported, and the panel distinguishes "reported but not
+usable" from "not reported". Treat any new concept as needing a plausibility check before it reaches
+a reader.
+
+**An SEC filer tags the same period twice, as year-to-date and as a standalone quarter.** Blue Owl's
+Q2 2026 investment income appears both as a 181-day year-to-date figure and as a 91-day quarter, and
+the two reconcile. Grouping duration facts by their `start` alone therefore emits two points for one
+period. `lib/peer-intel/xbrl.ts` prefers the directly reported quarter and marks it
+`origin: "reported"`. Related: measure a fact's span in **days**, not calendar months —
+2026-04-01 to 2026-06-30 crosses two month boundaries but is three months of activity, and month
+arithmetic silently files quarterly facts into the year-to-date series.
+
+**Share repurchases mean opposite things for listed and non-traded vehicles.** For a non-traded BDC
+or REIT, `PaymentsForRepurchaseOfCommonStock` is the redemption programme paying investors out — the
+liquidity signal. For a listed company it is a buyback, and issuance is an equity raise: both
+capital-markets decisions that say little about investor demand, since an investor wanting out just
+sells the stock. `PeerVehicle.quoted` carries the distinction and net flow is computed only for
+non-traded vehicles. Five of the twelve registered vehicles in the registry are listed.
+
+**A registered vehicle files no Form D, and that is not a gap.** A listed REIT or non-traded BDC
+raises through a registered offering rather than Regulation D, so nine of the twelve registered
+vehicles in the peer registry have no Form D at all — the expected shape, not a failure. Their
+issuance is in the periodic reports instead. `CohortOfferings` separates `noFormD` from `failures`
+and `PeerCohort.coverage` separates `registeredWithoutFormD` from `unresolvedVehicles` for exactly
+this reason; a *private* vehicle missing its Form D is a real gap, because a Reg D fund must have
+one. BREIT runs a parallel Reg D offering alongside its registered one, so treat this as expected
+and never as required.
+
+**One fundraise is spread across several SEC filers.** A fund routinely files a separate Form D for
+its onshore LP, its offshore or international feeder, a master, and parallel or "-R" sleeves — each
+reporting only its own slice of the capital. Bridge Debt Strategies Fund VI is one raise across four
+CIKs. Counting filers as raises overstates how many funds are in the market and understates each
+one's size, so `lib/peer-intel/registry.ts` marks sleeves with a `role` and counts raises through
+`fundVehiclesInScope()` while summing capital through `vehiclesInScope()`. Some managers also file a
+per-vintage "Holdings LLC" aggregator — Madison Realty has one per fund, each reporting a $125,000
+target fully sold to exactly 125 investors. Those are feeder artefacts, not fundraising, and are
+omitted from the registry.
+
+**Searching EDGAR by strategy name misses managers who name funds after themselves.** The
+name-pattern discovery in `scripts/discover-peers.ts` found 67 Florida filers and none of Rialto,
+Madison Realty, Bridge, Pretium or Gelt, because "Rialto Real Estate Fund V - Debt" contains no
+strategy phrase. `scripts/lookup-peer.ts` searches by manager name and found all five — including
+Rialto, which is Miami-based and the largest direct peer in the county. Name matching also produces
+false positives across industries ("Pretium Packaging LLC"), which is why the registry is curated.
+
+**The XBRL `frames` API cannot read year-to-date filers.** It looks like the right tool for a
+cohort pull — every filer, one concept, one period, one request — but
+`frames/us-gaap/.../CY2026Q2` returned 134 entities and not one of the non-traded BDCs, because
+their figures are year-to-date durations that do not match a calendar-quarter frame. Per-entity
+`companyconcept` is the only reliable path, and is 117× smaller than `companyfacts` besides.
+
+
 - **`NODE_ENV` as a production check.** Fixed in `lib/features.ts`,
   `app/actions/search-industry-reports.ts` and `app/actions/summarize-found-report.ts`, but other
   `NODE_ENV === "production"` checks remain (for example in `app/actions/fetch-report-summaries.ts`).
@@ -2251,9 +2475,10 @@ changing code, check that *your* files are clean rather than expecting a clean o
 - **Cache keys hide fixes.** After changing generation behaviour, bump the cache version or
   production will serve yesterday's output.
 - **A lot of orphaned UI.** None of these are mounted from `app/page.tsx` or the dashboard:
-  `market-participants-intel.tsx` and `components/participants-intel/*` (the tab was removed in
-  `259fa20`), `national-view.tsx`, `florida-view.tsx`, `miami-view.tsx`, `market-research-library.tsx`,
-  `market-research-reports.tsx`, `competitor-analysis.tsx`. Confirm reachability before investing
+  `national-view.tsx`, `florida-view.tsx`, `miami-view.tsx`, `market-research-library.tsx`,
+  `market-research-reports.tsx`. (The Market Participants and Competitor Analysis components were
+  on this list until 2026-10-26, when they were removed with the rest of the AOM code — see below.)
+  Confirm reachability before investing
   effort in any of them. Note the admin upload library is in this list, so the Blob upload path has
   no live UI even though its API routes work.
 - **The daily cron still warms caches for orphaned features** — KPI, insights, price index and

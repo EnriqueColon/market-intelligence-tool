@@ -21,18 +21,23 @@ deployment, and `main` is deployed automatically on push.
 
 ## Documentation map
 
-Four files are maintained together, and each answers a different question. Read the one that matches
-what you need rather than starting at the top.
+Start with `CLAUDE.md`. It is short, kept current, and names the traps — it exists so a session does
+not spend its first thousand tokens rediscovering the project. Everything below is what it points at.
 
 | File | Answers | Kind |
 | --- | --- | --- |
+| `CLAUDE.md` | Where do I start, what should I read, what will bite me? | Entry point |
 | `README.md` (this file) | What is this, how do I run it, how do I change it safely? | Orientation |
 | `confluence.md` | How does the system behave *right now*, in detail? | Technical reference |
 | `SESSION.md` | What changed, when, and why was it done that way? | Dated history |
 | `ROLLBACK.md` | Which commit do I go back to, and how? | Recovery |
 
-`docs/` holds narrower guides, of which `docs/DEV_ENVIRONMENT.md` is the one most worth reading
-early. `docs/NEXT_VERSION_PLAN.md` describes where the tool is going — serving underwriting, investor
+`SESSION.md` is long and reverse-chronological; its **"STOPPED HERE" block at the top** carries the
+current state and the pick-up list, and is the only part worth reading in full to resume.
+
+`docs/` holds narrower guides. `docs/PEER_TRACKER_STATUS.md` and
+`docs/BANK_BEHAVIOR_EXPANSION_STATUS.md` are the live open-item lists for the two expansions in
+progress; `docs/DEV_ENVIRONMENT.md` is the one most worth reading early. `docs/NEXT_VERSION_PLAN.md` describes where the tool is going — serving underwriting, investor
 relations, finance and executives from one data layer — and is the place to check before starting
 anything substantial, since it records which decisions are already settled.
 `EXEC_SUMMARY_WITH_KEYWORDS.md` is an older file recording the search keyword criteria behind the
@@ -166,7 +171,6 @@ with almost no configuration.
 | **Google Programmable Search** | Market Research search | `GOOGLE_API_KEY` + `GOOGLE_CSE_ID` | Research search unavailable |
 | **OpenFreeMap** | Basemap tiles for the stress map | Keyless | Map renders without a basemap |
 | **Census**, **FFIEC** | Analytics side panels | `CENSUS_API_KEY`, `FFIEC_USER_ID`, `FFIEC_TOKEN` | Sections report `configured: false` |
-| **Elementix** | Participants intel API | `ELEMENTIX_API_KEY` | Returns null; feeds orphaned UI |
 | **govtrack** | Finds federal bills for the Legislative Tracker, and the bill-identity check | Keyless | Federal legislation disappears from the tab rather than becoming unverified. Slow on its first request of the day — see Maintenance notes |
 | **GPO bulk data** (govinfo.gov) | Each federal bill's record, text, committee report and CRS summary, by bill number | Keyless — the bulk files, not the API, which needs one | Federal bill cards show govtrack's four facts and no details |
 | **Federal Register** | Rules and proposed rules for the Regulatory section, with each rule's record facts and full text | Keyless | That section falls back to the model alone, which it also uses anyway for FILs and bulletins |
@@ -396,6 +400,9 @@ components/
 lib/            Domain logic: FDIC client and transforms, auth, features, caching, formatting
   scoring/      Pure, testable analysis: opportunity score, change detection, brief ranking,
                 peer cohorts, the CRE capital scenario, FDIC quarter arithmetic
+  analytics/    Market Analytics computation, incl. the bank-behaviour layers
+  peer-intel/   Peer & Private Credit tracker: EDGAR access contract, Form D parsing,
+                the three-layer competitor registry (not yet rendered anywhere)
 docs/           Focused guides (start with DEV_ENVIRONMENT.md)
 data/           Local SQLite and JSON — development only
 scripts/        One-off and ingestion scripts (TypeScript and Python)
@@ -411,8 +418,7 @@ scripts/        One-off and ingestion scripts (TypeScript and Python)
 - **Development happens on `dev`**, which deploys as an isolated Vercel preview.
 - Never push feature work directly to `main`. Ship with `git checkout main && git merge dev`.
 - Do not commit unrelated files. This repository carries habitual uncommitted churn in
-  `data/*.sqlite*`, `scripts/import_aom_to_sqlite.py`, `data/README-aom-import.md` and `.DS_Store` —
-  leave it alone.
+  `data/*.sqlite*` and `.DS_Store` — leave it alone.
 
 ### Before you ship
 
@@ -428,6 +434,18 @@ scripts/        One-off and ingestion scripts (TypeScript and Python)
 ## Maintenance notes
 
 ### Traps that have already caused incidents
+
+**SEC EDGAR ignores an unknown query parameter instead of rejecting it.** Full-text search takes
+`q`; a request built with `keys=` returns the entire form firehose, newest first, with the search
+term dropped — 10,000+ unrelated Form D filings that look like a successful response. An earlier
+SEC connector in this repo always passed `keys`, which is why it found almost nothing; it was
+removed with the competitor-surveillance framework on 2026-10-26. The location filter behaves the
+same way: `locationCodes` (plural)
+works, `locationCode` is silently ignored. Anything new against EDGAR should go through
+`lib/peer-intel/edgar-contract.ts`, which encodes the working parameters and the measurement behind
+each one. Related: Form D full-text matches **entity names only** (the form has no narrative), so a
+search for a strategy term returns nothing while a search for a name pattern returns hundreds.
+
 
 **A bare `max-w-*` on `DialogContent` loses to the base component's `sm:max-w-lg`.** The base
 class is a media-query rule and wins on every desktop viewport, so the institution drawer asked for

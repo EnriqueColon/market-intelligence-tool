@@ -9,6 +9,24 @@
 
 export const CHART_SERIES = ["#006D95", "#0088b3", "#005a7a", "#00a3cc", "#004d6b"] as const
 
+/**
+ * Series that have to be told apart.
+ *
+ * `CHART_SERIES` is five steps of one blue, which suits a trend panel where
+ * one line leads and the rest are context — but a reader cannot tell the
+ * steps apart (adjacent pairs differ by ΔE 8.5, under the 15 a full-colour
+ * reader needs), so a chart whose whole point is *which* line is which cannot
+ * use it. This set keeps the brand blue first and adds three hues at the same
+ * lightness, checked on 2026-10-22 against the lightness band, chroma floor,
+ * colour-vision-deficiency separation (worst pair ΔE 17.7 protan, 21.4
+ * tritan), normal-vision separation (25.4) and 3:1 contrast on white.
+ *
+ * Four, deliberately: a fifth distinguishable hue is not available at this
+ * lightness, and a chart that needs more than four identities needs small
+ * multiples instead.
+ */
+export const CATEGORICAL_SERIES = ["#006D95", "#b45309", "#7c3aed", "#be185d"] as const
+
 export const CHART_INK = {
   /** Axis numbers and units */
   axis: "#64748b",

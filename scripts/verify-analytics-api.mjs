@@ -80,11 +80,26 @@ if (watch.status !== 200) fail(`cohort-watch: ${watch.body?.error ?? watch.statu
 
 const signals = await call(`/api/analytics/v1/behavior-signals?scope=${encodeURIComponent(scope)}`)
 console.log(`signals       → ${signals.status} ${signals.ms}ms ${kb(signals.bytes)}`)
-if (signals.status !== 200) fail(`behavior-signals: ${signals.body?.error ?? signals.status}`)
-else {
+// 413 is a correct answer here, not a failure: the whole-scope national
+// response measured 3.9 MB against a 4.5 MB platform ceiling, and the route
+// refuses rather than letting the function fail with nothing useful to say.
+if (signals.status === 413) {
+  console.log(`  refused at ${signals.body?.responseSize ?? "unknown size"} — as designed; consumers must use band=`)
+  if (!Array.isArray(signals.body?.bands) || signals.body.bands.length === 0) {
+    fail("413 must list the bands a consumer should switch to")
+  }
+} else if (signals.status !== 200) {
+  fail(`behavior-signals: ${signals.body?.error ?? signals.status}`)
+} else {
   const c = signals.body.cohort
   const firing = c.summaries.filter((s) => s.actionCount >= 2).length
   console.log(`  ${c.institutionCount} institutions, ${c.currentCount} current, ${c.unjudgedCount} unjudged; ${firing} with ≥2 action signals`)
+  const share = signals.bytes / (4.5 * 1024 * 1024)
+  console.log(`  ${(share * 100).toFixed(0)}% of the 4.5 MB response ceiling`)
+  if (signals.body.sizeWarning) console.log(`  warning carried: ${signals.body.sizeWarning}`)
+  if (share > 0.78 && !signals.body.sizeWarning) {
+    fail(`response is ${(share * 100).toFixed(0)}% of the ceiling but carries no sizeWarning`)
+  }
 }
 
 const band = await call(`/api/analytics/v1/behavior-signals?scope=${encodeURIComponent(scope)}&band=1b-3b`)

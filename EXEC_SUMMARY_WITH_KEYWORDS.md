@@ -65,12 +65,7 @@ No keyword searching here; this tab uses structured public data.
 
 ---
 
-## 3) Competitor Analysis Tab (AOM)
-Uses Miami‑Dade **Assignment of Mortgage** records from a local dataset. This is **structured data**, not keyword‑based search.
-
----
-
-## 4) Legal Landscape Tab — Keywords
+## 3) Legal Landscape Tab — Keywords
 Legal updates are pulled using this **search term list** (Federal Register + LegiScan for Florida):
 - "commercial real estate"
 - "real estate"
@@ -98,5 +93,4 @@ Legal updates are pulled using this **search term list** (Federal Register + Leg
 ## Quick Takeaways
 - **News** is keyword‑driven with strict filters to keep it relevant and US‑focused.
 - **Market Analytics** is FDIC‑anchored and lagged, with clearly labeled proxies.
-- **Competitor Analysis** is local AOM data, not a web search.
 - **Legal** is keyword‑based and filtered by jurisdiction/type.

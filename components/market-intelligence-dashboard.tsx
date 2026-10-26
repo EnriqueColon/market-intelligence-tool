@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
-import { FileText, LineChart, LogOut, Newspaper, Scale } from "lucide-react"
+import { FileText, LineChart, LogOut, Newspaper, Scale, Users } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { LegalUpdates } from "@/components/legal-updates"
@@ -13,6 +13,7 @@ import { ArticleDigest } from "@/components/article-digest"
 import { IndustryOutlook } from "@/components/industry-outlook"
 import { MarketResearchFeed } from "@/components/market-research-feed"
 import { MarketPulseStrip } from "@/components/market-pulse-strip"
+import { PeerIntel } from "@/components/peer-intel"
 import type { InitialNewsData } from "@/app/services/initial-news-data"
 
 type TabValue =
@@ -20,12 +21,14 @@ type TabValue =
   | "analytics"
   | "market-research"
   | "legal"
+  | "peers"
 
 export type EnabledTabs = {
   news: boolean
   marketAnalytics: boolean
   marketResearch: boolean
   legal: boolean
+  peerIntel: boolean
 }
 
 /** Flags for content inside a tab, as opposed to the tabs themselves. */
@@ -48,6 +51,7 @@ const TAB_DEFS = [
   { value: "analytics", flag: "marketAnalytics", label: "Market Analytics", Icon: LineChart },
   { value: "market-research", flag: "marketResearch", label: "Market Research", Icon: FileText },
   { value: "legal", flag: "legal", label: "Legal Landscape", Icon: Scale },
+  { value: "peers", flag: "peerIntel", label: "Peers (beta)", Icon: Users },
 ] as const satisfies ReadonlyArray<{ value: TabValue; flag: keyof EnabledTabs; label: string; Icon: typeof Newspaper }>
 
 /**
@@ -61,6 +65,7 @@ const TAB_GRID_COLS: Record<number, string> = {
   2: "grid-cols-2",
   3: "grid-cols-3",
   4: "grid-cols-4",
+  5: "grid-cols-5",
 }
 
 const TAB_TRIGGER_CLASS =
@@ -254,6 +259,16 @@ export function MarketIntelligenceDashboard({
                 {...keepMounted("legal")}
               >
                 <LegalUpdates />
+              </TabsContent>
+            )}
+
+            {enabledTabs.peerIntel && (
+              <TabsContent
+                value="peers"
+                className={`flex flex-col gap-[60px] ${TAB_CONTENT_CLASS}`}
+                {...keepMounted("peers")}
+              >
+                <PeerIntel />
               </TabsContent>
             )}
 

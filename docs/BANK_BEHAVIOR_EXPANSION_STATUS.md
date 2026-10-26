@@ -1,6 +1,8 @@
 # Bank Behaviour Expansion — status for review
 
-*As of 2026-10-07, 09:30. Branch `dev` at `0d90a59`; production (`main`) untouched.*
+*As of 2026-10-21. Steps 1–4 are on `dev` at `9b8777b`; steps 1–3 are in production at `fe0ad1b`.
+Step 4 is the Seller Likelihood score, calibrated against the banks that actually failed — see
+§6 below.*
 
 ## 1. What we are building, in one paragraph
 
@@ -25,7 +27,7 @@ labelled derived.
 | 1 | Field audit, then ingest the Phase 1 Call Report fields | **Done, committed, pushed** (`c656665`, docs `db373cf`) |
 | 2 | Behaviour signals + nonaccrual roll-forward, cached per scope in the weekly job | **Done, committed, pushed** (`4ab576f`) |
 | 3 | Balance-Sheet Actions panel in the institution drawer | **Done, committed** (`0d90a59`) — first visible change |
-| 4 | Seller Likelihood score, four states (Pre-seller / Active seller / Cleaned up / Stable), backtest against known sellers and failures | Not started |
+| 4 | Seller Likelihood score, four states, backtest against failures | **Done** (`1b9c212`, `9b8777b`) |
 | 5 | Enforcement actions (FDIC / OCC / Fed), monthly | Not started |
 | 6 | Public-bank intent: EDGAR and transcripts | Not started |
 | 7 | Weekly alerts digest; Cohort Changes list, table columns, Pressure-vs-Action scatter | Not started |
@@ -206,5 +208,41 @@ npm run verify:behavior-signals         # known cases, Florida-vs-national, band
 
 ## 8. Git state
 
-- `main` (production): `8afac5b` — unchanged by this work.
-- `dev`: step 1 `c656665`, step 2 `4ab576f`, step 3 `0d90a59`, plus documentation commits on top.
+- `main` (production) and `dev`: level at `fe0ad1b` since 11:30 on 2026-10-07. Step 1 `c656665`, step 2 `4ab576f`, step 3 `0d90a59`, then `80743b6` (Market Analytics data API, `/api/analytics/v1/*`, so AMO Tracker renders this tab's data in its own layout — see `confluence.md` → "Market Analytics data API"), plus documentation commits.
+- Production state before this work: `8afac5b`.
+
+
+## 6. Step 4 — Seller Likelihood, and what the backtest changed
+
+Four states: `active-seller` (acting now, biddable today), `pre-seller` (pressure with nothing moving
+— the one to call first, because by the time a pool is marketed the price is set), `cleaned-up`,
+`stable`. Without a prior-quarter history `cleaned-up` cannot be told from `stable`, so the
+assessment returns `stable` and says so rather than guessing.
+
+**The backtest is the reason this differs from the peer signals.** Bank failures are published with
+dates, so thresholds can be checked against outcomes rather than argued about. `npm run
+backtest:seller` runs the score against every bank that failed since 2022 and reports what it said in
+the quarters before. It broke the thresholds three times:
+
+| Run | Finding | Change |
+| --- | --- | --- |
+| 1 | 12 of 13 failures flagged — including SVB, Signature and First Republic as "active sellers" of CRE loans, when all three were deposit runs | `activeActionCount` 1 → 2. One signal fires on ~25% of the industry; two was measured at 3.6% |
+| 2 | `pre-seller` covered 45% of backtest bank-quarters | A confidence floor: the score is computed over observed weight, so one component at its ceiling reads 100 on 15% confidence |
+| 3 | `pre-seller` still 29.7% of the real national cohort | The absolute path needs corroboration from the score; the list floor was swept against the cohort, 40 → 70 |
+
+Final distribution over 4,603 banks: active-seller 176 (3.8%), pre-seller 419 (9.1%), cleaned-up 851
+(18.5%), stable 3,157 (68.6%). **Ranked list: 288** — 176 biddable today plus 112 worth a call.
+
+**How to read the backtest.** 9 of 10 CRE-relevant failures were flagged; 3 of 3 deposit runs were
+flagged too, which is a false positive rather than a win, and the script reports them apart for that
+reason. A failure is also a harsher test than the score is built for: this predicts *selling*, not
+failing, and a bank that sold its way out and survived is a success that never appears in the sample.
+Thirteen failures is directional, not statistical, and the script says so.
+
+**Storage.** Summaries carry `sellerState`, `sellerScore` and `sellerConfidence` only; the components
+carry a label and a sentence each, which is 4.1 MB across the cohort against a 2 MB per-entry ceiling.
+Asset bands are unmoved at 0.16–0.90 MB. The drawer recomputes the full assessment from one bank's own
+history, with percentiles absent because one bank has no cohort to rank against.
+
+**Carried.** Adding these fields took the unchunked national cohort to 4.02 MB, past the API's 4 MB
+refusal threshold, so `/api/analytics/v1/behavior-signals` now needs `band=` for the national scope.

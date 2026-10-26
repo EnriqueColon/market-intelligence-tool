@@ -8,7 +8,988 @@ is it in now, and what is still open.
 
 ---
 
-## 2026-10-07, late morning (latest) — Market Analytics data API, so AMO Tracker can render this tab's data
+## STOPPED HERE — 2026-10-26, AOM removed from dev and production
+
+Read `CLAUDE.md` first for orientation, then this block. Everything below it is the running record —
+reverse-chronological, and worth reading only when you need the reasoning behind something specific.
+
+On `origin/dev`: the gating checks of 2026-10-21 (`188f74d`) and the vintage pacing panel
+(`71f7ec9`, preview `market-intelligence-tool-inultkm9f.vercel.app`, **not yet looked at**).
+
+Also on `origin/dev`: **`ac560a8`**, the interim-close labels and the `verify:peer-gating` command —
+see the newest entry below — and `4b1662e`, its documentation. **`dev` is level with `origin/dev`
+and the working tree is clean** apart from `.DS_Store` and the untracked `.claude/`. Neither
+`71f7ec9` nor `ac560a8` has been looked at in a browser; both are on the Peers tab, which previews
+show regardless of `ENABLED_TABS`. The preview for the current head is
+`market-intelligence-tool-p3z7jctk0.vercel.app`.
+
+**The AOM removal is on both branches.** `dev` has it as `eb8eef1`; **production has it as
+`9f8a1f9`**, applied directly to `main` so nothing else from `dev` shipped — deployed by Vercel
+(`success`) and checked live. `main` and `dev` now differ by that one commit; a simulated merge was
+clean, so the next release is an ordinary `git merge dev` that produces a merge commit. Production
+otherwise still runs `fe0ad1b`'s code: no Seller Likelihood, no Peers, AMO Tracker unaffected.
+
+**Pushing needs `gh`'s active account to be EnriqueColon** — git on this machine asks `gh` for
+GitHub credentials, and RSronin09, which had become active again, gets a 403. Switched on
+2026-10-26 with `gh auth switch --user EnriqueColon`. The `non-traded` bucket split
+has still not been started; begin it fresh from the build order in §3b of the peer status doc. Confirm the
+head with `git log --oneline -1` rather than trusting a SHA written here; production is untouched at
+`fe0ad1b`, and nothing has been merged to `main`.
+
+### Where this leaves the expansion
+
+The user's framing for the week: **push forward what can be built with confidence.** Two of the
+morning's three recommendations are done — vintage pacing (`71f7ec9`) and the gating spot-check — and
+the third, the interim-close labels, with them. What the spot-check established is in §3 of the peer
+status doc and is the thing to read before building gating: the wording holds over six quarters per
+fund, but **a fully-met quarter states no accepted count** (three different shapes, HPS silent on
+acceptance altogether), **Ares re-files corrected results for the same offer**, **BREIT's figure is
+year-to-date**, and **SREIT has been closed to ordinary holders since April 2026** in a wording that
+carries no percentage. The first run of the reader saw only the prorated quarters and would have
+reported every fund as gating in every quarter it appeared.
+
+Next, in order: **split the `non-traded` bucket** (precondition), then **gating** on
+`verify:peer-gating`'s reader — the script's `readTenderResult` and `readReitProse` are the extractor
+in all but packaging, tested against 38 live documents. Then cap-change detection and the small tail.
+Bank Behaviour step 5 is independent and can go whenever. AMO and `ENABLED_TABS` stay parked.
+
+A preview deployment of `10160b3` rebuilds automatically; the GitHub deployment record appears a
+minute or two after the push, and the URL is in its deployment status. Previews sit behind Vercel
+Deployment Protection, so only a signed-in team member can open one.
+
+### The one thing with an impact outside this repo
+
+**`/api/analytics/v1/behavior-signals` now returns 413 for a whole-scope national request.**
+Adding the three Seller Likelihood fields took that response from 3.90 MB to 4.02 MB, past the 4 MB
+refusal threshold added in `cc087df`. The 413 names `band=` and lists the bands, and the bands
+partition the scope so their union is the whole cohort — but **AMO Tracker will break on that
+endpoint until it switches to per-band requests**, and it is deployed against production, which does
+not yet carry this change. Pushing to `dev` does not affect it; merging to `main` does. Either tell
+AMO to band first, or hold the merge.
+
+Everything else in these ten commits is additive: the Peers tab is absent from `ENABLED_TABS` by the
+user's choice until the expansion is finished, so none of it renders in production.
+
+### Where each expansion stands
+
+| | State |
+| --- | --- |
+| Peers tab, steps 1–6 | Done and reviewed in a preview by the user |
+| Peers step 7 | Developments feed done; **gating withheld**, alerts digest not started |
+| Bank Behaviour step 4 | **Done** — score, four states, backtest, cache, drawer |
+| Bank Behaviour steps 5–7 | Not started |
+
+### A factual correction made after stopping, and a lead it produced
+
+The user asked whether the two empty states — evergreen liquidity and portfolio stress — were
+stating legal facts or merely that something need not be reported. The answer is that **they are
+different cases, and the shipped copy conflated them.**
+
+The liquidity one is close to structural: a drawdown fund's partnership agreement grants no
+redemption right, so there is no programme to gate. But the copy drifted into implying its investors
+have no exit, which is wrong — secondary sales and GP-led continuation vehicles are real liquidity
+events that no filing records. Now worded as "no redemption programme, not no liquidity".
+
+The portfolio one was simply wrong. It read as though a private fund's holdings, valuations and
+performance do not exist. They do: the fund strikes a NAV quarterly, measures its own performance and
+is audited annually. They are **not public** — Regulation D carries no public reporting obligation,
+and the detailed data larger advisers file on **Form PF** is held confidentially by the SEC rather
+than published. Corrected in the panel, in `PRIVATE_FUND_LIMITS`, and in both components' doc
+comments, with a test asserting the distinction survives future edits.
+
+**The lead:** Form ADV Part 1A Schedule D requires a registered adviser to list each private fund it
+manages with that fund's **gross asset value**, and ADV filings are public. That would give fund size
+for the private peers, which the tab currently treats as unavailable — it derives size only from Form
+D's cumulative `totalAmountSold`. Logged in `docs/PEER_TRACKER_STATUS.md` §3; the filing requirement
+is not in doubt but the retrieval path is unverified, and coverage depends on each adviser being
+registered.
+
+### Open for discussion before any more is built — read §3b of the peer status doc
+
+Two questions came up after stopping, and the user wants to **discuss the approach before anything
+is built**. Nothing was implemented.
+
+**Build versus buy.** Commercial products already cover three of the brief's five asks better than
+this tool does. Stanger publishes a gating figure — Q2 2026 requests at 12.4% of NAV with sponsors
+meeting 38%. It was first assessed as unobtainable from filings; **that was wrong**, and Schedule TO
+final amendments carry it, so their advantage is aggregation and cadence rather than access. Our own figures corroborate theirs
+(−$4.45B against their ~−$3.8B from a wider vehicle set), which is reassuring about the method and
+also shows theirs is more complete. Where this tool wins and should stay: the Miami-Dade and Florida
+layers, which no vendor covers, filing-level provenance, and integration with the bank analytics.
+
+**What to borrow, and the line.** Studying published methodology and output is in scope; scraping
+vendor databases or decompiling their applications is not. The borrowable framings are listed in
+§3b. One is already proven from data we fetch today: **Fund 4 is raising at roughly Fund 3's dollar
+pace against a target that tripled** — $64.2M at month 28 versus Fund 3's $61.7M at month 40, which
+is the story behind the $500M → $300M cut and suggests $300M is still ambitious.
+
+Both are written up in full in `docs/PEER_TRACKER_STATUS.md` §3b, including the vintage table, what
+cannot be derived at any effort, and a proposed build order if the discussion lands that way.
+
+### The two questions are answered — gating is a full-coverage feature
+
+Both were checked against live EDGAR on 2026-10-21. **Gating is buildable for all seven vehicles**,
+from two sources rather than one, and the checks turned up four traps that would each have produced
+a confidently wrong number. The detail, with the counts and the arithmetic, is
+`docs/PEER_TRACKER_STATUS.md` §3.
+
+**1. Do BREIT and SREIT use tender offers? No — and neither matters, because both disclose anyway.**
+The five BDCs run quarterly issuer tenders: BCRED 22 `SC TO-I` and 37 amendments, Blue Owl 21/26,
+Apollo 18/17, HPS 18/17, Ares 12/17. **BREIT has never filed a Schedule TO at all** in 688 filings.
+**SREIT's five are `SC TO-T`** — the *third-party* form, filed by Cox Capital and Saba Capital
+against it in a March–April 2026 mini-tender. Reading `SC TO` presence as an issuer tender would
+have reported an activist's hostile bid as SREIT's own redemption programme. Filter on `SC TO-I`.
+
+Both REITs instead disclose requests and fulfilment in 10-Q prose, and **BREIT's is the best
+disclosure of any of the seven** — monthly, with the cap used beside the fulfilment rate: *"the
+Company fulfilled repurchases equal to 2.0%, 2.0% and 1.0% of NAV, or 34%, 43% and 29% of
+repurchase requests, respectively"* (Q3 2023). That is both of Stanger's headline metrics, monthly,
+per vehicle. SREIT gives a monthly fulfilment percentage too, but only in months it prorated — 37%,
+3%, 4%, 4%, 4% through April–August 2024 — so a silent month has to be read as full fulfilment,
+which is an inference and must be labelled as one.
+
+**2. How consistent is the 13e-4(c)(4) wording? Consistent in structure, with one trap in it.** All
+five BDCs give shares tendered and shares accepted as absolute counts, in a numbered list, in a
+filing under ~5,200 characters. Four cite the rule explicitly; Blue Owl does not. **But
+"representing X%" means two different things:** the fulfilment rate for Blue Owl and Ares, and the
+*cap* for BCRED, Apollo and HPS. Parsing it as one field would report Apollo's fulfilment as 5%
+when it was 29.8% — wrong by six times, in the direction that makes gating look worse than it was.
+Compute it from the two share counts instead, which all five give.
+
+**The other trap, which cost the most time here: the newest `SC TO-I/A` is usually not the final
+amendment.** BCRED's newest is a Rule 13e-4(c)**(1)** communication amendment carrying no figures.
+And the final amendment cannot be identified from the cover page, because the checkbox *label* is
+present in every Schedule TO whether ticked or not and stripping tags discards the tick. Select on
+the presence of the result figures themselves.
+
+**A third corroboration of Stanger, incidentally.** The five BDCs' weighted fulfilment rate is
+**33.9%** — 272.9M shares accepted of 805.9M tendered — against their published 38% sector figure.
+Not quarter-aligned, since the five offers expired on four different dates, so it is a sanity check
+rather than a match.
+
+**What this does to the build-versus-buy case in §3b.** It was assumed Stanger has the requests
+figure because sponsors tell them, which would be an access advantage no engineering closes. That
+is wrong: every sponsor is obliged to publish it. Their real edge is breadth and cadence — more
+vehicles, assembled quarterly — which is labour, and which engineering does close. §3b has been
+revised accordingly, and the proposed build order reordered: the `non-traded` bucket split moves up
+to second, because the BDCs and the REITs need different extractors on different periodicities and
+gating cannot be built until they are apart.
+
+### Pick up with, in order
+
+1. **Bank Behaviour step 5** — enforcement actions (FDIC / OCC / Fed, monthly). The next numbered
+   step, and the inputs are a new source rather than a reshaping of existing ones.
+2. **Split the `non-traded` bucket into BDC and REIT.** Promoted ahead of gating on 2026-10-21:
+   the five BDCs are read from Schedule TO quarterly and the two REITs from 10-Q prose monthly, so
+   they cannot share an extractor, a cadence or a column, and gating cannot be built until they are
+   apart. Currently one bucket that mixes them, which also makes the aggregate less meaningful.
+3. **Gating — build it, now unblocked.** Both confirmation questions are answered above and the
+   answer is full coverage across all seven vehicles. Two extractors: Schedule TO final amendments
+   for the five BDCs, computing fulfilment from the share counts and never from the "representing
+   X%" phrase; 10-Q prose for BREIT and SREIT, handling both the prorated and the fully-met
+   wordings. All four traps are written up in `docs/PEER_TRACKER_STATUS.md` §3 — read it before
+   starting, because each one produces a plausible wrong number rather than an error.
+4. **The screening-table column and Pressure-vs-Action scatter**, which the plan puts in step 7 —
+   now unblocked, since the summaries carry `sellerState` and `sellerScore`.
+5. **The peer alerts digest**, worth doing only after `peer-intel` is in `ENABLED_TABS` and the user
+   knows which signals they want pushed.
+6. Smaller: sleeve display grouping, `/api/peers/v1`, the "CRE / Assets" label.
+
+The full list is `docs/PEER_TRACKER_STATUS.md` (20 open) and
+`docs/BANK_BEHAVIOR_EXPANSION_STATUS.md` §2.
+
+### Decisions the user has already taken, so they need no revisiting
+
+**AMO Tracker is parked until the expansion is finished** (decided 2026-10-22). The question raised
+was whether AMO should keep its FDIC Data Analytics page at all, given that it is the only consumer
+of `/api/analytics/v1/*`, the integration is one-way, and the page's existence is what makes the
+whole-scope 413 a merge blocker. The three options — keep and brief AMO to use `band=`; drop the
+page from AMO and remove the coupling; or deepen it — were laid out, and the deciding fact is what
+AMO is for and who opens it, which was not settled. **Do not reopen this until the remaining
+expansion items are done**; until then the merge of `dev` to `main` stays held, which is the
+existing instruction anyway. AMO Tracker (`EnriqueColon/amo-dashboard`, a separate droplet app)
+is unrelated to the AOM material inside this repo.
+
+`ANALYTICS_API_KEY` rotation is theirs. The preview has been reviewed and looks correct.
+`peer-intel` goes into `ENABLED_TABS` when the expansion is finished, not before. The credential that
+was in the `origin` URL is not being pursued, on the basis that the repository's data is public. The
+broader private credit tier stays, marked `adjacent`. The tab is named **Peers (beta)**.
+
+---
+
+## 2026-10-26 (latest) — Assignment of Mortgage code removed from this tool
+
+**Why.** Asked what separates `dev` from production, the conversation turned to AMO Tracker, and the
+user was direct: *"we do not need to bring in Assignments of Mortgages into this tool."* That subject
+belongs to AMO Tracker, a separate app. The repo still carried the April AOM / Market Participants
+work, unmounted and broken on Vercel, which `CLAUDE.md` had said to leave. The user said remove it.
+
+**What went.** 647 tracked files, mapped first with an import graph so nothing live was cut:
+
+- **The AOM / Market Participants cluster** — 17 code files: the Competitor Analysis and Market
+  Participants components, `components/participants-intel/*`, `lib/participants-intel/*`,
+  `lib/participant-intel.ts`, `fetch-aom-data.ts`, the lookup and activity actions, and the
+  **`/api/participants-intel` route**, which was the only piece reachable in production at all —
+  behind login, returning "database not found".
+- **The `competitor_surveillance` framework** — first scoped as "remove only its AOM connector", but
+  AOM ran through its UI, schema, action, seed script and database (17 of its 25 events). The user
+  chose to remove the whole framework, including its six non-AOM connectors, none of which ever ran
+  in production. Its SEC connector was the broken `keys=` one, long since replaced by `peer-intel`.
+- **Data**, 17 MB: `aom.sqlite`, `aom-csv/` (572 files of unpacked Apple Numbers internals),
+  `aom-source/`, `participant_intel.sqlite`, `competitor_surveillance.sqlite`,
+  `major-banks-exclude.json`. Plus the two AOM-only Python scripts and two AOM docs.
+
+**What stayed.** `data/ingestion.sqlite` and the rest of `app/ingestion/` — a separate FFIEC /
+Census / UCC / foreclosure subsystem that live code reads. `data/watchlist*.json`, read by the
+institution watchlist.
+
+**Verified.** Nothing outside the removed set imported any of it. `next build` passes. Typecheck fell
+from 91 errors to 63 with none new — the 28 that went were all in the AOM aggregation code. Peers,
+analytics-API, panel, vintage and cohort suites pass.
+
+**Left for the user, each a separate call:** `better-sqlite3` and its types are now imported
+nowhere; `app/actions/fetch-watchlist.ts` lost its only importer; `ELEMENTIX_API_KEY` is read by
+nothing and can come off Vercel. The "Origination Targeting" idea in `docs/NEXT_VERSION_PLAN.md` was
+withdrawn as framed, since it depended on the AOM data.
+
+**Also this session:** a standing memory now records that AOM work stays in AMO Tracker and that the
+AMO droplet is not to be read without asking. `CLAUDE.md`'s "do not touch" line is replaced to say
+the same.
+
+---
+
+## 2026-10-22, afternoon — Interim-close labels, and a spot-check that found the quarters nobody was prorated
+
+Two of the morning's list. Neither changes a fetch, a payload or a cache key.
+
+**Interim closes.** The filing trail showed each Form D by its code — `D`, `D/A` — which says only
+that something was amended. A fund must amend on a material increase in capital and annually
+regardless, so an amendment whose amount sold rose is an interim close, the word every LP uses and
+the unit Preqin's "funds in market" is built on; one whose amount did not move is the mandatory
+re-file. `classifyFilings` in `lib/peer-intel/panel.ts` reads each filing against the one before it
+— *first filing*, *interim close +$52.9M*, *annual amendment, no new capital*, *amount sold
+restated −$2.0M* for the decreases that do occur — and says any offering change beside it. The
+drawer's trail and the vintage chart's tooltip render it; `closeKind` is catalogued with the caveat
+that one amendment can bundle several closes. One new test in `panel.test.ts`, 24 passing.
+
+**The spot-check.** Yesterday's finding rested on one results filing per fund. `npm run
+verify:peer-gating` (`scripts/verify-peer-gating.ts`) now walks `--depth` results filings per BDC,
+found by their figures rather than by form type, and `--quarters` 10-Qs per REIT, and checks what an
+extractor would rely on: both share counts present, computed rate agreeing with the stated one where
+one is stated, the "representing X%" denominator constant within a sponsor, a fully-met quarter
+reading 100% and a prorated one below it. The first run passed section 1 and failed four of five
+funds on count — one BCRED final found in 37 amendments — and that failure was the finding. **The
+reader had demanded an accepted share count, and no sponsor gives one when it accepted everything.**
+Three fully-met shapes, HPS's being no acceptance sentence at all; the rule that holds is that an
+accepted count means prorated and no "pro rata" means all bought. Two more runs surfaced Ares's
+corrected re-files for the same expiry, BREIT's year-to-date figures with 2025's "including all"
+wording, and SREIT's April 2026 plan restriction — "no repurchase requests will be accepted except"
+hardship cases — which carries no percentage and so read as *nothing to report* for the most gated
+vehicle of the seven. The final run, six quarters per BDC and four per REIT, passes every check; the
+table is in `docs/PEER_TRACKER_STATUS.md` §3. All five BDCs met every request through 2025; four
+crossed into proration in Q1 2026 and BCRED in Q2.
+
+**Verified.** 24 panel, 16 cohort, 13 vintage tests pass; `tsc` clean on every touched file; a
+production `next build` run as the pre-Vercel gate. Nothing here has been looked at in a browser.
+
+---
+
+## 2026-10-22, morning — Vintage pacing: each fund in a series on the same axes
+
+The first item on §3b's build order, chosen because it needed no new data: every raise in the
+cached cohort already carries its full Form D filing trail, and a trail — cumulative amount sold at
+each amendment — is a fundraising curve once it is laid out by months since first sale instead of by
+calendar date.
+
+**What was built.** `lib/peer-intel/vintage.ts`, pure, with 13 tests beside it. It takes one
+manager's raises, keeps the fund-role vehicles, orders them into vintages **by first-sale date, never
+by name** (a test names a fund "Fund 1" and starts it last), builds each one's curve, and compares
+the newest with its predecessor at the same month. Where that month falls between two of the prior's
+filings the figure is a straight line between them and the comparison records which two, so the
+reading can say "about $43M — a figure between its filings at 20 months and 40 months, not a reported
+one." Where the prior's trail does not reach that month nothing is extrapolated; the reading says the
+two cannot be compared at the same point and whether the newer fund has already passed the prior's
+last figure. Three catalogue entries carry the formulas.
+
+Two surfaces share one component, `components/peer-intel/vintage-pacing.tsx`: a card on the tab for
+the firm's own ladder, directly under Raise Environment, and a section in the manager drawer for any
+peer with two or more vintages that have a curve. The chart is markers joined by straight segments —
+a fund files only when it takes money, so a trail is two to five points, and a smoothed curve would
+claim knowledge of the months in between. A legend-table under it gives each vintage's start,
+offering (with any cut), raised, months in, subscribed share and a link to its newest filing.
+
+**One design decision worth knowing.** The repo's `CHART_SERIES` is five steps of one blue, and the
+palette validator fails it for exactly this use: adjacent steps differ by ΔE 8.5, under the 15 a
+full-colour reader needs to tell two lines apart. That suits a trend panel with one leading line; it
+cannot carry a chart whose whole point is which line is which. So `lib/chart-theme.tsx` gains
+`CATEGORICAL_SERIES`, four hues at one lightness with the brand blue first, validated on 2026-10-22
+(worst pair ΔE 17.7 protan, 21.4 tritan, 25.4 normal; all ≥ 3:1 on white). Colour is assigned by
+position from the newest, so the subject of the reading is always blue whatever its ordinal. Four is
+the ceiling — a fifth distinguishable hue is not available at that lightness.
+
+**Verified.** 229 tests across the twelve peer-intel suites pass; `tsc` is clean on every touched
+file and reports the same 91 pre-existing errors elsewhere. A production `next build` was run as the
+pre-Vercel gate. **The chart itself has not been looked at** — the standing instruction is to verify
+on a Vercel preview, which only a signed-in team member can open, so the visual check is the user's
+on the next push of `dev`. Things to look for there: label collisions on the legend-table at the
+drawer's compact width, and whether Safe Harbor's reading matches §3b's figures ($64.2M at month 28
+against Fund 3's $61.7M at month 40, offering 3.0× and cut from $500M).
+
+---
+
+## 2026-10-21 — The two gating questions, answered against live EDGAR
+
+No application code changed. Four scripts were run against live EDGAR to answer the two questions
+the previous stopping point left open, and the findings were written into
+`docs/PEER_TRACKER_STATUS.md` §3 and §3b. One stale comment was corrected.
+
+**What was checked.** Every Schedule TO ever filed by each of the seven non-traded vehicles, read
+from the full submissions history rather than the recent window; the cover page and filer of
+SREIT's five; the newest final amendment of each of the five BDCs, sentence by sentence; BREIT's and
+SREIT's 10-Qs for both a prorated period (2023 and 2024 respectively) and the current one.
+
+**What it found**, in short — the full version is in the stopping-point block above:
+
+- **Gating is a 7-of-7 feature, not 5-of-7**, but from two sources. Five BDCs file issuer tenders;
+  BREIT files none at all and SREIT's are a third party's hostile mini-tender. Both REITs disclose
+  requests and fulfilment in 10-Q prose instead, and BREIT's monthly disclosure is finer than
+  anything Stanger publishes.
+- **Four traps**, each of which yields a plausible wrong number rather than an error: `SC TO` vs
+  `SC TO-I`; the newest amendment not being the final one; the cover-page checkbox being
+  unreadable once tags are stripped; and "representing X%" meaning the fulfilment rate for two
+  sponsors and the cap for three.
+- **A third corroboration of Stanger** — 33.9% weighted fulfilment against their 38%.
+- **The build-versus-buy case shifted.** Their edge is breadth and cadence, not access. §3b and its
+  build order were revised, moving the `non-traded` bucket split ahead of gating.
+
+**The one code change** is a comment. `lib/peer-intel/gating.ts` still closed with "It never claims
+to know requests received, because no filing says" — the original mistaken reasoning, left behind by
+`d04bc4f` when the rest of the comment was corrected, and now contradicted by the body of the same
+comment. Rewritten, along with a note on which vehicles the Schedule TO route covers. Behaviour is
+unchanged: 15 of 15 gating tests pass, and `tsc` reports the same 91 pre-existing errors as before,
+none in `peer-intel`.
+
+---
+
+## 2026-10-21 — Bank Behaviour step 4: Seller Likelihood, and a backtest that broke it three times
+
+Two items of unaided work, in the order of value established with the user: the response size guard
+(`cc087df`), then Bank Behaviour step 4 — the score and its backtest (`1b9c212`), then the cache and
+drawer wiring that completes it (`9b8777b`).
+
+### The size guard
+
+The whole-scope national behaviour-signals response measured 3.9 MB against Vercel's 4.5 MB ceiling.
+Crossing it does not truncate — the function fails, and the consumer sees an error that says nothing
+about the shape of its request being the cause. AMO Tracker is that consumer, so it would have failed
+silently and far from here. The route now measures the serialised body: over 4 MB it is a **413**
+naming `band=` and listing the bands; between 3.5 and 4 MB it is sent with a `sizeWarning`. A
+truncated 200 was rejected as an option — a consumer receiving fewer institutions with no indication
+computes wrong figures and never finds out.
+
+### Step 4, and why the backtest is the point
+
+Unlike the peer signals, where there is no public record of which managers were *right* to be
+raising, bank failures are published with dates. So these thresholds could be checked against
+outcomes — and they were wrong three times.
+
+**First run: 12 of 13 failed banks flagged.** That looked like a 92% hit rate and was nothing of the
+kind: it labelled **Silicon Valley, Signature and First Republic as active sellers of CRE loans**,
+when all three were deposit runs. One action signal fires on roughly a quarter of the industry — step
+2 measured CRE runoff alone at 12.6% and unexplained exit at 8.6% — so `activeActionCount` went to
+2, where step 2 had measured 166 of 4,603 banks, 3.6%.
+
+**Second: `pre-seller` then covered 45% of the backtest's bank-quarters.** The score is computed over
+*observed* weight so a partial reporter is not read as calm — but that cuts both ways: one component
+at its ceiling scores 100 on 15% confidence, and that was deciding the state. A confidence floor now
+gates the score path, while an absolute rate still works without it.
+
+**Third: against the real national cohort, `pre-seller` was still 29.7%** — a third of all banks,
+which is not a label that means anything. The absolute path now needs corroboration from the overall
+score, and the list floor was chosen by **sweeping the cohort** rather than by taste: at 40 the
+ranked list was 1,005 banks (21.8% of the industry), at 70 it is 288.
+
+| State | Banks | Share |
+| --- | --- | --- |
+| Active seller | 176 | 3.8% |
+| Pre-seller | 419 | 9.1% |
+| Cleaned up | 851 | 18.5% |
+| Stable | 3,157 | 68.6% |
+
+**Ranked list: 288 banks** — 176 biddable today, 112 worth a call. The backtest reports the deposit
+runs apart from the CRE failures, because counting them either way distorts the result: **9 of 10
+CRE-relevant failures were flagged** before the end, and 3 of 3 deposit runs were too, which is a
+false positive rather than a win. It also states that failure is a harsher test than the score is
+built for — this predicts selling, not failing, and a bank that sold its way out and survived is a
+success that never appears in the sample.
+
+### Stored compact, computed in full
+
+Summaries carry three fields and nothing else. The components carry a label and a sentence each,
+which is right for one bank and ruinous for 4,603 — about 900 bytes a bank, 4.1 MB across the
+cohort, against a 2 MB per-entry ceiling. Asset bands measured after the change are unmoved at
+0.16-0.90 MB. The drawer recomputes the full assessment from the institution's own history, with
+percentiles deliberately absent because one bank has no cohort to be ranked against — which is also
+the harsher basis. The table gets the percentile-aware score from the cache, the drawer the absolute
+one, and the panel says so.
+
+Cache version is `behavior-signals-v2`, so v1 entries are not served with the fields missing.
+
+**The guard proved itself immediately.** Adding these fields took the unchunked national cohort from
+3.90 MB to **4.02 MB** — just past the refusal threshold set an hour earlier. So that endpoint now
+returns a 413 naming the bands, which is the guard working on the very next change rather than a
+platform failure a quarter from now.
+
+99 analytics tests; tsc clean with the 132-line baseline unchanged; `next build` passes.
+
+**Step 4 is complete.** The screening-table column and the Pressure-vs-Action scatter belong to step
+7 in the plan, not here.
+
+---
+
+## 2026-10-21 — Distribution, and step 7's developments feed
+
+Two things the user asked for in order: surface the broker-dealers selling a competitor's fund
+(`a8855c6`), then begin step 7 (`8f3eda9`). Open items are on hold at the user's direction.
+
+### Distribution — who is paid to sell
+
+From a question about the investor column: can you click 232 and see who those investors are? **No**,
+and not because of how this was built. Form D reports `totalNumberAlreadyInvested` and whether any
+were non-accredited, and nothing else about investors; no SEC filing discloses a private fund's
+limited partners, so there is no list to link to. The count now carries that on hover rather than
+being inert.
+
+But the filing *does* disclose who was paid to sell, with FINRA CRD numbers, and that is the more
+useful half. From live Florida filings:
+
+| Manager | Investors | Avg commitment | Channel |
+| --- | --- | --- | --- |
+| Rialto Capital | 126 | $8.6M | Morgan Stanley, Citigroup, Hines Private Wealth |
+| H.I.G. Bayside | 13 | $13.4M | direct |
+| 3650 REIT | 4 | $35.2M | direct |
+| Silverview Capital | 56 | $1.0M | five agents incl. North Capital, FNEX |
+| Safe Harbor | 40 | $1.60M | The Courtney Group |
+
+Four distinct go-to-markets in one asset class, and none of it appears in any dollar figure. Twelve
+broker-dealers are named across the layer; none is shared between managers.
+
+**Two corrections the live data forced.** A broker-dealer literally named **"N/A"** was appearing on
+sixteen funds with $28.9B of associated raises, leading the agent table — Form D's documented
+placeholder is "None", but filers also write "N/A", "NA" or a dash, and taking those literally
+invented a firm. And I had written in two comments that Fund 4 names no selling agent; the filing
+names The Courtney Group, so both were corrected. Grouping is on CRD, not name, since the same firm
+is filed with different spellings.
+
+### Step 7, part one — other developments
+
+**Name collisions are the whole problem.** The registry contains managers called Bridge, Ladder,
+Camden, Integra, Omnia, Naso, Apollo, Ares, Pretium and Safe Harbor. A search for "Bridge" returns
+bridges; "Apollo" returns a theatre and a spacecraft. So nothing matches on a token: a manager is
+recognised only by an exact phrase of two words or more, a one-word alias is refused rather than used
+carefully, and the match is against the headline rather than the URL because a slug can contain
+anything. Every item shows which phrase attributed it, so a wrong attribution is visible.
+
+Live, the filter takes **1,120 raw items to 10**, and what survives is the right kind of thing: Hines
+Rialto Credit Partners closing a **$1.1B** office credit strategy — corroborating the $1.08B that
+fund's Form D reports — the WSJ on **two Blue Owl funds seeing redemption requests above 5%**, and
+Reuters on Blue Owl withdrawal requests slowing. **The news independently corroborates the
+net-outflow finding the XBRL panels show**, which is the strongest validation the tab has had.
+
+Three defects the live run exposed, all now fixed and tested: a term matched inside a longer word, so
+"Issues Pessimistic Forecast" matched "sues" and read as litigation; sell-side price-target notes
+dominated the first run and are about the share price rather than the business, so "target" and
+"returns" are no longer development terms and analyst vocabulary is noise; and the same story
+syndicated to several outlets arrived as several items differing only in the " - Publisher" suffix
+Google News appends.
+
+A news outage cannot take the tab down — failures are collected per manager, caught at the payload
+boundary, and the panel says the feed was unavailable while every filings panel is unaffected.
+
+**A regression I introduced with the distribution work, and fixed.** The cached entry had grown to
+406 KB because `salesRecipients` and `relatedPersons` were stored on every filing of every trail —
+155 KB, of which the related-person lists that nothing displays were **132 KB**. Both are hoisted
+onto the raise from the newest filing, so the per-filing copies are dropped and the entry is back to
+**250 KB** (12% of the limit). Developments itself is 7 KB. Worth remembering that a field added to
+`OfferingRecord` is multiplied by every filing in every trail.
+
+181 unit tests; tsc clean; `next build` passes with the root route at 102 kB.
+
+**Step 7 remaining:** the gating narrative (repurchase requests against what was paid, from 10-Q
+text, figure-checked against the XBRL figure) and the alerts digest. The WSJ item above shows gating
+is real and currently only visible through news.
+
+---
+
+## 2026-10-21 — Peer tracker, step 6: a $10B swing in the semi-liquid tier
+
+Step 6 is committed as `f842f88`: the Evergreen Liquidity and Portfolio Stress panels, which cover
+the half of the brief that only exists for vehicles filing periodic reports. Before it, `eb2b140`
+fixed a real gap found while working the open items, and `0d63e33` named the tab **Peers (beta)**.
+
+**The tier-wide net flow is the finding, not the code.** Capital in and out across the non-traded
+vehicles, per quarter, read from their own filings:
+
+| Quarter | Capital in | Capital out | Net | Vehicles |
+| --- | --- | --- | --- | --- |
+| Q3 2024 | $6.22B | $2.71B | +$3.51B | 5 |
+| Q1 2025 | $8.31B | $2.75B | **+$5.56B** | 6 |
+| Q3 2025 | $8.40B | $3.33B | +$5.06B | 6 |
+| Q4 2025 | $6.80B | $3.26B | +$3.54B | 6 |
+| Q1 2026 | $4.18B | $5.44B | **−$1.26B** | 6 |
+| Q2 2026 | $1.92B | $6.38B | **−$4.45B** | 6 |
+
+Subscriptions fell 77% while redemptions rose 135% — a **$10B swing in five quarters**, with 6 of 7
+vehicles individually in outflow. BREIT and SREIT have been in outflow for all eight quarters shown.
+That is the environment Fund 4 is raising into, which is exactly what the tab was asked for.
+
+**A plausibility guard, because one figure was faithful and wrong.** HPS Corporate Lending Fund tags
+`NetAssetValuePerShare` as exactly **1000.00 in six consecutive filings** while its real NAV is about
+$25 — a par or subscription price tagged under the NAV concept. Rendered beside BCRED's $24.62 it
+would have told a reader HPS's NAV was forty times its peers'. A NAV that never moves across the
+quarters reported is not a NAV, so it shows as "n/a" with the reason on hover — a different fact from
+"not reported", and recorded as such. Three points are required before judging, since two identical
+quarters is a coincidence rather than a pattern.
+
+**Honesty rules carried through both panels.** Each quarter in the aggregate counts only the vehicles
+that reported both sides of it, and the chart says how many, so a quarter where half the tier has not
+filed cannot read as a collapse in flows. Listed vehicles are excluded from liquidity entirely rather
+than shown blank — there, repurchases are a buyback and issuance an equity raise, and an investor
+wanting out sells the stock. Portfolio stress does include them, because a shrinking book and a
+rising PIK share mean the same thing either way. **Gating is named as absent**: whether repurchase
+requests exceeded what was paid lives in a filing's narrative rather than any tagged figure, so it is
+step 7, and its absence here does not mean a vehicle paid everyone out in full.
+
+**Series are trimmed before storage.** Eight quarters, matching the institution drawer's window.
+Untrimmed, twelve vehicles across eight metrics would have added most of a megabyte; trimmed, the
+cached entry went 144 KB → **191 KB**, 9% of the 2 MB limit. The untrimmed series still feed the
+signals, which need five quarters.
+
+**Earlier the same day, working the open items found a real bug.** Open Raises and New Launches both
+filter to live offerings and were the *only* routes into the manager drawer, so **eleven of
+twenty-six tracked managers were unreachable** — Gelt Financial appeared nowhere at all, because its
+only Reg D raise closed in 2019. An "All tracked managers" roster now reaches every manager and
+states its standing. Five "state this limit in the UI" items were closed by auditing the code rather
+than assuming, and `.gitignore` turned out to have `next-env.d.ts` and `.env.local` concatenated onto
+one line, so it matched the single pattern `next-env.d.ts.env.local`. No env file was ever exposed —
+`.env*.local` below always covered them.
+
+149 unit tests; tsc clean; `next build` passes with the root route at 97.8 kB.
+
+**Next:** step 7 — the developments feed through the existing relevance gate, gating narrative
+extracted from 10-Q text and figure-checked against the XBRL figure, and the alerts digest.
+
+---
+
+## 2026-10-21 — Peers tab: provenance on the surface, and the preview is up
+
+Two things after step 5. The user asked that a reader be told **where the data comes from and how it
+is pulled in**, and pushed `dev` so a preview could be built.
+
+**Provenance is now on the surface, not in the source** (`ee56247`). Every raise links to the SEC
+document its headline figures were read from — in Open Raises, in New Launches, and as a full filing
+trail in the manager drawer: every amendment, newest first, each with the amount sold as at that
+filing and a link to the document. Two sample URLs were checked live and return 200 from sec.gov; an
+unparseable accession yields no link rather than a broken one, which a test covers.
+
+A **"Where this data comes from"** panel states the pipeline in three parts — who is tracked and how
+the registry is curated, what is read (Form D for the raise, XBRL company facts for the vehicles
+that report), and how often: rebuilt weekly, with the daily 05:00 UTC job rebuilding a layer on the
+first run of each new ISO week and serving the stored result in between. Above the fold it carries
+what the figures are *not*: self-reported and unaudited, cumulative rather than per-period, only as
+current as the last amendment, and "still open" inferred rather than reported because Form D has no
+closed flag. Expanded, it surfaces three tables that until now existed only in code — the Form D
+provenance catalogue with each figure's source or formula and how it can mislead, the XBRL concepts
+with measured coverage and the note that company-specific tags cannot be read at all, and every
+signal's firing rule with the caveat that the thresholds have never been backtested.
+
+**The preview deployment succeeded.** `f9a7540` built at 16:30 UTC —
+`https://market-intelligence-tool-mpfavtlub.vercel.app`. It is behind **Vercel Deployment
+Protection**: both `/` and `/login` redirect to `vercel.com/sso-api`, so only a signed-in Vercel team
+member can open it and it cannot be checked from a script. The user has to look at it. Worth
+recording that the earlier wait for this deployment was a false alarm twice over — the GitHub
+deployment record appears several minutes after the push, and a first poll compared a 7-character sha
+against the full 40-character one and so could never have matched.
+
+`ee56247` is not in that preview, so the sources panel needs another push before it can be seen.
+
+125 unit tests; tsc clean; `next build` passes with the root route at 92.3 kB, up from 87.1 kB for
+the catalogue data.
+
+---
+
+## 2026-10-21 — Peer tracker, step 5: the tab exists, but nothing has rendered yet
+
+Step 5 is committed as `94d8f24`: a fifth tab, **Peers**, gated on `peer-intel` in `ENABLED_TABS`,
+with a three-layer selector matching the scopes Market Analytics already uses.
+
+**What it shows, in order.** Raise Environment leads, because it answers the question the tab exists
+for — how many competitors are in the market, what they are asking for, what has just launched, who
+is cutting back. Under it, Safe Harbor's own position against the layer: rank among open raises, the
+peer median, and how far above or below it the firm sits. Then Open Raises with the firm's row
+pinned to the top, New Launches, and a manager drawer with signal chips, the raises behind them, a
+reading and Copy Snapshot.
+
+**The readings are deterministic**, built from the figures beside them — the same decision as the
+Balance-Sheet Actions panel. Building the sentence from what is already on screen satisfies "every
+figure is checked against the data" by construction and cannot drift from the table, so there is no
+figure-checker and no fallback path. A test asserts no reading can emit `undefined`, `NaN` or a raw
+`null` across every layer, with both full and empty data.
+
+They are also deliberately blunt in both directions. In the test fixture Fund 4 ranks **4 of 4** open
+Miami-Dade raises and the reading says so, with how far below the median it sits. The point of
+putting the firm on the same axes as its peers is to see the unflattering comparison as readily as
+the flattering one.
+
+**Three things the UI states rather than implies.** A layer with no reporting vehicle says every peer
+is a private fund that reports the raise and nothing else. An uncapped offering shows a blank
+subscribed share rather than a computed percentage. And an unjudged signal chip says *why* — "no
+redemption signal" and "redemptions not reported" mean very different things to a reader. Sleeves are
+excluded from the table, since a raise across an onshore LP and three feeders would read as four
+competitors, and are listed in the drawer instead.
+
+**Two traps avoided by reading the codebase first.** `TAB_GRID_COLS` only went to 4, so a fifth tab
+would have fallen back to `grid-cols-4` and left a broken bar — exactly what that file's own comment
+warns about, since Tailwind only ships classes it can see. `5: "grid-cols-5"` is added and the built
+CSS confirms the rule was emitted. And the drawer uses `sm:max-w-5xl` rather than a bare `max-w-*`,
+because the base `DialogContent` carries `sm:max-w-lg` as a media-query rule that wins on every
+desktop viewport — the trap that rendered the institution drawer 512px wide for weeks.
+
+**Not verified visually, and that is the honest state.** The standing rule is to verify on a Vercel
+deployment rather than a local dev server, and `dev` is unpushed by choice, so no part of this has
+rendered in a browser. What *is* verified: 122 unit tests, tsc clean on the new files with the
+132-line baseline elsewhere unchanged, `next build` passing, the root route at 87.1 kB, and
+`grid-cols-5` present in the built CSS. Production is unaffected regardless — `peer-intel` is absent
+from `ENABLED_TABS`, so the tab does not appear there until it is added.
+
+**Next:** the user has asked to return to the open items in `docs/PEER_TRACKER_STATUS.md` before
+steps 6 and 7.
+
+---
+
+## 2026-10-21 — Peer tracker, step 4: signals, and the first thing in a cache
+
+Step 4 is committed as `04bcd92`. Eight signals judged on each manager's own trail, rolled up per
+manager, cached per layer for a week, with three `warm-cache` entries. The user also asked for a
+tracked open-items list, which now lives at `docs/PEER_TRACKER_STATUS.md` (`8e78ff1`).
+
+**The acceptance rule holds against live data.** A manager's signals are identical in every layer it
+appears in — 20 comparisons, 0 differences. Every rule fires on absolute floors and the manager's own
+history, never on peer rank, which is what lets three cumulative layers agree about one firm.
+
+**The verification caught a signal that was wrong rather than broken.** Safe Harbor's "raise
+accelerating" fired on **Fund 3, last filed October 2022**, because `soldLastYear` measures between
+*filings* rather than against today — so a fund whose last two filings were a year apart in 2021 and
+2022 reads as accelerating for ever. The pace signals are now unjudged on a trail silent for four
+quarters, and the detail reads "in the twelve months to 2026-07-23" rather than implying recency.
+The same gate fixed "raise stalled", which an indefinite-target fund would otherwise trip
+permanently: past twelve quarters a fund is **closed, not stalled**. Firing rates fell to sensible
+levels and Safe Harbor's row now reads off the live Fund 4 — one signal fired, the offering cut, at
+18% of its total raised arriving in the last year against a 40% threshold.
+
+| Signal | Miami-Dade | National | Family |
+| --- | --- | --- | --- |
+| New vehicle | 50% | 45% | fundraising |
+| Raise accelerating | 33% | 45% | fundraising |
+| Raise stalled | 30% | 25% | fundraising |
+| Offering cut | 10% | 10% | fundraising |
+| Redemptions accelerating | — | 20% | liquidity |
+| Net outflow | — | 60% | liquidity |
+| PIK build | — | 0% | portfolio |
+| Portfolio shrinking | — | 0% | portfolio |
+
+Rates are over *judged* managers, so the unjudged tier does not deflate them; the dash means nothing
+in that layer can be judged at all, which is the honest answer for a layer with no registered
+vehicle. Net outflow at 60% is over five judged managers and is simply true — the semi-liquid
+complex is paying out.
+
+**`unjudged` is a real third state**, not a styling choice. A manager that does not tag
+payment-in-kind income has no PIK verdict rather than a quiet one, and ten of the twelve registered
+vehicles are in that position. A manager is unjudged on a signal only when *no* vehicle can judge it,
+so one untagged fund cannot silence a verdict its siblings support. Sleeves contribute no fundraising
+signals, or a sleeve restating the same ask would read as the manager cutting it.
+
+**Sizing, and why this needs no chunking.** The national layer builds in **73s over 340 requests**
+(244 Form D, 96 XBRL) against `warm-cache`'s 300s ceiling, and the cached entry is **144 KB of the
+2 MB per-entry limit** — 7%. Miami-Dade is 81 KB in 28s. The bank cohort had to be split into asset
+bands for exactly this reason; this does not, because the registry is 65 vehicles rather than 4,600
+institutions.
+
+**Two structural notes.** The cache key carries an **ISO week** rather than a published quarter,
+because SEC filings arrive continuously and there is no quarter to key on. And `warmWithLabel` treats
+any resolved promise as a success, so the cron unwraps `getPeerIntel`'s result object and re-throws —
+otherwise a failed layer would be recorded as `ok` and nobody would know.
+
+**One bug worth remembering.** CIK-to-manager resolution has to come from the registry, not from a
+manager's `raises`: a registered vehicle files no Form D and so never appears there. Matching that
+way silently dropped every liquidity and portfolio signal, because the series reached no manager.
+
+107 unit tests; tsc clean on the new files; `next build` passes. **Nothing renders yet** — the tab is
+step 5.
+
+**Next:** step 5, the tab — Raise Environment header, Active Raises with Safe Harbor's row pinned,
+New Launches, and the manager drawer. It needs `peer-intel` added to `ENABLED_TABS` on Vercel before
+it shows in production.
+
+**Open items are now tracked in `docs/PEER_TRACKER_STATUS.md`** rather than carried in prose here.
+
+---
+
+## 2026-10-21 — Peer tracker, step 3: the registered tier, and a market in net outflow
+
+Step 3 is committed as `8cb6fa9`: XBRL quarterly series for the twelve registered vehicles, which
+are the only peers whose redemption activity and portfolio are observable at all. Everything else in
+the tracker stops at the raise. Still nothing rendered.
+
+**The headline finding is in the data, not the code.** Blue Owl Credit Income's net flow — capital
+in less capital out, per quarter:
+
+| Quarter | Capital in | Capital out | Net |
+| --- | --- | --- | --- |
+| Q1 2025 | $1.93B | $193.2M | **+$1.73B** |
+| Q2 2025 | $1.57B | $203.9M | +$1.37B |
+| Q3 2025 | $2.04B | $464.2M | +$1.58B |
+| Q4 2025 | $1.37B | $317.6M | +$1.05B |
+| Q1 2026 | $670.4M | $1.01B | **−$338.6M** |
+| Q2 2026 | $117.5M | $963.5M | **−$846.1M** |
+
+Subscriptions fell 94% while redemptions rose 5.2x, turning +$1.7B a quarter into −$846M a quarter
+in five quarters. And it is not one fund: in Q2 2026 **every non-traded vehicle in the tier is in net
+outflow** — BCRED −$2.78B, Blue Owl −$846.1M, Ares −$308.8M, HPS −$300.0M, BREIT −$158.9M, SREIT
+−$62.5M. That is the semi-liquid private credit complex paying out faster than it is taking in, and
+it is the context for every LP conversation the tab is meant to support.
+
+**The verification caught a real bug before it reached anything.** Filers tag *both* forms for the
+same period — Blue Owl's Q2 2026 investment income appears as a 181-day year-to-date figure and again
+as a 91-day quarter, and the two reconcile — so grouping by `start` alone put two points on one
+period, across ten years and nine vehicles. Directly reported quarters now win over derived ones and
+carry `origin: "reported"`, which is the better provenance anyway. The cause underneath it was
+measuring spans in calendar months: 2026-04-01 to 2026-06-30 crosses two month boundaries but is
+three months of activity, so quarterly facts were being filed into the year-to-date series. Spans are
+now counted in days.
+
+**The second finding was a modelling gap.** For a **listed** REIT,
+`PaymentsForRepurchaseOfCommonStock` is a buyback and issuance is an equity raise — capital-markets
+decisions that say close to the opposite of investor demand, and that an investor wanting out would
+not use at all, because they would sell the stock. So `PeerVehicle` gained `quoted`, net flow is
+computed only for non-traded vehicles, and a test asserts every registered vehicle declares which it
+is. Five of the twelve are listed (BXMT, BXSL, STWD, BRSP, LADR); seven are non-traded.
+
+**Negative flow quarters are left faithful to the filing rather than clamped.** Ladder tags a
+−1,000 reversal outright, and its year-to-date series is non-monotonic on amounts of a few thousand
+dollars, so differencing faithfully yields a negative. Eight such quarters are reported as notes with
+their origin, because clamping would hide a filer's own correction.
+
+**Concept coverage is patchy, measured, and never assumed** — share issuance 12/12, repurchases
+11/12, investment income 11/12 across two candidate concepts, unrealised gains 7/12, investments at
+fair value and net investment income 6/12, NAV per share 5/12, and **payment-in-kind income only
+2/12**. So the PIK-build signal the plan wanted is available for two vehicles and absent elsewhere,
+never inferred. Filers also use extension tags in their own namespace, which `companyconcept` under
+`us-gaap` cannot see at all. Each metric lists candidates in preference order and records which
+answered.
+
+**Verified live** (`npm run verify:peer-metrics`): every figure read by hand from Blue Owl's filings
+reproduces, the four 2025 quarters sum back to the reported full year, and the tier fetch is ~96
+requests in 23s against warm-cache's 300s ceiling.
+
+85 unit tests; tsc clean on the new files; `next build` passes.
+
+**Next:** step 4 — signals and the layer aggregate, cached weekly, with the cron entries. The
+redemption-acceleration signal now has data behind it; the PIK-build signal has data for two
+vehicles and must say so.
+
+**Open, carried.** The two `adjacent` calls in Miami-Dade (Integra, SEGLO) and whether Rialto's
+Property funds should stay excluded as equity.
+
+---
+
+## 2026-10-21 — Peer tracker, step 2: the raise environment
+
+Step 2 is committed as `19e0e24`: Form D ingestion across the registry, manager- and layer-level
+aggregation, and the provenance catalog. The user declined a Vercel preview once it was clear step 1
+renders nothing — correct, and the same is true of step 2. The visible change is step 5.
+
+**The counting rule is the whole design, and the invariant checks enforce it.** Capital is summed
+over *every* vehicle, because a sleeve holds part of a real raise; raises are *counted* over
+fund-role vehicles only. Bridge Debt Strategies Fund VI is one raise across four CIKs — counting
+filers would report four competitors and divide its capital four ways when averaging progress.
+Offering amounts are summed over funds only, since a sleeve restates the same ask rather than adding
+to it.
+
+**Live figures, all three layers verified** (`npm run verify:peer-raises -- --layer <layer>`):
+
+| Layer | Managers | In market | Raises | Open | Raised | Launches, 12m | Offerings cut |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Miami-Dade | 10 | 8 | 24 | 13 | $9.27B | 5 | 1 |
+| Florida | 15 | 11 | 38 | 19 | $9.82B | 8 | 1 |
+| National | 26 | 15 | 50 | 25 | $18.68B | 11 | 2 |
+
+**Where the firm actually sits.** Fund 4 ranks **6 of 13** open raises in Miami-Dade against a peer
+median of $45.3M raised and 11.6% of offering, and **7 of 19** statewide against $32.1M and 24.8%.
+So it is above the median on capital in both layers — and is the only Miami-Dade manager to have cut
+an offering. Rialto dominates locally (Hines Rialto $1.08B, Credit Opportunities $248.5M, Insurance
+Credit Partners $200M from a July 2026 first sale); Bayview Opportunity Fund VII has $1.01B.
+`selfPositioning` returns null below three comparable peer raises, because a percentile over two
+funds is noise.
+
+**Two findings that changed the code.** 32 of 50 national offerings are the literal string
+"Indefinite", so "capital sought" covers only the remainder and reports the excluded count rather
+than implying it is the whole market's ask. And **nine registered vehicles file no Form D at all** —
+a listed REIT or non-traded BDC raises through a registered offering, not Regulation D. The first
+run reported those as nine failures, which would have had a panel showing problems where there are
+none. `CohortOfferings` now separates `noFormD` from `failures`, `coverage` separates
+`registeredWithoutFormD` from `unresolvedVehicles`, and an invariant asserts no *private* vehicle is
+ever missing its Form D (a Reg D fund must have one, so that would be a real gap). BREIT runs a
+parallel Reg D offering alongside its registered one, so this is "expected", never "required".
+
+**Provenance.** `lib/peer-intel/catalog.ts` mirrors `BEHAVIOR_FIELD_CATALOG`: every value traces to
+a Form D element or carries its formula, and the figures most open to misreading carry a caveat that
+a test asserts is present — `totalOfferingAmount` is a cap the issuer set, not a target it is working
+towards; `totalSold` is cumulative and unaudited; `investorCount` is per-vehicle, so a manager-level
+sum is not a count of distinct LPs; `isLikelyOpen` is inferred from four quarters of silence because
+Form D carries no closed flag, so a fund that closed the day after its last amendment reads as open
+for a year. `PRIVATE_FUND_LIMITS` states what Form D cannot show at all.
+
+**Cron budget, measured for step 4.** The national fetch is 244 requests in 49–60s against
+warm-cache's `maxDuration = 300`, leaving about 190s of headroom. Each vehicle needs one submissions
+request plus one per Form D filing, because the offering figures live in each filing's own XML and
+there is no bulk form of them.
+
+60 unit tests; tsc clean on the new files; `next build` passes (exit 0). **Nothing renders yet.**
+
+**Next:** step 3 — XBRL for the registered tier (`companyconcept` per concept, `fy`/`fp`
+differencing, comparative dedup), which is where redemption and portfolio figures come from and the
+only reason the national layer carries the mega-managers at all.
+
+**Open, carried.** The two `adjacent` calls in Miami-Dade (Integra is multifamily equity, SEGLO
+states no strategy) and whether Rialto's Property funds should stay excluded as equity. The user kept
+the broader private credit tier (Blue Owl, Apollo, Ares, HPS), marked `adjacent`.
+
+---
+
+## 2026-10-21 — Peer & Private Credit tracker, step 1: who the competitors actually are
+
+A new expansion, from a capital-raising ask: track what peer managers are doing — fundraising,
+new launches, evergreen redemption activity, portfolio stress, other developments. The tool has
+only ever served deal sourcing; this is the second purpose. Plan approved before any code, and
+step 1 is committed as `203b818`.
+
+**The firm research changed the design.** Safe Harbor Capital Partners (Miami Beach, 2005, Rafael
+Serrano) buys non-performing and sub-performing first mortgages and originates high-yield CRE
+financing — buying NPL pools from banks, which is why the Market Analytics tab watches bank balance
+sheets in the first place. Four vintages, $500M+ invested, deals of $8.5M–$44M. It is a
+**lower-middle-market** manager, so the repo's existing watchlist — which leads with Blackstone,
+Apollo and KKR under "Global Distressed Credit" — names the wrong competitors: several of those are
+*counterparties* selling pools, not rivals for the same LP dollars. Hence three layers, per the ask
+and matching the tool's existing `national` / `Florida` / `miami` scopes.
+
+**Form D is the spine, and the method was proved on the firm's own filings.** Any Reg D raise must
+file a Form D and amend it annually while open, which makes it the one fundraising dataset that is
+mandatory, free, authoritative and current. Fund 4 (CIK 2017189) was read by hand during the audit
+and the pipeline now reproduces it exactly: target **cut from $500M to $300M**, $64,168,863 sold to
+40 investors (21.4% of target), $1.60M average ticket, +$11.25M and +10 LPs in the twelve months to
+July 2026. A target cut is not something a competitor puts in a press release.
+
+**What step 1 built.** `lib/peer-intel/` — `edgar-contract.ts` (pure URL/param/retry decisions),
+`form-d.ts` (filing XML to offering record, raise and pace maths), `registry.ts` (the three layers,
+21 managers, 41 vehicles) — plus `app/services/peer-intel.ts` (rate-limited, retrying fetchers),
+`scripts/discover-peers.ts` and `scripts/verify-peer-registry.ts`. 38 unit tests; tsc clean on the
+new files. **Nothing renders yet**: no tab, no cache, no cron.
+
+**Verified live** (`npm run verify:peer-registry`, 2026-10-21): all 41 vehicles resolve on EDGAR,
+every audited `kind` still matches what the entity files, layers cumulative at 16 / 29 / 41
+vehicles, and all seventeen Fund 4 assertions pass.
+
+**Two coverage tiers, and the measurement that forced them.** Of 41 vehicles, the 12 that file
+periodic reports — and so have observable quarterly redemption and portfolio figures — are **all
+national**. Discovery resolved 67 Florida Form D filers and *not one* reports quarterly. So private
+funds get fundraising depth only, and the panels must say what cannot be known rather than render
+empty charts.
+
+**Four traps, all confirmed against the live API and encoded with their measurements.** EDGAR
+full-text search takes `q`; `keys` is **silently ignored** and returns the entire Form D firehose
+(10,000+ unrelated filings) — which is exactly what the existing
+`app/ingestion/competitor_surveillance/connectors/sec_edgar.ts` passes, so **that connector is
+broken** and this expansion supersedes it. The location filter is `locationCodes`, plural; singular
+is ignored the same way (80 hits, 25 of them Florida, against 25 and all Florida). Form D full-text
+matches **entity names only**, because the form carries no narrative — `"non-performing"` returns 0
+hits and `"opportunity fund"` returns 194 — so discovery is name-pattern matching and needs explicit
+exclusions for Opportunity-Zone, CLO, SPAC and venture funds. And `totalOfferingAmount` is routinely
+the literal string `Indefinite`, against which a percentage must be null, not computed.
+
+Two further findings that shaped the ingestion design rather than the contract: the XBRL **frames**
+API looks ideal for cohort pulls but is unusable here — `frames/.../CY2026Q2` returned 134 entities
+and none of the evergreen vehicles, because their year-to-date durations do not match a
+calendar-quarter frame — so per-entity `companyconcept` is required, which is also 117× smaller
+than `companyfacts` (4.9 KB against 570 KB). And XBRL repeats prior-year comparatives, so a
+dedup on `(start, end)` preferring the earliest-filed accession is needed in step 3.
+
+**Discovery proposes, a human decides.** `discover:peers` surfaced candidates by location and name;
+the registry records which are real peers with an evidence note each, and marks relevance `direct`
+only where the Form D industry group, fund type or legal name supports it. Soma Capital's eight
+Miami Beach funds are **Venture Capital** by their own filing and are excluded on that basis — the
+name-only search could not have told. Genuine peers the hand-curated watchlist had missed: **BH3**
+(Fort Lauderdale, Fund III filed 2026-10-08), **Bayview** (Coral Gables), **H.I.G. Bayside**,
+**3650 REIT** (Coconut Grove), **Omnia** (Aventura), **Silverview** (Tampa), **Naso CRE Bridge**
+(Boca Raton). Gelt Financial, Rialto, Madison Realty, Bridge and Pretium are listed in
+`UNRESOLVED_WATCH` — real competitors with no resolvable vehicle, kept out of `PEERS` so nothing
+claims data it does not have.
+
+**Two bugs found by running discovery rather than trusting it.** Fund names arrived with XML
+entities undecoded ("R &amp; R Capital"), and a filer whose matched filing carried a stale Miami
+address was landing in the Miami-Dade layer although its current address is New York. Both fixed,
+both now covered by tests.
+
+**Also decided.** Storage is the `unstable_cache` + weekly cron path, not the SQLite
+`competitor_surveillance` framework, which reads `process.cwd()` and cannot run on Vercel — it has
+never worked in production. That framework and the AOM material are untouched.
+
+**Then, same day: the targeted lookups.** The user kept the private credit tier and asked for the
+five `UNRESOLVED_WATCH` names to be chased down. `scripts/lookup-peer.ts` searches by *manager*
+name rather than by strategy-name pattern, and found all five — `f310c1a`. The list is now empty.
+
+The important one: **Rialto Capital Management is in Miami**, and is the largest direct peer in the
+county by a wide margin — Real Estate Fund V - Debt took $2.61B from 914 investors, and Hines Rialto
+Credit Partners ($1.08B), Rialto Credit Opportunities ($248.5M) and Rialto Insurance Credit Partners
+($200M) were all still filing in 2026. It sat on the firm's own watchlist under *national* CRE Debt
+Platforms, so it would have been benchmarked against the wrong cohort entirely. Also added: Madison
+Realty Capital (Debt Fund VI raised $2.04B after cutting its target from $2.25B; Debt Fund VII
+opened April 2026 with nothing sold), Bridge Investment Group (Fund VI opened August 2026, $2.5B
+target, $500K taken — a raise caught at the very start), Pretium Partners, and Gelt Financial
+(Delray Beach, not Boca Raton; its only Reg D raise closed in 2019 at $1.8M, so it lends off balance
+sheet — showing that raise as long closed is the useful fact about it).
+
+**Two structural traps the lookups exposed, both now encoded.** A single raise is routinely spread
+across several CIKs — onshore LP, offshore or international feeder, master, parallel or "-R" sleeve
+— each filing its own Form D for its own slice of the capital. Bridge Debt Strategies Fund VI is one
+raise across four CIKs. So `PeerVehicle` gained a `role`, and `fundVehiclesInScope()` counts raises
+while `vehiclesInScope()` sums capital; counting the sleeves would have overstated the number of
+funds in the market and understated the size of each. Separately, some managers file a "Holdings
+LLC" aggregator per vintage — Madison has one per fund, every one reporting a $125,000 target fully
+sold to exactly 125 investors. That is a feeder artefact, not fundraising, and would have put a run
+of spurious "100% subscribed" rows in the table; they are omitted and a test asserts none slips
+back. And "Pretium Packaging LLC" matches the name "Pretium" but is an unrelated company last
+reporting in 2014, excluded by hand — the reason this registry is reviewed rather than generated.
+
+**Registry now:** 26 managers, 65 vehicles, 59 distinct raises; 25 / 39 / 65 by layer; 12 registered
+vehicles, still all national. All 65 resolve on live EDGAR. 44 unit tests.
+
+**Open.** The two `adjacent` calls in Miami-Dade are still unreviewed — Integra (multifamily equity,
+not credit) and SEGLO (strategy not stated in its filing). Rialto's Property funds are deliberately
+excluded from its vehicle list as equity rather than debt; worth confirming. Then step 2 (Form D ingestion across the registry and the provenance catalog), step 3 (XBRL for the
+registered tier), step 4 (signals and the Raise Environment aggregate), step 5 (the tab), step 6
+(liquidity and portfolio panels), step 7 (developments, gating narrative, alerts).
+
+**Carried from before.** Rotate `ANALYTICS_API_KEY` once AMO is wired up; refuse the whole-scope
+national behaviour-signals response as it nears 4.5 MB; the screening-table two-cohort decision;
+the cold-cache production look at Cohort Changes and the drawer; the "CRE / Assets" label; Bank
+Behaviour step 4 (Seller Likelihood). The cron scope-casing item is **struck**: the tab deliberately
+sends `"national"` for screening and `"National"` for visuals, watch and behaviour, and
+`app/api/cron/warm-cache/route.ts` matches both exactly. Not a bug.
+
+---
+
+## 2026-10-07, late morning — Market Analytics data API, so AMO Tracker can render this tab's data
 
 **Why.** A second tool, AMO Tracker (`EnriqueColon/amo-dashboard`), carries an "FDIC Data Analytics"
 page forked from this tab in April 2026, before scoring existed: its three scores are hardcoded to 0.
@@ -42,13 +1023,16 @@ in `app/api/cron/warm-cache/route.ts`; left for a separate commit. (3) AMO has t
 adopting here: a shared query-window constant with a check script, and a per-metric percentile
 direction (`high-risk` / `high-good`) asserted by a negative-control script.
 
-**State.** `dev` = `80743b6` plus this docs commit, not pushed at time of writing; `main` untouched.
-`ANALYTICS_API_KEY` is **not yet set on Vercel** — until it is, the routes return 503 on every
-deployment, which is the intended closed state. A prompt for the AMO side (Express fetch-and-cache
-layer, then rendering) is the next deliverable; it depends on the key being set on the dev preview.
+**State (updated 11:30).** Shipped. The user chose production as the API's home, set
+`ANALYTICS_API_KEY` on Vercel (Production environment only) and said "merge": `main` fast-forwarded
+`8afac5b` → `fe0ad1b`, taking the API and Bank Behaviour steps 1–3 together. `verify:analytics-api`
+against production passed for Florida (35541) and National (4433) with the same figures as the local
+run and the tab. National responses were cold on that first call (visuals 26 s, signals 10 s); the
+05:00 UTC cron keeps them warm from tomorrow. The AMO-side prompt has been handed over; it points at
+`https://market-intelligence-tool-gilt.vercel.app` and starts once the user's current AMO update is
+done. The key was generated in chat, so it is to be rotated (Vercel + droplet) once AMO is working.
 
-**Open.** Set `ANALYTICS_API_KEY` on Vercel (preview first, then production when the API ships to
-`main`); the cron scope-casing mismatch; refuse the whole-scope national signals response once it nears
+**Open.** Rotate `ANALYTICS_API_KEY` after AMO is wired up; the cron scope-casing mismatch; refuse the whole-scope national signals response once it nears
 4.5 MB; Bank Behaviour step 4 (Seller Likelihood, states, backtest) is unchanged and still next in the
 expansion; the AOM export questions from earlier today are still with the user.
 

@@ -7,24 +7,110 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
-| `main` | `7a3f80e` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `80743b6` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `main` | `9f8a1f9` | Production | https://market-intelligence-tool-gilt.vercel.app |
+| `dev` | `eb8eef1` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 This table names the newest commit on each branch that **changes behaviour**; documentation-only
 commits sit on top of it and are deliberately not tracked here, because amending one rotates its
 SHA and the table then reads as stale when nothing has moved. Confirm with
 `git log --format='%h|%ci|%s'` rather than trusting the previous entry — this has drifted twice.
 
-**`dev` is four behavioural commits ahead of `main` as of 11:05 on 2026-10-07:** `80743b6`, the
-Market Analytics data API (`/api/analytics/v1/*`, bearer-keyed and fail-closed, plus the one-line
-`middleware.ts` exemption — revertable in isolation, nothing in the tab imports it; while
-`ANALYTICS_API_KEY` is unset on Vercel it is inert, answering 503); `c656665`, the
-Bank Behaviour expansion's ingestion layer (a new FDIC field list, a pure shaping module, a service
-and a verify script); `4ab576f`, its signals layer (seven behaviour signals, the CRE nonaccrual
-roll-forward, a server action cached per asset band, and two new warm-cache entries); and `0d90a59`,
-the first visible piece — the Balance-Sheet Actions section in the institution drawer and its lines
-in Copy Snapshot. Reverting `0d90a59` alone removes the section and leaves the data layers in place
-with no caller; reverting all three removes files nothing imports. Before them, **`main` and `dev` were level at `ad24c30` as of 10:50 on 2026-10-06.** Production fast-forwarded
+**Production carries `9f8a1f9` as of 2026-10-26** — the Assignment of Mortgage removal, and nothing
+else. It was applied directly to `main` rather than merged from `dev`, so that production lost the
+AOM code without taking `dev`'s 41 other commits (which would break AMO Tracker's FDIC page and
+start the nightly peer cron). **`main` and `dev` have therefore diverged by that one commit.** `dev`
+carries the identical 647-file deletion as `eb8eef1`, and a simulated merge of `dev` into `main` was
+clean, so the next release is `git checkout main && git merge dev` as usual — it produces a merge
+commit rather than a fast-forward, and that is expected. Vercel deployed it (`success`, 12:39 UTC);
+the live site redirects to login, serves `/login`, and the data API answers 401 without a key. To
+roll back: `git revert 9f8a1f9` on `main` restores every file, including the 17 MB of data.
+
+**`dev` carries `eb8eef1` as of 2026-10-26** — the same removal, with documentation: `CLAUDE.md`,
+README, confluence, the peer status doc and others updated, and the `edgar-contract.ts` comment
+that named the deleted SEC connector. Revert with `git revert eb8eef1`. Before it, **`dev` carries
+`ac560a8` as of 2026-10-22.** Interim-close labels on the drawer's filing trail and
+the vintage chart's tooltip (`classifyFilings` in `lib/peer-intel/panel.ts`, a `closeKind` catalogue
+entry), and the `verify:peer-gating` command (`scripts/verify-peer-gating.ts`) — a read-only live
+check against EDGAR that touches no cache. Display and tooling only; a clean `git revert`, and
+invisible in production while `peer-intel` is absent from `ENABLED_TABS`. Before it, **`dev` carries
+`71f7ec9` as of 2026-10-22.** The vintage pacing panel: `lib/peer-intel/vintage.ts`,
+`components/peer-intel/vintage-pacing.tsx`, a card on the Peers tab and a section in the manager
+drawer, plus `CATEGORICAL_SERIES` in `lib/chart-theme.tsx` and three `PEER_FIELD_CATALOG` entries.
+Pure additions over the cohort already in the cache — **no fetch, payload or cache-key change**, so
+reverting is a clean `git revert` with nothing stored to expire. Invisible in production regardless,
+since `peer-intel` is not in `ENABLED_TABS`. `monthsBetween` in `form-d.ts` is now exported; nothing
+else there moved. Before it, **`dev` carries `9b8777b` as of 2026-10-21.** Three commits there change
+behaviour in production code paths, unlike the peer work: `cc087df` makes
+`/api/analytics/v1/behavior-signals` return **413** for a whole-scope request above 4 MB — which the
+national scope now is, so **AMO Tracker must switch to `band=`**; `1b9c212` adds the scoring module
+and its backtest, inert on its own; and `9b8777b` widens `BankBehaviorSummary` with three seller
+fields and bumps the signals cache to `behavior-signals-v2`, so every band entry recomputes on first
+read. Reverting `9b8777b` should take the version bump with it, or v2 entries will be served into v1
+code. Reverting `cc087df` restores the previous behaviour, in which an oversized response fails in
+the platform rather than returning a 413. Before them, **`dev` carries `8f3eda9` as of 2026-10-21.** `a8855c6` adds the Distribution panel and widens
+`OfferingRecord` with `salesRecipients`, `relatedPersons` and `hasNonAccreditedInvestors`;
+`8f3eda9` adds the developments feed and widens `PeerIntelPayload` with `developments`. Both widen
+shapes under the same `peer-intel-v2` key, so **entries written earlier lack the new fields** and
+those panels show their empty state until the weekly revalidate. `8f3eda9` is also the first part of
+the tab that calls a **non-SEC host** (Google News RSS): failures there are collected per manager and
+caught at the payload boundary, so a news outage degrades one panel and nothing else. Reverting
+either is a clean `git revert`. Before them, **`dev` carries `f842f88` as of 2026-10-21.** Step 6 adds the liquidity and portfolio panels plus
+`lib/peer-intel/liquidity.ts`, and widens `PeerIntelPayload` with a trimmed `tier` array — so the
+cache key version stays `peer-intel-v2` but **stored entries written before it lack `tier`**, and the
+panels render their empty state until the weekly revalidate refreshes them. Reverting
+`f842f88` removes both panels and the field; the entries themselves expire on their own. Also on
+`dev`: `eb2b140`, the manager roster that makes quiet managers reachable, and `0d63e33`, the
+"Peers (beta)" label. Before them, **`dev` carries `94d8f24` as of 2026-10-21.** Step 5, the first peer commit that changes what a
+user can see: `components/peer-intel.tsx` and `components/peer-intel/*`, the reading builder
+`lib/peer-intel/panel.ts`, a fifth entry in `TAB_DEFS`, a new `peerIntel` key on `EnabledTabs`,
+`5: "grid-cols-5"` in `TAB_GRID_COLS`, and `isFeatureEnabled("peer-intel")` in `app/page.tsx`.
+**It is invisible in production until `peer-intel` is added to `ENABLED_TABS`**, because
+`isFeatureEnabled` returns false for anything not in that list. Outside production every feature is
+on, so a preview deployment shows the tab without any variable change. Reverting is
+`git revert 94d8f24`, which removes the tab and leaves steps 1-4 intact and still inert. Note the
+`EnabledTabs` type gains a required key, so a revert must take `app/page.tsx` with it. Before it, **`dev` carries `04bcd92` as of 2026-10-21.** Step 4: `lib/peer-intel/signals.ts`, the payload
+builder on the service, the cached action `app/actions/peer-intel.ts`, and **three new
+`warm-cache` entries** (`peers:national`, `peers:florida`, `peers:miami`). This is the first peer
+commit that is *not* inert: the cron will build and store three cache entries on its next run, and
+`warm-cache` gains an import plus a `throwIfFailed` helper. Nothing reads those entries — there is
+still no tab — so the only effect is cron time (73s for the national layer, inside the 300s ceiling)
+and three Data Cache entries of 81-144 KB. `git revert 04bcd92` removes the entries and the cron
+lines together; the stored entries then expire on their own weekly revalidate. Before it, **`dev` carries `8cb6fa9` as of 2026-10-21.** Step 3: `lib/peer-intel/xbrl.ts`, the XBRL fetchers on
+the service, `PeerVehicle.quoted` on the registry, and a verify script. Still inert — nothing
+imported by any route, no cache entry, no cron change, no tab — so `git revert 8cb6fa9` is the whole
+procedure. Note it touches `registry.ts` (adding `quoted` to the twelve registered vehicles), so
+reverting it also drops that field; step 2's aggregation does not read it and keeps working. Before
+it, **`dev` carries `19e0e24` as of 2026-10-21.** Step 2 of the peer tracker: the provenance catalog,
+manager- and layer-level raise aggregation, a cohort fetcher on the service, and a verify script.
+Still inert — new files plus two `package.json` entries, nothing imported by any route, no cache
+entry, no cron change, no tab — so `git revert 19e0e24` is the whole procedure and leaves step 1's
+registry working. Before it, **`dev` carries `f310c1a` as of 2026-10-21.** `f310c1a` extends the peer registry with the five
+managers found by targeted lookup (Rialto into Miami-Dade, Madison Realty, Bridge and Pretium
+nationally, Gelt into Florida) and adds `PeerVehicle.role` so a raise spread across several CIKs is
+counted once. Still inert — registry data, one new script, no route or cache or tab — so
+`git revert f310c1a` is the whole procedure, and reverting it leaves `203b818`'s smaller registry
+working. Before it, **`dev` carries `203b818` as of 2026-10-21; `main` is unchanged at `fe0ad1b`.** Step 1 of the Peer &
+Private Credit tracker: `lib/peer-intel/` (the EDGAR access contract, Form D parsing and raise
+maths, the three-layer registry of 21 managers and 41 vehicles), `app/services/peer-intel.ts`, and
+two scripts. It is **inert** — new files plus four `package.json` script entries, no route, no cache
+entry, no cron change, no tab, and nothing existing imports any of it. So it cannot affect
+production behaviour and needs no rollback plan beyond `git revert 203b818`, which removes the files
+and the script entries together. It does **not** touch the SQLite `competitor_surveillance`
+framework (which cannot run on Vercel) or the AOM material; it supersedes
+`app/ingestion/competitor_surveillance/connectors/sec_edgar.ts`, whose `keys=` parameter EDGAR
+silently ignores, but deliberately leaves that file in place. Before it, **`main` and `dev` are level at `fe0ad1b` as of 11:30 on 2026-10-07.** Production fast-forwarded
+`8afac5b` → `fe0ad1b`, four behavioural commits: `c656665`, the Bank Behaviour expansion's ingestion
+layer (a new FDIC field list, a pure shaping module, a service and a verify script); `4ab576f`, its
+signals layer (seven behaviour signals, the CRE nonaccrual roll-forward, a server action cached per
+asset band, two new warm-cache entries); `0d90a59`, the Balance-Sheet Actions section in the
+institution drawer and its lines in Copy Snapshot; and `80743b6`, the Market Analytics data API
+(`/api/analytics/v1/*`, bearer `ANALYTICS_API_KEY`, fail-closed, plus the one-line `middleware.ts`
+exemption). The API was verified against production at 11:28 with `verify:analytics-api` for Florida
+and National: every endpoint 200, the negative cases 400/401, figures identical to the tab. **AMO
+Tracker will depend on `80743b6` once its FDIC page is switched over**; reverting it then breaks that
+page and nothing here. `0d90a59` reverts alone (section goes, data layers stay with no caller);
+the four together remove files nothing else imports. `8afac5b` is the production state before them
+and the rollback target if the drawer or the API misbehaves. Before them, **`main` and `dev` were level at `ad24c30` as of 10:50 on 2026-10-06.** Production fast-forwarded
 `8391d1c` → `ad24c30`, taking the whole morning's Market Analytics work in one release, six
 behavioural commits: `7aab24f`, which keeps failed and merged banks out of the charts and exports
 and reads each bank's headline-quarter filing rather than its largest-asset one; `45d2934`, the
@@ -199,6 +285,9 @@ to `4ca86dc`. It is kept as the record of what each commit does and what reverti
 
 | Commit | Date | Summary |
 | --- | --- | --- |
+| `eb8eef1` | 10-26 | Assignment of Mortgage code and the `competitor_surveillance` framework removed, 647 files: the AOM / Market Participants components and data plumbing, `/api/participants-intel`, the framework and its six non-AOM connectors, 17 MB of Miami-Dade Clerk data, two Python scripts, two docs. Nothing outside the set imported it; build passes; tsc 91 → 63 errors, none new. The same deletion reached production separately as `9f8a1f9`. Revert restores everything. |
+| `ac560a8` | 10-22 | Interim-close labels: each Form D filing in the drawer's trail and the vintage tooltip read against the one before it — first filing, interim close with delta, annual re-file, restatement — with offering changes beside. Plus `npm run verify:peer-gating`, a repeatable live check of the gating sources over six quarters per BDC and four 10-Qs per REIT. Display and tooling; clean revert; invisible in production while `peer-intel` is absent from `ENABLED_TABS`. |
+| `71f7ec9` | 10-22 | Vintage pacing on the Peers tab: each fund in a manager's series on one chart, months since first sale against cumulative raised, the newest read against its predecessor at the same month with interpolation stated. From the Form D trails already in the cohort; no fetch, payload or cache change. Also adds `CATEGORICAL_SERIES` to `lib/chart-theme.tsx`. Clean revert; invisible in production while `peer-intel` is absent from `ENABLED_TABS`. |
 | `80743b6` | 10-07 | Market Analytics data API. Six read-only routes under `/api/analytics/v1/` (meta, screening, visuals, cohort-watch, behavior-signals with optional band, institution/CERT) return the tab's cached objects to other tools — AMO Tracker is the consumer. `Authorization: Bearer $ANALYTICS_API_KEY`, constant-time, 503 when the key is unset; `middleware.ts` adds `/api/analytics` to `PUBLIC_PATHS`. **Revertable in isolation** and inert until the env var is set. Reverting it breaks AMO Tracker's FDIC page once that page has been switched over, and nothing here. |
 | `0d90a59` | 10-07 | Bank Behaviour expansion, step 3 (drawer panel). The institution drawer gains a Balance-Sheet Actions section under the Eight-Quarter Trend: signal chips, HFS/OREO/modifications chart, CRE nonaccrual roll-forward waterfall and table, charge-offs and loan-sale bars, signals-by-quarter strip, deterministic actions reading; Copy Snapshot gains the signals and reading. `getInstitutionBehavior(cert)` cached `institution-behavior-v1` + CERT + quarter. **Revertable in isolation**: the section and its action go, the step 1–2 layers stay with no UI caller. |
 | `4ab576f` | 10-07 | Bank Behaviour expansion, step 2 (signals). `lib/analytics/bank-behavior-signals.ts`: HFS transfer, realized sale, CRE charge-off spike, unexplained nonaccrual exit, foreclosure route, modification build, CRE runoff, each on absolute floors and the bank's own history so Florida and national judge a bank identically; the per-category nonaccrual roll-forward. `app/actions/bank-behavior-signals.ts` caches per asset band (`behavior-signals-v1` + scope + band + quarter, seven days; largest entry 0.90 MB). `warm-cache` gains `behavior:national` / `behavior:florida`. Adds five RC-C fields to `FDIC_FIELDS.behavior` and `creLoans` to `BehaviorQuarter`. No UI; reverting removes two cron entries and files nothing else imports. |
@@ -247,7 +336,8 @@ rollback notes; see the production table for the current head.
 
 | Commit | Date | Summary |
 | --- | --- | --- |
-| `ad24c30` | 10-06 | **Production head.** Documentation on top of `7a3f80e`, so identical in behaviour. The release `8391d1c` → `ad24c30` carries the six 10-06 behavioural commits listed under "Dev branch commits". |
+| `9f8a1f9` | 10-26 | **Production head.** The Assignment of Mortgage removal only, applied directly on top of `fe0ad1b`: 647 deletions, no documentation edits so the later `dev` merge cannot conflict. Verified on `main`'s own code before pushing — no outside importers, cron and dashboard untouched, `next build` 23/23 pages, tsc 91 → 63 with none new — and on the live site after. Removes `/api/participants-intel`. `git revert 9f8a1f9` restores it all. |
+| `ad24c30` | 10-06 | Former production head. Documentation on top of `7a3f80e`, so identical in behaviour. The release `8391d1c` → `ad24c30` carries the six 10-06 behavioural commits listed under "Dev branch commits". |
 | `996efa9` | 09-10 | Former production head. Documentation on top of `7b4e2b9`, so identical in behaviour. |
 | `27ef6f1` | 09-08 | Documentation on top of `02e45ae`, so identical in behaviour. |
 | `02e45ae` | 09-08 | perf(market-analytics): move the screening reduction and scoring to the server and cache it. **No displayed figure changes** — `npm run verify:screening-parity` compares every rendered field per institution against the previous browser reduction, 51,510 comparisons nationally, all matching. Rolling back restores a tab that fetches 10.8MB and ~5.8s from FDIC on every single visit, so prefer fixing forward. If you roll back, also drop `screening:national` and `screening:florida` from the warm-cache route or it will warm a cache nothing reads. The cached entry is 1.26MB against a 2MB ceiling; adding fields to the transported row is what would break it, silently, by making Next refuse the write. |

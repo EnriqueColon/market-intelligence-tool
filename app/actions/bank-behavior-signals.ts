@@ -10,6 +10,7 @@ import {
   type BankBehaviorSummary,
   type BehaviorSignalsCohort,
 } from "@/lib/analytics/bank-behavior-signals"
+import { withSellerFields, type SellerSummaryFields } from "@/lib/analytics/seller-likelihood"
 
 /**
  * A week, keyed by scope, asset band and published quarter, like the other
@@ -21,15 +22,16 @@ const SIGNALS_REVALIDATE_SECONDS = 60 * 60 * 24 * 7
  * Bump when a threshold, a measure or the summary shape changes, or cached
  * entries keep judging banks under the old rules for a week.
  */
-const CACHE_VERSION = "behavior-signals-v1"
+// v2: summaries carry the Seller Likelihood state, score and confidence.
+const CACHE_VERSION = "behavior-signals-v2"
 
 type BandEntry = Omit<BehaviorSignalsCohort, "summaries"> & {
   band: AssetBandKey
-  summaries: BankBehaviorSummary[]
+  summaries: Array<BankBehaviorSummary & SellerSummaryFields>
   computedAt: string
 }
 
-export type BehaviorSignalsResult = { ok: true; cohort: BehaviorSignalsCohort } | { ok: false; error: string }
+export type BehaviorSignalsResult = { ok: true; cohort: ScoredCohort } | { ok: false; error: string }
 
 /**
  * Behaviour signals for every institution in the scope.
@@ -46,8 +48,8 @@ export type BehaviorSignalsResult = { ok: true; cohort: BehaviorSignalsCohort } 
 export async function getBehaviorSignals(scope: string): Promise<BehaviorSignalsResult> {
   const quarter = await getLatestFdicQuarter()
 
-  let computing: Promise<BehaviorSignalsCohort> | null = null
-  const computeOnce = (): Promise<BehaviorSignalsCohort> => {
+  let computing: Promise<ScoredCohort> | null = null
+  const computeOnce = (): Promise<ScoredCohort> => {
     if (!computing) computing = computeCohort(scope, quarter)
     return computing
   }
@@ -87,8 +89,16 @@ export async function getBehaviorSignals(scope: string): Promise<BehaviorSignals
   }
 }
 
+/**
+ * The scored cohort: a `BehaviorSignalsCohort` whose summaries carry the Seller
+ * Likelihood fields.
+ */
+export type ScoredCohort = Omit<BehaviorSignalsCohort, "summaries"> & {
+  summaries: Array<BankBehaviorSummary & SellerSummaryFields>
+}
+
 /** Throws rather than returning a failure, so `unstable_cache` stores only successes. */
-async function computeCohort(scope: string, quarter: string): Promise<BehaviorSignalsCohort> {
+async function computeCohort(scope: string, quarter: string): Promise<ScoredCohort> {
   const cohort = await fetchBehaviorCohort(scope, quarter)
   if (cohort.histories.length === 0) throw new Error(`FDIC returned no behaviour rows for ${scope}.`)
   // If the newest quarter has not been published for this scope yet, judge
@@ -96,5 +106,9 @@ async function computeCohort(scope: string, quarter: string): Promise<BehaviorSi
   const asOf = cohort.emptyQuarters.includes(cohort.asOfQuarter)
     ? [...cohort.quarters].reverse().find((q) => !cohort.emptyQuarters.includes(q)) ?? cohort.asOfQuarter
     : cohort.asOfQuarter
-  return computeBehaviorSignals(cohort.histories, scope, asOf)
+  // The seller fields are added here rather than inside `computeBehaviorSignals`
+  // so the import stays one-way: the scoring layer reads the signals layer and
+  // not the reverse. Doing it before the split into band entries means the
+  // stored cache carries them and the screening table needs no second pass.
+  return withSellerFields(computeBehaviorSignals(cohort.histories, scope, asOf), cohort.histories)
 }

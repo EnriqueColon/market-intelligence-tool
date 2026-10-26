@@ -35,8 +35,7 @@ Verify SHAs with `git log --format='%h|%ci|%s'` rather than writing them from me
 - Development happens on `dev`, which deploys as an isolated Vercel preview.
 - Never push feature work directly to `main`. Ship with `git checkout main && git merge dev`.
 - Do not commit unrelated files. This repo usually carries uncommitted churn in
-  `data/*.sqlite*`, `scripts/import_aom_to_sqlite.py`, `data/README-aom-import.md` and `.DS_Store` —
-  leave it alone.
+  `data/*.sqlite*` and `.DS_Store` — leave it alone.
 - Four files carry CRLF line endings (`lib/map-stress-utils.ts`, `app/actions/cre-deterioration.ts`,
   `app/actions/export-market-analytics-report.ts`, `lib/noncurrent-debug.ts`). Editing them with a
   script in text mode rewrites every line and buries the real change. Check `git show --stat` before
