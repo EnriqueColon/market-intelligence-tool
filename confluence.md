@@ -783,7 +783,19 @@ Raise Environment with the firm's own position against the layer, **Vintage Paci
 funds on one chart, months since first sale against cumulative raised, the newest read against its
 predecessor — `lib/peer-intel/vintage.ts`, from the Form D trails already in the cohort), Open
 Raises with the firm's row pinned, Launched in the last twelve months, and a manager drawer, which
-carries the same vintage chart for any peer with two or more vintages on file.
+carries the same vintage chart for any peer with two or more vintages on file, and two sections from
+the rest of Form D: **Structure & terms** (formation, co-issuers, exemptions and their changes,
+securities, minimum and its history, commissions, payments to insiders, with the filer's own notes
+quoted) and **People** (the related persons, and any name found at another manager).
+
+**Two rules the structure and people code depends on.** A Form D filed jointly by several issuers
+reports the offering as a whole, so a co-issuer's capital is *inside* the filing's totals; the risk is
+double counting, when a co-issuer is also tracked as its own vehicle and its trail holds the same
+filing — `structureRows` flags it and `npm run verify:peer-structure` fails on it. And Form D carries
+no identifier for a person, so cross-manager links are exact name matches with case, punctuation and
+accents folded and nothing else; the panel calls them name matches. Item 1 fields (`entityType`,
+`jurisdictionOfInc`, `yearOfInc`) repeat for every co-issuer, so they are read inside
+`primaryIssuer`, never with a whole-document match.
 
 **Vintages are ordered by first-sale date, never by name**, sleeves are omitted because the registry
 holds no parent link, and the prior fund's figure at the newest's month is interpolated between its

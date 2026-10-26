@@ -16,6 +16,8 @@ import type { ManagerRaises, PeerCohort, VehicleRaise } from "./cohort"
 import { activeRaises, newLaunches, selfPositioning } from "./cohort"
 import { peerSignalSpec, type ManagerSignals, type PeerSignalKey } from "./signals"
 import { UNRESOLVED_WATCH } from "./registry"
+import { structureRows } from "./structure"
+import { buildPeopleIndex, managerPeople } from "./people"
 
 export function money(value: number | "indefinite" | null | undefined): string {
   if (value === "indefinite") return "no stated cap"
@@ -283,6 +285,38 @@ export function buildManagerSnapshot(
     lines.push("", "Not judged:")
     for (const s of unjudged) {
       lines.push(`  ${peerSignalSpec(s.key)?.label ?? s.key}${s.missing ? ` — ${s.missing}` : ""}`)
+    }
+  }
+
+  const structure = structureRows(manager, cohort.managers)
+  if (structure.length) {
+    lines.push("", "Structure & terms:")
+    for (const row of structure) {
+      const t = row.terms
+      const commissions =
+        t.salesCommissions.amount == null
+          ? "commissions not reported"
+          : t.salesCommissions.amount === 0
+            ? "no commissions"
+            : `commissions ${money(t.salesCommissions.amount)}${t.salesCommissions.estimate ? " (est.)" : ""}${row.commissionShare != null ? `, ${percent(row.commissionShare, 2)} of offering` : ""}`
+      lines.push(
+        `  ${row.vehicleName}${row.role === "sleeve" ? " (sleeve)" : ""} — ${row.exemptions.map((e) => e.label).join(", ") || "exemptions not reported"}; ${commissions}` +
+          `${row.coIssuers.length ? `; files jointly with ${row.coIssuers.map((c) => c.name).join(", ")}` : ""}`
+      )
+      for (const ch of row.exemptionChanges) {
+        lines.push(`    exemptions changed ${ch.filedAt}: +${ch.added.map((e) => e.label).join(", ") || "—"} −${ch.removed.map((e) => e.label).join(", ") || "—"}`)
+      }
+    }
+  }
+
+  const people = managerPeople(manager, buildPeopleIndex(cohort.managers))
+  if (people.length) {
+    lines.push("", "People (Form D related persons):")
+    for (const p of people) {
+      lines.push(
+        `  ${p.name}${p.kind === "entity" ? " [entity]" : ""} — ${p.roles.join(", ") || "role not stated"}` +
+          `${p.elsewhere.length ? `; same name at ${p.elsewhere.map((o) => o.manager).join(", ")} (name match)` : ""}`
+      )
     }
   }
 

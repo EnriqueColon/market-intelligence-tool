@@ -325,3 +325,26 @@ test("an open raise reports its count rather than a quiet duration", () => {
   assert.equal(row.standing, "in-market")
   assert.equal(standingLabel(row), "1 open raise")
 })
+
+test("Copy Snapshot carries structure and people when the filings have them", () => {
+  const base = miamiRecords()
+  const fund4 = base.get("2017189")!
+  fund4[fund4.length - 1] = {
+    ...fund4[fund4.length - 1],
+    relatedPersons: [{ name: "Rafael Serrano", kind: "person", relationships: ["Executive Officer", "Director"], clarification: null }],
+    terms: {
+      entityType: "Limited Partnership", yearOfInc: 2022, formedOverFiveYearsAgo: false,
+      coIssuers: [{ cik: "2017088", name: "Safe Harbor Equity Distressed Debt Fund 4 Feeder, L.P.", jurisdiction: "CAYMAN ISLANDS", entityType: "Limited Partnership", yearOfInc: 2023 }],
+      exemptions: ["06b", "3C", "3C.1", "3C.7"], securities: ["pooled-fund"], securitiesOther: null, moreThanOneYear: true,
+      salesCommissions: { amount: 2_000_000, estimate: true }, findersFees: { amount: 0, estimate: false }, feesClarification: null,
+      proceedsToInsiders: { amount: 0, estimate: false }, proceedsClarification: null,
+    },
+  }
+  const cohort = buildPeerCohort("miami-dade", base, ASOF)
+  const self = cohort.managers.find((m) => m.isSelf)!
+  const snap = buildManagerSnapshot(self, managerSignals(self, new Map()), cohort)
+  assert.match(snap, /Structure & terms:/)
+  assert.match(snap, /Rule 506\(b\), 3\(c\)\(1\), 3\(c\)\(7\); commissions \$2\.0M \(est\.\), 0\.67% of offering; files jointly with Safe Harbor Equity Distressed Debt Fund 4 Feeder, L\.P\./)
+  assert.match(snap, /People \(Form D related persons\):\n  Rafael Serrano — Executive Officer, Director/)
+  assert.ok(snap.indexOf("Structure & terms:") < snap.indexOf("Reading:"), "before the reading, which summarises")
+})

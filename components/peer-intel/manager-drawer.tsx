@@ -18,6 +18,7 @@ import { peerById } from "@/lib/peer-intel/registry"
 import { peerSignalSpec, type ManagerSignals, type SignalState } from "@/lib/peer-intel/signals"
 import { buildVintagePacing } from "@/lib/peer-intel/vintage"
 import { VintageLadder } from "@/components/peer-intel/vintage-pacing"
+import { PeopleSection, StructureSection } from "@/components/peer-intel/structure-people"
 
 /**
  * One manager, in full.
@@ -298,6 +299,14 @@ export function ManagerDrawer({
                     </>
                   )
                 })()}
+              </Section>
+
+              <Section title="Structure & terms">
+                <StructureSection manager={manager} allManagers={cohort.managers} />
+              </Section>
+
+              <Section title="People">
+                <PeopleSection manager={manager} allManagers={cohort.managers} />
               </Section>
 
               <Section title="Filing trail">

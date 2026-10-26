@@ -40,6 +40,28 @@ cached cohort — no new fetch, no payload change. `lib/peer-intel/vintage.ts`, 
 ordered by first-sale date rather than name, sleeves are omitted and counted, and where the prior
 fund's figure at that month falls between two filings the reading says which two.
 
+And **Structure & terms** and **People** in the manager drawer (2026-10-26, at the user's request),
+from the parts of Form D the raise figures do not use — no new fetch, ~31 KB more in the US entry,
+cache key `peer-intel-v3`. `parseTerms` in `form-d.ts`, `lib/peer-intel/structure.ts` and
+`people.ts`, with 31 new and amended tests; `npm run verify:peer-structure` checks a whole layer
+live. What the first run over all 26 managers and 56 vehicles established:
+
+- **Co-issuers:** 8, all untracked, **none double-counted**. A joint filing reports the whole
+  offering, so a co-issuer's capital is inside its totals. H.I.G. files with Cayman and Luxembourg
+  feeders in euros and sterling — a European channel invisible until now; Safe Harbor Fund 4 and
+  Madison Funds V and VII each file with one.
+- **Exemptions:** 506(b) 45, 3(c)(7) 33, 3(c)(1) 13, 3(c)(5) 9, 506(c) 5. Five real changes across
+  trails, among them **Rialto Credit Opportunities moving from 506(b) to 506(c) in July 2025** — it
+  began advertising — and an older Safe Harbor fund going the other way in 2022. H.I.G. adds and
+  drops the umbrella 3C code with nothing else moving; that is ignored as a change.
+- **Commissions:** reported above zero by 12 of 56. BXSL $80M (est.); Madison VI and V 0.52% and
+  0.54% of offering; Safe Harbor Fund 4 $2.0M (est.), 0.67%.
+- **People:** 114 people and 39 entities, and **no name at two managers**, so the cross-manager
+  links are empty for this registry. Matching is exact by design: Safe Harbor's own filings list both
+  Rafael and Ralph Serrano, which may be one person or two, and the tool cannot know.
+- **A parser fix along the way:** entity related persons filed with "." or "[none]" as a first name
+  were read as ". BH3 Debt Opportunity Fund II GP, LLC". Nothing displayed them until now.
+
 Cache entries written by `warm-cache`: `peers:national` (~250 KB, 43s, 340 SEC requests plus 26 news
 feeds), with Florida and Miami-Dade smaller — all far inside the 2 MB per-entry limit, so no chunking
 is needed.

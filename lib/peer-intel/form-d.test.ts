@@ -1,6 +1,6 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
-import { buildRaise, isLikelyOpen, isNewLaunch, parseFormD, type OfferingRecord } from "./form-d"
+import { buildRaise, isLikelyOpen, isNewLaunch, parseFormD, parseTerms, type OfferingRecord } from "./form-d"
 
 /** Shaped like the real primary_doc.xml, including the nested dateOfFirstSale wrapper. */
 function xml(fields: Record<string, string>): string {
@@ -160,4 +160,110 @@ test("a launch is dated from first sale, falling back to the first filing", () =
 test("no filings yields no raise", () => {
   assert.equal(buildRaise([], "2026-10-21"), null)
   assert.equal(buildRaise([{ ...shcpFund4()[0], filedAt: "garbage" }], "2026-10-21"), null)
+})
+
+// ---------------------------------------------------------- structure and terms
+//
+// Each fixture is the real section XML from the filer named, compacted and with
+// addresses dropped — so the parser is held to what issuers actually file.
+
+const SHCP_FUND4_TERMS = `<edgarSubmission><primaryIssuer><cik>0002017189</cik><entityName>Safe Harbor Equity Distressed Debt Fund 4, L.P.</entityName><jurisdictionOfInc>DELAWARE</jurisdictionOfInc><entityType>Limited Partnership</entityType><yearOfInc><withinFiveYears>true</withinFiveYears><value>2022</value></yearOfInc></primaryIssuer><issuerList><issuer><cik>0002017088</cik><entityName>Safe Harbor Equity Distressed Debt Fund 4 Feeder, L.P.</entityName><jurisdictionOfInc>CAYMAN ISLANDS</jurisdictionOfInc><entityType>Limited Partnership</entityType><yearOfInc><withinFiveYears>true</withinFiveYears><value>2023</value></yearOfInc></issuer></issuerList><relatedPersonsList><relatedPersonInfo><relatedPersonName><firstName>Rafael</firstName><lastName>Serrano</lastName></relatedPersonName><relatedPersonRelationshipList><relationship>Executive Officer</relationship><relationship>Director</relationship></relatedPersonRelationshipList><relationshipClarification>Manager of SHE DDF4 GP, LLC the General Partner of the Issuer</relationshipClarification></relatedPersonInfo></relatedPersonsList><offeringData><federalExemptionsExclusions><item>06b</item><item>3C</item><item>3C.1</item><item>3C.7</item></federalExemptionsExclusions><durationOfOffering><moreThanOneYear>true</moreThanOneYear></durationOfOffering><typesOfSecuritiesOffered><isEquityType>true</isEquityType><isPooledInvestmentFundType>true</isPooledInvestmentFundType><isOtherType>true</isOtherType><descriptionOfOtherType>Limited partnership interests. In sole discretion of General Partner to accept lesser minimum investment amounts.</descriptionOfOtherType></typesOfSecuritiesOffered><minimumInvestmentAccepted>100000</minimumInvestmentAccepted><salesCommissionsFindersFees><salesCommissions><dollarAmount>2000000</dollarAmount><isEstimate>true</isEstimate></salesCommissions><findersFees><dollarAmount>0</dollarAmount></findersFees><clarificationOfResponse>Courtney Group is no longer engaged by Issuers, and no commission or other remuneration was or will be paid to Courtney Group in connection with this offering.</clarificationOfResponse></salesCommissionsFindersFees><useOfProceeds><grossProceedsUsed><dollarAmount>0</dollarAmount></grossProceedsUsed></useOfProceeds></offeringData></edgarSubmission>`
+
+const GELT_TERMS = `<edgarSubmission><primaryIssuer><cik>0001796479</cik><entityName>Gelt Financial, LLC</entityName><jurisdictionOfInc>DELAWARE</jurisdictionOfInc><entityType>Limited Liability Company</entityType><yearOfInc><overFiveYears>true</overFiveYears></yearOfInc></primaryIssuer><relatedPersonsList><relatedPersonInfo><relatedPersonName><firstName>H. Jack</firstName><lastName>Miller</lastName></relatedPersonName><relatedPersonRelationshipList><relationship>Executive Officer</relationship></relatedPersonRelationshipList><relationshipClarification></relationshipClarification></relatedPersonInfo></relatedPersonsList><offeringData><federalExemptionsExclusions><item>06c</item></federalExemptionsExclusions><durationOfOffering><moreThanOneYear>false</moreThanOneYear></durationOfOffering><typesOfSecuritiesOffered><isEquityType>true</isEquityType></typesOfSecuritiesOffered><minimumInvestmentAccepted>10000</minimumInvestmentAccepted><salesCommissionsFindersFees><salesCommissions><dollarAmount>0</dollarAmount></salesCommissions><findersFees><dollarAmount>0</dollarAmount></findersFees><clarificationOfResponse></clarificationOfResponse></salesCommissionsFindersFees><useOfProceeds><grossProceedsUsed><dollarAmount>0</dollarAmount></grossProceedsUsed><clarificationOfResponse></clarificationOfResponse></useOfProceeds></offeringData></edgarSubmission>`
+
+/** BH3 writes "." and Bridge "[none]" in the first-name field of an entity; Silverview "--". */
+const ENTITY_PLACEHOLDERS = `<edgarSubmission><relatedPersonsList><relatedPersonInfo><relatedPersonName><firstName>.</firstName><lastName>BH3 Debt Opportunity Fund II GP, LLC</lastName></relatedPersonName><relatedPersonRelationshipList><relationship>Director</relationship></relatedPersonRelationshipList><relationshipClarification>General Partner of the Issuer</relationshipClarification></relatedPersonInfo><relatedPersonInfo><relatedPersonName><firstName>[none]</firstName><lastName>Bridge Debt Strategies Fund VI GP LLC</lastName></relatedPersonName><relatedPersonRelationshipList><relationship>Executive Officer</relationship></relatedPersonRelationshipList></relatedPersonInfo><relatedPersonInfo><relatedPersonName><firstName>--</firstName><lastName>Silverview Credit Partners LP</lastName></relatedPersonName><relatedPersonRelationshipList><relationship>Promoter</relationship></relatedPersonRelationshipList></relatedPersonInfo><relatedPersonInfo><relatedPersonName><firstName>Daniel</firstName><lastName>Lebensohn</lastName></relatedPersonName><relatedPersonRelationshipList><relationship>Executive Officer</relationship></relatedPersonRelationshipList></relatedPersonInfo></relatedPersonsList></edgarSubmission>`
+
+test("terms: Safe Harbor Fund 4, read from the primary issuer and not its co-issuer", () => {
+  const t = parseTerms(SHCP_FUND4_TERMS)
+  assert.equal(t.entityType, "Limited Partnership")
+  assert.equal(t.yearOfInc, 2022, "the primary's year, not the feeder's 2023 that also appears in the filing")
+  assert.equal(t.formedOverFiveYearsAgo, false)
+  assert.deepEqual(t.coIssuers, [
+    { cik: "2017088", name: "Safe Harbor Equity Distressed Debt Fund 4 Feeder, L.P.", jurisdiction: "CAYMAN ISLANDS", entityType: "Limited Partnership", yearOfInc: 2023 },
+  ])
+  assert.deepEqual(t.exemptions, ["06b", "3C", "3C.1", "3C.7"])
+  assert.deepEqual(t.securities, ["equity", "pooled-fund", "other"])
+  assert.match(t.securitiesOther ?? "", /sole discretion of General Partner to accept lesser minimum/)
+  assert.equal(t.moreThanOneYear, true)
+  assert.deepEqual(t.salesCommissions, { amount: 2_000_000, estimate: true })
+  assert.deepEqual(t.findersFees, { amount: 0, estimate: false })
+  assert.match(t.feesClarification ?? "", /Courtney Group is no longer engaged/)
+  assert.deepEqual(t.proceedsToInsiders, { amount: 0, estimate: false })
+  assert.equal(t.proceedsClarification, null, "an absent note is null, not an empty string")
+})
+
+test("terms: an issuer over five years old has no year, and says so", () => {
+  const t = parseTerms(GELT_TERMS)
+  assert.equal(t.yearOfInc, null)
+  assert.equal(t.formedOverFiveYearsAgo, true)
+  assert.equal(t.entityType, "Limited Liability Company")
+  assert.deepEqual(t.exemptions, ["06c"], "Rule 506(c): may advertise")
+  assert.equal(t.moreThanOneYear, false)
+  assert.deepEqual(t.coIssuers, [])
+  assert.equal(t.feesClarification, null)
+})
+
+test("terms: a filing with none of the sections yields empty values, not a throw", () => {
+  const t = parseTerms("<edgarSubmission></edgarSubmission>")
+  assert.deepEqual(t.coIssuers, [])
+  assert.deepEqual(t.exemptions, [])
+  assert.deepEqual(t.securities, [])
+  assert.equal(t.entityType, null)
+  assert.equal(t.moreThanOneYear, null)
+  assert.deepEqual(t.salesCommissions, { amount: null, estimate: false }, "not reported is null, never zero")
+})
+
+test("related persons: placeholder first names mark an entity and are dropped from the name", () => {
+  const r = parseFormD(ENTITY_PLACEHOLDERS, ctx)
+  assert.deepEqual(
+    r.relatedPersons.map((p) => [p.name, p.kind]),
+    [
+      ["BH3 Debt Opportunity Fund II GP, LLC", "entity"],
+      ["Bridge Debt Strategies Fund VI GP LLC", "entity"],
+      ["Silverview Credit Partners LP", "entity"],
+      ["Daniel Lebensohn", "person"],
+    ]
+  )
+  assert.equal(r.relatedPersons[0].clarification, "General Partner of the Issuer")
+  assert.equal(r.relatedPersons[1].clarification, null)
+})
+
+test("related persons: a person keeps a multi-part first name and the filer's role note", () => {
+  const gelt = parseFormD(GELT_TERMS, ctx).relatedPersons
+  assert.deepEqual(gelt, [{ name: "H. Jack Miller", kind: "person", relationships: ["Executive Officer"], clarification: null }])
+  const shcp = parseFormD(SHCP_FUND4_TERMS, ctx).relatedPersons[0]
+  assert.equal(shcp.name, "Rafael Serrano")
+  assert.deepEqual(shcp.relationships, ["Executive Officer", "Director"])
+  assert.match(shcp.clarification ?? "", /General Partner of the Issuer/)
+})
+
+test("a raise carries the newest terms, dates each co-issuer, and records exemption changes", () => {
+  const solo = SHCP_FUND4_TERMS.replace(/<issuerList>[\s\S]*?<\/issuerList>/, "").replace("<item>3C.7</item>", "")
+  const trail = [
+    parseFormD(solo, { cik: "2017189", accession: "a1", formType: "D", filedAt: "2024-03-28" }),
+    parseFormD(SHCP_FUND4_TERMS, { cik: "2017189", accession: "a2", formType: "D/A", filedAt: "2025-07-22" }),
+    parseFormD(SHCP_FUND4_TERMS, { cik: "2017189", accession: "a3", formType: "D/A", filedAt: "2026-07-23" }),
+  ]
+  const r = buildRaise(trail, "2026-10-21")!
+  assert.equal(r.terms?.coIssuers[0].firstSeen, "2025-07-22", "the feeder first appears on the second filing")
+  assert.deepEqual(r.exemptionChanges, [{ filedAt: "2025-07-22", added: ["3C.7"], removed: [] }], "3(c)(7) added with the feeder")
+  assert.deepEqual(r.terms?.salesCommissions, { amount: 2_000_000, estimate: true })
+  for (const f of r.filings) assert.equal(f.terms, null, "stored filings carry no terms — they would multiply in the cache")
+})
+
+test("adding or dropping only the 3(c) umbrella code is not an exemption change", () => {
+  // H.I.G. Bayside: an amendment added "3C" beside an unchanged 3(c)(7).
+  const without = SHCP_FUND4_TERMS.replace("<item>3C</item>", "")
+  const trail = [
+    parseFormD(without, { cik: "2017189", accession: "b1", formType: "D", filedAt: "2024-03-20" }),
+    parseFormD(SHCP_FUND4_TERMS, { cik: "2017189", accession: "b2", formType: "D/A", filedAt: "2024-09-09" }),
+  ]
+  assert.deepEqual(buildRaise(trail, "2026-10-21")!.exemptionChanges, [])
+})
+
+test("a raise built from filings without terms has none, and no changes", () => {
+  const r = buildRaise(shcpFund4(), "2026-10-21")!
+  assert.equal(r.terms, null)
+  assert.deepEqual(r.exemptionChanges, [])
 })

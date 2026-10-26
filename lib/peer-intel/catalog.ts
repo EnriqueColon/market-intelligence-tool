@@ -99,6 +99,55 @@ export const PEER_FIELD_CATALOG: readonly PeerFieldSpec[] = [
   reported("formType", "form type on the filing index", "Filing type (D or D/A)", "filing"),
   reported("filedAt", "filing date on the filing index", "Filed", "filing"),
 
+  // ------------------------------------------- structure and terms (newest filing)
+  reported("entityType", "primaryIssuer/entityType", "Entity type", "filing", "Read from the primary issuer only — the same element repeats for every co-issuer."),
+  reported(
+    "yearOfInc",
+    "primaryIssuer/yearOfInc/value",
+    "Year formed",
+    "filing",
+    'Given only for an issuer formed within five years; older issuers tick "over five years ago" and give no year.'
+  ),
+  reported(
+    "coIssuers",
+    "issuerList/issuer (cik, entityName, jurisdictionOfInc, entityType, yearOfInc)",
+    "Files jointly with",
+    "filing",
+    "A joint filing reports the offering as a whole, so a co-issuer's capital is inside the filing's totals, not missing from them."
+  ),
+  reported(
+    "exemptions",
+    "federalExemptionsExclusions/item",
+    "Exemptions claimed",
+    "filing",
+    "506(b) may not advertise and 506(c) may; 3(c)(1) caps a fund at 100 beneficial owners, 3(c)(7) admits only qualified purchasers, 3(c)(5) is the mortgage and real-estate exclusion. The umbrella code 3C is not shown beside a sub-item."
+  ),
+  reported("securities", "typesOfSecuritiesOffered (is…Type flags, descriptionOfOtherType)", "Securities offered", "filing", "Nearly every fund ticks pooled investment fund interests; the free-text description is quoted as filed."),
+  reported("moreThanOneYear", "durationOfOffering/moreThanOneYear", "Offering expected to run over a year", "filing"),
+  reported(
+    "salesCommissions",
+    "salesCommissionsFindersFees/salesCommissions (dollarAmount, isEstimate)",
+    "Sales commissions",
+    "filing",
+    "Paid or expected for the offering as a whole, and frequently an estimate. Zero is shown as none; absent as not reported."
+  ),
+  reported("findersFees", "salesCommissionsFindersFees/findersFees", "Finder's fees", "filing"),
+  reported("feesClarification", "salesCommissionsFindersFees/clarificationOfResponse", "Note on commissions", "filing", "Quoted as filed; often names a placement agent engaged or dropped."),
+  reported(
+    "proceedsToInsiders",
+    "useOfProceeds/grossProceedsUsed (dollarAmount, isEstimate) and clarificationOfResponse",
+    "Paid to officers, directors and promoters",
+    "filing",
+    "Usually zero with a note describing the management fee, which is quoted as filed."
+  ),
+  reported(
+    "relatedPersons",
+    "relatedPersonsList/relatedPersonInfo (firstName, middleName, lastName, relationship, relationshipClarification)",
+    "People and entities",
+    "filing",
+    'Executive officers, directors and promoters of the issuer — not the whole team, never investors. An entity is recognised by a placeholder first name (".", "--", "[none]") or a legal suffix.'
+  ),
+
   // ------------------------------------------------- computed across the trail
   derived(
     "target",
@@ -169,6 +218,37 @@ export const PEER_FIELD_CATALOG: readonly PeerFieldSpec[] = [
     "What the filing was",
     "trail",
     "An amendment is mandatory on a material increase in capital and once a year regardless, so a rise is a close and no rise is the annual re-file. The figure is cumulative and the filing only has to follow the change, so one amendment can bundle several closes — \"interim close\" is the right word, \"one amendment is one close\" is not guaranteed."
+  ),
+
+  derived("coIssuerFirstSeen", "the earliest filing in the trail whose issuerList includes the co-issuer", "Co-issuer first listed", "trail"),
+  derived(
+    "exemptionChanges",
+    "the exemptions of each filing against the one before it, ignoring the umbrella 3C code",
+    "Exemptions changed",
+    "trail",
+    "A move from 506(b) to 506(c) is a manager starting to advertise. Some changes are corrections — a sub-item dropped and restored a month later — and are shown as filed."
+  ),
+  derived("minimumChanges", "minimumAccepted of each filing against the previous filing that states one", "Minimum changed", "trail"),
+  derived(
+    "commissionShare",
+    "salesCommissions ÷ the current numeric offering amount",
+    "Commissions as a share of the offering",
+    "trail",
+    "Never computed against an indefinite offering or a zero commission."
+  ),
+  derived(
+    "doubleCounted",
+    "a co-issuer tracked as its own vehicle whose filing trail contains a filing from this raise's trail",
+    "Co-issuer capital counted twice",
+    "cohort",
+    "None found across the US layer on 2026-10-26 (`npm run verify:peer-structure`)."
+  ),
+  derived(
+    "personCrossLinks",
+    "related persons whose name, with case, punctuation and accents folded, appears at another manager in the layer",
+    "Same name at another manager",
+    "cohort",
+    "A name match, not a verified identity: Form D carries no identifier for a person. Initials and middle names are never dropped, so one person filed under two forms of their name is not merged."
   ),
 
   // ------------------------------------------------- vintage pacing, per manager

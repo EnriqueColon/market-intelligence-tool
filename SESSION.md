@@ -8,7 +8,7 @@ is it in now, and what is still open.
 
 ---
 
-## STOPPED HERE — 2026-10-26, Peers released to production as beta
+## STOPPED HERE — 2026-10-26, Structure & terms and People built (uncommitted)
 
 Read `CLAUDE.md` first for orientation, then this block. Everything below it is the running record —
 reverse-chronological, and worth reading only when you need the reasoning behind something specific.
@@ -228,7 +228,38 @@ broader private credit tier stays, marked `adjacent`. The tab is named **Peers (
 
 ---
 
-## 2026-10-26, later (latest) — Peers released to production, and the size guard that would have broken AMO
+## 2026-10-26, evening (latest) — Structure & terms, and People, in the manager drawer
+
+The user, with the tab live: would minimum investments, securities offered, associated individuals
+and entities help understand fund dynamics? Checked against the real filings before answering —
+minimum was already shown, related persons were parsed but never displayed, and co-issuers, exemptions
+and commissions were not read at all. Built both, structure first, at the user's choice.
+
+**What was built.** `parseTerms` reads Items 1, 6, 8, 9, 15 and 16 from Form D; `buildRaise` hoists
+the newest filing's terms onto the raise, dates each co-issuer and records exemption changes across
+the trail; stored filings carry none, as with sales recipients. `lib/peer-intel/structure.ts` turns
+that into plain language; `people.ts` groups related persons and matches names across managers.
+Two drawer sections in `components/peer-intel/structure-people.tsx`; Copy Snapshot carries both;
+fifteen catalogue entries; cache key `peer-intel-v3`.
+
+**Written against real XML.** Five filers' sections were dumped before any parser code, which is
+how three traps were found: entity first names filed as "." and "[none]" (the old parser read
+". BH3 … GP, LLC"), Item 1 repeating for every co-issuer, and a joint filing's totals covering its
+co-issuers — so an untracked co-issuer is not missing capital. The test fixtures are those sections.
+
+**The live run** (`verify:peer-structure`, all 26 managers, 56 vehicles) is summarised in
+`docs/PEER_TRACKER_STATUS.md` §1: 8 co-issuers and no double counts; Rialto Credit Opportunities
+moved to 506(c) in July 2025; 12 funds report commissions; and no name appears at two managers, so
+the cross-manager links are empty for now. Its first run failed one check — a bug in the script,
+which looked up labels where it meant codes — and surfaced the H.I.G. umbrella-code noise, which
+is now ignored.
+
+**Verified.** Tests across every peer and analytics suite, `next build`, and `tsc` with no new errors
+— see the gate in the stopping block. **Not looked at in a preview yet**, and not committed.
+
+---
+
+## 2026-10-26, later — Peers released to production, and the size guard that would have broken AMO
 
 The user asked to push the Peers tab's current state to production, which meant merging all of
 `dev` — not only Peers but Seller Likelihood and the 4 MB signals guard that `CLAUDE.md` warned

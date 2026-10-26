@@ -55,7 +55,66 @@ export type SalesRecipient = {
 export type RelatedPerson = {
   /** Either a person's name or, commonly for a fund, the GP entity. */
   name: string
+  /**
+   * `entity` when the filer listed a company rather than a person — a fund's
+   * GP or investment manager, typically — which Form D marks only by leaving
+   * the first name as a placeholder: ".", "--", "[none]".
+   */
+  kind: "person" | "entity"
   relationships: string[]
+  /** The filer's own words on the role, e.g. "Manager of SHE DDF4 GP, LLC the General Partner". */
+  clarification: string | null
+}
+
+/** Another issuer on the same filing — a feeder, parallel or master vehicle filing jointly. */
+export type CoIssuer = {
+  cik: string
+  name: string
+  jurisdiction: string | null
+  entityType: string | null
+  /** Year of formation where given; Form D omits it for an issuer over five years old. */
+  yearOfInc: number | null
+  /** `YYYY-MM-DD` of the earliest filing in the trail that lists it. Set by `buildRaise`. */
+  firstSeen?: string
+}
+
+/** A dollar figure Form D lets the issuer mark as an estimate. */
+export type FeeFigure = {
+  amount: number | null
+  estimate: boolean
+}
+
+/**
+ * The structure and terms of an offering, from the parts of Form D the raise
+ * figures do not use. All self-reported, like the rest of the form.
+ */
+export type OfferingTerms = {
+  entityType: string | null
+  yearOfInc: number | null
+  /** True where the issuer ticked "over five years ago" instead of giving a year. */
+  formedOverFiveYearsAgo: boolean
+  /**
+   * Other issuers on this filing. **The filing's dollar figures cover the
+   * offering across all of them** — a co-issuer's capital is inside the
+   * totals, not missing from them.
+   */
+  coIssuers: CoIssuer[]
+  /** Item 6 codes as filed: `06b`, `06c`, `3C`, `3C.1`, `3C.5`, `3C.7`, `04a5`, … */
+  exemptions: string[]
+  /** Item 9, normalised: `equity`, `debt`, `pooled-fund`, `option`, `security-to-acquire`, `mineral`, `business-combination`, `other`. */
+  securities: string[]
+  securitiesOther: string | null
+  /** Item 8: whether the issuer expects the offering to last more than a year. */
+  moreThanOneYear: boolean | null
+  /** Item 15. Commissions paid or expected for the offering as a whole. */
+  salesCommissions: FeeFigure
+  findersFees: FeeFigure
+  /** The issuer's note on Item 15, which often names or drops a placement agent. */
+  feesClarification: string | null
+  /** Item 16: gross proceeds paid to officers, directors or promoters. */
+  proceedsToInsiders: FeeFigure
+  /** The issuer's note on Item 16, usually a description of the management fee. */
+  proceedsClarification: string | null
 }
 
 export type OfferingRecord = {
@@ -95,6 +154,12 @@ export type OfferingRecord = {
   salesRecipients: SalesRecipient[]
   /** Officers, directors and promoters — never investors. */
   relatedPersons: RelatedPerson[]
+  /**
+   * Structure and terms. Optional because the stored filings in the cache drop
+   * it — `buildRaise` hoists the newest filing's onto the raise, the same
+   * reason `salesRecipients` and `relatedPersons` are emptied there.
+   */
+  terms?: OfferingTerms | null
 }
 
 /**
@@ -199,6 +264,16 @@ function parseSalesRecipients(xml: string): SalesRecipient[] {
   return out
 }
 
+/**
+ * What filers put in the first-name field when the related person is a
+ * company. Seen in real filings: "--" (Silverview), "." (BH3), "[none]"
+ * (Bridge). `PLACEHOLDERS` covers the first two; brackets are added here.
+ */
+const NAME_PLACEHOLDER = /^(\[?none\]?|n\/a|na|-{1,2}|\.|)$/i
+
+/** A legal-entity suffix, for an entity listed with a real-looking first name. */
+const ENTITY_SUFFIX = /\b(LLC|L\.L\.C\.|LP|L\.P\.|LLP|Inc\.?|Corp\.?|Corporation|Ltd\.?|Limited|Trust|GP)\b/i
+
 function parseRelatedPersons(xml: string): RelatedPerson[] {
   const list = blocks(xml, "relatedPersonsList")[0]
   if (!list) return []
@@ -206,25 +281,107 @@ function parseRelatedPersons(xml: string): RelatedPerson[] {
   for (const block of blocks(list, "relatedPersonInfo")) {
     const nameBlock = blocks(block, "relatedPersonName")[0] ?? block
     const first = tagIn(nameBlock, "firstName")
+    const middle = tagIn(nameBlock, "middleName")
     const last = tagIn(nameBlock, "lastName")
-    // A fund usually files its GP entity here, which arrives with "--" in the
-    // first-name field; keeping both parts and trimming the placeholder gives
-    // the entity name rather than "-- Silverview Credit Partners LP".
-    const name = [first, last]
-      .map((part) => (part && part !== "--" ? part : null))
-      .filter(Boolean)
+    // A fund usually files its GP entity here with a placeholder first name;
+    // dropping it gives "BH3 Debt Opportunity Fund II GP, LLC" rather than
+    // ". BH3 Debt Opportunity Fund II GP, LLC".
+    const firstIsPlaceholder = first == null || NAME_PLACEHOLDER.test(first.trim())
+    const name = [firstIsPlaceholder ? null : first, middle && !NAME_PLACEHOLDER.test(middle.trim()) ? middle : null, last]
+      .filter((p): p is string => Boolean(p))
       .join(" ")
       .trim()
     if (!name) continue
     const relBlock = blocks(block, "relatedPersonRelationshipList")[0] ?? block
     out.push({
       name,
+      kind: firstIsPlaceholder || ENTITY_SUFFIX.test(name) ? "entity" : "person",
       relationships: [...relBlock.matchAll(/<relationship>([\s\S]*?)<\/relationship>/gi)]
         .map((m) => decodeEntities(m[1].trim()))
         .filter(Boolean),
+      clarification: notNone(tagIn(block, "relationshipClarification")),
     })
   }
   return out
+}
+
+const SECURITY_FLAGS: Array<[string, string]> = [
+  ["isEquityType", "equity"],
+  ["isDebtType", "debt"],
+  ["isPooledInvestmentFundType", "pooled-fund"],
+  ["isOptionToAcquireType", "option"],
+  ["isSecurityToBeAcquiredType", "security-to-acquire"],
+  ["isMineralPropertyType", "mineral"],
+  ["isTenantInCommonType", "tenant-in-common"],
+  ["isBusinessCombinationTransaction", "business-combination"],
+  ["isOtherType", "other"],
+]
+
+function feeFigure(block: string | undefined): FeeFigure {
+  if (!block) return { amount: null, estimate: false }
+  const raw = tagIn(block, "dollarAmount")
+  const n = raw == null ? null : Number(raw.replace(/[^0-9.-]/g, ""))
+  return { amount: n != null && Number.isFinite(n) ? n : null, estimate: boolOf(tagIn(block, "isEstimate")) === true }
+}
+
+/** Year of formation: `<value>` within five years, or nothing when "over five years". */
+function yearOf(block: string | undefined): { year: number | null; overFive: boolean } {
+  const y = block ? blocks(block, "yearOfInc")[0] : undefined
+  if (!y) return { year: null, overFive: false }
+  const v = tagIn(y, "value")
+  const n = v ? Number(v) : NaN
+  return { year: Number.isFinite(n) && n > 1900 ? n : null, overFive: boolOf(tagIn(y, "overFiveYears")) === true }
+}
+
+/**
+ * Items 1, 6, 8, 9, 15 and 16 — the structure and terms of the offering.
+ *
+ * Read from named blocks rather than with the whole-document `tag`, because
+ * `entityType`, `jurisdictionOfInc` and `yearOfInc` repeat for every co-issuer
+ * and the first match would be whichever issuer the filer happened to list
+ * first.
+ */
+export function parseTerms(xml: string): OfferingTerms {
+  const primary = blocks(xml, "primaryIssuer")[0]
+  const { year, overFive } = yearOf(primary)
+  const issuerList = blocks(xml, "issuerList")[0]
+  const coIssuers: CoIssuer[] = issuerList
+    ? blocks(issuerList, "issuer")
+        .map((b) => {
+          const cik = tagIn(b, "cik")
+          const name = tagIn(b, "entityName")
+          if (!cik || !name) return null
+          return {
+            cik: String(Number(cik.replace(/\D/g, ""))),
+            name,
+            jurisdiction: tagIn(b, "jurisdictionOfInc"),
+            entityType: tagIn(b, "entityType"),
+            yearOfInc: yearOf(b).year,
+          }
+        })
+        .filter((c): c is CoIssuer => c != null)
+    : []
+
+  const exemptionsBlock = blocks(xml, "federalExemptionsExclusions")[0] ?? ""
+  const securitiesBlock = blocks(xml, "typesOfSecuritiesOffered")[0] ?? ""
+  const feesBlock = blocks(xml, "salesCommissionsFindersFees")[0]
+  const proceedsBlock = blocks(xml, "useOfProceeds")[0]
+
+  return {
+    entityType: primary ? tagIn(primary, "entityType") : null,
+    yearOfInc: year,
+    formedOverFiveYearsAgo: overFive,
+    coIssuers,
+    exemptions: [...exemptionsBlock.matchAll(/<item>([\s\S]*?)<\/item>/gi)].map((m) => m[1].trim()).filter(Boolean),
+    securities: SECURITY_FLAGS.filter(([el]) => boolOf(tagIn(securitiesBlock, el)) === true).map(([, key]) => key),
+    securitiesOther: notNone(tagIn(securitiesBlock, "descriptionOfOtherType")),
+    moreThanOneYear: boolOf(tagIn(blocks(xml, "durationOfOffering")[0] ?? "", "moreThanOneYear")),
+    salesCommissions: feeFigure(feesBlock ? blocks(feesBlock, "salesCommissions")[0] : undefined),
+    findersFees: feeFigure(feesBlock ? blocks(feesBlock, "findersFees")[0] : undefined),
+    feesClarification: feesBlock ? notNone(tagIn(feesBlock, "clarificationOfResponse")) : null,
+    proceedsToInsiders: feeFigure(proceedsBlock ? blocks(proceedsBlock, "grossProceedsUsed")[0] : undefined),
+    proceedsClarification: proceedsBlock ? notNone(tagIn(proceedsBlock, "clarificationOfResponse")) : null,
+  }
 }
 
 /**
@@ -260,6 +417,7 @@ export function parseFormD(
     hasNonAccreditedInvestors: boolOf(tag(xml, "hasNonAccreditedInvestors")),
     salesRecipients: parseSalesRecipients(xml),
     relatedPersons: parseRelatedPersons(xml),
+    terms: parseTerms(xml),
   }
 }
 
@@ -306,6 +464,18 @@ export type Raise = {
   relatedPersons: RelatedPerson[]
   /** Whether the issuer accepted non-accredited investors, per the newest filing. */
   hasNonAccreditedInvestors: boolean | null
+  /**
+   * Structure and terms from the newest filing, with each co-issuer's
+   * `firstSeen` filled from the trail. Null where no filing in the trail was
+   * parsed with terms — an entry cached before they were read.
+   */
+  terms: OfferingTerms | null
+  /**
+   * Each point where the exemptions claimed changed between consecutive
+   * filings, oldest first. A move from 506(b) to 506(c) is a manager starting
+   * to advertise; adding 3(c)(7) is opening to qualified purchasers.
+   */
+  exemptionChanges: Array<{ filedAt: string; added: string[]; removed: string[] }>
 }
 
 function numericTarget(v: number | "indefinite" | null): number | null {
@@ -364,7 +534,33 @@ export function buildRaise(filings: OfferingRecord[], asOf: string): Raise | nul
   // `relatedPersons` are hoisted onto the raise from the newest filing below,
   // and keeping a copy on all nine filings of sixty-five vehicles added 155 KB
   // of which the related-person lists — which nothing displays — were 132 KB.
-  const stored: OfferingRecord[] = ordered.map((f) => ({ ...f, salesRecipients: [], relatedPersons: [] }))
+  const stored: OfferingRecord[] = ordered.map((f) => ({ ...f, salesRecipients: [], relatedPersons: [], terms: null }))
+
+  // Terms come from the newest filing, but two things need the whole trail:
+  // when each co-issuer first appeared, and how the exemptions moved.
+  const withTerms = ordered.filter((f): f is OfferingRecord & { terms: OfferingTerms } => f.terms != null)
+  const newestTerms = withTerms[withTerms.length - 1]?.terms ?? null
+  const terms: OfferingTerms | null = newestTerms
+    ? {
+        ...newestTerms,
+        coIssuers: newestTerms.coIssuers.map((c) => ({
+          ...c,
+          firstSeen: withTerms.find((f) => f.terms.coIssuers.some((x) => x.cik === c.cik))?.filedAt,
+        })),
+      }
+    : null
+  const exemptionChanges: Raise["exemptionChanges"] = []
+  // `3C` is the umbrella code filed beside 3(c)(1), (5) or (7). H.I.G. adds and
+  // drops it between amendments with no sub-item moving, which is a change in
+  // how the form was filled in, not in what is claimed — so it is ignored here.
+  const claimed = (codes: readonly string[]) => new Set(codes.filter((c) => c !== "3C"))
+  for (let i = 1; i < withTerms.length; i++) {
+    const before = claimed(withTerms[i - 1].terms.exemptions)
+    const after = claimed(withTerms[i].terms.exemptions)
+    const added = [...after].filter((x) => !before.has(x))
+    const removed = [...before].filter((x) => !after.has(x))
+    if (added.length || removed.length) exemptionChanges.push({ filedAt: withTerms[i].filedAt, added, removed })
+  }
 
   return {
     cik: newest.cik,
@@ -389,6 +585,8 @@ export function buildRaise(filings: OfferingRecord[], asOf: string): Raise | nul
     salesRecipients: newest.salesRecipients,
     relatedPersons: newest.relatedPersons,
     hasNonAccreditedInvestors: newest.hasNonAccreditedInvestors,
+    terms,
+    exemptionChanges,
   }
 }
 

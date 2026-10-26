@@ -209,7 +209,7 @@ test("agents are hoisted to the raise, not kept on every filing", () => {
     new Map<string, OfferingRecord[]>([
       ["1980247", [
         rec({ cik: "1980247", filedAt: "2025-06-05", salesRecipients: SILVERVIEW_AGENTS }),
-        rec({ cik: "1980247", filedAt: "2026-06-05", formType: "D/A", salesRecipients: SILVERVIEW_AGENTS, relatedPersons: [{ name: "Silverview Credit Partners LP", relationships: ["Promoter"] }] }),
+        rec({ cik: "1980247", filedAt: "2026-06-05", formType: "D/A", salesRecipients: SILVERVIEW_AGENTS, relatedPersons: [{ name: "Silverview Credit Partners LP", kind: "entity", relationships: ["Promoter"], clarification: null }] }),
       ]],
     ]),
     ASOF
