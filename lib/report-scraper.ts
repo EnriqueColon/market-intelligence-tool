@@ -19,7 +19,12 @@ export const FETCH_HEADERS: Record<string, string> = {
   Accept:
     "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp;q=0.8,*/*;q=0.7",
   "Accept-Language": "en-US,en;q=0.9",
-  "Accept-Encoding": "gzip, deflate, br",
+  // No `br`: this was the only place the tool asked a remote server for Brotli,
+  // and Node decodes it with the decoder CVE-2026-111497 found an out-of-bounds
+  // write in (fixed in Node 24.22.1). The sites this reaches are arbitrary, so
+  // the response is attacker-controllable; gzip is universal and loses nothing.
+  // Node's own fetch() default is already "gzip, deflate".
+  "Accept-Encoding": "gzip, deflate",
   "Cache-Control": "no-cache",
   Referer: "https://www.google.com/",
 }
