@@ -7,15 +7,28 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
-| `main` | `80743b6` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `ac560a8` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `main` | `9f8a1f9` | Production | https://market-intelligence-tool-gilt.vercel.app |
+| `dev` | `eb8eef1` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 This table names the newest commit on each branch that **changes behaviour**; documentation-only
 commits sit on top of it and are deliberately not tracked here, because amending one rotates its
 SHA and the table then reads as stale when nothing has moved. Confirm with
 `git log --format='%h|%ci|%s'` rather than trusting the previous entry — this has drifted twice.
 
-**`dev` carries `ac560a8` as of 2026-10-22.** Interim-close labels on the drawer's filing trail and
+**Production carries `9f8a1f9` as of 2026-10-26** — the Assignment of Mortgage removal, and nothing
+else. It was applied directly to `main` rather than merged from `dev`, so that production lost the
+AOM code without taking `dev`'s 41 other commits (which would break AMO Tracker's FDIC page and
+start the nightly peer cron). **`main` and `dev` have therefore diverged by that one commit.** `dev`
+carries the identical 647-file deletion as `eb8eef1`, and a simulated merge of `dev` into `main` was
+clean, so the next release is `git checkout main && git merge dev` as usual — it produces a merge
+commit rather than a fast-forward, and that is expected. Vercel deployed it (`success`, 12:39 UTC);
+the live site redirects to login, serves `/login`, and the data API answers 401 without a key. To
+roll back: `git revert 9f8a1f9` on `main` restores every file, including the 17 MB of data.
+
+**`dev` carries `eb8eef1` as of 2026-10-26** — the same removal, with documentation: `CLAUDE.md`,
+README, confluence, the peer status doc and others updated, and the `edgar-contract.ts` comment
+that named the deleted SEC connector. Revert with `git revert eb8eef1`. Before it, **`dev` carries
+`ac560a8` as of 2026-10-22.** Interim-close labels on the drawer's filing trail and
 the vintage chart's tooltip (`classifyFilings` in `lib/peer-intel/panel.ts`, a `closeKind` catalogue
 entry), and the `verify:peer-gating` command (`scripts/verify-peer-gating.ts`) — a read-only live
 check against EDGAR that touches no cache. Display and tooling only; a clean `git revert`, and
@@ -272,6 +285,7 @@ to `4ca86dc`. It is kept as the record of what each commit does and what reverti
 
 | Commit | Date | Summary |
 | --- | --- | --- |
+| `eb8eef1` | 10-26 | Assignment of Mortgage code and the `competitor_surveillance` framework removed, 647 files: the AOM / Market Participants components and data plumbing, `/api/participants-intel`, the framework and its six non-AOM connectors, 17 MB of Miami-Dade Clerk data, two Python scripts, two docs. Nothing outside the set imported it; build passes; tsc 91 → 63 errors, none new. The same deletion reached production separately as `9f8a1f9`. Revert restores everything. |
 | `ac560a8` | 10-22 | Interim-close labels: each Form D filing in the drawer's trail and the vintage tooltip read against the one before it — first filing, interim close with delta, annual re-file, restatement — with offering changes beside. Plus `npm run verify:peer-gating`, a repeatable live check of the gating sources over six quarters per BDC and four 10-Qs per REIT. Display and tooling; clean revert; invisible in production while `peer-intel` is absent from `ENABLED_TABS`. |
 | `71f7ec9` | 10-22 | Vintage pacing on the Peers tab: each fund in a manager's series on one chart, months since first sale against cumulative raised, the newest read against its predecessor at the same month with interpolation stated. From the Form D trails already in the cohort; no fetch, payload or cache change. Also adds `CATEGORICAL_SERIES` to `lib/chart-theme.tsx`. Clean revert; invisible in production while `peer-intel` is absent from `ENABLED_TABS`. |
 | `80743b6` | 10-07 | Market Analytics data API. Six read-only routes under `/api/analytics/v1/` (meta, screening, visuals, cohort-watch, behavior-signals with optional band, institution/CERT) return the tab's cached objects to other tools — AMO Tracker is the consumer. `Authorization: Bearer $ANALYTICS_API_KEY`, constant-time, 503 when the key is unset; `middleware.ts` adds `/api/analytics` to `PUBLIC_PATHS`. **Revertable in isolation** and inert until the env var is set. Reverting it breaks AMO Tracker's FDIC page once that page has been switched over, and nothing here. |
@@ -322,7 +336,8 @@ rollback notes; see the production table for the current head.
 
 | Commit | Date | Summary |
 | --- | --- | --- |
-| `ad24c30` | 10-06 | **Production head.** Documentation on top of `7a3f80e`, so identical in behaviour. The release `8391d1c` → `ad24c30` carries the six 10-06 behavioural commits listed under "Dev branch commits". |
+| `9f8a1f9` | 10-26 | **Production head.** The Assignment of Mortgage removal only, applied directly on top of `fe0ad1b`: 647 deletions, no documentation edits so the later `dev` merge cannot conflict. Verified on `main`'s own code before pushing — no outside importers, cron and dashboard untouched, `next build` 23/23 pages, tsc 91 → 63 with none new — and on the live site after. Removes `/api/participants-intel`. `git revert 9f8a1f9` restores it all. |
+| `ad24c30` | 10-06 | Former production head. Documentation on top of `7a3f80e`, so identical in behaviour. The release `8391d1c` → `ad24c30` carries the six 10-06 behavioural commits listed under "Dev branch commits". |
 | `996efa9` | 09-10 | Former production head. Documentation on top of `7b4e2b9`, so identical in behaviour. |
 | `27ef6f1` | 09-08 | Documentation on top of `02e45ae`, so identical in behaviour. |
 | `02e45ae` | 09-08 | perf(market-analytics): move the screening reduction and scoring to the server and cache it. **No displayed figure changes** — `npm run verify:screening-parity` compares every rendered field per institution against the previous browser reduction, 51,510 comparisons nationally, all matching. Rolling back restores a tab that fetches 10.8MB and ~5.8s from FDIC on every single visit, so prefer fixing forward. If you roll back, also drop `screening:national` and `screening:florida` from the warm-cache route or it will warm a cache nothing reads. The cached entry is 1.26MB against a 2MB ceiling; adding fields to the transported row is what would break it, silently, by making Next refuse the write. |

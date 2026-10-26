@@ -8,7 +8,7 @@ is it in now, and what is still open.
 
 ---
 
-## STOPPED HERE — 2026-10-26, AOM removed (uncommitted)
+## STOPPED HERE — 2026-10-26, AOM removed from dev and production
 
 Read `CLAUDE.md` first for orientation, then this block. Everything below it is the running record —
 reverse-chronological, and worth reading only when you need the reasoning behind something specific.
@@ -23,8 +23,15 @@ and the working tree is clean** apart from `.DS_Store` and the untracked `.claud
 show regardless of `ENABLED_TABS`. The preview for the current head is
 `market-intelligence-tool-p3z7jctk0.vercel.app`.
 
-**Uncommitted on 2026-10-26: the AOM and competitor-surveillance removal** — 647 staged deletions,
-one edited code comment, and the docs. See the newest entry below. The `non-traded` bucket split
+**The AOM removal is on both branches.** `dev` has it as `eb8eef1`; **production has it as
+`9f8a1f9`**, applied directly to `main` so nothing else from `dev` shipped — deployed by Vercel
+(`success`) and checked live. `main` and `dev` now differ by that one commit; a simulated merge was
+clean, so the next release is an ordinary `git merge dev` that produces a merge commit. Production
+otherwise still runs `fe0ad1b`'s code: no Seller Likelihood, no Peers, AMO Tracker unaffected.
+
+**Pushing needs `gh`'s active account to be EnriqueColon** — git on this machine asks `gh` for
+GitHub credentials, and RSronin09, which had become active again, gets a 403. Switched on
+2026-10-26 with `gh auth switch --user EnriqueColon`. The `non-traded` bucket split
 has still not been started; begin it fresh from the build order in §3b of the peer status doc. Confirm the
 head with `git log --oneline -1` rather than trusting a SHA written here; production is untouched at
 `fe0ad1b`, and nothing has been merged to `main`.
