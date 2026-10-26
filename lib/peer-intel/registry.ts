@@ -90,6 +90,16 @@ export type PeerVehicle = {
    * Meaningless for a private fund, whose units do not trade at all.
    */
   quoted?: VehicleQuotation
+  /**
+   * The vehicle's own adviser on IAPD, where it differs from the manager's.
+   *
+   * A sponsor registers several advisers — Blackstone's BREIT is advised by
+   * BX REIT Advisors and its BCRED by Blackstone Credit BDC Advisors — and
+   * the Form ADV that lists a fund is the one filed by *its* adviser. Set
+   * from the name the vehicle's own 10-K or Schedule TO gives, confirmed on
+   * IAPD; absent means the manager's `adviser` applies.
+   */
+  adviser?: { crd: string; secNumber: string | null; name: string; basis: string; confirmedOn: string }
 }
 
 export type Peer = {
@@ -108,6 +118,29 @@ export type Peer = {
   vehicles: PeerVehicle[]
   /** Safe Harbor itself, shown alongside the peers rather than hidden. */
   isSelf?: boolean
+  /**
+   * The manager's SEC adviser record, which is the key to its Form ADV.
+   *
+   * Proposed by `npm run resolve:peer-crds` from IAPD's search and confirmed
+   * by a person before it is written here — the search returns look-alikes
+   * (Safe Harbor Family Capital beside Safe Harbor Capital Partners) and caps
+   * large sponsors' results, so no CRD is recorded unreviewed. `basis` says
+   * what the confirmation rested on. Absent means not yet resolved, or
+   * resolved to "no adviser on file", which `noAdviser` records.
+   */
+  adviser?: {
+    crd: string
+    /** `801-…` registered, `802-…` exempt reporting adviser. */
+    secNumber: string | null
+    /** The adviser's name on IAPD, which may differ from the manager's. */
+    name: string
+    /** How it was confirmed, e.g. "exact name and Miami office; Form D names SHE DDF1 Manager as GP". */
+    basis: string
+    /** `YYYY-MM-DD` of the review. */
+    confirmedOn: string
+  }
+  /** Reviewed and found to have no SEC adviser record under any known name. */
+  noAdviser?: { checkedOn: string; note: string }
 }
 
 export const PEERS: readonly Peer[] = [
@@ -123,6 +156,7 @@ export const PEERS: readonly Peer[] = [
     aliases: ["Safe Harbor Equity", "Safe Harbor Equity Distressed Debt Fund", "SHCP", "SHE"],
     website: "https://safeharborcp.com",
     isSelf: true,
+    adviser: { crd: "305314", secNumber: "801-117908", name: "SAFE HARBOR CAPITAL PARTNERS", basis: "Exact name, Coconut Grove FL office; IAPD lists SHE DDF1 Manager LLC, the Fund 1 GP, among its other names", confirmedOn: "2026-10-26" },
     vehicles: [
       { cik: "1637588", name: "Safe Harbor Equity Distressed Debt Fund 1, L.P.", kind: "private" },
       { cik: "1685329", name: "Safe Harbor Equity Distressed Debt Fund 2, L.P.", kind: "private" },
@@ -140,6 +174,7 @@ export const PEERS: readonly Peer[] = [
       "Miami-headquartered CRE credit and special-situations manager — the largest direct peer in the county by a wide margin. Rialto Real Estate Fund V - Debt raised $2.61B from 914 investors; Hines Rialto Credit Partners and Rialto Credit Opportunities are both still filing. Found by targeted lookup, not by name-pattern discovery, because its funds are named after the firm rather than the strategy.",
     aliases: ["Rialto", "Rialto Capital", "Rialto Real Estate Fund", "Rialto Credit"],
     website: "https://www.rialtocapital.com",
+    adviser: { crd: "159998", secNumber: "801-74178", name: "RIALTO CAPITAL MANAGEMENT, LLC", basis: "Exact name and Miami office; other names are the fund GPs its Form Ds list (RCCF GP II, RSSF GP)", confirmedOn: "2026-10-26" },
     vehicles: [
       { cik: "2026136", name: "Hines Rialto Credit Partners, LP", kind: "private" },
       { cik: "1912768", name: "Rialto Credit Opportunities Fund, LP", kind: "private" },
@@ -161,6 +196,7 @@ export const PEERS: readonly Peer[] = [
     evidence:
       "Form D: 'Bayview Commercial Real Estate Credit Fund', industry Pooled Investment Fund / Hedge Fund. A long-standing mortgage-credit and NPL buyer; the closest large peer in the county.",
     aliases: ["Bayview", "Bayview Asset Management LLC", "Bayview Opportunity"],
+    adviser: { crd: "157053", secNumber: "801-73638", name: "BAYVIEW ASSET MANAGEMENT, LLC", basis: "Exact name and Florida office; Form D GP entities among its other names", confirmedOn: "2026-10-26" },
     vehicles: [
       { cik: "2053256", name: "Bayview Commercial Real Estate Credit Fund Domestic, L.P.", kind: "private" },
       { cik: "2053157", name: "Bayview Commercial Real Estate Credit Fund Domestic (Employee), L.P.", kind: "private" },
@@ -176,6 +212,7 @@ export const PEERS: readonly Peer[] = [
     relevance: "direct",
     evidence: "Form D: '3650 Real Estate Credit Solutions Fund 5', Pooled Investment Fund. CRE bridge and event-driven lender.",
     aliases: ["3650 Capital", "3650 Real Estate Credit Solutions"],
+    adviser: { crd: "286013", secNumber: "801-110624", name: "3650 REIT INVESTMENT MANAGEMENT LLC", basis: "Form D names it as investment manager; Miami office", confirmedOn: "2026-10-26" },
     vehicles: [{ cik: "2033725", name: "3650 Real Estate Credit Solutions Fund 5 LP", kind: "private" }],
   },
   {
@@ -186,6 +223,7 @@ export const PEERS: readonly Peer[] = [
     relevance: "direct",
     evidence: "Form D: 'H.I.G. Bayside Loan Opportunity Fund' series. H.I.G.'s distressed-debt arm; buys loans, larger cheque size than Safe Harbor.",
     aliases: ["H.I.G.", "HIG Capital", "Bayside Capital", "H.I.G. Bayside"],
+    adviser: { crd: "160711", secNumber: "801-74338", name: "H.I.G. CAPITAL, LLC", basis: "Umbrella filer; lists Bayside Capital, Inc. and WhiteHorse Capital Management as relying advisers; Miami office", confirmedOn: "2026-10-26" },
     vehicles: [
       { cik: "1899762", name: "H.I.G. Bayside Loan Opportunity Fund VII (Europe-US$), L.P.", kind: "private" },
       { cik: "1954463", name: "H.I.G. Bayside Loan Opportunity Fund VIII, L.P.", kind: "private" },
@@ -199,6 +237,7 @@ export const PEERS: readonly Peer[] = [
     relevance: "direct",
     evidence: "Form D: 'Omnia Real Estate Debt Income Fund', Pooled Investment Fund / Hedge Fund. Closest size match to Safe Harbor's current raise.",
     aliases: ["Omnia Real Estate Debt Income Fund"],
+    adviser: { crd: "170909", secNumber: "801-79590", name: "OMNIA FAMILY WEALTH, LLC", basis: "The Omnia Real Estate Debt Income Fund Form D names it as the fund's investment manager; Aventura FL office", confirmedOn: "2026-10-26" },
     vehicles: [{ cik: "1858491", name: "Omnia Real Estate Debt Income Fund, LLC", kind: "private" }],
   },
   {
@@ -209,6 +248,7 @@ export const PEERS: readonly Peer[] = [
     relevance: "direct",
     evidence: "Form D: 'Atipana Credit Opportunity Fund I', Pooled Investment Fund / Private Equity Fund. Small credit manager.",
     aliases: ["Atipana"],
+    noAdviser: { checkedOn: "2026-10-26", note: "Searched the manager name, aliases and Form D entities on 2026-10-26; no adviser under any of them. Candidates were unrelated firms" },
     vehicles: [{ cik: "1796170", name: "Atipana Credit Opportunity Fund I, LP", kind: "private" }],
   },
   {
@@ -220,6 +260,7 @@ export const PEERS: readonly Peer[] = [
     evidence:
       "Form D industry group 'Other Real Estate'; the firm describes itself (777 Brickell) as handling distressed residential mortgage assets. Raise not yet begun at the audit.",
     aliases: ["R & R Capital", "R&R Capital Holdings"],
+    noAdviser: { checkedOn: "2026-10-26", note: "No adviser under R&R Capital or its Form D entities; a lender raising under Rule 506(c) without a registered adviser" },
     vehicles: [{ cik: "2131969", name: "R & R Capital Opportunity Fund LLC", kind: "private" }],
   },
   {
@@ -230,6 +271,7 @@ export const PEERS: readonly Peer[] = [
     relevance: "adjacent",
     evidence: "Form D industry group 'Other Real Estate' — multifamily equity, not credit. Competes for the same LP wallet, not the same assets.",
     aliases: ["Integra Multifamily"],
+    noAdviser: { checkedOn: "2026-10-26", note: "No adviser for Integra Investments. Integra Wealth (Coconut Grove) is an unrelated wealth advisory" },
     vehicles: [{ cik: "2107754", name: "Integra Multifamily Opportunity Fund LP", kind: "private" }],
   },
   {
@@ -240,6 +282,7 @@ export const PEERS: readonly Peer[] = [
     relevance: "adjacent",
     evidence: "Form D: 'SEGLO Private Credit & Opportunity Fund', industry group 'Investing' with no fund type. Private credit, strategy not stated.",
     aliases: ["SEGLO Private Credit"],
+    noAdviser: { checkedOn: "2026-10-26", note: "No IAPD hit under the manager name, aliases or Form D entities" },
     vehicles: [{ cik: "2081957", name: "SEGLO Private Credit & Opportunity Fund LLC", kind: "private" }],
   },
 
@@ -253,6 +296,7 @@ export const PEERS: readonly Peer[] = [
     evidence:
       "Form D: 'BH3 Debt Opportunity Fund' II and III plus offshore, parallel and Harel sleeves. South Florida distressed CRE debt; Fund III filed 2026-10-08, the most recent peer launch found.",
     aliases: ["BH3", "BH3 Debt Opportunity"],
+    adviser: { crd: "298967", secNumber: "801-130429", name: "BH3 FUND ADVISORS, LLC", basis: "Form D lists it as investment manager of the BH3 debt funds; IAPD has no record under the BH3 Management name", confirmedOn: "2026-10-26" },
     vehicles: [
       { cik: "1967366", name: "BH3 Debt Opportunity Fund II, L.P.", kind: "private" },
       { cik: "2021809", name: "BH3 Debt Opportunity Fund II-Offshore, L.P.", kind: "private" },
@@ -272,6 +316,7 @@ export const PEERS: readonly Peer[] = [
       "Buys non-performing and sub-performing CRE loans of $100K–$5M — the closest strategy and cheque-size match to Safe Harbor outside Miami-Dade. Its only Reg D raise ($1.8M, 12 investors) closed in 2019, so it appears to lend from its own balance sheet; the fundraising panels will show that raise as long closed, which is itself the useful fact about this competitor.",
     aliases: ["Gelt", "Gelt Financial LLC"],
     website: "https://geltfinancial.com",
+    noAdviser: { checkedOn: "2026-10-26", note: "No IAPD hit; a balance-sheet lender, not an investment adviser" },
     vehicles: [{ cik: "1796479", name: "Gelt Financial, LLC", kind: "private" }],
   },
   {
@@ -282,6 +327,7 @@ export const PEERS: readonly Peer[] = [
     relevance: "direct",
     evidence: "Form D: 'Silverview Special Situations Lending Fund II', onshore and offshore. Special-situations lender; the largest Florida peer raise outside Miami-Dade.",
     aliases: ["Silverview", "Silverview Special Situations Lending"],
+    adviser: { crd: "282955", secNumber: "801-107849", name: "SILVERVIEW CREDIT PARTNERS LP", basis: "Form D lists it as promoter; other names include Silverview Capital Partners; Tampa office", confirmedOn: "2026-10-26" },
     vehicles: [
       { cik: "1980247", name: "Silverview Special Situations Lending Onshore Fund II LP", kind: "private" },
       { cik: "1980377", name: "Silverview Special Situations Lending Offshore Fund II LP", kind: "private" },
@@ -295,6 +341,7 @@ export const PEERS: readonly Peer[] = [
     relevance: "direct",
     evidence: "Form D: 'Naso CRE Bridge Loan Fund'. CRE bridge lending — the origination half of Safe Harbor's strategy.",
     aliases: ["Naso CRE", "Naso Capital"],
+    noAdviser: { checkedOn: "2026-10-26", note: "No adviser under Naso or its Form D entities; a bridge lender without a registered adviser" },
     vehicles: [{ cik: "1933138", name: "Naso CRE Bridge Loan Fund, L.P", kind: "private" }],
   },
   {
@@ -305,6 +352,7 @@ export const PEERS: readonly Peer[] = [
     relevance: "direct",
     evidence: "Form D: 'Camden Credit Opportunity Fund' series V–VIII, each fully subscribed. Series structure, retail-sized tickets.",
     aliases: ["Camden Credit", "Camden Credit Opportunity Fund"],
+    adviser: { crd: "129505", secNumber: "801-62580", name: "CERTUITY, LLC", basis: "Form D names it as the Camden Credit Opportunity Fund series' adviser; IAPD's other names carry the Camden-era entity; North Palm Beach office", confirmedOn: "2026-10-26" },
     vehicles: [
       { cik: "2012451", name: "Camden Credit Opportunity Fund, LLC Series V", kind: "private" },
       { cik: "2012462", name: "Camden Credit Opportunity Fund, LLC Series VI", kind: "private" },
@@ -325,6 +373,7 @@ export const PEERS: readonly Peer[] = [
     evidence:
       "CRE debt and distressed manager on the firm's watchlist. Debt Fund VI raised $2.04B after cutting its target from $2.25B; Debt Fund VII opened in April 2026 with nothing sold yet, and Debt MA IV has taken $464.4M. Its per-vintage 'Holdings LLC' feeder shells are omitted — see VehicleRole.",
     aliases: ["Madison Realty", "MRC", "Madison Realty Capital Debt Fund"],
+    adviser: { crd: "158988", secNumber: "801-72909", name: "MADISON REALTY CAPITAL", basis: "Exact name and New York office; Form D GP entities among its other names", confirmedOn: "2026-10-26" },
     vehicles: [
       { cik: "2124480", name: "Madison Realty Capital Debt Fund VII LP", kind: "private" },
       { cik: "2001103", name: "Madison Realty Capital Debt MA IV LP", kind: "private" },
@@ -342,6 +391,7 @@ export const PEERS: readonly Peer[] = [
     evidence:
       "Real-estate credit and distressed platform on the firm's watchlist. Bridge Debt Strategies Fund VI opened in August 2026 against a $2.5B target with $500K taken — the clearest example in the registry of a raise caught at the very start.",
     aliases: ["Bridge", "Bridge Debt Strategies", "BRDG"],
+    adviser: { crd: "159127", secNumber: "801-72790", name: "BRIDGE INVESTMENT GROUP", basis: "Exact name and Sandy UT office; umbrella filer whose other names include its fund managers. The debt funds' own GP (Bridge Debt Strategies Fund VI GP LLC) files no ADV of its own", confirmedOn: "2026-10-26" },
     vehicles: [
       { cik: "2151824", name: "Bridge Debt Strategies Fund VI LP", kind: "private" },
       { cik: "2151821", name: "Bridge Debt Strategies Fund VI International LP", kind: "private", role: "sleeve" },
@@ -361,6 +411,7 @@ export const PEERS: readonly Peer[] = [
       "Real-estate credit and residential-focused manager on the firm's watchlist; Pretium Real Estate Debt Fund and its B sleeve have taken $132.8M and $124.2M and were still filing in August 2026. 'Pretium Packaging LLC' matches the name but is an unrelated company that last reported in 2014, and is excluded — the reason this registry is reviewed rather than generated.",
     aliases: ["Pretium", "Pretium Real Estate Debt"],
     website: "https://www.pretium.com",
+    adviser: { crd: "171026", secNumber: "801-79924", name: "PRETIUM RESIDENTIAL CREDIT MANAGEMENT, LLC", basis: "The only Pretium adviser on IAPD; other names are Pretium Mortgage Credit Management and its fund GP; New York office", confirmedOn: "2026-10-26" },
     vehicles: [
       { cik: "2065921", name: "Pretium Real Estate Debt Fund, LP", kind: "private" },
       { cik: "2065970", name: "Pretium Real Estate Debt Fund B, LP", kind: "private", role: "sleeve" },
@@ -377,10 +428,11 @@ export const PEERS: readonly Peer[] = [
       "BXMT is a CRE debt REIT; BREIT and BCRED are the flagship non-traded vehicles whose redemption activity sets the tone for the whole semi-liquid market.",
     aliases: ["Blackstone Real Estate Debt Strategies", "BREDS", "BXMT", "BCRED", "BREIT"],
     website: "https://www.blackstone.com",
+    adviser: { crd: "296294", secNumber: "801-113393", name: "BLACKSTONE CREDIT BDC ADVISORS LLC", basis: "Blackstone registers many advisers; this is BCRED's, per its filings (336 EDGAR hits). BREIT's is recorded on the vehicle", confirmedOn: "2026-10-26" },
     vehicles: [
       { cik: "1061630", name: "Blackstone Mortgage Trust, Inc. (BXMT)", kind: "registered", quoted: "listed" },
-      { cik: "1662972", name: "Blackstone Real Estate Income Trust, Inc. (BREIT)", kind: "registered", quoted: "non-traded" },
-      { cik: "1803498", name: "Blackstone Private Credit Fund (BCRED)", kind: "registered", quoted: "non-traded" },
+      { cik: "1662972", name: "Blackstone Real Estate Income Trust, Inc. (BREIT)", kind: "registered", quoted: "non-traded", adviser: { crd: "288053", secNumber: "801-110350", name: "BX REIT ADVISORS L.L.C.", basis: "Named as BREIT's adviser in its own filings (239 EDGAR full-text hits on BREIT's CIK)", confirmedOn: "2026-10-26" } },
+      { cik: "1803498", name: "Blackstone Private Credit Fund (BCRED)", kind: "registered", quoted: "non-traded", adviser: { crd: "296294", secNumber: "801-113393", name: "BLACKSTONE CREDIT BDC ADVISORS LLC", basis: "Named as BCRED's adviser in its own filings (336 hits)", confirmedOn: "2026-10-26" } },
       { cik: "1736035", name: "Blackstone Secured Lending Fund (BXSL)", kind: "registered", quoted: "listed" },
     ],
   },
@@ -394,6 +446,7 @@ export const PEERS: readonly Peer[] = [
       "STWD is a CRE debt REIT; SREIT is the non-traded vehicle that gated redemptions in 2024, the canonical example of the liquidity signal this tab tracks. Headquarters moved to Miami Beach, but the business is national.",
     aliases: ["Starwood", "Starwood Property Trust", "STWD", "SREIT"],
     website: "https://www.starwoodcapital.com",
+    adviser: { crd: "110148", secNumber: "801-56403", name: "STARWOOD CAPITAL GROUP MANAGEMENT, L.L.C.", basis: "Umbrella filer, Miami Beach office; SREIT's adviser Starwood REIT Advisors is a relying adviser under it, so its ADV carries SREIT", confirmedOn: "2026-10-26" },
     vehicles: [
       { cik: "1465128", name: "Starwood Property Trust, Inc. (STWD)", kind: "registered", quoted: "listed" },
       { cik: "1711929", name: "Starwood Real Estate Income Trust, Inc. (SREIT)", kind: "registered", quoted: "non-traded" },
@@ -407,6 +460,7 @@ export const PEERS: readonly Peer[] = [
     relevance: "direct",
     evidence: "CRE credit REIT focused on debt investments; already on the firm's watchlist.",
     aliases: ["BrightSpire", "BRSP"],
+    adviser: { crd: "312908", secNumber: "801-120521", name: "BRIGHTSPIRE CAPITAL ADVISORS, LLC", basis: "Name match, New York office. BrightSpire Capital itself is internally managed and files no ADV; this is its affiliated adviser for private vehicles", confirmedOn: "2026-10-26" },
     vehicles: [{ cik: "1717547", name: "BrightSpire Capital, Inc. (BRSP)", kind: "registered", quoted: "listed" }],
   },
   {
@@ -417,6 +471,7 @@ export const PEERS: readonly Peer[] = [
     relevance: "direct",
     evidence: "Internally managed CRE lender and securities holder; on the firm's watchlist under CRE Debt Platforms.",
     aliases: ["Ladder", "LADR"],
+    adviser: { crd: "160383", secNumber: "801-121780", name: "LADDER CAPITAL ASSET MANAGEMENT LLC", basis: "Name match, New York office. Ladder Capital Corp is internally managed; this is its affiliated adviser", confirmedOn: "2026-10-26" },
     vehicles: [{ cik: "1577670", name: "Ladder Capital Corp (LADR)", kind: "registered", quoted: "listed" }],
   },
 
@@ -433,6 +488,7 @@ export const PEERS: readonly Peer[] = [
     evidence:
       "Blue Owl Credit Income Corp is the largest non-traded BDC by redemption volume: $1.18B repurchased across 2025 against $1.97B in the first half of 2026 alone, with PIK income up from $86.1M to $103.6M.",
     aliases: ["Blue Owl", "OBDC", "Blue Owl Credit Income", "OCIC"],
+    adviser: { crd: "282575", secNumber: "801-107232", name: "BLUE OWL CREDIT ADVISORS LLC", basis: "The adviser Blue Owl Credit Income Corp's own filings name (formerly Owl Rock Capital Advisors; 228 EDGAR full-text hits on its CIK)", confirmedOn: "2026-10-26" },
     vehicles: [{ cik: "1812554", name: "Blue Owl Credit Income Corp.", kind: "registered", quoted: "non-traded" }],
   },
   {
@@ -444,7 +500,8 @@ export const PEERS: readonly Peer[] = [
     evidence: "Apollo Debt Solutions BDC is a flagship non-traded private credit vehicle; Apollo is on the firm's watchlist.",
     aliases: ["Apollo", "ADS BDC", "Apollo Debt Solutions"],
     website: "https://www.apollo.com",
-    vehicles: [{ cik: "1837532", name: "Apollo Debt Solutions BDC", kind: "registered", quoted: "non-traded" }],
+    adviser: { crd: "143161", secNumber: "801-67592", name: "APOLLO CAPITAL MANAGEMENT, L.P.", basis: "Umbrella filer for Apollo's credit advisers; Apollo Debt Solutions BDC's own adviser is recorded on the vehicle", confirmedOn: "2026-10-26" },
+    vehicles: [{ cik: "1837532", name: "Apollo Debt Solutions BDC", kind: "registered", quoted: "non-traded", adviser: { crd: "156115", secNumber: "801-72098", name: "APOLLO CREDIT MANAGEMENT, LLC", basis: "Named as Apollo Debt Solutions BDC's adviser in its own filings (298 hits); files its own ADV", confirmedOn: "2026-10-26" } }],
   },
   {
     id: "ares",
@@ -455,7 +512,8 @@ export const PEERS: readonly Peer[] = [
     evidence: "Ares Strategic Income Fund is its non-traded credit vehicle; Ares is on the firm's watchlist.",
     aliases: ["Ares", "ASIF", "Ares Strategic Income"],
     website: "https://www.aresmgmt.com",
-    vehicles: [{ cik: "1918712", name: "Ares Strategic Income Fund", kind: "registered", quoted: "non-traded" }],
+    adviser: { crd: "130074", secNumber: "801-63800", name: "ARES MANAGEMENT LLC", basis: "Umbrella filer; Ares Strategic Income Fund's own adviser is recorded on the vehicle", confirmedOn: "2026-10-26" },
+    vehicles: [{ cik: "1918712", name: "Ares Strategic Income Fund", kind: "registered", quoted: "non-traded", adviser: { crd: "131619", secNumber: "801-63168", name: "ARES CAPITAL MANAGEMENT LLC", basis: "Named as Ares Strategic Income Fund's adviser in its own filings (295 hits); files its own ADV", confirmedOn: "2026-10-26" } }],
   },
   {
     id: "hps",
@@ -465,7 +523,8 @@ export const PEERS: readonly Peer[] = [
     relevance: "adjacent",
     evidence: "HPS Corporate Lending Fund is among the largest non-traded BDCs; included so the national liquidity read is not drawn from two managers.",
     aliases: ["HPS", "HLEND", "HPS Corporate Lending"],
-    vehicles: [{ cik: "1838126", name: "HPS Corporate Lending Fund", kind: "registered", quoted: "non-traded" }],
+    adviser: { crd: "282125", secNumber: "801-107234", name: "HPS INVESTMENT PARTNERS, LLC", basis: "Umbrella filer; HPS Corporate Lending Fund's own adviser is recorded on the vehicle", confirmedOn: "2026-10-26" },
+    vehicles: [{ cik: "1838126", name: "HPS Corporate Lending Fund", kind: "registered", quoted: "non-traded", adviser: { crd: "324983", secNumber: "801-127446", name: "HPS ADVISORS, LLC", basis: "Named as HPS Corporate Lending Fund's adviser in its own filings (164 hits); files its own ADV", confirmedOn: "2026-10-26" } }],
   },
 ]
 

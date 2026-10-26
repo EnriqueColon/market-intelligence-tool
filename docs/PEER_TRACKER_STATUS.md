@@ -122,22 +122,28 @@ zero.
 
 **A lead worth chasing: Form ADV as a size source for private peers.**
 
-- [ ] **Form ADV may give per-fund size for the private managers**, which the tab currently treats as
-  unavailable. Part 1A Schedule D, Section 7.B.(1) requires a registered investment adviser to list
-  **each private fund it manages together with that fund's gross asset value**, and ADV filings are
-  public through IAPD. If that holds for these peers it closes a real gap: fund size is presently
-  derived only from Form D's `totalAmountSold`, which is cumulative subscriptions rather than assets,
-  and says nothing at all once a fund stops amending.
+- [x] **Form ADV gives per-fund size for the private managers — path verified and the key in place
+  (2026-10-26).** Part 1A Schedule D, Section 7.B.(1) lists each private fund with its gross asset
+  value, owner count, audit status and auditor, and ADV is public through IAPD. The 21st's note that
+  the retrieval path was unverified is superseded: IAPD's search endpoint returns an adviser's CRD
+  as JSON, `reports.adviserinfo.sec.gov/reports/ADV/{CRD}/PDF/{CRD}.pdf` serves the full ADV, and
+  `pdftotext` reads the fund rows (Safe Harbor's lists seven funds with GAV from $0 to $186.7M).
+  History through 2024 is in the SEC's bulk CSVs (`IA_Schedule_D_7B1`, `ERA_Schedule_D_7B1`). Full
+  source notes: `docs/SPONSOR_STRESS_RESEARCH.md`.
 
-  Two things to establish before relying on it. **The retrieval path is unverified** — the two SEC
-  endpoints tried on 2026-10-21 returned a 403 and a redirect, so while the filing requirement is not
-  in doubt, how to read it programmatically is. The SEC publishes ADV bulk data, and IAPD serves
-  individual advisers; one of those is the way in. And **coverage depends on registration**: an
-  adviser below the threshold, or exempt, files no ADV or only a shortened one, so a small
-  Miami-Dade manager may be absent where Rialto and Bayview are present.
+  **Step 2 of the sponsor-stress plan is done:** every manager's adviser CRD is in `registry.ts`
+  with its basis — 20 recorded, 6 reviewed as having no adviser (Atipana, R&R, Integra, SEGLO,
+  Naso, Gelt: small lenders without one), and 5 vehicle-level advisers where a BDC's or REIT's
+  differs from its sponsor's (BREIT, BCRED, Apollo Debt Solutions, Ares Strategic Income, HPS
+  Corporate Lending). `lib/peer-intel/iapd.ts` with 9 tests; `npm run resolve:peer-crds` proposes
+  from IAPD and `npm run verify:peer-crds` checks the registry against it live. Coverage caveat
+  stands: the six without an adviser will have no ADV figures, and the panel must say "no ADV on
+  file" rather than infer.
 
-  Noted after a question about whether the panels' empty states were legal facts or reporting facts —
-  which turned out to be the right question, and produced this.
+- [ ] **Step 3: Form ADV 7.B.(1) in the drawer** — each fund's gross asset value, owners, audit
+  delivered and opinion, auditor, 3(c)(1)/(7), master/feeder, from the IAPD PDF, catalogued, beside
+  the Form D figures. Not started. The parse is proven on one adviser; keep every PDF, and a parse
+  failure reads "not read", never zero.
 
 **Deferred by design.**
 

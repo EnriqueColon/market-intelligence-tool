@@ -792,6 +792,15 @@ reader's click, and the drawer closes every row whenever a different manager is 
 manager's open row never carries to the next. (A first version pre-expanded the fund clicked on the
 tab and a single-fund manager's only fund; the user asked for that to go.)
 
+**Adviser CRDs.** Since 2026-10-26 each manager in `registry.ts` carries its SEC adviser record
+(`adviser`: CRD, SEC number, IAPD name, the basis it was confirmed on) or a `noAdviser` note, and a
+vehicle whose adviser differs from its sponsor's carries its own (BREIT and BCRED under Blackstone;
+the Apollo, Ares and HPS BDCs). The CRD is the key to Form ADV. `lib/peer-intel/iapd.ts` scores
+IAPD's search hits; `npm run resolve:peer-crds` proposes and `npm run verify:peer-crds` checks the
+registry live. IAPD's search is a public site's own JSON endpoint, not a documented API: use it from
+scripts only, never at runtime, and never write a CRD unreviewed — the search returns look-alikes
+and caps at twenty results, which hides large sponsors' advisers.
+
 **Two rules the structure and people code depends on.** A Form D filed jointly by several issuers
 reports the offering as a whole, so a co-issuer's capital is *inside* the filing's totals; the risk is
 double counting, when a co-issuer is also tracked as its own vehicle and its trail holds the same

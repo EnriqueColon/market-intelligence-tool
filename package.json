@@ -83,7 +83,10 @@
     "measure:signals-response": "tsx --conditions=react-server scripts/measure-signals-response.ts",
     "test:peer-intel-structure": "tsx --test --tsconfig tsconfig.json lib/peer-intel/structure.test.ts",
     "test:peer-intel-people": "tsx --test --tsconfig tsconfig.json lib/peer-intel/people.test.ts",
-    "verify:peer-structure": "tsx --conditions=react-server scripts/verify-peer-structure.ts"
+    "verify:peer-structure": "tsx --conditions=react-server scripts/verify-peer-structure.ts",
+    "test:peer-intel-iapd": "tsx --test --tsconfig tsconfig.json lib/peer-intel/iapd.test.ts",
+    "resolve:peer-crds": "tsx --conditions=react-server scripts/resolve-peer-crds.ts",
+    "verify:peer-crds": "tsx --conditions=react-server scripts/resolve-peer-crds.ts --verify"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

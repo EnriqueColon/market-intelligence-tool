@@ -8,44 +8,41 @@ is it in now, and what is still open.
 
 ---
 
-## STOPPED HERE — 2026-10-26, fund rows expand on click only (uncommitted); sponsor stress monitor research next
+## STOPPED HERE — 2026-10-26, evening: sponsor-stress step 2 (adviser CRDs) on dev
 
 Read `CLAUDE.md` first for orientation, then this block. Everything below it is the running record —
 reverse-chronological, and worth reading only when you need the reasoning behind something specific.
 
-On `origin/dev`: the gating checks of 2026-10-21 (`188f74d`) and the vintage pacing panel
-(`71f7ec9`, preview `market-intelligence-tool-inultkm9f.vercel.app`, **not yet looked at**).
+**Production is `8061ec2`**, released this morning: Peers (beta), Seller Likelihood in the bank
+drawer, the nightly Peers cron warm, the Assignment of Mortgage removal, and the signals size guard
+raised to 4,480,000 bytes so AMO Tracker's 4.12 MB request is still sent. The user has since set
+`peer-intel` in production's `ENABLED_TABS` and confirmed the tab works there.
 
-Also on `origin/dev`: **`ac560a8`**, the interim-close labels and the `verify:peer-gating` command —
-see the newest entry below — and `4b1662e`, its documentation. **`dev` is level with `origin/dev`
-and the working tree is clean** apart from `.DS_Store` and the untracked `.claude/`. Neither
-`71f7ec9` nor `ac560a8` has been looked at in a browser; both are on the Peers tab, which previews
-show regardless of `ENABLED_TABS`. The preview for the current head is
-`market-intelligence-tool-p3z7jctk0.vercel.app`.
+**`dev` is ahead of production by four commits, none released:** `d3acaff` Structure & terms and
+People from Form ADV's neighbour, Form D (reviewed in a preview by the user); `8e93ead` each fund's
+row in the Raises table expands to them; `8aae1dc` no row opens on its own (the user's correction;
+preview `market-intelligence-tool-caw5jcwsu.vercel.app`); and the adviser-CRD commit described in
+the newest entry below. Confirm the head with `git log --oneline -1` rather than trusting a SHA
+written here. Releasing them is the usual `git merge dev` on `main`, a fast-forward, once the user
+has looked at the fund rows in the preview.
 
-**Production carries `8061ec2`: everything on `dev`, released 2026-10-26 at the user's request.**
-Peers (beta), Seller Likelihood in the bank drawer, the Peers cron warm, the AOM removal, and the
-signals guard raised so AMO Tracker keeps working. Deployed by Vercel (`success`) and checked live.
-`dev` was fast-forwarded to match, so the branches are level and the next release is an ordinary
-fast-forward again.
+**Decisions taken 2026-10-26, so they need no revisiting.** Assignment-of-mortgage work stays out of
+this tool (it belongs to AMO Tracker; the code and data were removed, `9f8a1f9` / `eb8eef1`). The
+AMO question — whether it keeps its FDIC page — is parked until the expansion is done. The PE sponsor
+stress monitor is **held**, to be built lowest-hanging first; its research is
+`docs/SPONSOR_STRESS_RESEARCH.md`; step 1 (Form D-only stress signals) was dropped as a verdict the
+data cannot support; **step 2 is done** (every manager's adviser CRD in `registry.ts`); **step 3 is
+next**: Form ADV 7.B.(1) in the drawer, from the IAPD PDF, a path proven on Safe Harbor's own ADV.
 
-**One step is the user's: add `peer-intel` to production's `ENABLED_TABS` in Vercel and redeploy.**
-Until then the Peers code is in production but the tab does not render. The variable is a
-comma-separated list read by `lib/features.ts`. After it is set, each Peers layer cold-builds from
-SEC on its first visit (about 17, 22 and 43 seconds; the tab explains the wait) until the 05:00 UTC
-cron warms all three. The Market Analytics drawer recomputes each asset band once on first read,
-because the signals cache moved to `v2`.
+**Pick up with, in order:** step 3 above; then, on the Peers list, the `non-traded` bucket split and
+gating on the reader `verify:peer-gating` already carries; Bank Behaviour step 5 whenever deal
+sourcing should move.
 
-**AMO Tracker has about 160 KB of room.** Its whole-scope request is 4,318,145 bytes against a
-refusal at 4,480,000. Run `npm run measure:signals-response` before widening `BankBehaviorSummary`;
-the durable fix is AMO requesting by `band=`.
-
-**Pushing needs `gh`'s active account to be EnriqueColon** — git on this machine asks `gh` for
-GitHub credentials, and RSronin09, which had become active again, gets a 403. Switched on
-2026-10-26 with `gh auth switch --user EnriqueColon`. The `non-traded` bucket split
-has still not been started; begin it fresh from the build order in §3b of the peer status doc. Confirm the
-head with `git log --oneline -1` rather than trusting a SHA written here; production is untouched at
-`fe0ad1b`, and nothing has been merged to `main`.
+**Standing hazards.** AMO Tracker has about 160 KB of room on `/api/analytics/v1/behavior-signals`
+(4,318,145 bytes against a refusal at 4,480,000); run `npm run measure:signals-response` before
+widening `BankBehaviorSummary`; the durable fix is AMO requesting by `band=`. Pushing needs `gh`'s
+active account to be EnriqueColon (`gh auth switch --user EnriqueColon`); RSronin09 gets a 403.
+IAPD's search is a public site's own endpoint: scripts only, never runtime, never written unreviewed.
 
 ### Where this leaves the expansion
 
@@ -228,7 +225,37 @@ broader private credit tier stays, marked `adjacent`. The tab is named **Peers (
 
 ---
 
-## 2026-10-26, night, later (latest) — Rows expand only on the reader's click
+## 2026-10-26, late (latest) — Sponsor-stress research, held; step 2 built: adviser CRDs
+
+**The research.** The user asked for a three-phase assessment of a PE sponsor stress monitor, no
+code. Phase 1 mapped the repo: the snapshot→diff→alert pattern exists only in memory (FDIC and Form
+D both diff history the source returns), there is no persisted period and no alert channel, and the
+Python UCC and foreclosure connectors have never produced a row. Phase 2 verified every source on its
+own site: Form ADV bulk CSV through 2024 with per-fund `7B1` tables for RIAs and ERAs; IAPD-only from
+2025, with a working search JSON and a per-adviser PDF that `pdftotext` reads; Form D quarterly zips;
+the BDC monthly data set whose `soi.tsv` tags PIK (11,265 rows) but not non-accrual (8 rows of
+186,669); Florida UCC unscriptable, Delaware offline, CourtListener's limits, Florida WARN blocking
+scripts. Phase 3 proposed extending the Peers tab with Blob snapshots and Postgres rows. All of it is
+in `docs/SPONSOR_STRESS_RESEARCH.md`. **The user held the integration and chose step-by-step, lowest
+hanging first**, and on discussion dropped step 1 — Form D is a reliable *source* but a stress
+*verdict* from it alone is not, with no closed flag, sparse trails and no backtest.
+
+**Step 2.** Each manager's SEC adviser CRD, the key to Form ADV. `lib/peer-intel/iapd.ts` scores
+IAPD search hits — exact name, a registry name with a management suffix, other names against
+aliases, the GP and investment-manager entities the manager's own Form D names, state, city, scope —
+and `scripts/resolve-peer-crds.ts` proposes (`resolve:peer-crds`) or verifies (`verify:peer-crds`).
+Two live runs over 26 managers, then a review of the candidate lists: 20 manager advisers written to
+`registry.ts` with a `basis` each, 6 `noAdviser` records, 5 vehicle advisers where a BDC's or
+REIT's differs from its sponsor's (confirmed by EDGAR full-text counts on each vehicle's own CIK).
+The Form D link decided the surprising ones — Omnia Family Wealth is the debt fund's adviser, Certuity
+is Camden's — and found BH3 Fund Advisors, which IAPD cannot find under the manager's name. Three
+traps: IAPD's address is a JSON string in a field; "(RELYING ADVISOR)" must be stripped before
+names compare; the 20-result cap makes a capped set without a strong match "ambiguous", never
+"none". 9 tests; all 20 + 5 verify live; registry tests 22; build and the full sweep (313) pass.
+
+---
+
+## 2026-10-26, night, later — Rows expand only on the reader's click
 
 The user reviewed the `8e93ead` preview: it works, but a fund must not be expanded for them. So the
 pre-expansion is gone in every form — the fund clicked in Open Raises or New Launches, and a
