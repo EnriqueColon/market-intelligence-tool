@@ -57,6 +57,12 @@ digest are not built yet.
   data arrives — it went 3.90 → 4.02 → 4.12 MB. Anything that widens `BankBehaviorSummary` can tip it
   over. Run `npm run measure:signals-response` before such a change; the durable fix is AMO
   requesting by `band=`.
+- **Node is 24.x, and the local one must be Homebrew's `node@24`, not `node`.** Vercel builds and
+  runs on `24.x` (`engines` in `package.json`; Vercel rolls patches out itself). Homebrew's
+  unversioned `node` formula is Node 26, so `brew upgrade node` moves the machine off the
+  production line; `node@24` is linked instead (24.22.1 since 2026-10-26, the first release with the
+  Brotli decoder fix, CVE-2026-111497). The build script prints `node --version` first, so every
+  Vercel build log states the runtime it used.
 - **Assignment of Mortgage (AOM) work does not belong in this tool.** It lives in AMO Tracker
   (`EnriqueColon/amo-dashboard`, a separate app). The old AOM / Market Participants code and the
   `competitor_surveillance` framework were removed on 2026-10-26 at the user's instruction; do not

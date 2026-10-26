@@ -8,7 +8,7 @@ is it in now, and what is still open.
 
 ---
 
-## STOPPED HERE — 2026-10-26, evening: sponsor-stress step 2 (adviser CRDs) on dev
+## STOPPED HERE — 2026-10-26, evening: Node upgraded; sponsor-stress step 2 on dev
 
 Read `CLAUDE.md` first for orientation, then this block. Everything below it is the running record —
 reverse-chronological, and worth reading only when you need the reasoning behind something specific.
@@ -37,6 +37,14 @@ next**: Form ADV 7.B.(1) in the drawer, from the IAPD PDF, a path proven on Safe
 **Pick up with, in order:** step 3 above; then, on the Peers list, the `non-traded` bucket split and
 gating on the reader `verify:peer-gating` already carries; Bank Behaviour step 5 whenever deal
 sourcing should move.
+
+**Node.** The runtime is 24.x everywhere. Locally that is Homebrew's `node@24`, linked on
+2026-10-26 at 24.22.1 — the first release carrying the Brotli decoder fix (CVE-2026-111497, Node's
+October 21 security release). Homebrew's plain `node` formula is Node 26 and is installed but
+unlinked; `brew upgrade node` would move the machine off the production line. The build script now
+prints `node --version`, so every Vercel build log states its runtime; Vercel's project setting is
+`24.x` and it rolls patches out itself. The one code path that asked remote sites for Brotli
+(`lib/report-scraper.ts`) no longer does (`54371c4`).
 
 **Standing hazards.** AMO Tracker has about 160 KB of room on `/api/analytics/v1/behavior-signals`
 (4,318,145 bytes against a refusal at 4,480,000); run `npm run measure:signals-response` before
@@ -225,7 +233,32 @@ broader private credit tier stays, marked `adjacent`. The tab is named **Peers (
 
 ---
 
-## 2026-10-26, late (latest) — Sponsor-stress research, held; step 2 built: adviser CRDs
+## 2026-10-26, evening (latest) — Node 24.22.1, and the Brotli decoder CVE
+
+The user brought a note claiming the tool was exposed to CVE-2026-111497 ("Node2Shell"), an
+out-of-bounds write in the Brotli decoder bundled with Node. Checked at the source: real, High
+severity, fixed in 22.23.4 / 24.22.1 / 26.12.1 on 2026-10-21, trigger "an attacker who can supply
+Brotli data that an application decompresses with `node:zlib`". The note was wrong about this
+stack three times — it assumed Node 20 (this is 24), an inbound compressed-request vector (neither
+Node nor Next.js decompresses request bodies, and no code here does), and Brotli in the Python
+ingestion (no Brotli dependency; `urllib` only; never ran in production).
+
+The real exposure was outbound and singular: `lib/report-scraper.ts` sent `Accept-Encoding: gzip,
+deflate, br` to arbitrary report sites, the one place a response Node would Brotli-decode was
+attacker-controllable. Node's own `fetch()` default and every other fetch here send gzip/deflate.
+That header lost `br` (`54371c4`) — defence in depth whatever runtime a deployment is on.
+
+Then the runtime. Local Node was Homebrew's 24.1.0. `brew upgrade node` landed on **26.12.1**,
+because the unversioned formula is now Node 26 — patched, but a major off the production line. So
+`node@24` was installed and linked instead: **24.22.1**, with the 26 keg left installed but
+unlinked. The build script became `node --version && next build`, since Vercel's docs give that as
+the way to see the runtime a build used; the production project's setting reads `24.x` via the
+Vercel CLI (logged in here as `mktinfo-9651`). The full `test:*` sweep and a production build were
+re-run on 24.22.1 — see the stopping block for the result.
+
+---
+
+## 2026-10-26, late — Sponsor-stress research, held; step 2 built: adviser CRDs
 
 **The research.** The user asked for a three-phase assessment of a PE sponsor stress monitor, no
 code. Phase 1 mapped the repo: the snapshot→diff→alert pattern exists only in memory (FDIC and Form

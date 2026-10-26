@@ -202,8 +202,11 @@ Cron routes bypass the password gate and are protected by a bearer token instead
 
 ### Prerequisites
 
-Node 24.x and npm. Some ingestion scripts under `scripts/` are Python and are not needed to run the
-app.
+Node 24.x and npm — on a Mac, Homebrew's **`node@24`** (`brew install node@24 && brew link
+--overwrite --force node@24`), not its unversioned `node`, which is Node 26 and off the line Vercel
+runs. Keep it at 24.22.1 or later: that is the first 24.x release with the Brotli decoder fix
+(CVE-2026-111497, October 2026). Some ingestion scripts under `scripts/` are Python and are not
+needed to run the app.
 
 ### Setup
 
