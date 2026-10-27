@@ -4,8 +4,8 @@
 `ENABLED_TABS`. Steps 1–6 are done, with step 7's developments feed, vintage pacing and interim-close
 labels; gating is assessed and its reader proven (`verify:peer-gating`) but not built, and the
 alerts digest is not started. On `dev` and unreleased: each fund's row expands to its structure,
-terms and people, adviser CRDs in the registry (sponsor-stress step 2), and **Form ADV 7.B.(1) in
-the drawer (step 3)** — see §3.*
+terms and people, adviser CRDs in the registry (sponsor-stress step 2), **Form ADV 7.B.(1) in the
+drawer (step 3)** and **continuation-vehicle detection (step 4)** — see §3.*
 
 **Resuming:** see the "STOPPED HERE" block at the top of `SESSION.md` for the ordered pick-up list.
 The item with an impact outside this repo is §3a: AMO Tracker's whole-scope signals request now has
@@ -155,9 +155,20 @@ zero.
   no private funds, correctly, and the section says why. 16 catalogue entries with basis `adv`.
   Not yet reviewed in a preview by the user.
 
-- [ ] **Step 4: continuation-vehicle detection** — from Form D issuer names (Continuation,
-  CV, Annex, Extension) and the ADV's master/feeder links, flagged on the manager, never scored.
-  Next in the sponsor-stress plan, user-paced.
+- [x] **Step 4: continuation-vehicle detection — done 2026-10-27, on `dev`.** A "Continuation,
+  annex and extension vehicles" section in the drawer and a `CV` marker on the roster; a flag,
+  never a score. Two sources: the adviser's Form ADV by name (a feeder named only on its master's
+  record included — that is where Pretium's annex fund is), and one EDGAR full-text search per
+  term over the manager's names and the GP entities and people on its tracked raises, with the
+  words continuation, annex, CV and extension; the index covers a filing's related persons, so a
+  vehicle named after a fund rather than the firm is found. A hit is shown only when its name is
+  on the ADV, its entity name carries a two-word identifying phrase, or its related persons share
+  an exact folded name with the tracked raises; a one-word hit is counted and listed as
+  unconfirmed. `lib/peer-intel/continuation.ts`, 5 tests; `npm run verify:peer-continuation --
+  national` found 9 vehicles across H.I.G., Camden, Bridge, Pretium and Ares in 173 requests and
+  35 s, and 3 unconfirmed (Blackstone's two Annex funds — Blackstone's tracked vehicles are
+  registered, so it has no Form D people to share — and a "De Soi Bridge Extension" series that
+  is not Bridge's). Cache key `peer-intel-v5`. Not yet reviewed in a preview by the user.
 
 - [ ] **Step 5: ADV history 2011–2024** from the SEC's bulk CSVs (`IA_Schedule_D_7B1` is in the
   scratchpad; FilingID→CRD needs `IA_ADV_Base_A`), so a fund's gross asset value becomes a series —

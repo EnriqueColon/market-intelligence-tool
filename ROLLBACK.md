@@ -8,7 +8,7 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
 | `main` | `8061ec2` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `3ec5e2e` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `dev` | `b25f774` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 This table names the newest commit on each branch that **changes behaviour**; documentation-only
 commits sit on top of it and are deliberately not tracked here, because amending one rotates its
@@ -26,6 +26,12 @@ key. **To roll back:** Vercel's dashboard can promote the previous production de
 which is the fastest route; in git, `git revert -m 1 8061ec2` on `main` returns the code to
 `9f8a1f9`. Reverting leaves the `behavior-signals-v2` and `peer-intel-v2` cache entries in place,
 harmlessly — the reverted code reads `v1` keys and recomputes.
+
+**`dev` carries `b25f774` as of 2026-10-27, later** — continuation, annex and extension vehicles,
+sponsor-stress step 4, ten commits past production. Reverting `b25f774` removes the drawer's
+continuation section, the roster's `CV` marker, the per-term full-text searches from the weekly
+build (173 requests nationally) and the `peer-intel-v5` cache key; `v4` entries are served again.
+Nothing in it touches the bank analytics, the data API or production.
 
 **`dev` carries `3ec5e2e` as of 2026-10-27** — Form ADV 7.B.(1) in the drawer, sponsor-stress step
 3, seven commits past production (`d3acaff`, `8e93ead`, `8aae1dc`, `04ccd88`, `54371c4`, `95e5675`,

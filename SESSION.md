@@ -8,7 +8,7 @@ is it in now, and what is still open.
 
 ---
 
-## STOPPED HERE — 2026-10-27: sponsor-stress step 3 on dev — Form ADV in the drawer
+## STOPPED HERE — 2026-10-27: sponsor-stress steps 3 and 4 on dev — Form ADV and continuation vehicles
 
 Read `CLAUDE.md` first for orientation, then this block. Everything below it is the running record —
 reverse-chronological, and worth reading only when you need the reasoning behind something specific.
@@ -18,14 +18,16 @@ drawer, the nightly Peers cron warm, the Assignment of Mortgage removal, and the
 at 4,480,000 bytes. The user has set `peer-intel` in production's `ENABLED_TABS` and confirmed the
 tab works there.
 
-**`dev` is ahead of production by seven commits, none released:** `d3acaff` Structure & terms and
+**`dev` is ahead of production by ten commits, none released:** `d3acaff` Structure & terms and
 People from Form D; `8e93ead` each fund's row expands to them; `8aae1dc` no row opens on its own
-(the user's correction; preview `market-intelligence-tool-caw5jcwsu.vercel.app`); `04ccd88`
-adviser CRDs in the registry (sponsor-stress step 2); `54371c4` and `95e5675` the Brotli CVE
-response and Node 24; and `3ec5e2e` **Form ADV in the drawer (step 3)**, described in the newest
-entry below. Confirm the head with `git log --oneline -1` rather than trusting a SHA written here.
-Releasing is `git checkout main && git merge dev`, a fast-forward. **The user has not yet looked at
-the fund rows or the Form ADV section in a preview** — the `3ec5e2e` preview is the one to show.
+(the user's correction); `04ccd88` adviser CRDs in the registry (sponsor-stress step 2); `54371c4`
+and `95e5675` the Brotli CVE response and Node 24; `3ec5e2e` **Form ADV in the drawer (step 3)**
+with its docs `484a495` and `76c1eca`; and `b25f774` **continuation, annex and extension
+vehicles (step 4)**, described in the newest entry below. Confirm the head with
+`git log --oneline -1` rather than trusting a SHA written here. Releasing is
+`git checkout main && git merge dev`, a fast-forward. **The user has not yet looked at the fund
+rows, the Form ADV section or the continuation section in a preview** — the newest `dev` preview
+is the one to show.
 
 **Step 3 in one paragraph.** `npm run refresh:peer-adv` downloads each adviser's Form ADV PDF from
 IAPD, reads it with pdf.js, parses Schedule D 7.B.(1) and commits `lib/peer-intel/adv-extract.json`
@@ -42,6 +44,20 @@ Silverview 1/2; the unlinked vehicles have file numbers newer than the ADV filin
 siblings, and the row says "not on the ADV by file number or name". Madison, BX REIT Advisors,
 Blackstone Credit BDC Advisors, Apollo Credit Management, BrightSpire and Ladder report **no private
 funds** — correct, since 7.B.(1) covers private funds only and their vehicles are registered.
+
+**Step 4 in one paragraph.** A "Continuation, annex and extension vehicles" section in the drawer
+and a `CV` count on the roster — a flag, never a score. Found two ways: by name on the adviser's
+ADV (feeders a master lists by name included; Pretium's annex fund is only there), and by one EDGAR
+full-text search per term over the manager's names and the GP entities and people on its tracked
+raises with the words continuation, annex, CV and extension — the index covers a filing's related
+persons, which is what finds a vehicle named after a fund rather than the firm. **EDGAR's grammar
+is one quoted phrase plus a bracketed group of bare words, nothing else**: a bracketed group of
+quoted phrases returns 0 silently, and the first version found nothing for anyone with no error.
+A hit is shown only when its name is on the ADV, its entity name carries a two-word identifying
+phrase, or its related persons share an exact folded name with the tracked raises; a one-word hit
+is listed as unconfirmed. Live, national: 9 vehicles across H.I.G., Camden, Bridge, Pretium and
+Ares, 173 requests, 35 s added to the build; cache key `peer-intel-v5`.
+`npm run verify:peer-continuation -- national` is the check.
 
 **What the ADV says about Safe Harbor itself, to know before the user opens it.** Seven funds, $0.39B
 gross over six non-feeder funds. Fund 4 $186.7M and 30 owners; Fund 3 $84.1M and 46 owners, down
@@ -61,13 +77,12 @@ deploy with no cache bump.
 of this tool. The AMO question is parked until the expansion is done. The sponsor stress monitor is
 built lowest-hanging first: step 1 dropped as a verdict the data cannot support; steps 2 and 3 done.
 
-**Pick up with, in order:** (1) the user looks at the `3ec5e2e` preview — a fund row's ADV block,
-the Form ADV section, Safe Harbor's amber answers; (2) sponsor-stress **step 4**,
-continuation-vehicle detection from Form D names and the ADV's master/feeder links, or **step 5**,
-2011–2024 ADV history from the SEC's bulk CSVs (`IA_Schedule_D_7B1` is in the scratchpad;
-FilingID→CRD needs `IA_ADV_Base_A`), whichever the user picks; (3) on the Peers list, the
-`non-traded` bucket split and gating on the reader `verify:peer-gating` already carries; (4) Bank
-Behaviour step 5 whenever deal sourcing should move.
+**Pick up with, in order:** (1) the user looks at the newest `dev` preview — a fund row's ADV block,
+the Form ADV section, Safe Harbor's amber answers, and a manager with a `CV` marker (Bridge,
+Pretium, H.I.G.); (2) sponsor-stress **step 5**, 2011–2024 ADV history from the SEC's bulk CSVs
+(`IA_Schedule_D_7B1` is in the scratchpad; FilingID→CRD needs `IA_ADV_Base_A`), so a fund's gross
+asset value becomes a series; (3) on the Peers list, the `non-traded` bucket split and gating on
+the reader `verify:peer-gating` already carries; (4) Bank Behaviour step 5 whenever deal sourcing
 
 **Node.** 24.x everywhere; locally Homebrew's `node@24` at 24.22.1 (CVE-2026-111497 fixed); the
 plain `node` formula is 26 and unlinked — never `brew upgrade node`. The build prints
@@ -87,7 +102,7 @@ responses, nearly all of it briefs of untracked funds (Bridge 148, H.I.G. 149, S
 | --- | --- |
 | Peers tab, steps 1–6 | Done, in production as beta |
 | Peers step 7 | Developments feed done; gating assessed and its reader proven, not built; alerts digest not started |
-| Sponsor stress | Steps 2 (CRDs) and 3 (Form ADV) done on `dev`; steps 4–5 next, user-paced |
+| Sponsor stress | Steps 2 (CRDs), 3 (Form ADV) and 4 (continuation vehicles) done on `dev`; step 5 (ADV history) next, user-paced |
 | Bank Behaviour step 4 | Done — score, four states, backtest, cache, drawer |
 | Bank Behaviour steps 5–7 | Not started |
 
@@ -98,7 +113,45 @@ the 2026-10-22 and 2026-10-26 entries below.
 
 ---
 
-## 2026-10-27 (latest) — Sponsor-stress step 3: Form ADV 7.B.(1) in the drawer
+## 2026-10-27, later (latest) — Sponsor-stress step 4: continuation, annex and extension vehicles
+
+**What was built — `b25f774`.** `lib/peer-intel/continuation.ts` (pure, 5 tests): the four marking
+words and what counts as one (`CV` only as an upper-case token before a fund word, so "Pretium CV
+Platform Holdco" is not one); a manager's search terms — names and aliases longest first, then GP
+entities, then the people on most of its raises, capped at four and four; attribution by ADV name,
+identifying phrase or shared related person; a predecessor by name stem; and the merge of Form D
+hits with the ADV's names, feeders included. `fetchContinuationVehicles` in the service runs one
+search per term, reads each new filer's trail, and builds the view; the payload carries
+`continuation` and `diagnostics.continuationRequests`. `components/peer-intel/continuation-section.tsx`
+is the drawer section; the roster shows a count; `buildManagerSnapshot` takes the view; three
+catalogue entries with basis `search`; `scripts/verify-peer-continuation.ts` is the live check.
+
+**What the live run showed, 2026-10-27, national.** 9 vehicles: H.I.G.'s Europe Realty Partners III
+Annex Fund ($63.9M gross, by ADV and by three shared people) and "H.I.G. Supreme CV, SCSp
+SICAV-RAIF" (by two shared people only — the find the ADV could not make); Certuity's Private Equity
+Continuation Fund under Camden ($8.3M, 42 owners, first sale 2025-04-25); Bridge Multifamily CV LP
+($549.2M, 103 owners) and its PV sleeve; Pretium's Residential Credit Annex Fund and feeder (on the
+ADV only as feeders of RCAF Aggregator); Ares Senior Direct Lending CV Master Fund ($1.23B) and its
+offshore feeder. Three unconfirmed and listed as such: Blackstone's Annex Onshore and Offshore
+funds (Blackstone's tracked vehicles are registered, so there are no Form D people to share, and
+"Blackstone" is one word) and "De Soi Bridge Extension Apr 2024", which is not Bridge's. No
+lower-middle-market Florida manager has one.
+
+**The trap that cost the first run.** A combined query —
+`("Pretium Partners" OR "Pretium") (annex OR continuation OR CV OR extension)` — returns 0 with
+no error; `"Pretium" (annex OR …)` returns the annex fund; `"a" OR "b" (…)` returns 964. Full-text
+search takes one quoted phrase and one bracketed group of bare words. Written into
+`continuation.ts` and `confluence.md` §10.
+
+**State.** On `dev`, not released and not yet reviewed in a preview. `next build` passes, `tsc` at
+the 63-error baseline, all 17 peer suites pass.
+
+**Open.** Step 5 (ADV history 2011–2024). A continuation vehicle named without the four words is not
+found. The predecessor rule matched nothing in the nine; it stays because it is free.
+
+---
+
+## 2026-10-27 — Sponsor-stress step 3: Form ADV 7.B.(1) in the drawer
 
 **What was built — `3ec5e2e`.** Three pure modules and a script. `lib/peer-intel/adv-pdf.mts`
 reads an IAPD Form ADV PDF with pdf.js into ordered text lines with their checkbox marks: every

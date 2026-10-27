@@ -152,3 +152,43 @@ responses, nearly all briefs of untracked funds.
 
 **Left for later.** No scheduled refresh — the extract is as of its last run; step 5 would make the
 gross asset value a series from the bulk CSVs; step 4 is continuation-vehicle detection.
+
+## 7. Step 4, done 2026-10-27: continuation, annex and extension vehicles
+
+A flag, never a score. The drawer lists each vehicle with what its Form D and the adviser's ADV
+say and the basis on which it was attributed; the roster marks the manager with a count.
+
+**Two sources.** The ADV, by name — including feeders a master lists by name only, which is the
+only place Pretium's Residential Credit Annex Fund appears. And EDGAR full-text search for Form D
+filings, which turned out to index a filing's **related persons** as well as its entity name:
+searching Safe Harbor's GP "SHE DDF4 GP" returns Fund 4's filings. So a manager is searched on
+its names and on the GP entities and people from its tracked raises, which finds vehicles named
+after a fund rather than the firm — H.I.G.'s "H.I.G. Supreme CV, SCSp SICAV-RAIF" came only that
+way.
+
+**The query grammar, measured.** EDGAR accepts one quoted phrase followed by a bracketed group of
+bare words — `"Pretium" (annex OR continuation OR CV OR extension)` — and nothing else:
+a bracketed group of quoted phrases returns 0 silently, and an unbracketed `"a" OR "b" (…)`
+binds the OR across everything and returns 964 hits. The first version sent one combined query
+per manager and found nothing for anyone with no error. It is now one request per term, capped
+at four names and four people per manager: 173 requests and 35 s for the national layer.
+
+**Attribution.** A hit is shown when its name is on the ADV, when its entity name carries a
+two-or-more-word phrase identifying the manager, or when its related persons share an exact
+folded name with the manager's tracked raises; the panel says which held. A hit on a one-word
+name alone is counted and listed as unconfirmed — Blackstone's two Annex funds are, because
+Blackstone's tracked vehicles are registered and so have no Form D people to share, and "De Soi
+Bridge Extension" is, correctly, not Bridge's. "CV" counts only as an upper-case token before a
+fund word: Bridge Multifamily CV LP yes, Pretium CV Platform Holdco no.
+
+**What it found, national, 2026-10-27.** Nine vehicles across five managers: H.I.G.'s Europe
+Realty Partners III Annex Fund ($63.9M gross) and Supreme CV; Camden's adviser Certuity's Private
+Equity Continuation Fund ($8.3M, 42 owners); Bridge Multifamily CV ($549.2M, 103 owners) and its
+PV sleeve; Pretium's Residential Credit Annex Fund and its feeder; Ares Senior Direct Lending CV
+Master Fund ($1.23B) and its offshore feeder. None of the lower-middle-market Florida managers
+has one. Several Form Ds were filed before any sale and the panel says "no sale reported yet"
+rather than "$0 from 0 investors".
+
+**Not done.** No predecessor was matched by name stem for any of the nine; the rule stays because
+it costs nothing and will catch "Fund III Annex" when a tracked fund is "Fund III". The search
+cannot find a continuation vehicle named without those four words.

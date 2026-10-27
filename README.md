@@ -267,6 +267,8 @@ npm run test:legal-applicability # which institutions a rule covers, and the two
 npm run test:allowlist        # publisher allowlist, and what "all" covers
 npm run test:peer-intel-adv   # Form ADV: checkbox order, Safe Harbor's Fund 4 record, file-number links (tsx)
 npm run refresh:peer-adv      # local only: IAPD Form ADV PDFs → lib/peer-intel/adv-extract.json, with a link report
+npm run test:peer-intel-continuation  # continuation vehicles: the four marking words, search terms, attribution, merging (tsx)
+npm run verify:peer-continuation -- national  # the continuation search against live EDGAR, per manager
 npm run build                 # next build
 ```
 

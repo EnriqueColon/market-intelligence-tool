@@ -818,6 +818,17 @@ zero. The action rebuilds the views from the committed file after the cache, so 
 on deploy. A manager with no adviser on file says that; a fund the adviser reports under a master
 with another name is listed under "not tracked here".
 
+**Continuation vehicles.** Since 2026-10-27 the drawer lists each manager's continuation, annex and
+extension vehicles — a flag, never a score — and the roster marks the manager with a count. Two
+sources: the adviser's ADV by name, feeders a master lists included, and one EDGAR full-text
+search per term over the manager's names and the GP entities and people on its tracked raises,
+with the words continuation, annex, CV and extension (`lib/peer-intel/continuation.ts`,
+`fetchContinuationVehicles`). The search index covers a filing's related persons as well as its
+entity name, which is what finds a vehicle named after a fund rather than the firm. A hit is shown
+only when its name is on the ADV, its entity name carries a two-word identifying phrase, or its
+related persons share an exact folded name with the tracked raises; otherwise it is counted and
+listed as unconfirmed. `npm run verify:peer-continuation -- national` runs it live.
+
 **Two rules the structure and people code depends on.** A Form D filed jointly by several issuers
 reports the offering as a whole, so a co-issuer's capital is *inside* the filing's totals; the risk is
 double counting, when a co-issuer is also tracked as its own vehicle and its trail holds the same
@@ -2290,6 +2301,8 @@ npm run test:peer-intel-registry   # peer registry: unique CIKs, cumulative laye
 npm run test:peer-intel-iapd       # IAPD hit scoring: exact, suffixed, Form D entities, capped sets (tsx)
 npm run test:peer-intel-adv        # Form ADV: checkbox order, Safe Harbor's Fund 4 record, file-number links (tsx)
 npm run refresh:peer-adv           # local only: IAPD PDFs → lib/peer-intel/adv-extract.json, with a link report
+npm run test:peer-intel-continuation  # continuation vehicles: marking words, terms, attribution, merging (tsx)
+npm run verify:peer-continuation -- national  # the continuation search against live EDGAR, per manager
 npm run discover:peers             # proposes peer candidates from EDGAR by location and name
 npm run lookup:peer -- "Rialto"     # finds one named manager's vehicles (names, not patterns)
 npm run test:peer-intel-cohort     # raise aggregation: sleeve counting, coverage, positioning (tsx)
@@ -2439,6 +2452,14 @@ refused on merge. It now has about 160 KB of room, and it grows as FDIC data arr
 weight so a partial reporter is not read as calm, which means one component at its ceiling reads 100
 on 15% confidence. Any state or list built on such a score needs a confidence floor — without one,
 `pre-seller` covered 45% of the backtest's bank-quarters. Always show confidence beside the score.
+
+**EDGAR full-text search takes one quoted phrase and one bracketed group of bare words — nothing
+else — and returns 0 rather than an error for anything else.** `"Pretium" (annex OR continuation)`
+returns the annex fund; `("Pretium Partners" OR "Pretium") (annex OR continuation)` returns 0;
+`"Pretium" OR "Donald Mullen" (annex OR continuation)` binds the OR across everything and returns
+964. The first continuation-vehicle run sent one combined query per manager and found nothing for
+anyone, cleanly. One request per term, and cap the terms. The index does cover a filing's related
+persons, so a GP's or an officer's name is a valid term.
 
 **Form ADV's answers are images, and pdf.js keeps them in two places.** The IAPD PDF paints one
 small image under Yes and one under No for every question, with no form field and no tick glyph;
