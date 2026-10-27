@@ -63,6 +63,10 @@ digest are not built yet.
   production line; `node@24` is linked instead (24.22.1 since 2026-10-26, the first release with the
   Brotli decoder fix, CVE-2026-111497). The build script prints `node --version` first, so every
   Vercel build log states the runtime it used.
+- **Form ADV data is a committed file, never a fetch.** `lib/peer-intel/adv-extract.json` is written
+  by `npm run refresh:peer-adv` on a laptop from IAPD's PDFs (up to 165 MB each) and read by the
+  app; it is as of its last run. The PDF's yes/no answers are images, and the parser's traps are in
+  `confluence.md` §10 — read them before touching `adv-pdf.mts` or `adv.ts`.
 - **Assignment of Mortgage (AOM) work does not belong in this tool.** It lives in AMO Tracker
   (`EnriqueColon/amo-dashboard`, a separate app). The old AOM / Market Participants code and the
   `competitor_surveillance` framework were removed on 2026-10-26 at the user's instruction; do not
