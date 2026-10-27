@@ -48,7 +48,10 @@ function Pipeline({ cohort, diagnostics }: { cohort: PeerCohort; diagnostics: Pe
           income come from. Both are read directly from <span className="font-mono text-[10px]">sec.gov</span>. No
           survey, no subscription data, no estimates. <strong>Form ADV</strong>, the adviser&apos;s own registration
           filing on IAPD, for the private funds it manages — gross assets, owners, and whether each is audited with a
-          clean opinion. Read offline and committed, because the PDFs run to tens of megabytes.
+          clean opinion. Read offline and committed, because the PDFs run to tens of megabytes. And one{" "}
+          <strong>full-text search</strong> per manager for Form D filings that carry its names or the people on its
+          filings together with &ldquo;continuation&rdquo;, &ldquo;annex&rdquo;, &ldquo;CV&rdquo; or
+          &ldquo;extension&rdquo; — the index covers a filing&apos;s related persons, not just the entity name.
         </p>
       </div>
       <div className="rounded-md border border-slate-200/80 bg-white px-3 py-2">

@@ -232,6 +232,7 @@ export function PeerIntel() {
           <ManagerRoster
             cohort={payload.cohort}
             signals={payload.signals}
+            continuation={payload.continuation?.byManager ?? {}}
             onSelectManager={setSelectedManager}
           />
           <DataSources cohort={payload.cohort} diagnostics={payload.diagnostics} />
@@ -241,6 +242,14 @@ export function PeerIntel() {
             signals={payload.signals}
             peerId={selectedManager}
             adv={selectedManager ? payload.adv?.byManager[selectedManager] ?? null : null}
+            continuation={selectedManager ? payload.continuation?.byManager[selectedManager] ?? null : null}
+            continuationFailure={
+              selectedManager
+                ? payload.continuation?.failures.find(
+                    (f) => f.manager === "all" || f.manager === payload.cohort.managers.find((m) => m.peerId === selectedManager)?.manager
+                  )?.reason ?? null
+                : null
+            }
             onClose={() => setSelectedManager(null)}
           />
 

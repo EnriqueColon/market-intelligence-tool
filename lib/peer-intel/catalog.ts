@@ -27,6 +27,8 @@ export type PeerFieldBasis =
   | "cohort"
   /** Taken from the adviser's Form ADV, Schedule D section 7.B.(1), as of its filing date. */
   | "adv"
+  /** Found by EDGAR full-text search over the manager's names and people, then read from the filing it found. */
+  | "search"
 
 export type PeerFieldKind = "reported" | "derived"
 
@@ -374,6 +376,29 @@ export const PEER_FIELD_CATALOG: readonly PeerFieldSpec[] = [
     "Gross assets across the adviser's funds",
     "adv",
     "Feeders are excluded because a feeder's assets are its stake in the master, already inside the master's figure."
+  ),
+
+  // ------------------------------- continuation, annex and extension vehicles
+  derived(
+    "continuationKind",
+    "the filer's or fund's name — or a feeder's name on a master's ADV record — carries 'continuation', 'annex', 'extension', or the token 'CV' followed by a fund word",
+    "Continuation vehicle",
+    "search",
+    "A name test, so a vehicle named without those words is missed, and 'CV' counts only before LP, Master, Fund, Feeder and the like — 'CV Platform Holdco' does not. A flag, never a score: the largest sponsors run these routinely."
+  ),
+  derived(
+    "continuationAttribution",
+    "the name matches a fund on the adviser's Form ADV; or the entity name carries a two-or-more-word phrase identifying the manager; or the filing's related persons share an exact folded name with the manager's tracked raises",
+    "Attributed to manager",
+    "search",
+    "The search also matches a one-word name — 'Bridge', 'Apollo' — and a person's name on an unrelated filing; a hit with none of the three bases is counted and not shown. A shared person is a name match, as with People."
+  ),
+  derived(
+    "continuationPredecessor",
+    "the words before the marking term, folded, begin a tracked vehicle's folded name and are at least two words",
+    "Likely continues",
+    "search",
+    "A name resemblance, not a filing fact: no form states which fund a continuation vehicle took its assets from."
   ),
 ]
 

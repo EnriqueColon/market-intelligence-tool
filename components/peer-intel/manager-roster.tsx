@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card"
 import type { PeerCohort } from "@/lib/peer-intel/cohort"
 import { layerName, managerRoster, money, standingLabel, unresolvedWatchList } from "@/lib/peer-intel/panel"
 import type { ManagerSignals } from "@/lib/peer-intel/signals"
+import type { ContinuationView } from "@/lib/peer-intel/continuation"
 
 /**
  * Every tracked manager in the layer, raising or not.
@@ -29,10 +30,13 @@ const STANDING_STYLE = {
 export function ManagerRoster({
   cohort,
   signals,
+  continuation = {},
   onSelectManager,
 }: {
   cohort: PeerCohort
   signals: ManagerSignals[]
+  /** Each manager's continuation vehicles, for the marker beside its name. */
+  continuation?: Record<string, ContinuationView>
   onSelectManager?: (peerId: string) => void
 }) {
   const rows = managerRoster(cohort, signals)
@@ -87,6 +91,14 @@ export function ManagerRoster({
                       title="A nearby strategy worth watching, not a like-for-like comparison — real-estate equity, or generalist private credit rather than CRE lending."
                     >
                       adjacent
+                    </span>
+                  )}
+                  {(continuation[row.peerId]?.vehicles.length ?? 0) > 0 && (
+                    <span
+                      className="ml-2 rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-900"
+                      title={`${continuation[row.peerId].vehicles.length} continuation, annex or extension ${continuation[row.peerId].vehicles.length === 1 ? "vehicle" : "vehicles"} on file — a flag, not a score. Open the row for the list.`}
+                    >
+                      {continuation[row.peerId].vehicles.length} CV
                     </span>
                   )}
                 </td>

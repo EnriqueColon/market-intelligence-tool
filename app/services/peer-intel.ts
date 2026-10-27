@@ -15,8 +15,18 @@ import {
   type FtsQuery,
   type PeerLayer,
 } from "@/lib/peer-intel/edgar-contract"
-import { parseFormD, type OfferingRecord } from "@/lib/peer-intel/form-d"
+import { buildRaise, parseFormD, type OfferingRecord } from "@/lib/peer-intel/form-d"
 import { layerAdv, type ManagerAdv, type VehicleKey } from "@/lib/peer-intel/adv-link"
+import {
+  buildContinuationView,
+  continuationKind,
+  continuationQuery,
+  MAX_SEARCH_PAGES,
+  searchTerms,
+  type AdvisedFund,
+  type ContinuationHit,
+  type ContinuationView,
+} from "@/lib/peer-intel/continuation"
 import { advExtract } from "@/lib/peer-intel/adv-extract"
 import { buildPeerCohort, type PeerCohort } from "@/lib/peer-intel/cohort"
 import { buildVehicleTrend, type VehicleTrend } from "@/lib/peer-intel/liquidity"
@@ -611,11 +621,19 @@ export type PeerIntelPayload = {
    * been read, has no entry.
    */
   adv: LayerAdv
+  /**
+   * Each manager's continuation, annex and extension vehicles, from one
+   * full-text search per manager over its names and people and from its ADV —
+   * see `lib/peer-intel/continuation.ts`. A flag, never a score. Keyed by peer
+   * id; every manager in scope has an entry, searched or not.
+   */
+  continuation: ContinuationResult
   /** What the fetch cost and what it could not read, so a panel can be honest. */
   diagnostics: {
     asOf: string
     formDRequests: number
     xbrlRequests: number
+    continuationRequests: number
     /** Private vehicles whose Form D could not be read — real gaps. */
     offeringFailures: Array<{ cik: string; manager: string; reason: string }>
     /** Registered vehicles with no Form D, which is expected rather than a gap. */
@@ -640,6 +658,90 @@ export function buildLayerAdv(layer: PeerLayer, cohort: PeerCohort): LayerAdv {
     )
   }
   return layerAdv(peersInScope(layer), advExtract(), keys)
+}
+
+export type ContinuationResult = {
+  byManager: Record<string, ContinuationView>
+  /** Managers whose search or trail reads failed; their view says "not searched". */
+  failures: Array<{ manager: string; reason: string }>
+  requests: number
+}
+
+/** Search hits read per manager; beyond this the rest are left unread rather than spending the budget. */
+const MAX_CONTINUATION_HITS = 8
+
+/**
+ * Continuation, annex and extension vehicles for every manager in a layer.
+ *
+ * One full-text search per term — the manager's names and the people on its
+ * tracked raises, each with the four marking words; EDGAR takes one quoted
+ * phrase per query, see `continuation.ts` — then the Form D trail of each
+ * filer whose own name carries a marking word. The search index covers a
+ * filing's related persons, which is what lets a vehicle named after a fund
+ * rather than the firm be found; attribution is then decided from the trail
+ * and the adviser's ADV records in `buildContinuationView`, and a hit nothing
+ * attributes is counted, not shown. A filer that is already a tracked vehicle
+ * reuses the cohort's trail.
+ *
+ * Cost: up to eight searches per manager (about 150 for the national layer)
+ * plus one submissions request and one per filing for each new filer, under
+ * the same rate limiter as everything else — some twenty seconds nationally.
+ */
+export async function fetchContinuationVehicles(layer: PeerLayer, cohort: PeerCohort, adv: LayerAdv): Promise<ContinuationResult> {
+  const failures: ContinuationResult["failures"] = []
+  let requests = 0
+  const extract = advExtract()
+
+  const views = await mapWithConcurrency(peersInScope(layer), 3, async (peer) => {
+    const manager = cohort.managers.find((m) => m.peerId === peer.id) ?? null
+    // The full records, not the payload briefs: a feeder named only on its
+    // master's record is where Pretium's annex fund appears.
+    const advFunds: AdvisedFund[] = (adv.byManager[peer.id]?.filings ?? []).flatMap((f) =>
+      (extract.advisers[f.crd]?.funds ?? []).map((fund) => ({ crd: f.crd, fund }))
+    )
+    const terms = searchTerms(peer, manager)
+    if (!terms.length) return buildContinuationView(peer, manager, advFunds, [], terms, false)
+    try {
+      const newestByCik = new Map<string, FtsHit>()
+      for (const term of terms) {
+        for (let page = 0; page < MAX_SEARCH_PAGES; page++) {
+          const res = await searchFilings({ q: continuationQuery(term), forms: ["D"], from: page * 10 })
+          requests++
+          for (const h of res.hits) {
+            const prev = newestByCik.get(h.cik)
+            if (!prev || h.filedAt > prev.filedAt) newestByCik.set(h.cik, h)
+          }
+          if (res.hits.length < 10 || (page + 1) * 10 >= res.total) break
+        }
+      }
+      const hits: ContinuationHit[] = []
+      for (const h of newestByCik.values()) {
+        // The search matches the words anywhere in the filing; only a filer
+        // whose own name carries one is a candidate.
+        if (!continuationKind(h.name)) continue
+        if (hits.length >= MAX_CONTINUATION_HITS) break
+        const tracked = manager?.raises.find((r) => r.cik === h.cik)
+        if (tracked) {
+          hits.push({ cik: h.cik, name: h.name, raise: tracked.raise })
+          continue
+        }
+        const profile = await fetchFilerProfile(h.cik)
+        requests++
+        const records = await fetchOfferingHistory(profile)
+        requests += profile.formD.length
+        const built = buildRaise(records, cohort.asOf)
+        if (built) hits.push({ cik: h.cik, name: profile.name || h.name, raise: built })
+      }
+      return buildContinuationView(peer, manager, advFunds, hits, terms, true)
+    } catch (error) {
+      failures.push({ manager: peer.manager, reason: error instanceof Error ? error.message : String(error) })
+      return buildContinuationView(peer, manager, advFunds, [], terms, false)
+    }
+  })
+
+  const byManager: Record<string, ContinuationView> = {}
+  for (const v of views) byManager[v.peerId] = v
+  return { byManager, failures, requests }
 }
 
 /**
@@ -676,6 +778,15 @@ export async function buildPeerIntelPayload(layer: PeerLayer, asOf: string): Pro
   ])
 
   const cohort = buildPeerCohort(layer, offerings.byCik, asOf)
+  const adv = buildLayerAdv(layer, cohort)
+  // Needs the cohort's people and the ADV views, so it runs after them. Its
+  // failures are collected per manager; a search outage leaves the section
+  // saying "not searched" rather than taking the layer down.
+  const continuation = await fetchContinuationVehicles(layer, cohort, adv).catch((error) => ({
+    byManager: {},
+    failures: [{ manager: "all", reason: error instanceof Error ? error.message : String(error) }],
+    requests: 0,
+  }))
 
   const seriesByCik = new Map<string, { series: VehicleSeries; quoted?: VehicleQuotation }>()
   for (const vehicle of tier.vehicles) {
@@ -705,11 +816,13 @@ export async function buildPeerIntelPayload(layer: PeerLayer, asOf: string): Pro
     tier: tier.vehicles.map((v) => buildVehicleTrend(v, ownerOf.get(v.cik) ?? "")),
     developments,
     gating,
-    adv: buildLayerAdv(layer, cohort),
+    adv,
+    continuation,
     diagnostics: {
       asOf,
       formDRequests: offerings.requests,
       xbrlRequests: tier.requests,
+      continuationRequests: continuation.requests,
       offeringFailures: offerings.failures,
       registeredWithoutFormD: offerings.noFormD,
       metricFailures: tier.failures,

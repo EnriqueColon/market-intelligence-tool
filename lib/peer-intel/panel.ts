@@ -19,6 +19,7 @@ import { UNRESOLVED_WATCH } from "./registry"
 import { structureRows } from "./structure"
 import { buildPeopleIndex, managerPeople } from "./people"
 import type { ManagerAdv } from "./adv-link"
+import type { ContinuationView } from "./continuation"
 
 export function money(value: number | "indefinite" | null | undefined): string {
   if (value === "indefinite") return "no stated cap"
@@ -251,7 +252,8 @@ export function buildManagerSnapshot(
   manager: ManagerRaises,
   signals: ManagerSignals,
   cohort: PeerCohort,
-  adv: ManagerAdv | null = null
+  adv: ManagerAdv | null = null,
+  continuation: ContinuationView | null = null
 ): string {
   const lines: string[] = [
     `${manager.manager} — ${manager.location}`,
@@ -344,6 +346,19 @@ export function buildManagerSnapshot(
             `${f.auditors.length ? `, auditor ${f.auditors.map((a) => a.name).join("; ")}` : ""}`
         )
       }
+    }
+  }
+
+  if (continuation) {
+    lines.push("", continuation.vehicles.length ? "Continuation, annex and extension vehicles (a flag, not a score):" : `Continuation, annex and extension vehicles: none found${continuation.searched ? "" : " (not searched)"}`)
+    for (const v of continuation.vehicles) {
+      lines.push(
+        `  ${v.name} — ${v.kind === "cv" ? "continuation vehicle" : `${v.kind} fund`}` +
+          `${v.predecessor ? `, likely continues ${v.predecessor.name}` : ""}` +
+          `${v.formD ? (!v.formD.sold && !v.formD.investorCount ? `; Form D filed ${v.formD.lastFiled ?? "n/a"}, no sale reported yet` : `; Form D first sale ${v.formD.firstSale ?? "n/a"}, raised ${money(v.formD.sold)}${v.formD.investorCount != null ? ` from ${v.formD.investorCount} investors` : ""}`) : ""}` +
+          `${v.adv ? `; ADV gross assets ${money(v.adv.grossAssetValue)}` : ""}` +
+          `; attributed by ${v.attribution.map((a) => (a.basis === "adv" ? "ADV record" : a.basis === "name" ? `name "${a.phrase}"` : `shared people (${a.names.join(", ")})`)).join(", ")}`
+      )
     }
   }
 

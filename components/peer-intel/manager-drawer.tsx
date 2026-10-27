@@ -21,7 +21,9 @@ import { buildVintagePacing } from "@/lib/peer-intel/vintage"
 import { VintageLadder } from "@/components/peer-intel/vintage-pacing"
 import { FundDetail, FundDetailNote } from "@/components/peer-intel/structure-people"
 import { AdvSection } from "@/components/peer-intel/adv-section"
+import { ContinuationSection } from "@/components/peer-intel/continuation-section"
 import type { ManagerAdv } from "@/lib/peer-intel/adv-link"
+import type { ContinuationView } from "@/lib/peer-intel/continuation"
 
 /**
  * One manager, in full.
@@ -87,6 +89,8 @@ export function ManagerDrawer({
   signals,
   peerId,
   adv,
+  continuation,
+  continuationFailure,
   onClose,
 }: {
   cohort: PeerCohort
@@ -94,6 +98,10 @@ export function ManagerDrawer({
   peerId: string | null
   /** This manager's Form ADV view, or null where there is none to show. */
   adv: ManagerAdv | null
+  /** This manager's continuation vehicles; null before the layer has been rebuilt with them. */
+  continuation: ContinuationView | null
+  /** Why the continuation search did not run for this manager, if it did not. */
+  continuationFailure: string | null
   onClose: () => void
 }) {
   const [copied, setCopied] = useState(false)
@@ -124,7 +132,7 @@ export function ManagerDrawer({
   async function copySnapshot() {
     if (!manager || !managerSignalSet) return
     try {
-      await navigator.clipboard.writeText(buildManagerSnapshot(manager, managerSignalSet, cohort, adv))
+      await navigator.clipboard.writeText(buildManagerSnapshot(manager, managerSignalSet, cohort, adv, continuation))
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch {
@@ -288,6 +296,10 @@ export function ManagerDrawer({
 
               <Section title="Form ADV — what its adviser manages">
                 <AdvSection manager={manager} adv={adv} />
+              </Section>
+
+              <Section title="Continuation, annex and extension vehicles">
+                <ContinuationSection manager={manager} view={continuation} failure={continuationFailure} />
               </Section>
 
               <Section title="How it raises">

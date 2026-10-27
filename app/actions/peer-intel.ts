@@ -37,12 +37,13 @@ export async function getPeerIntel(layer: PeerLayer, asOf?: string): Promise<Pee
       // `day` is not in the key, so it is not a cache input; it only dates the
       // payload that gets stored. A rebuild a week later stamps the new date.
       async () => buildPeerIntelPayload(layer, day),
+      // v5 (2026-10-27): `continuation` — each manager's continuation, annex
+      // and extension vehicles — and `diagnostics.continuationRequests`.
       // v4 (2026-10-27): each raise carries its Form D `fileNumber`, the key
-      // that links it to the adviser's Form ADV record. A v3 entry has none, so
-      // its ADV links would fall back to name matching for up to a week.
+      // that links it to the adviser's Form ADV record.
       // v3 (2026-10-26): each raise carries `terms` and `exemptionChanges`, and
       // related persons a `kind` and `clarification`.
-      ["peer-intel-v4", layer],
+      ["peer-intel-v5", layer],
       { revalidate: PEER_REVALIDATE_SECONDS, tags: [`peer-intel`, `peer-intel:${layer}`] }
     )
     const payload = await cached()
