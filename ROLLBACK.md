@@ -8,7 +8,7 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
 | `main` | `8061ec2` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `8061ec2` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `dev` | `3ec5e2e` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 This table names the newest commit on each branch that **changes behaviour**; documentation-only
 commits sit on top of it and are deliberately not tracked here, because amending one rotates its
@@ -26,6 +26,14 @@ key. **To roll back:** Vercel's dashboard can promote the previous production de
 which is the fastest route; in git, `git revert -m 1 8061ec2` on `main` returns the code to
 `9f8a1f9`. Reverting leaves the `behavior-signals-v2` and `peer-intel-v2` cache entries in place,
 harmlessly — the reverted code reads `v1` keys and recomputes.
+
+**`dev` carries `3ec5e2e` as of 2026-10-27** — Form ADV 7.B.(1) in the drawer, sponsor-stress step
+3, seven commits past production (`d3acaff`, `8e93ead`, `8aae1dc`, `04ccd88`, `54371c4`, `95e5675`,
+`3ec5e2e`; confirm with `git log`). Each reverts independently with `git revert <sha>`. Reverting
+`3ec5e2e` removes the drawer's Form ADV section and the ADV block under each fund row, the committed
+878 KB extract, the `fileNumber` on raises and the `peer-intel-v4` cache key — the `v3` entries are
+still in the data cache and are served again, and the `v4` ones expire harmlessly. Nothing in it
+touches the bank analytics, the data API or production, which does not carry it.
 
 **Before it, production carried `9f8a1f9`** — the Assignment of Mortgage removal, and nothing
 else. It was applied directly to `main` rather than merged from `dev`, so that production lost the

@@ -265,6 +265,8 @@ npm run test:legal-florida    # legal feed: Florida bills, number formats, local
 npm run test:legal-pages      # legal feed: reading the enforcement roundup pages the model cites
 npm run test:legal-applicability # which institutions a rule covers, and the two CRE-concentration units
 npm run test:allowlist        # publisher allowlist, and what "all" covers
+npm run test:peer-intel-adv   # Form ADV: checkbox order, Safe Harbor's Fund 4 record, file-number links (tsx)
+npm run refresh:peer-adv      # local only: IAPD Form ADV PDFs → lib/peer-intel/adv-extract.json, with a link report
 npm run build                 # next build
 ```
 
@@ -404,8 +406,10 @@ lib/            Domain logic: FDIC client and transforms, auth, features, cachin
   scoring/      Pure, testable analysis: opportunity score, change detection, brief ranking,
                 peer cohorts, the CRE capital scenario, FDIC quarter arithmetic
   analytics/    Market Analytics computation, incl. the bank-behaviour layers
-  peer-intel/   Peer & Private Credit tracker: EDGAR access contract, Form D parsing,
-                the three-layer competitor registry (not yet rendered anywhere)
+  peer-intel/   Peer & Private Credit tracker: EDGAR access contract, Form D parsing, the
+                three-layer competitor registry with each manager's adviser CRD, and Form ADV
+                (adv-pdf.mts reads the IAPD PDF, adv.ts parses it, adv-extract.json is the
+                committed result the app reads — never fetched at runtime)
 docs/           Focused guides (start with DEV_ENVIRONMENT.md)
 data/           Local SQLite and JSON — development only
 scripts/        One-off and ingestion scripts (TypeScript and Python)

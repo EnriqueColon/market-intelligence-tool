@@ -8,232 +8,148 @@ is it in now, and what is still open.
 
 ---
 
-## STOPPED HERE — 2026-10-26, evening: Node upgraded; sponsor-stress step 2 on dev
+## STOPPED HERE — 2026-10-27: sponsor-stress step 3 on dev — Form ADV in the drawer
 
 Read `CLAUDE.md` first for orientation, then this block. Everything below it is the running record —
 reverse-chronological, and worth reading only when you need the reasoning behind something specific.
 
-**Production is `8061ec2`**, released this morning: Peers (beta), Seller Likelihood in the bank
+**Production is `8061ec2`** (2026-10-26 morning): Peers (beta), Seller Likelihood in the bank
 drawer, the nightly Peers cron warm, the Assignment of Mortgage removal, and the signals size guard
-raised to 4,480,000 bytes so AMO Tracker's 4.12 MB request is still sent. The user has since set
-`peer-intel` in production's `ENABLED_TABS` and confirmed the tab works there.
+at 4,480,000 bytes. The user has set `peer-intel` in production's `ENABLED_TABS` and confirmed the
+tab works there.
 
-**`dev` is ahead of production by four commits, none released:** `d3acaff` Structure & terms and
-People from Form ADV's neighbour, Form D (reviewed in a preview by the user); `8e93ead` each fund's
-row in the Raises table expands to them; `8aae1dc` no row opens on its own (the user's correction;
-preview `market-intelligence-tool-caw5jcwsu.vercel.app`); and the adviser-CRD commit described in
-the newest entry below. Confirm the head with `git log --oneline -1` rather than trusting a SHA
-written here. Releasing them is the usual `git merge dev` on `main`, a fast-forward, once the user
-has looked at the fund rows in the preview.
+**`dev` is ahead of production by seven commits, none released:** `d3acaff` Structure & terms and
+People from Form D; `8e93ead` each fund's row expands to them; `8aae1dc` no row opens on its own
+(the user's correction; preview `market-intelligence-tool-caw5jcwsu.vercel.app`); `04ccd88`
+adviser CRDs in the registry (sponsor-stress step 2); `54371c4` and `95e5675` the Brotli CVE
+response and Node 24; and `3ec5e2e` **Form ADV in the drawer (step 3)**, described in the newest
+entry below. Confirm the head with `git log --oneline -1` rather than trusting a SHA written here.
+Releasing is `git checkout main && git merge dev`, a fast-forward. **The user has not yet looked at
+the fund rows or the Form ADV section in a preview** — the `3ec5e2e` preview is the one to show.
 
-**Decisions taken 2026-10-26, so they need no revisiting.** Assignment-of-mortgage work stays out of
-this tool (it belongs to AMO Tracker; the code and data were removed, `9f8a1f9` / `eb8eef1`). The
-AMO question — whether it keeps its FDIC page — is parked until the expansion is done. The PE sponsor
-stress monitor is **held**, to be built lowest-hanging first; its research is
-`docs/SPONSOR_STRESS_RESEARCH.md`; step 1 (Form D-only stress signals) was dropped as a verdict the
-data cannot support; **step 2 is done** (every manager's adviser CRD in `registry.ts`); **step 3 is
-next**: Form ADV 7.B.(1) in the drawer, from the IAPD PDF, a path proven on Safe Harbor's own ADV.
+**Step 3 in one paragraph.** `npm run refresh:peer-adv` downloads each adviser's Form ADV PDF from
+IAPD, reads it with pdf.js, parses Schedule D 7.B.(1) and commits `lib/peer-intel/adv-extract.json`
+(21 advisers, 593 funds, 878 KB). The app never fetches a PDF. A fund links to a vehicle by the Form
+D file number the ADV quotes in question 22 — now read from EDGAR's index onto every raise as
+`fileNumber`, cache key `peer-intel-v4` — and by folded name as the fallback. The drawer gained a
+**Form ADV** section (the adviser's whole book: fund count, gross assets with feeders excluded,
+audit counts, and the funds not tracked here) and an **ADV block under each expanded fund row**
+(gross assets, owners, minimum, 3(c)(1)/(7), master or feeder, auditor with PCAOB number, opinion,
+whether audited statements reached every investor, custodians, prime brokers, administrators,
+marketers). Copy Snapshot carries it. Link rate with the file-number key: Safe Harbor 3/4, Camden
+4/4, H.I.G. 2/2, 3650 1/1, Omnia 1/1, Rialto 5/9, Bayview 2/4, BH3 3/6, Bridge 2/6, Pretium 1/3,
+Silverview 1/2; the unlinked vehicles have file numbers newer than the ADV filing or are offshore
+siblings, and the row says "not on the ADV by file number or name". Madison, BX REIT Advisors,
+Blackstone Credit BDC Advisors, Apollo Credit Management, BrightSpire and Ladder report **no private
+funds** — correct, since 7.B.(1) covers private funds only and their vehicles are registered.
 
-**Pick up with, in order:** step 3 above; then, on the Peers list, the `non-traded` bucket split and
-gating on the reader `verify:peer-gating` already carries; Bank Behaviour step 5 whenever deal
-sourcing should move.
+**What the ADV says about Safe Harbor itself, to know before the user opens it.** Seven funds, $0.39B
+gross over six non-feeder funds. Fund 4 $186.7M and 30 owners; Fund 3 $84.1M and 46 owners, down
+from $155.6M on the 2024 ADV; Fund 2 $1.5M; Fund 1 is no longer listed. Every audited fund has an
+unqualified Deloitte opinion, but **Funds 3 and 4 answer No to 23(g)** — audited statements
+distributed to all investors — which the panel shows in amber, and Precedent Asset Management-4D1
+answers "report not yet received". If any of that is a filing error, the fix is on the ADV, not here.
 
-**Node.** The runtime is 24.x everywhere. Locally that is Homebrew's `node@24`, linked on
-2026-10-26 at 24.22.1 — the first release carrying the Brotli decoder fix (CVE-2026-111497, Node's
-October 21 security release). Homebrew's plain `node` formula is Node 26 and is installed but
-unlinked; `brew upgrade node` would move the machine off the production line. The build script now
-prints `node --version`, so every Vercel build log states its runtime; Vercel's project setting is
-`24.x` and it rolls patches out itself. The one code path that asked remote sites for Brotli
-(`lib/report-scraper.ts`) no longer does (`54371c4`).
+**Refreshing the extract.** Local only: `npm run refresh:peer-adv`, about four minutes, 433 MB of
+PDFs kept in the scratchpad's `adv-pdf/` (`--reuse` re-parses without downloading, `--dry` writes
+nothing, `--crd N` one adviser). Read the per-manager report before committing; a parse failure
+prints FAILED and exits 1, and a fund whose figure could not be read renders "not reported". The
+action rebuilds the ADV views from the committed file on every read, so a new extract shows on
+deploy with no cache bump.
 
-**Standing hazards.** AMO Tracker has about 160 KB of room on `/api/analytics/v1/behavior-signals`
-(4,318,145 bytes against a refusal at 4,480,000); run `npm run measure:signals-response` before
-widening `BankBehaviorSummary`; the durable fix is AMO requesting by `band=`. Pushing needs `gh`'s
-active account to be EnriqueColon (`gh auth switch --user EnriqueColon`); RSronin09 gets a 403.
-IAPD's search is a public site's own endpoint: scripts only, never runtime, never written unreviewed.
+**Decisions taken 2026-10-26, so they need no revisiting.** Assignment-of-mortgage work stays out
+of this tool. The AMO question is parked until the expansion is done. The sponsor stress monitor is
+built lowest-hanging first: step 1 dropped as a verdict the data cannot support; steps 2 and 3 done.
 
-### Where this leaves the expansion
+**Pick up with, in order:** (1) the user looks at the `3ec5e2e` preview — a fund row's ADV block,
+the Form ADV section, Safe Harbor's amber answers; (2) sponsor-stress **step 4**,
+continuation-vehicle detection from Form D names and the ADV's master/feeder links, or **step 5**,
+2011–2024 ADV history from the SEC's bulk CSVs (`IA_Schedule_D_7B1` is in the scratchpad;
+FilingID→CRD needs `IA_ADV_Base_A`), whichever the user picks; (3) on the Peers list, the
+`non-traded` bucket split and gating on the reader `verify:peer-gating` already carries; (4) Bank
+Behaviour step 5 whenever deal sourcing should move.
 
-The user's framing for the week: **push forward what can be built with confidence.** Two of the
-morning's three recommendations are done — vintage pacing (`71f7ec9`) and the gating spot-check — and
-the third, the interim-close labels, with them. What the spot-check established is in §3 of the peer
-status doc and is the thing to read before building gating: the wording holds over six quarters per
-fund, but **a fully-met quarter states no accepted count** (three different shapes, HPS silent on
-acceptance altogether), **Ares re-files corrected results for the same offer**, **BREIT's figure is
-year-to-date**, and **SREIT has been closed to ordinary holders since April 2026** in a wording that
-carries no percentage. The first run of the reader saw only the prorated quarters and would have
-reported every fund as gating in every quarter it appeared.
+**Node.** 24.x everywhere; locally Homebrew's `node@24` at 24.22.1 (CVE-2026-111497 fixed); the
+plain `node` formula is 26 and unlinked — never `brew upgrade node`. The build prints
+`node --version`, so every Vercel build log states its runtime.
 
-Next, in order: **split the `non-traded` bucket** (precondition), then **gating** on
-`verify:peer-gating`'s reader — the script's `readTenderResult` and `readReitProse` are the extractor
-in all but packaging, tested against 38 live documents. Then cap-change detection and the small tail.
-Bank Behaviour step 5 is independent and can go whenever. AMO and `ENABLED_TABS` stay parked.
-
-A preview deployment of `10160b3` rebuilds automatically; the GitHub deployment record appears a
-minute or two after the push, and the URL is in its deployment status. Previews sit behind Vercel
-Deployment Protection, so only a signed-in team member can open one.
-
-### The one thing with an impact outside this repo
-
-**`/api/analytics/v1/behavior-signals` now returns 413 for a whole-scope national request.**
-Adding the three Seller Likelihood fields took that response from 3.90 MB to 4.02 MB, past the 4 MB
-refusal threshold added in `cc087df`. The 413 names `band=` and lists the bands, and the bands
-partition the scope so their union is the whole cohort — but **AMO Tracker will break on that
-endpoint until it switches to per-band requests**, and it is deployed against production, which does
-not yet carry this change. Pushing to `dev` does not affect it; merging to `main` does. Either tell
-AMO to band first, or hold the merge.
-
-Everything else in these ten commits is additive: the Peers tab is absent from `ENABLED_TABS` by the
-user's choice until the expansion is finished, so none of it renders in production.
+**Standing hazards.** AMO Tracker has about 160 KB of room on `/api/analytics/v1/behavior-signals`;
+run `npm run measure:signals-response` before widening `BankBehaviorSummary`; the durable fix is AMO
+requesting by `band=`. Pushing needs `gh`'s active account to be EnriqueColon
+(`gh auth switch --user EnriqueColon`). IAPD is a public site: scripts only, 300 ms spacing, never
+runtime, never a CRD written unreviewed. The ADV views add 81 / 102 / 207 KB to the three layers'
+responses, nearly all of it briefs of untracked funds (Bridge 148, H.I.G. 149, Starwood 115) — trim
+`AdvFundBrief` rather than widen it.
 
 ### Where each expansion stands
 
 | | State |
 | --- | --- |
-| Peers tab, steps 1–6 | Done and reviewed in a preview by the user |
-| Peers step 7 | Developments feed done; **gating withheld**, alerts digest not started |
-| Bank Behaviour step 4 | **Done** — score, four states, backtest, cache, drawer |
+| Peers tab, steps 1–6 | Done, in production as beta |
+| Peers step 7 | Developments feed done; gating assessed and its reader proven, not built; alerts digest not started |
+| Sponsor stress | Steps 2 (CRDs) and 3 (Form ADV) done on `dev`; steps 4–5 next, user-paced |
+| Bank Behaviour step 4 | Done — score, four states, backtest, cache, drawer |
 | Bank Behaviour steps 5–7 | Not started |
 
-### A factual correction made after stopping, and a lead it produced
-
-The user asked whether the two empty states — evergreen liquidity and portfolio stress — were
-stating legal facts or merely that something need not be reported. The answer is that **they are
-different cases, and the shipped copy conflated them.**
-
-The liquidity one is close to structural: a drawdown fund's partnership agreement grants no
-redemption right, so there is no programme to gate. But the copy drifted into implying its investors
-have no exit, which is wrong — secondary sales and GP-led continuation vehicles are real liquidity
-events that no filing records. Now worded as "no redemption programme, not no liquidity".
-
-The portfolio one was simply wrong. It read as though a private fund's holdings, valuations and
-performance do not exist. They do: the fund strikes a NAV quarterly, measures its own performance and
-is audited annually. They are **not public** — Regulation D carries no public reporting obligation,
-and the detailed data larger advisers file on **Form PF** is held confidentially by the SEC rather
-than published. Corrected in the panel, in `PRIVATE_FUND_LIMITS`, and in both components' doc
-comments, with a test asserting the distinction survives future edits.
-
-**The lead:** Form ADV Part 1A Schedule D requires a registered adviser to list each private fund it
-manages with that fund's **gross asset value**, and ADV filings are public. That would give fund size
-for the private peers, which the tab currently treats as unavailable — it derives size only from Form
-D's cumulative `totalAmountSold`. Logged in `docs/PEER_TRACKER_STATUS.md` §3; the filing requirement
-is not in doubt but the retrieval path is unverified, and coverage depends on each adviser being
-registered.
-
-### Open for discussion before any more is built — read §3b of the peer status doc
-
-Two questions came up after stopping, and the user wants to **discuss the approach before anything
-is built**. Nothing was implemented.
-
-**Build versus buy.** Commercial products already cover three of the brief's five asks better than
-this tool does. Stanger publishes a gating figure — Q2 2026 requests at 12.4% of NAV with sponsors
-meeting 38%. It was first assessed as unobtainable from filings; **that was wrong**, and Schedule TO
-final amendments carry it, so their advantage is aggregation and cadence rather than access. Our own figures corroborate theirs
-(−$4.45B against their ~−$3.8B from a wider vehicle set), which is reassuring about the method and
-also shows theirs is more complete. Where this tool wins and should stay: the Miami-Dade and Florida
-layers, which no vendor covers, filing-level provenance, and integration with the bank analytics.
-
-**What to borrow, and the line.** Studying published methodology and output is in scope; scraping
-vendor databases or decompiling their applications is not. The borrowable framings are listed in
-§3b. One is already proven from data we fetch today: **Fund 4 is raising at roughly Fund 3's dollar
-pace against a target that tripled** — $64.2M at month 28 versus Fund 3's $61.7M at month 40, which
-is the story behind the $500M → $300M cut and suggests $300M is still ambitious.
-
-Both are written up in full in `docs/PEER_TRACKER_STATUS.md` §3b, including the vintage table, what
-cannot be derived at any effort, and a proposed build order if the discussion lands that way.
-
-### The two questions are answered — gating is a full-coverage feature
-
-Both were checked against live EDGAR on 2026-10-21. **Gating is buildable for all seven vehicles**,
-from two sources rather than one, and the checks turned up four traps that would each have produced
-a confidently wrong number. The detail, with the counts and the arithmetic, is
-`docs/PEER_TRACKER_STATUS.md` §3.
-
-**1. Do BREIT and SREIT use tender offers? No — and neither matters, because both disclose anyway.**
-The five BDCs run quarterly issuer tenders: BCRED 22 `SC TO-I` and 37 amendments, Blue Owl 21/26,
-Apollo 18/17, HPS 18/17, Ares 12/17. **BREIT has never filed a Schedule TO at all** in 688 filings.
-**SREIT's five are `SC TO-T`** — the *third-party* form, filed by Cox Capital and Saba Capital
-against it in a March–April 2026 mini-tender. Reading `SC TO` presence as an issuer tender would
-have reported an activist's hostile bid as SREIT's own redemption programme. Filter on `SC TO-I`.
-
-Both REITs instead disclose requests and fulfilment in 10-Q prose, and **BREIT's is the best
-disclosure of any of the seven** — monthly, with the cap used beside the fulfilment rate: *"the
-Company fulfilled repurchases equal to 2.0%, 2.0% and 1.0% of NAV, or 34%, 43% and 29% of
-repurchase requests, respectively"* (Q3 2023). That is both of Stanger's headline metrics, monthly,
-per vehicle. SREIT gives a monthly fulfilment percentage too, but only in months it prorated — 37%,
-3%, 4%, 4%, 4% through April–August 2024 — so a silent month has to be read as full fulfilment,
-which is an inference and must be labelled as one.
-
-**2. How consistent is the 13e-4(c)(4) wording? Consistent in structure, with one trap in it.** All
-five BDCs give shares tendered and shares accepted as absolute counts, in a numbered list, in a
-filing under ~5,200 characters. Four cite the rule explicitly; Blue Owl does not. **But
-"representing X%" means two different things:** the fulfilment rate for Blue Owl and Ares, and the
-*cap* for BCRED, Apollo and HPS. Parsing it as one field would report Apollo's fulfilment as 5%
-when it was 29.8% — wrong by six times, in the direction that makes gating look worse than it was.
-Compute it from the two share counts instead, which all five give.
-
-**The other trap, which cost the most time here: the newest `SC TO-I/A` is usually not the final
-amendment.** BCRED's newest is a Rule 13e-4(c)**(1)** communication amendment carrying no figures.
-And the final amendment cannot be identified from the cover page, because the checkbox *label* is
-present in every Schedule TO whether ticked or not and stripping tags discards the tick. Select on
-the presence of the result figures themselves.
-
-**A third corroboration of Stanger, incidentally.** The five BDCs' weighted fulfilment rate is
-**33.9%** — 272.9M shares accepted of 805.9M tendered — against their published 38% sector figure.
-Not quarter-aligned, since the five offers expired on four different dates, so it is a sanity check
-rather than a match.
-
-**What this does to the build-versus-buy case in §3b.** It was assumed Stanger has the requests
-figure because sponsors tell them, which would be an access advantage no engineering closes. That
-is wrong: every sponsor is obliged to publish it. Their real edge is breadth and cadence — more
-vehicles, assembled quarterly — which is labour, and which engineering does close. §3b has been
-revised accordingly, and the proposed build order reordered: the `non-traded` bucket split moves up
-to second, because the BDCs and the REITs need different extractors on different periodicities and
-gating cannot be built until they are apart.
-
-### Pick up with, in order
-
-1. **Bank Behaviour step 5** — enforcement actions (FDIC / OCC / Fed, monthly). The next numbered
-   step, and the inputs are a new source rather than a reshaping of existing ones.
-2. **Split the `non-traded` bucket into BDC and REIT.** Promoted ahead of gating on 2026-10-21:
-   the five BDCs are read from Schedule TO quarterly and the two REITs from 10-Q prose monthly, so
-   they cannot share an extractor, a cadence or a column, and gating cannot be built until they are
-   apart. Currently one bucket that mixes them, which also makes the aggregate less meaningful.
-3. **Gating — build it, now unblocked.** Both confirmation questions are answered above and the
-   answer is full coverage across all seven vehicles. Two extractors: Schedule TO final amendments
-   for the five BDCs, computing fulfilment from the share counts and never from the "representing
-   X%" phrase; 10-Q prose for BREIT and SREIT, handling both the prorated and the fully-met
-   wordings. All four traps are written up in `docs/PEER_TRACKER_STATUS.md` §3 — read it before
-   starting, because each one produces a plausible wrong number rather than an error.
-4. **The screening-table column and Pressure-vs-Action scatter**, which the plan puts in step 7 —
-   now unblocked, since the summaries carry `sellerState` and `sellerScore`.
-5. **The peer alerts digest**, worth doing only after `peer-intel` is in `ENABLED_TABS` and the user
-   knows which signals they want pushed.
-6. Smaller: sleeve display grouping, `/api/peers/v1`, the "CRE / Assets" label.
-
-The full list is `docs/PEER_TRACKER_STATUS.md` (20 open) and
-`docs/BANK_BEHAVIOR_EXPANSION_STATUS.md` §2.
-
-### Decisions the user has already taken, so they need no revisiting
-
-**AMO Tracker is parked until the expansion is finished** (decided 2026-10-22). The question raised
-was whether AMO should keep its FDIC Data Analytics page at all, given that it is the only consumer
-of `/api/analytics/v1/*`, the integration is one-way, and the page's existence is what makes the
-whole-scope 413 a merge blocker. The three options — keep and brief AMO to use `band=`; drop the
-page from AMO and remove the coupling; or deepen it — were laid out, and the deciding fact is what
-AMO is for and who opens it, which was not settled. **Do not reopen this until the remaining
-expansion items are done**; until then the merge of `dev` to `main` stays held, which is the
-existing instruction anyway. AMO Tracker (`EnriqueColon/amo-dashboard`, a separate droplet app)
-is unrelated to the AOM material inside this repo.
-
-`ANALYTICS_API_KEY` rotation is theirs. The preview has been reviewed and looks correct.
-`peer-intel` goes into `ENABLED_TABS` when the expansion is finished, not before. The credential that
-was in the `origin` URL is not being pursued, on the basis that the repository's data is public. The
-broader private credit tier stays, marked `adjacent`. The tab is named **Peers (beta)**.
+The gating findings (Schedule TO for the five BDCs, 10-Q prose for BREIT and SREIT, the four traps)
+are in `docs/PEER_TRACKER_STATUS.md` §3, the build-versus-buy assessment in §3b, the sponsor-stress
+research in `docs/SPONSOR_STRESS_RESEARCH.md`, and the AMO decision and `ENABLED_TABS` history in
+the 2026-10-22 and 2026-10-26 entries below.
 
 ---
 
-## 2026-10-26, evening (latest) — Node 24.22.1, and the Brotli decoder CVE
+## 2026-10-27 (latest) — Sponsor-stress step 3: Form ADV 7.B.(1) in the drawer
+
+**What was built — `3ec5e2e`.** Three pure modules and a script. `lib/peer-intel/adv-pdf.mts`
+reads an IAPD Form ADV PDF with pdf.js into ordered text lines with their checkbox marks: every
+yes/no answer on the form is a small drawn image, not text or a form field, and the ticked box is
+the inkier of the pair (83% against 79% dark pixels for the 13×16 yes/no boxes, 37% against 22% for
+the 9×9 option boxes), decided by clustering each page's marks of one size at the widest ink gap, so
+a new report generator moving the levels does not break it. `lib/peer-intel/adv.ts` parses the
+cover (adviser, filing type, date) and Schedule D 7.B.(1) into one `AdvFund` record per fund — 40
+fields, every one an answer on the form by question number. `lib/peer-intel/adv-link.ts` decides
+which advisers to read for a manager, links funds to vehicles, and builds the payload-sized view:
+linked funds in full, every other fund as a brief, and a summary (funds, feeders, gross assets over
+non-feeders, by type, audit and opinion counts, statements withheld). `scripts/refresh-peer-adv.mts`
+runs it all locally and commits `adv-extract.json`.
+
+**The link key.** Name matching linked 0 of 4 Bayview and Camden vehicles, because the registry
+holds the Form D issuer (the domestic feeder) and the ADV lists the master under another name. The
+ADV quotes each fund's Form D file number (Q22), and EDGAR's submissions index carries `fileNumber`
+on every filing, so the fetch now reads it onto `FilingRef`, `parseFormD` onto `OfferingRecord`,
+and `buildRaise` hoists it onto `Raise.fileNumber`. Cache key bumped to `peer-intel-v4`. A master
+and feeder that filed one Form D between them both attach to the vehicle, master first.
+
+**Which advisers.** A vehicle's own adviser where recorded, plus the manager's unless every tracked
+vehicle names its own — which skips Apollo Capital Management's 165 MB umbrella filing. What that
+revealed: the vehicle-level advisers of BREIT, BCRED and Apollo Debt Solutions report **no private
+funds**, correctly, because 7.B.(1) covers private funds only and those vehicles are registered. The
+section says so beside the vehicle's name instead of showing an empty count.
+
+**Traps found.** pdf.js stores an image named `g_…` in `page.commonObjs` and any other in
+`page.objs`; asking the wrong store waits forever, and a wait with nothing else on the event loop
+exits the process silently with code 0 — every lookup is bounded at one second. `.ts` modules
+compile as CommonJS under tsx and pdf.js is ESM-only, so the reader and the script are `.mts`, and
+an `.mts` file importing a CommonJS `.ts` module sees only its default export. A filing of more than
+15 funds is paginated and carries no "Total Funds" line at all, so the count is the parsed count.
+`firmKey` strips parentheticals, which is right for adviser names and wrong for fund names — "(Employee)"
+and "(Offshore)" tell sibling vehicles apart — so `fundKey` is its own function.
+
+**UI.** `components/peer-intel/adv-section.tsx` (the drawer's Form ADV section) and an ADV block in
+`structure-people.tsx`'s `FundDetail`; `buildManagerSnapshot` takes the view; 16 catalogue entries
+with basis `adv`; the Data Sources panel names Form ADV. Amber marks the audit answers that fall
+short of "audited, clean, distributed", as flags to read the record rather than verdicts.
+
+**State.** On `dev`, not released and not yet reviewed in a preview. `next build` passes, `tsc` at
+the 63-error baseline, all 16 peer suites pass (`test:peer-intel-adv` is 10). The refresh ran once,
+2026-10-27, 21 advisers, exit 0.
+
+**Open.** Step 4 (continuation vehicles) and step 5 (ADV history 2011–2024) of the sponsor-stress
+plan; the ADV extract has no scheduled refresh and is as of 2026-10-27 until the script is re-run.
+
+---
+
+## 2026-10-26, evening — Node 24.22.1, and the Brotli decoder CVE
 
 The user brought a note claiming the tool was exposed to CVE-2026-111497 ("Node2Shell"), an
 out-of-bounds write in the Brotli decoder bundled with Node. Checked at the source: real, High

@@ -801,6 +801,23 @@ registry live. IAPD's search is a public site's own JSON endpoint, not a documen
 scripts only, never at runtime, and never write a CRD unreviewed — the search returns look-alikes
 and caps at twenty results, which hides large sponsors' advisers.
 
+**Form ADV.** Since 2026-10-27 the drawer shows each manager's private funds as its adviser reports
+them on Form ADV Schedule D 7.B.(1) — gross asset value, owners, minimum, 3(c)(1)/(7), master or
+feeder, the auditor and PCAOB number, whether every opinion was unqualified and whether the audited
+statements reached every investor, custodians, prime brokers, administrators, marketers. IAPD serves
+the ADV only as a generated PDF, up to 165 MB, so nothing deployed reads one: `npm run
+refresh:peer-adv` downloads each needed adviser's PDF, reads it with pdf.js
+(`lib/peer-intel/adv-pdf.mts`), parses it (`lib/peer-intel/adv.ts`) and commits
+`lib/peer-intel/adv-extract.json`; the app reads the file (`adv-extract.ts`) and
+`lib/peer-intel/adv-link.ts` attaches funds to vehicles by the Form D file number the ADV quotes
+(Q22) — carried on every raise as `fileNumber` since cache key `peer-intel-v4` — with folded name
+as the fallback. Every yes/no on the form is a drawn image: the ticked box is the inkier of the pair,
+decided per page by clustering, and the Yes column is the leftmost. 7.B.(1) lists private funds only,
+so a BDC's or non-traded REIT's adviser reports none, and the section says so rather than showing
+zero. The action rebuilds the views from the committed file after the cache, so a new extract shows
+on deploy. A manager with no adviser on file says that; a fund the adviser reports under a master
+with another name is listed under "not tracked here".
+
 **Two rules the structure and people code depends on.** A Form D filed jointly by several issuers
 reports the offering as a whole, so a co-issuer's capital is *inside* the filing's totals; the risk is
 double counting, when a co-issuer is also tracked as its own vehicle and its trail holds the same
@@ -2270,6 +2287,9 @@ npm run test:analytics-api         # data API: fail-closed auth, scope and CERT 
 npm run test:peer-intel-edgar      # EDGAR contract: q= not keys=, locationCodes, CIKs, retry, layers (tsx)
 npm run test:peer-intel-formd      # Form D: entities, "Indefinite", the Safe Harbor Fund 4 trail (tsx)
 npm run test:peer-intel-registry   # peer registry: unique CIKs, cumulative layers, evidence (tsx)
+npm run test:peer-intel-iapd       # IAPD hit scoring: exact, suffixed, Form D entities, capped sets (tsx)
+npm run test:peer-intel-adv        # Form ADV: checkbox order, Safe Harbor's Fund 4 record, file-number links (tsx)
+npm run refresh:peer-adv           # local only: IAPD PDFs → lib/peer-intel/adv-extract.json, with a link report
 npm run discover:peers             # proposes peer candidates from EDGAR by location and name
 npm run lookup:peer -- "Rialto"     # finds one named manager's vehicles (names, not patterns)
 npm run test:peer-intel-cohort     # raise aggregation: sleeve counting, coverage, positioning (tsx)
@@ -2419,6 +2439,18 @@ refused on merge. It now has about 160 KB of room, and it grows as FDIC data arr
 weight so a partial reporter is not read as calm, which means one component at its ceiling reads 100
 on 15% confidence. Any state or list built on such a score needs a confidence floor — without one,
 `pre-seller` covered 45% of the backtest's bank-quarters. Always show confidence beside the score.
+
+**Form ADV's answers are images, and pdf.js keeps them in two places.** The IAPD PDF paints one
+small image under Yes and one under No for every question, with no form field and no tick glyph;
+text extraction sees neither. The ticked image has more ink — but by a few points, and the level
+differs by box size, so decide per page by clustering marks of one size at the widest gap, never by
+a fixed threshold. An image named `g_…` lives in `page.commonObjs`, any other in `page.objs`;
+asking the wrong store never calls back, and a Node process waiting on nothing exits silently with
+code 0, so every lookup is bounded. A filing of more than 15 funds is paginated and carries no
+"Total Funds" line. And the registry's name for a vehicle is the Form D issuer, often a feeder,
+while the ADV lists the master under another name — link on the Form D file number, which both
+carry, and keep parentheticals in a fund name because "(Employee)" and "(Offshore)" are the only
+difference between siblings.
 
 **A field added to `OfferingRecord` is multiplied by every filing in every trail.** Adding
 `relatedPersons` to the Form D record put a copy on all nine filings of sixty-five vehicles — 132 KB

@@ -1,10 +1,11 @@
 # Peer & Private Credit Tracker — status and open items
 
-*As of 2026-10-26: **merged to production as beta.** Steps 1–6 are done, with step 7's developments
-feed, vintage pacing and interim-close labels; gating is assessed and its reader proven
-(`verify:peer-gating`) but not built, and the alerts digest is not started. The user chose to ship
-the current state rather than wait for the expansion to finish; the tab shows once `peer-intel` is in
-production's `ENABLED_TABS`.*
+*As of 2026-10-27: **in production as beta** since 2026-10-26, with `peer-intel` in production's
+`ENABLED_TABS`. Steps 1–6 are done, with step 7's developments feed, vintage pacing and interim-close
+labels; gating is assessed and its reader proven (`verify:peer-gating`) but not built, and the
+alerts digest is not started. On `dev` and unreleased: each fund's row expands to its structure,
+terms and people, adviser CRDs in the registry (sponsor-stress step 2), and **Form ADV 7.B.(1) in
+the drawer (step 3)** — see §3.*
 
 **Resuming:** see the "STOPPED HERE" block at the top of `SESSION.md` for the ordered pick-up list.
 The item with an impact outside this repo is §3a: AMO Tracker's whole-scope signals request now has
@@ -140,10 +141,28 @@ zero.
   stands: the six without an adviser will have no ADV figures, and the panel must say "no ADV on
   file" rather than infer.
 
-- [ ] **Step 3: Form ADV 7.B.(1) in the drawer** — each fund's gross asset value, owners, audit
-  delivered and opinion, auditor, 3(c)(1)/(7), master/feeder, from the IAPD PDF, catalogued, beside
-  the Form D figures. Not started. The parse is proven on one adviser; keep every PDF, and a parse
-  failure reads "not read", never zero.
+- [x] **Step 3: Form ADV 7.B.(1) in the drawer — done 2026-10-27 (`3ec5e2e`, on `dev`).** Each
+  fund's gross asset value, owners, minimum, 3(c)(1)/(7), master/feeder, auditor with PCAOB number,
+  opinion, whether audited statements reached every investor, custodians, prime brokers,
+  administrators and marketers — under its row in the drawer's Raises table, beside the Form D
+  figures, with a Form ADV section for the adviser's whole book (funds, gross assets with feeders
+  excluded, audit counts, the funds not tracked here). Read offline by `npm run refresh:peer-adv`
+  from the IAPD PDFs and committed as `lib/peer-intel/adv-extract.json` (21 advisers, 593 funds);
+  the app never fetches a PDF. Funds link to vehicles by the Form D file number the ADV quotes
+  (Q22), now read from EDGAR's index onto every raise, with folded name as the fallback; the link
+  rate and the reasons for each unlinked vehicle are in the refresh script's report. The six
+  managers without an adviser say "no adviser on file"; the advisers of registered vehicles report
+  no private funds, correctly, and the section says why. 16 catalogue entries with basis `adv`.
+  Not yet reviewed in a preview by the user.
+
+- [ ] **Step 4: continuation-vehicle detection** — from Form D issuer names (Continuation,
+  CV, Annex, Extension) and the ADV's master/feeder links, flagged on the manager, never scored.
+  Next in the sponsor-stress plan, user-paced.
+
+- [ ] **Step 5: ADV history 2011–2024** from the SEC's bulk CSVs (`IA_Schedule_D_7B1` is in the
+  scratchpad; FilingID→CRD needs `IA_ADV_Base_A`), so a fund's gross asset value becomes a series —
+  Safe Harbor's Fund 3 fell from $155.6M (2024) to $84.1M (2026), which is the kind of move the
+  series would show for a peer.
 
 **Deferred by design.**
 

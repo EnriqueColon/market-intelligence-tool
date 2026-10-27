@@ -98,3 +98,57 @@ against IAPD. Two runs over all 26 managers, then a review:
 **Decided 2026-10-26:** step 1 (fundraising-stress signals from Form D alone) is not built — the
 inputs are reliable but a verdict from them is not, since Form D has no closed flag, trails are
 sparse, and no backtest exists. The next step is 3: Form ADV 7.B.(1) in the drawer.
+
+## 6. Step 3, done 2026-10-27: Form ADV 7.B.(1) in the drawer
+
+Built as a local refresh that commits an extract, because IAPD serves the current ADV only as a
+generated PDF — 2.6 MB for Safe Harbor, 46 MB for Bridge, 165 MB for Apollo Capital Management's
+umbrella — and nothing on Vercel can hold or parse one. `scripts/refresh-peer-adv.mts` downloads
+each needed adviser's PDF (300 ms apart, EDGAR's User-Agent convention), `lib/peer-intel/adv-pdf.mts`
+reads it with pdf.js, `lib/peer-intel/adv.ts` parses it, and `lib/peer-intel/adv-extract.json` is
+committed: 21 advisers, 593 funds, $313B gross, 878 KB. One run, about four minutes.
+
+**What the PDF turned out to be.** Text extracts cleanly, but every yes/no answer and every option
+in a checkbox list is a small drawn image — no form field, no tick glyph. The ticked image carries
+more ink than the empty one (83% against 79% of dark pixels for the 13×16 yes/no boxes, 37% against
+22% for the 9×9 option boxes, measured on Safe Harbor's and BH3's filings), and every page carries
+both kinds, so the two are told apart by clustering each page's marks of one size at the widest
+ink gap rather than by a fixed threshold. The Yes box is the leftmost on its line. pdf.js keeps an
+image named `g_…` in `page.commonObjs` and any other in `page.objs`; asking the wrong store never
+calls back, and a process waiting on nothing exits silently with code 0, so every lookup is bounded.
+
+**The link.** Matching by folded name linked 0 of 4 Bayview and Camden vehicles: the registry holds
+the Form D issuer, often a domestic feeder, and the ADV lists the master under another name. The
+ADV quotes each fund's Form D file number (Q22) and EDGAR's submissions index carries `fileNumber`
+on every filing, so the fetch now reads it onto each raise and the link is by file number first,
+name second, with parentheticals kept in names because "(Employee)" and "(Offshore)" are what
+separate siblings. Rate after the change: Safe Harbor 3/4, Camden 4/4, H.I.G. 2/2, 3650 1/1, Omnia
+1/1, Rialto 5/9, Bayview 2/4, BH3 3/6, Bridge 2/6, Pretium 1/3, Silverview 1/2. Every unlinked
+vehicle has a file number newer than the ADV's filing date (BH3's Fund III, Bridge's Fund VI) or is an
+offshore sibling whose Form D is separate; the row says "not on the ADV by file number or name".
+
+**Which advisers, and what 7.B.(1) does not cover.** A vehicle's own adviser where recorded, plus
+the manager's unless every tracked vehicle names its own — which is what skips the Apollo umbrella.
+The vehicle-level advisers of BREIT, BCRED and Apollo Debt Solutions, and BrightSpire's and Ladder's,
+report **no private funds**, correctly: 7.B.(1) lists private funds only, and those vehicles are
+registered. Madison Realty Capital's adviser reports none either, as the 2024 bulk data had shown.
+Ares Management's own PDF (CRD 130074) is a blank one-page stub; the tracked Ares vehicle's adviser
+(131619) reads fine.
+
+**What it shows for Safe Harbor.** Seven funds: Fund 4 $186.7M gross and 30 owners, Fund 3 $84.1M
+and 46 (down from $155.6M on the 2024 ADV), Fund 2 $1.5M, Fund 4's Cayman feeder $7.5M, Precedent
+Asset Management-4D $37.2M and 4D1 $0, SHEDDF3 Tides $84.0M; Fund 1 is no longer listed. All
+audited by Deloitte Miami (PCAOB 34) with unqualified opinions, except 4D1's "report not yet
+received"; **Funds 3 and 4 answer No to 23(g)**, audited statements distributed to all investors,
+which the panel shows in amber. If that is a filing error the correction belongs on the ADV.
+
+**Surfacing.** A Form ADV section in the drawer (the adviser's book: funds, feeders, gross assets
+over non-feeders so a master and feeder are not double counted, by type, audit and opinion counts,
+statements withheld, and the funds not tracked here — the eight largest, expandable) and an ADV
+block under each expanded fund row; Copy Snapshot carries both; 16 catalogue entries with basis
+`adv` and the form's question numbers. The views are rebuilt from the committed file after the cache
+on every read, so a new extract shows on deploy. Cost: 81 / 102 / 207 KB on the three layers'
+responses, nearly all briefs of untracked funds.
+
+**Left for later.** No scheduled refresh — the extract is as of its last run; step 5 would make the
+gross asset value a series from the bulk CSVs; step 4 is continuation-vehicle detection.
