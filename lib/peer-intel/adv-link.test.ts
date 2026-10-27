@@ -151,6 +151,33 @@ test("a fund links by Form D file number before name, and a master and feeder bo
   assert.equal(view.summary.grossAssetValue, 3_050, "the feeder's 400 is inside the master's and is not added")
   assert.equal(view.summary.grossAssetValueFunds, 3)
   assert.equal(view.filings[0].fundsParsed, 4)
+  assert.deepEqual(view.linked[0].series.map((s) => [s.year, s.basis, s.grossAssetValue]), [[2026, "current", 1_000]], "without history, the series is the current point alone")
+  assert.deepEqual(view.years.map((y) => [y.year, y.funds, y.grossAssetValue]), [[2026, 4, 3_050]])
+
+  const withHistory = managerAdv(p, extract, [{ cik: "10", name: "Bayview Opportunity Fund Domestic VII, L.P.", fileNumber: "021-446363" }], {
+    builtOn: "2026-10-27",
+    source: "test",
+    coverage: { from: "2023-03-30", to: "2024-03-28" },
+    funds: {
+      "805-1": {
+        crd: "157053",
+        names: ["BAYVIEW OPPORTUNITY MASTER FUND VII, L.P."],
+        points: [
+          { filedOn: "2023-03-30", filingId: 1, annual: true, grossAssetValue: 600, owners: 40, annualAudit: true, statementsDistributed: true, opinion: "unqualified", isFeederFund: false },
+          { filedOn: "2024-03-28", filingId: 2, annual: true, grossAssetValue: 900, owners: 55, annualAudit: true, statementsDistributed: true, opinion: "unqualified", isFeederFund: false },
+        ],
+      },
+      "805-4": {
+        crd: "157053",
+        names: ["WHITETAIL MSR MASTER FUND A, L.P."],
+        points: [{ filedOn: "2024-03-28", filingId: 2, annual: true, grossAssetValue: 1_500, owners: 3, annualAudit: true, statementsDistributed: true, opinion: "unqualified", isFeederFund: false }],
+      },
+    },
+  })!
+  const master7 = withHistory.linked.find((l) => l.fund.fundId === "805-1")!
+  assert.deepEqual(master7.series.map((s) => [s.year, s.basis, s.grossAssetValue, s.owners]), [[2023, "annual", 600, 40], [2024, "annual", 900, 55], [2026, "current", 1_000, null]])
+  assert.deepEqual(master7.notes.map((n) => n.text), ["gross assets rose 50% between the 2023 and 2024 filings", "owners rose from 40 to 55"])
+  assert.deepEqual(withHistory.years.map((y) => [y.year, y.funds, y.grossAssetValue]), [[2023, 1, 600], [2024, 2, 2_400], [2026, 4, 3_050]])
 })
 
 test("the summary counts audit answers and opinions, and a manager with no entry gets no view", () => {

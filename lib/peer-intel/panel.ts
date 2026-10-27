@@ -345,6 +345,13 @@ export function buildManagerSnapshot(
             `${f.statementsDistributed === false ? ", statements not distributed" : ""}` +
             `${f.auditors.length ? `, auditor ${f.auditors.map((a) => a.name).join("; ")}` : ""}`
         )
+        if (l.series.length > 1) {
+          lines.push(`    by year: ${l.series.map((p) => `${p.year} ${money(p.grossAssetValue)} / ${p.owners ?? "?"} owners`).join("; ")}`)
+          for (const n of l.notes) lines.push(`    ${n.text}`)
+        }
+      }
+      if (adv.years.length > 1) {
+        lines.push(`  book by year: ${adv.years.map((y) => `${y.year} ${money(y.grossAssetValue)} (${y.funds} funds)`).join("; ")}`)
       }
     }
   }

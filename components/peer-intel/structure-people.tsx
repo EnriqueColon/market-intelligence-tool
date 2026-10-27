@@ -311,6 +311,60 @@ function AdvFundBlock({ link, adv }: { link: LinkedFund; adv: ManagerAdv }) {
           {f.marketers.length > 0 && <Line label="Marketers">{f.marketers.join("; ")}</Line>}
         </div>
       </div>
+      {link.series.length > 1 && (
+        <div className="mt-2">
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Year by year, as filed</div>
+          <table className="mt-1 border-collapse text-xs">
+            <thead>
+              <tr className="text-[10px] uppercase tracking-wide text-slate-500">
+                <th className="pr-3 text-left font-semibold">Filing</th>
+                <th className="pr-3 text-right font-semibold">Gross assets</th>
+                <th className="pr-3 text-right font-semibold">Owners</th>
+                <th className="pr-3 text-left font-semibold">Audit</th>
+              </tr>
+            </thead>
+            <tbody>
+              {link.series.map((p) => {
+                const op = opinionLabel(p.opinion)
+                const audit =
+                  p.annualAudit === false
+                    ? { text: "not audited", warn: true }
+                    : p.annualAudit == null
+                      ? { text: "not answered", warn: false }
+                      : {
+                          text: `${p.opinion === "unqualified" ? "clean" : p.opinion === "not-unqualified" ? "not unqualified" : p.opinion === "report-not-yet-received" ? "report pending" : "opinion not answered"}${p.statementsDistributed === false ? ", not distributed" : ""}`,
+                          warn: op.warn || p.statementsDistributed === false,
+                        }
+                return (
+                  <tr key={p.filedOn} className="border-t border-slate-100">
+                    <td className="pr-3 py-0.5 whitespace-nowrap text-slate-600">
+                      {p.year}
+                      <span className="ml-1 text-[10px] text-slate-400">{p.basis === "current" ? "current" : p.basis === "annual" ? "annual" : "last of year"}</span>
+                    </td>
+                    <td className="pr-3 py-0.5 text-right tabular-nums text-slate-700">{p.grossAssetValue == null ? "—" : money(p.grossAssetValue)}</td>
+                    <td className="pr-3 py-0.5 text-right tabular-nums text-slate-700">{p.owners ?? "—"}</td>
+                    <td className={`pr-3 py-0.5 ${audit.warn ? WARN : "text-slate-600"}`}>{audit.text}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+          {link.notes.length > 0 && (
+            <ul className="mt-1 text-[11px] text-slate-600">
+              {link.notes.map((n) => (
+                <li key={`${n.from}-${n.to}-${n.kind}`} className={n.kind === "gross-assets" || n.kind === "owners" ? "" : WARN}>
+                  {n.text}
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="mt-1 text-[10px] text-slate-400">
+            Each row is the adviser&apos;s annual filing for that year, with fiscal-year-end figures, from the SEC&apos;s bulk Form ADV
+            data; the last row is the current filing. A fall in gross assets is what a drawdown fund returning capital looks like,
+            as well as what a loss looks like — the filing does not say which.
+          </p>
+        </div>
+      )}
     </div>
   )
 }

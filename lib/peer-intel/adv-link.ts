@@ -28,6 +28,7 @@
  */
 
 import type { AdvFiling, AdvFund } from "./adv"
+import { adviserYears, currentPoint, seriesNotes, yearlySeries, type AdviserYear, type AdvHistory, type AdvSeriesNote, type AdvYearPoint } from "./adv-history"
 import type { Peer } from "./registry"
 
 export type AdvExtractEntry = AdvFiling & {
@@ -93,6 +94,12 @@ export type LinkedFund = {
   crd: string
   vehicleCik: string
   linkBasis: AdvLinkBasis
+  /**
+   * One point per year from the bulk history, then the current filing.
+   * Just the current point for a fund that first appears after 2024.
+   */
+  series: AdvYearPoint[]
+  notes: AdvSeriesNote[]
 }
 
 /** A fund the adviser reports that matches no tracked vehicle: enough to list, not the whole record. */
@@ -145,6 +152,12 @@ export type ManagerAdv = {
   /** Every other fund the adviser reports, largest first. */
   others: AdvFundBrief[]
   summary: AdvSummary
+  /**
+   * The advisers' book by year — funds listed and gross assets over
+   * non-feeders — from the bulk history, then the current filing. Summed
+   * across the advisers read where a manager has more than one.
+   */
+  years: AdviserYear[]
 }
 
 /** What a vehicle brings to the link: its registry name and, from its Form D trail, its file number. */
@@ -208,7 +221,12 @@ export function summarise(funds: readonly AdvFund[]): AdvSummary {
  * an entry — the case for a manager with no adviser, and for one whose
  * refresh has not run; the panel tells those apart from the registry.
  */
-export function managerAdv(peer: Peer, extract: AdvExtract | null, vehicles: readonly VehicleKey[]): ManagerAdv | null {
+export function managerAdv(
+  peer: Peer,
+  extract: AdvExtract | null,
+  vehicles: readonly VehicleKey[],
+  history: AdvHistory | null = null
+): ManagerAdv | null {
   if (!extract) return null
   const sources = advisersToRead(peer).filter((s) => extract.advisers[s.crd])
   if (!sources.length) return null
@@ -234,11 +252,33 @@ export function managerAdv(peer: Peer, extract: AdvExtract | null, vehicles: rea
       all.push(fund)
       const byNumber = fund.formDFileNumber ? byFileNumber.get(fund.formDFileNumber) : undefined
       const vehicle = byNumber ?? byName.get(fundKey(fund.name))
-      if (vehicle) linked.push({ fund, crd: s.crd, vehicleCik: vehicle.cik, linkBasis: byNumber ? "file-number" : "name" })
-      else others.push(brief(fund))
+      if (vehicle) {
+        const filedOn = extract.advisers[s.crd].filedOn
+        const past = (fund.fundId ? history?.funds[fund.fundId]?.points : undefined) ?? []
+        const series = yearlySeries(past, filedOn ? currentPoint(fund, filedOn) : null)
+        linked.push({ fund, crd: s.crd, vehicleCik: vehicle.cik, linkBasis: byNumber ? "file-number" : "name", series, notes: seriesNotes(series) })
+      } else others.push(brief(fund))
     }
   }
   others.sort((a, b) => (b.grossAssetValue ?? -1) - (a.grossAssetValue ?? -1) || a.name.localeCompare(b.name))
+
+  // The book by year, summed across the advisers read.
+  const yearsByYear = new Map<number, AdviserYear>()
+  for (const s of sources) {
+    const e = extract.advisers[s.crd]
+    const own = history ? adviserYears(history, s.crd, { filedOn: e.filedOn, funds: e.funds }) : e.filedOn ? adviserYears({ builtOn: "", source: "", coverage: { from: "", to: "" }, funds: {} }, s.crd, { filedOn: e.filedOn, funds: e.funds }) : []
+    for (const y of own) {
+      const have = yearsByYear.get(y.year)
+      if (!have) yearsByYear.set(y.year, { ...y })
+      else {
+        have.funds += y.funds
+        have.grossAssetValue = have.grossAssetValue == null && y.grossAssetValue == null ? null : (have.grossAssetValue ?? 0) + (y.grossAssetValue ?? 0)
+        have.grossAssetValueFunds += y.grossAssetValueFunds
+        if (y.filedOn > have.filedOn) have.filedOn = y.filedOn
+      }
+    }
+  }
+  const years = [...yearsByYear.values()].sort((a, b) => a.year - b.year)
 
   return {
     peerId: peer.id,
@@ -260,6 +300,7 @@ export function managerAdv(peer: Peer, extract: AdvExtract | null, vehicles: rea
     linked,
     others,
     summary: summarise(all),
+    years,
   }
 }
 
@@ -274,12 +315,13 @@ export function advForVehicle(adv: ManagerAdv | null, cik: string): LinkedFund[]
 export function layerAdv(
   peers: readonly Peer[],
   extract: AdvExtract | null,
-  vehicleKeys: ReadonlyMap<string, readonly VehicleKey[]>
-): { refreshedOn: string | null; byManager: Record<string, ManagerAdv> } {
+  vehicleKeys: ReadonlyMap<string, readonly VehicleKey[]>,
+  history: AdvHistory | null = null
+): { refreshedOn: string | null; historyTo: string | null; byManager: Record<string, ManagerAdv> } {
   const byManager: Record<string, ManagerAdv> = {}
   for (const peer of peers) {
-    const view = managerAdv(peer, extract, vehicleKeys.get(peer.id) ?? [])
+    const view = managerAdv(peer, extract, vehicleKeys.get(peer.id) ?? [], history)
     if (view) byManager[peer.id] = view
   }
-  return { refreshedOn: extract?.refreshedOn ?? null, byManager }
+  return { refreshedOn: extract?.refreshedOn ?? null, historyTo: history?.coverage.to ?? null, byManager }
 }

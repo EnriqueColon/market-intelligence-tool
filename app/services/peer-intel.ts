@@ -27,7 +27,7 @@ import {
   type ContinuationHit,
   type ContinuationView,
 } from "@/lib/peer-intel/continuation"
-import { advExtract } from "@/lib/peer-intel/adv-extract"
+import { advExtract, advHistory } from "@/lib/peer-intel/adv-extract"
 import { buildPeerCohort, type PeerCohort } from "@/lib/peer-intel/cohort"
 import { buildVehicleTrend, type VehicleTrend } from "@/lib/peer-intel/liquidity"
 import {
@@ -642,7 +642,7 @@ export type PeerIntelPayload = {
   }
 }
 
-export type LayerAdv = { refreshedOn: string | null; byManager: Record<string, ManagerAdv> }
+export type LayerAdv = { refreshedOn: string | null; historyTo: string | null; byManager: Record<string, ManagerAdv> }
 
 /**
  * The ADV views for a layer, from the committed extract and the cohort's
@@ -657,7 +657,7 @@ export function buildLayerAdv(layer: PeerLayer, cohort: PeerCohort): LayerAdv {
       m.raises.map((r) => ({ cik: r.cik, name: r.vehicleName, fileNumber: r.raise.fileNumber ?? null }))
     )
   }
-  return layerAdv(peersInScope(layer), advExtract(), keys)
+  return layerAdv(peersInScope(layer), advExtract(), keys, advHistory())
 }
 
 export type ContinuationResult = {

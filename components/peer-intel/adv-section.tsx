@@ -129,6 +129,24 @@ export function AdvSection({ manager, adv }: { manager: ManagerRaises; adv: Mana
               its feeder are not counted twice.
             </p>
           )}
+          {adv.years.length > 1 && (
+            <div className="mt-3">
+              <div className="text-[11px] font-medium uppercase tracking-wide text-slate-500">The book by year</div>
+              <div className="mt-1 flex flex-wrap gap-x-5 gap-y-1 text-xs">
+                {adv.years.map((y) => (
+                  <div key={y.year} className="min-w-[5.5rem]">
+                    <div className="text-[10px] text-slate-500">{y.year}</div>
+                    <div className="tabular-nums text-slate-800">{y.grossAssetValue == null ? "—" : money(y.grossAssetValue)}</div>
+                    <div className="text-[10px] text-slate-500">{y.funds} {y.funds === 1 ? "fund" : "funds"}</div>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-1 text-[11px] text-slate-500">
+                Gross assets over non-feeder funds on each year&apos;s annual filing, from the SEC&apos;s bulk Form ADV data
+                through 2024 and the current filing after it. Funds and feeders are counted as listed that year.
+              </p>
+            </div>
+          )}
           <p className="mt-1 text-[11px] text-slate-500">
             {linkedVehicles} of the {privateVehicles} private {privateVehicles === 1 ? "vehicle" : "vehicles"} tracked here{" "}
             {linkedVehicles === 1 ? "matches" : "match"} a fund on the ADV

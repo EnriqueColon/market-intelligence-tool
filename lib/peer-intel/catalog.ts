@@ -378,6 +378,28 @@ export const PEER_FIELD_CATALOG: readonly PeerFieldSpec[] = [
     "Feeders are excluded because a feeder's assets are its stake in the master, already inside the master's figure."
   ),
 
+  derived(
+    "advSeries",
+    "the fund's 7.B.(1) row on one filing per calendar year — the annual updating amendment where the filing index marks one, else the year's last filing — from the SEC's bulk Form ADV data 2011–2024, then the current filing",
+    "ADV year by year",
+    "adv",
+    "Keyed by the fund's 805- number, so a renamed fund stays one series. The annual filing carries fiscal-year-end figures, so a 2024 row describes 2023 year end. Advisers registered after 2011 have shorter series; a fund that first appears after 2024 has only the current point."
+  ),
+  derived(
+    "advSeriesNotes",
+    "consecutive years compared: gross assets at a fifth either way, owners at any change, and the audit, statements and opinion answers whenever they move",
+    "ADV change notes",
+    "adv",
+    "A fall in gross assets is reported as a fall. For a drawdown fund returning capital that is the plan; the filing does not say which it is."
+  ),
+  derived(
+    "advAdviserYears",
+    "per calendar year, the funds listed on the adviser's filing for that year and gross assets summed over those that are not feeders",
+    "Adviser's book by year",
+    "adv",
+    "One filing per year, as for the fund series. Where a manager's view reads more than one adviser the years are summed across them."
+  ),
+
   // ------------------------------- continuation, annex and extension vehicles
   derived(
     "continuationKind",
