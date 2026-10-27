@@ -8,7 +8,7 @@ is it in now, and what is still open.
 
 ---
 
-## STOPPED HERE — 2026-10-27: sponsor-stress steps 3, 4 and 5 on dev — Form ADV, continuation vehicles, history
+## STOPPED HERE — 2026-10-27: everything released; Peers work HELD for a new integration
 
 Read `CLAUDE.md` first for orientation, then this block. Everything below it is the running record —
 reverse-chronological, and worth reading only when you need the reasoning behind something specific.
@@ -87,13 +87,23 @@ built lowest-hanging first: step 1 dropped as a verdict the data cannot support;
 and 5 done — **the sponsor-stress data layer is complete**; what remains is whether to build a
 read on top of it, which the user has not decided.
 
-**Pick up with, in order:** (1) the sponsor-stress question the five steps were building towards —
-whether a deterministic reading over these facts is wanted, and what it may and may not say — is
-the user's call and has not been asked for; (2) on the Peers list, the `non-traded` bucket split
-and gating on the reader `verify:peer-gating` already carries; (3) Bank Behaviour step 5 whenever
-deal sourcing should move; (4) the ADV extract and history have no scheduled refresh — re-run
-`refresh:peer-adv` after the spring annual amendments, and `build:adv-history` when the SEC
-publishes the 2025 bulk data.
+**HELD, 2026-10-27, by the user.** After the release the user said: "Lets hold off for now, we need to
+add another integration. But we will circle back to this once the next integration is done." The
+integration was not named. So the next conversation starts with **whatever the user brings**, not
+with this list; nothing below is to be picked up until they say so.
+
+**What is open on the Peers and sponsor-stress work, for when they circle back.** Sponsor stress:
+a reading over the facts (steps 2–5 built the data; no verdict, score or ranking exists, by the
+user's decision, and whether one should is undecided); no scheduled refresh for the ADV extract or
+the history (re-run `refresh:peer-adv` after the spring annual amendments, `build:adv-history` when
+the SEC publishes 2025 bulk data); six managers with no registered adviser and so no ADV data
+(Atipana, R&R, Integra, SEGLO, Naso, Gelt); a continuation vehicle named without the four words is
+not found. Peers tab: gating (reader proven on all seven vehicles, panel not built), the
+`non-traded` bucket split it needs first, the alerts digest, cap-change detection, sleeve grouping,
+`/api/peers/v1`. Bank Behaviour steps 5–7. Housekeeping: AMO Tracker's whole-scope request is
+about 160 KB from refusal and should move to `band=`; the AMO question itself, parked until the
+expansion was done — it now is; unused `better-sqlite3`, the orphaned `fetch-watchlist.ts`,
+`ELEMENTIX_API_KEY`.
 
 **Node.** 24.x everywhere; locally Homebrew's `node@24` at 24.22.1 (CVE-2026-111497 fixed); the
 plain `node` formula is 26 and unlinked — never `brew upgrade node`. The build prints
