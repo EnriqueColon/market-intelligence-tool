@@ -75,7 +75,8 @@ deploy with no cache bump.
 
 **Decisions taken 2026-10-26, so they need no revisiting.** Assignment-of-mortgage work stays out
 of this tool. The AMO question is parked until the expansion is done. The sponsor stress monitor is
-built lowest-hanging first: step 1 dropped as a verdict the data cannot support; steps 2 and 3 done.
+built lowest-hanging first: step 1 dropped as a verdict the data cannot support; steps 2, 3 and 4
+done.
 
 **Pick up with, in order:** (1) the user looks at the newest `dev` preview — a fund row's ADV block,
 the Form ADV section, Safe Harbor's amber answers, and a manager with a `CV` marker (Bridge,
@@ -83,6 +84,7 @@ Pretium, H.I.G.); (2) sponsor-stress **step 5**, 2011–2024 ADV history from th
 (`IA_Schedule_D_7B1` is in the scratchpad; FilingID→CRD needs `IA_ADV_Base_A`), so a fund's gross
 asset value becomes a series; (3) on the Peers list, the `non-traded` bucket split and gating on
 the reader `verify:peer-gating` already carries; (4) Bank Behaviour step 5 whenever deal sourcing
+should move.
 
 **Node.** 24.x everywhere; locally Homebrew's `node@24` at 24.22.1 (CVE-2026-111497 fixed); the
 plain `node` formula is 26 and unlinked — never `brew upgrade node`. The build prints
