@@ -8,7 +8,7 @@ is it in now, and what is still open.
 
 ---
 
-## STOPPED HERE — 2026-10-27: sponsor-stress steps 3 and 4 on dev — Form ADV and continuation vehicles
+## STOPPED HERE — 2026-10-27: sponsor-stress steps 3, 4 and 5 on dev — Form ADV, continuation vehicles, history
 
 Read `CLAUDE.md` first for orientation, then this block. Everything below it is the running record —
 reverse-chronological, and worth reading only when you need the reasoning behind something specific.
@@ -18,16 +18,15 @@ drawer, the nightly Peers cron warm, the Assignment of Mortgage removal, and the
 at 4,480,000 bytes. The user has set `peer-intel` in production's `ENABLED_TABS` and confirmed the
 tab works there.
 
-**`dev` is ahead of production by ten commits, none released:** `d3acaff` Structure & terms and
-People from Form D; `8e93ead` each fund's row expands to them; `8aae1dc` no row opens on its own
-(the user's correction); `04ccd88` adviser CRDs in the registry (sponsor-stress step 2); `54371c4`
-and `95e5675` the Brotli CVE response and Node 24; `3ec5e2e` **Form ADV in the drawer (step 3)**
-with its docs `484a495` and `76c1eca`; and `b25f774` **continuation, annex and extension
-vehicles (step 4)**, described in the newest entry below. Confirm the head with
-`git log --oneline -1` rather than trusting a SHA written here. Releasing is
-`git checkout main && git merge dev`, a fast-forward. **The user has not yet looked at the fund
-rows, the Form ADV section or the continuation section in a preview** — the newest `dev` preview
-is the one to show.
+**`dev` is ahead of production by fourteen commits, none released:** `d3acaff` Structure & terms
+and People from Form D; `8e93ead` each fund's row expands to them; `8aae1dc` no row opens on its
+own; `04ccd88` adviser CRDs (sponsor-stress step 2); `54371c4` and `95e5675` the Brotli CVE
+response and Node 24; `3ec5e2e` **Form ADV in the drawer (step 3)**; `b25f774` **continuation,
+annex and extension vehicles (step 4)**; `37c55b9` **Form ADV history 2011–2024 (step 5)**; and
+their docs commits. Confirm the head with `git log --oneline -1` rather than trusting a SHA
+written here. Releasing is `git checkout main && git merge dev`, a fast-forward. **The user has
+not yet looked at any of the step 3–5 work in a preview** — the newest `dev` preview is the one
+to show.
 
 **Step 3 in one paragraph.** `npm run refresh:peer-adv` downloads each adviser's Form ADV PDF from
 IAPD, reads it with pdf.js, parses Schedule D 7.B.(1) and commits `lib/peer-intel/adv-extract.json`
@@ -59,6 +58,19 @@ is listed as unconfirmed. Live, national: 9 vehicles across H.I.G., Camden, Brid
 Ares, 173 requests, 35 s added to the build; cache key `peer-intel-v5`.
 `npm run verify:peer-continuation -- national` is the check.
 
+**Step 5 in one paragraph.** Each linked fund's ADV block carries a year-by-year table (gross
+assets, owners, audit) with change notes, and the Form ADV section shows the adviser's book by
+year. `npm run build:adv-history` streams the SEC's bulk Form ADV filing data — two zips, 1.1 GB,
+every filing 2011-11-05 to 2024-12-31, kept in the scratchpad's `adv-bulk/` — keeps the 21
+advisers the extract reads, and commits `lib/peer-intel/adv-history.json` (726 KB, 583 funds, 549
+filings, keyed by the fund's 805 number; repeat other-than-annual filings dropped). The current
+PDF extract is the newest point. One point per calendar year, the annual amendment where the
+filing index marks one; a year with only repeat filings has no point, and the notes say "between
+the 2019 and 2021 filings". Safe Harbor's own series: Fund 2 $52M (2019) → $1.5M (2026) with the
+same 20 owners — a fund returning capital, which is why the panel's caveat says a fall is what
+that looks like as well as what a loss looks like; Fund 3 $41.5M → $155.6M (2024) → $84.1M
+(2026). 33 KB more on the national response.
+
 **What the ADV says about Safe Harbor itself, to know before the user opens it.** Seven funds, $0.39B
 gross over six non-feeder funds. Fund 4 $186.7M and 30 owners; Fund 3 $84.1M and 46 owners, down
 from $155.6M on the 2024 ADV; Fund 2 $1.5M; Fund 1 is no longer listed. Every audited fund has an
@@ -75,16 +87,18 @@ deploy with no cache bump.
 
 **Decisions taken 2026-10-26, so they need no revisiting.** Assignment-of-mortgage work stays out
 of this tool. The AMO question is parked until the expansion is done. The sponsor stress monitor is
-built lowest-hanging first: step 1 dropped as a verdict the data cannot support; steps 2, 3 and 4
-done.
+built lowest-hanging first: step 1 dropped as a verdict the data cannot support; steps 2, 3, 4
+and 5 done — **the sponsor-stress data layer is complete**; what remains is whether to build a
+read on top of it, which the user has not decided.
 
-**Pick up with, in order:** (1) the user looks at the newest `dev` preview — a fund row's ADV block,
-the Form ADV section, Safe Harbor's amber answers, and a manager with a `CV` marker (Bridge,
-Pretium, H.I.G.); (2) sponsor-stress **step 5**, 2011–2024 ADV history from the SEC's bulk CSVs
-(`IA_Schedule_D_7B1` is in the scratchpad; FilingID→CRD needs `IA_ADV_Base_A`), so a fund's gross
-asset value becomes a series; (3) on the Peers list, the `non-traded` bucket split and gating on
-the reader `verify:peer-gating` already carries; (4) Bank Behaviour step 5 whenever deal sourcing
-should move.
+**Pick up with, in order:** (1) the user looks at the newest `dev` preview — a fund row's ADV block
+with its year-by-year table, the Form ADV section's book by year, the continuation section for
+Bridge or Pretium, Safe Harbor's amber answers; (2) release, when the user says so; (3) the
+sponsor-stress question the five steps were building towards — whether a deterministic reading
+over these facts is wanted, and what it may and may not say — is the user's call and has not
+been asked for; (4) on the Peers list, the `non-traded` bucket split and gating on the reader
+`verify:peer-gating` already carries; (5) Bank Behaviour step 5 whenever deal sourcing should
+move.
 
 **Node.** 24.x everywhere; locally Homebrew's `node@24` at 24.22.1 (CVE-2026-111497 fixed); the
 plain `node` formula is 26 and unlinked — never `brew upgrade node`. The build prints
@@ -104,7 +118,7 @@ responses, nearly all of it briefs of untracked funds (Bridge 148, H.I.G. 149, S
 | --- | --- |
 | Peers tab, steps 1–6 | Done, in production as beta |
 | Peers step 7 | Developments feed done; gating assessed and its reader proven, not built; alerts digest not started |
-| Sponsor stress | Steps 2 (CRDs), 3 (Form ADV) and 4 (continuation vehicles) done on `dev`; step 5 (ADV history) next, user-paced |
+| Sponsor stress | Steps 2–5 done on `dev` (CRDs, Form ADV, continuation vehicles, ADV history 2011–2024); whether to build a reading on top is undecided |
 | Bank Behaviour step 4 | Done — score, four states, backtest, cache, drawer |
 | Bank Behaviour steps 5–7 | Not started |
 
@@ -115,7 +129,39 @@ the 2026-10-22 and 2026-10-26 entries below.
 
 ---
 
-## 2026-10-27, later (latest) — Sponsor-stress step 4: continuation, annex and extension vehicles
+## 2026-10-27, evening (latest) — Sponsor-stress step 5: Form ADV history, 2011–2024
+
+**What was built — `37c55b9`.** `lib/peer-intel/adv-history.ts` (pure, 3 tests): `yearlySeries`
+(one point per calendar year from the bulk history, the annual amendment where the filing index
+marks one, then the current extract's point), `seriesNotes` (gross assets at a fifth either way,
+owners at any change, the three audit answers whenever they move, in checkable words) and
+`adviserYears` (the book by year over non-feeder funds). `adv-link.ts` attaches a `series` and
+`notes` to every linked fund and `years` to every manager view; the service passes the committed
+history. `scripts/build-adv-history.mts` streams four of the SEC's bulk tables — `IA_ADV_Base_A`
+(533 MB, the filing's date and CRD), `ADV_Filing_Types` (annual or not), `IA_Schedule_D_7B1`
+(397 MB, 1.65 million fund rows) and `ERA_Schedule_D_7B1` — in seconds, keeps the advisers
+`advisersToRead` names, drops the 6,208 other-than-annual points that repeat the filing before
+them, and writes 726 KB. The UI is a table and notes under the ADV block (`structure-people.tsx`)
+and a "book by year" strip in `adv-section.tsx`; Copy Snapshot carries both; three catalogue
+entries.
+
+**Checks that held.** All 593 funds in the extract carry an 805 number and they match the bulk
+table's; a renamed fund ("Fund 3 Tides JV" → "SHEDDF3 Tides LLC") stays one series. The bulk
+table confirmed the PDF parser's reading of Fund 3's checkbox: "statements distributed: No" on
+every filing since 2019. The first build was 16 MB because it included the three umbrella
+advisers (Apollo Capital Management alone: 1,098 funds, 40,054 fund-filings); restricting to the
+extract's advisers and collapsing repeats brought it to 726 KB.
+
+**State.** On `dev`, not released and not yet reviewed in a preview. `next build` passes, `tsc` at
+the 63-error baseline, all 18 peer suites pass. The archives stay in the scratchpad, not the
+repository.
+
+**Open.** The sponsor-stress data layer (steps 2–5) is complete; a reading over it is undecided.
+A series can skip a year in which every filing repeated the one before.
+
+---
+
+## 2026-10-27, later — Sponsor-stress step 4: continuation, annex and extension vehicles
 
 **What was built — `b25f774`.** `lib/peer-intel/continuation.ts` (pure, 5 tests): the four marking
 words and what counts as one (`CV` only as an upper-case token before a fund word, so "Pretium CV

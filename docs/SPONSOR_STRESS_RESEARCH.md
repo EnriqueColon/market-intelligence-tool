@@ -192,3 +192,46 @@ rather than "$0 from 0 investors".
 **Not done.** No predecessor was matched by name stem for any of the nine; the rule stays because
 it costs nothing and will catch "Fund III Annex" when a tracked fund is "Fund III". The search
 cannot find a continuation vehicle named without those four words.
+
+## 8. Step 5, done 2026-10-27: Form ADV history, 2011–2024
+
+The current extract is one snapshot; this makes each figure a series. The SEC publishes every
+Form ADV filing from 2011-11-05 to 2024-12-31 as CSVs in two zip archives
+(`https://www.sec.gov/files/adv-filing-data-20111105-20241231-part1.zip` and `-part2.zip`, 705 MB
+and 429 MB). Four tables matter: `IA_ADV_Base_A` (533 MB; every filing's date and the adviser's
+CRD in column `1E1`), `ADV_Filing_Types` (which filings were annual updating amendments, and the
+fiscal year), `IA_Schedule_D_7B1` (397 MB, 1.65 million rows, one per private fund per filing —
+the same questions the PDF parser reads) and `ERA_Schedule_D_7B1` for exempt reporting advisers,
+which contributes nothing because every adviser in the registry is registered.
+
+**What `build:adv-history` does.** Streams the tables, keeps the filings of the 21 advisers the
+extract reads — the same `advisersToRead` rule, which leaves out the umbrella filers Apollo
+Capital Management (1,098 funds, 40,054 fund-filings), Ares Management and HPS Investment
+Partners, 61,000 of the 70,000 fund-filings and none of it on a panel — and writes
+`lib/peer-intel/adv-history.json` keyed by the fund's `805-` number. Other-than-annual filings
+that repeat every answer of the filing before them are dropped (6,208 of them); annual filings
+are always kept. 726 KB, 583 funds, 549 filings; the whole pass runs in seconds.
+
+**Fund IDs hold.** Every one of the extract's 593 funds carries an 805 number, and they match the
+bulk table's: Safe Harbor's Fund 3 is 805-8628615757 in both, and "Safe Harbor Equity Distressed
+Debt Fund 3 Tides JV" became "SHEDDF3 Tides LLC" under 805-5917272487. The bulk table also
+confirmed the PDF parser: Fund 3's "statements distributed: No" has been its answer on every
+filing since 2019, so the amber mark is a standing answer, not a misread.
+
+**The series.** One point per calendar year — the annual updating amendment where the filing
+index marks one, else the last filing of the year — then the current PDF extract as the newest
+point; a fund first listed after 2024 has the current point only. A year in which every filing
+repeated the one before has no point, so a series can skip a year and the notes say "between the
+2019 and 2021 filings". Notes compare consecutive years: gross assets at a fifth either way,
+owners at any change, the audit, statements and opinion answers whenever they move. The
+adviser's book by year sums gross assets over non-feeder funds on that year's filing.
+
+**What Safe Harbor's own series say.** Fund 2: $52.0M (2019), $32.4M, $25.9M, $10.1M, $6.3M
+(2024), $1.5M (2026), 20 owners throughout — a drawdown fund returning capital, which is why the
+panel's caveat says a fall is what that looks like as well as what a loss looks like, and the
+filing does not say which. Fund 3: $41.5M (2019), $67.1M, $109.7M, $115.7M, $155.6M (2024),
+$84.1M (2026), owners 17 → 46. Fund 4: first on the 2024 filing with nothing yet, $186.7M and 30
+owners by 2026. The book: $95.9M (2019) → $393.5M (2026) over three to seven funds.
+
+**Cost.** 33 KB more on the national layer's response. The archives stay in the scratchpad, not
+the repository; a re-run needs them downloaded again.

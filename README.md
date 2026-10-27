@@ -267,6 +267,8 @@ npm run test:legal-applicability # which institutions a rule covers, and the two
 npm run test:allowlist        # publisher allowlist, and what "all" covers
 npm run test:peer-intel-adv   # Form ADV: checkbox order, Safe Harbor's Fund 4 record, file-number links (tsx)
 npm run refresh:peer-adv      # local only: IAPD Form ADV PDFs → lib/peer-intel/adv-extract.json, with a link report
+npm run test:peer-intel-adv-history   # Form ADV history: one point per year, change notes, the adviser's book by year (tsx)
+npm run build:adv-history -- --dir <csv folder>  # local only: SEC bulk Form ADV CSVs → lib/peer-intel/adv-history.json
 npm run test:peer-intel-continuation  # continuation vehicles: the four marking words, search terms, attribution, merging (tsx)
 npm run verify:peer-continuation -- national  # the continuation search against live EDGAR, per manager
 npm run build                 # next build
@@ -411,7 +413,8 @@ lib/            Domain logic: FDIC client and transforms, auth, features, cachin
   peer-intel/   Peer & Private Credit tracker: EDGAR access contract, Form D parsing, the
                 three-layer competitor registry with each manager's adviser CRD, and Form ADV
                 (adv-pdf.mts reads the IAPD PDF, adv.ts parses it, adv-extract.json is the
-                committed result the app reads — never fetched at runtime)
+                committed result the app reads — never fetched at runtime; adv-history.json is
+                the 2011–2024 series from the SEC's bulk data, built by scripts/build-adv-history.mts)
 docs/           Focused guides (start with DEV_ENVIRONMENT.md)
 data/           Local SQLite and JSON — development only
 scripts/        One-off and ingestion scripts (TypeScript and Python)

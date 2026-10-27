@@ -829,6 +829,19 @@ only when its name is on the ADV, its entity name carries a two-word identifying
 related persons share an exact folded name with the tracked raises; otherwise it is counted and
 listed as unconfirmed. `npm run verify:peer-continuation -- national` runs it live.
 
+**Form ADV history.** Since 2026-10-27 each linked fund's ADV block carries a year-by-year table
+and change notes, and the Form ADV section the adviser's book by year. The SEC publishes every
+Form ADV filing from 2011-11-05 to 2024-12-31 as bulk CSVs (two zips, 1.1 GB);
+`npm run build:adv-history` streams them locally, keeps the advisers the extract reads, and
+commits `lib/peer-intel/adv-history.json` keyed by the fund's `805-` number
+(`lib/peer-intel/adv-history.ts` builds the series: one point per calendar year, the annual
+amendment where the filing index marks one, then the current extract as the newest point;
+other-than-annual filings that repeat the one before are dropped at build time, so a series can
+skip a year). The umbrella filers the extract skips carry 61,000 of the registry advisers' 70,000
+fund-filings and are left out, which is the difference between 16 MB and 726 KB. A fall in gross
+assets is reported as a fall; for a drawdown fund returning capital that is the plan, and the
+panel says the filing does not say which.
+
 **Two rules the structure and people code depends on.** A Form D filed jointly by several issuers
 reports the offering as a whole, so a co-issuer's capital is *inside* the filing's totals; the risk is
 double counting, when a co-issuer is also tracked as its own vehicle and its trail holds the same
@@ -2301,6 +2314,8 @@ npm run test:peer-intel-registry   # peer registry: unique CIKs, cumulative laye
 npm run test:peer-intel-iapd       # IAPD hit scoring: exact, suffixed, Form D entities, capped sets (tsx)
 npm run test:peer-intel-adv        # Form ADV: checkbox order, Safe Harbor's Fund 4 record, file-number links (tsx)
 npm run refresh:peer-adv           # local only: IAPD PDFs → lib/peer-intel/adv-extract.json, with a link report
+npm run test:peer-intel-adv-history   # Form ADV history: one point per year, change notes, the book by year (tsx)
+npm run build:adv-history -- --dir <csv folder>  # local only: SEC bulk Form ADV CSVs → lib/peer-intel/adv-history.json
 npm run test:peer-intel-continuation  # continuation vehicles: marking words, terms, attribution, merging (tsx)
 npm run verify:peer-continuation -- national  # the continuation search against live EDGAR, per manager
 npm run discover:peers             # proposes peer candidates from EDGAR by location and name

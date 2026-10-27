@@ -66,7 +66,12 @@ digest are not built yet.
 - **Form ADV data is a committed file, never a fetch.** `lib/peer-intel/adv-extract.json` is written
   by `npm run refresh:peer-adv` on a laptop from IAPD's PDFs (up to 165 MB each) and read by the
   app; it is as of its last run. The PDF's yes/no answers are images, and the parser's traps are in
-  `confluence.md` §10 — read them before touching `adv-pdf.mts` or `adv.ts`.
+  `confluence.md` §10 — read them before touching `adv-pdf.mts` or `adv.ts`. Its history,
+  `adv-history.json`, comes from the SEC's 1.1 GB bulk archives via `npm run build:adv-history`,
+  also local.
+- **EDGAR full-text search takes one quoted phrase plus one bracketed group of bare words, and
+  returns 0 — not an error — for any other shape.** A bracketed group of quoted phrases finds
+  nothing; see `lib/peer-intel/continuation.ts`.
 - **Assignment of Mortgage (AOM) work does not belong in this tool.** It lives in AMO Tracker
   (`EnriqueColon/amo-dashboard`, a separate app). The old AOM / Market Participants code and the
   `competitor_surveillance` framework were removed on 2026-10-26 at the user's instruction; do not

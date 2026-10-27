@@ -170,10 +170,19 @@ zero.
   registered, so it has no Form D people to share — and a "De Soi Bridge Extension" series that
   is not Bridge's). Cache key `peer-intel-v5`. Not yet reviewed in a preview by the user.
 
-- [ ] **Step 5: ADV history 2011–2024** from the SEC's bulk CSVs (`IA_Schedule_D_7B1` is in the
-  scratchpad; FilingID→CRD needs `IA_ADV_Base_A`), so a fund's gross asset value becomes a series —
-  Safe Harbor's Fund 3 fell from $155.6M (2024) to $84.1M (2026), which is the kind of move the
-  series would show for a peer.
+- [x] **Step 5: ADV history 2011–2024 — done 2026-10-27, on `dev`.** Every linked fund's ADV
+  block now carries a year-by-year table (gross assets, owners, audit) and change notes, and the
+  Form ADV section shows the adviser's book by year. `npm run build:adv-history` reads the SEC's
+  bulk Form ADV filing data (two zips, 1.1 GB, every filing 2011-11-05 to 2024-12-31), keeps the
+  filings of the 21 advisers the extract reads, and commits `lib/peer-intel/adv-history.json`
+  (726 KB: 583 funds, 549 filings, keyed by the fund's 805- number so a rename stays one series;
+  other-than-annual filings that repeat the filing before them are dropped). The current PDF
+  extract supplies the newest point. One point per calendar year — the annual updating amendment
+  where the filing index marks one — and notes at a fifth either way on gross assets, any change
+  in owners, and any move in the audit answers. `lib/peer-intel/adv-history.ts`, 3 tests.
+  Safe Harbor's own: Fund 2 $52M (2019) → $1.5M (2026) with the same 20 owners, a fund returning
+  capital; Fund 3 $41.5M → $155.6M (2024) → $84.1M (2026); the book $95.9M (2019) → $393.5M (2026).
+  Not yet reviewed in a preview by the user.
 
 **Deferred by design.**
 
