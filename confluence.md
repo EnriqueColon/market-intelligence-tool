@@ -102,7 +102,7 @@ the map runs to four, which is every tab that exists.
 
 | Tab | Feature key | What it shows |
 | --- | --- | --- |
-| News | `news` | Industry Outlook / Key Signals memo (`industry-outlook.tsx`), Industry-Specific News (`public-mentions.tsx`), General Finance News (`investing-business-mentions.tsx`), and an on-demand Article Digest (`article-digest.tsx`) |
+| News | `news` | Industry Outlook / Key Signals memo (`industry-outlook.tsx`), Industry-Specific News (`public-mentions.tsx`, with the subscriber picks from The Real Deal pinned above the feeds), General Finance News (`investing-business-mentions.tsx`), and an on-demand Article Digest (`article-digest.tsx`) |
 | Market Analytics | `market-analytics` | FDIC bank financials with state filter, institution drawer and export (`market-analytics.tsx`); a Cohort Changes card — deteriorating institutions and exits (`market-analytics-watch.tsx`); a Visual Analysis chart section (`market-analytics-visuals.tsx`); a Bank Stress Map behind `bank-stress-map`; plus a nested FRED/Census indicator panel (`market-research.tsx`) |
 | Market Research | `market-research` | Live publisher-by-publisher research feed with Postgres-backed archive (`market-research-feed.tsx`) and memo generation (`research-memo-modal.tsx`) |
 | Legal Landscape | `legal` | Three sections — Regulatory Watch, Legislative Tracker, Enforcement & Litigation (`legal-updates.tsx`) — drawn from the Federal Register, govtrack and GPO bulk data, and LegiScan where a record exists, and from a model with web search where it does not |
@@ -120,6 +120,40 @@ Commercial Observer, The Real Deal, CRE Daily, Trepp, Miami Herald for CRE; CNBC
 for finance), and fall back to the **GDELT DOC 2.0 API** when RSS yields fewer than 15 items. The two
 actions carry near-duplicate fetching logic, so a parsing bug tends to need fixing in both — as
 happened with the CDATA regex.
+
+### Subscriber sources: The Real Deal
+
+The firm's subscription publications, read by the tool and pinned above the feed list in
+Industry-Specific News under a "Subscriber sources" header — five rows, each with the rules that
+ranked it in its hover card. The Real Deal is the first and, as of 2026-10-27, the only one; South
+Florida Business Journal is held by the user (`docs/NEWS_SUBSCRIBER_SOURCES_STATUS.md` §3 has what
+was found about it).
+
+TRD is a WordPress site whose public REST API (`therealdeal.com/wp-json/wp/v2/posts`) returns
+every post with its full body, its editorial standfirst (`excerpt`) and its `market`, `sector` and
+`story_type` terms. Nothing on a post marks it subscriber-only — the metered paywall is applied in
+the reader's browser — so the tool reads the API and never logs in; the firm's subscriptions matter
+when a user opens the link. `app/services/trd.ts` runs two requests a day, the Miami market
+(`market=9574`, TRD's South Florida desk) and the commercial sector (`sector=27942`), each over the
+last seven days with a day of slack (49 and 97 posts on 2026-10-27; one page of 100 covers each).
+`lib/news/trd.ts` ranks them: the topic rules Industry-Specific News applies to feed items, on the
+headline and standfirst, with distress tested before residential (6/4/3/2/1); +2 for a distress
+term the body carries and the headline omits; +2 commercial sector, +2 finance, +1 development, −2
+residential only; +3 Miami market, +1 national; +1 for original reporting (news, breaking, data,
+reports) and nothing for a blurb, which re-reports another outlet; promo and celebrity story types
+excluded. Ties go to the newer post. Region is the headline's named places, then the Miami market
+read as Florida. `fetch-subscriber-sources.ts` caches the five picks under `subscriber-sources-v1`
++ ET day; a build whose requests all fail throws inside the cache so nothing is stored, and the
+action returns an `error` the panel shows as "Subscriber sources unavailable today". The panel
+drops a feed item whose URL the pinned block already shows. `npm run test:news-trd` covers the
+rules on a 24-post fixture; `npm run verify:news-trd` runs the live build from a laptop and prints
+every pick's reasons.
+
+The one unknown is Vercel's egress: Cloudflare fronts TRD and answers 403 to any user agent it
+does not take for a browser — the tool's `MarketIntelligence/1.0` string included, which is why
+the TRD RSS entries in the feed list have returned nothing. The service sends a Chrome string,
+which passes from a laptop; whether it passes from Vercel is read from the warm-cache cron's
+`subscriber_sources: trd` log line or from the panel itself.
 
 ### Legal Landscape: two prompts, one record, and five gates
 
@@ -1925,6 +1959,7 @@ above were produced and is the before/after instrument for further work on load 
   | --- | --- |
   | `industry-outlook-shared-v12` | The generated memo |
   | `industry-outlook-verified-metrics-v1` | Fetched FRED/FDIC figures |
+  | `subscriber-sources-v1` + ET day | The five Real Deal picks pinned above Industry-Specific News, with the reasons each ranked; never holds a failed build |
   | `market-analytics-report-data-v3` + scope | Full screening cohort with scores, for the PDF and Visual Analysis |
   | `market-analytics-screening-v2` + scope | Reduced, scored rows for the Market Analytics **tab**, now with `capitalCategory` |
   | `market-analytics-watch-v1` + scope | Cohort Changes: deteriorating institutions and exits with their FDIC structure records |
@@ -2089,6 +2124,8 @@ OpenAI call: the workflow's curl timeout is 280s against the route's 300s `maxDu
 `National` is warmed, because that is the only scope either lens is mounted with** — adding a scope
 selector without adding its scopes here quietly restores a fifty-second cold load. Note that
 `warm-briefs` is unrelated: it pre-generates *news article* summaries, not the Executive Brief.
+`warm-cache` also warms `subscriberSources`, the Real Deal picks; the action reports a refused
+build in its return value, so the cron re-throws it and a blank day shows as a failed entry.
 
 `/api/cron` is exempt from the auth middleware and protected by bearer token instead.
 
@@ -2333,6 +2370,8 @@ npm run test:peer-intel-developments  # name-collision gate, word boundaries, de
 npm run test:peer-intel-gating     # repurchase cap, table rows, shares outstanding (tsx)
 npm run test:seller-likelihood     # four states, confidence floor, cohort enrichment (tsx)
 npm run backtest:seller            # live: the score against the banks that actually failed
+npm run test:news-trd              # The Real Deal picks: entities, the ranking rules and reasons, the gates, a fixture (tsx)
+npm run verify:news-trd            # live, laptop only: the two Real Deal requests and the five picks with their reasons
 npm run verify:peer-signals -- --all   # live: all three layers, firing rates, cache size, scope independence
 ```
 
@@ -2628,6 +2667,18 @@ their figures are year-to-date durations that do not match a calendar-quarter fr
   per project, and suspends compute after five minutes idle.
 - **Several Postgres variables in Vercel are flagged "Needs Attention"** and have not been
   investigated. May affect the live research library.
+
+**The Real Deal answers 403 to a user agent it does not take for a browser, and its feed body is
+now a pointer.** Cloudflare fronts therealdeal.com; the feed fetchers' `MarketIntelligence/1.0`
+string gets 403 on `/miami/feed/` and on the REST API, a bare `Mozilla/5.0` as well, and a full
+Chrome string passes. The RSS body is now only "This article originally appeared on The Real Deal.
+Click here to read the full story", so even a feed that loads carries no text; the REST API carries
+the full body, which is what the subscriber block reads. `app/services/trd.ts` sends the browser
+string and records each request's status. South Florida Business Journal is the harder case:
+`feeds.bizjournals.com` returns S3 `AccessDenied` for every user agent (the feed is gone), and every
+`bizjournals.com` page, the login page included, serves a Cloudflare JavaScript challenge a server
+cannot solve. A stored password would buy nothing there; see
+`docs/NEWS_SUBSCRIBER_SOURCES_STATUS.md` §3 for the two routes that work.
 
 ## 11. Runbook
 

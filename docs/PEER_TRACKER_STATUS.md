@@ -7,8 +7,9 @@ alerts digest is not started. **Released 2026-10-27 (`c2ea445`):** each fund's r
 structure, terms and people, and sponsor-stress steps 2–5 — adviser CRDs, Form ADV 7.B.(1) in the
 drawer, continuation-vehicle detection, and the 2011–2024 ADV history — see §3.*
 
-**Held, 2026-10-27, by the user:** this work pauses for another integration, not yet named, and resumes
-when that is done. The open list is in the "STOPPED HERE" block at the top of `SESSION.md`; nothing
+**Held, 2026-10-27, by the user:** this work pauses for another integration — the firm's subscription
+news sources, The Real Deal built on `dev` and South Florida Business Journal pending; see
+`docs/NEWS_SUBSCRIBER_SOURCES_STATUS.md` — and resumes when that is done. The open list is in the "STOPPED HERE" block at the top of `SESSION.md`; nothing
 here is to be picked up until the user says so.
 
 **Resuming:** see the "STOPPED HERE" block at the top of `SESSION.md` for the ordered pick-up list.

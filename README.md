@@ -57,7 +57,7 @@ a tab is built on `dev` before being exposed to users.
 
 | Tab | Feature key | What it shows |
 | --- | --- | --- |
-| News | `news` | The Industry Outlook / Key Signals memo, industry-specific and general finance news feeds, and an on-demand article digest |
+| News | `news` | The Industry Outlook / Key Signals memo, industry-specific and general finance news feeds with the firm's subscriber picks (The Real Deal) pinned above the industry feed, and an on-demand article digest |
 | Market Analytics | `market-analytics` | FDIC bank screening with a state filter, institution drawer and export; a Visual Analysis chart section; a Bank Stress Map behind `bank-stress-map`; and a nested FRED/Census indicator panel |
 | Market Research | `market-research` | A publisher-by-publisher research feed with a Postgres-backed archive, plus memo generation |
 | Legal Landscape | `legal` | Regulatory Watch, Legislative Tracker and Enforcement & Litigation, all AI-generated. Despite the name, no LegiScan data is involved |
@@ -168,6 +168,7 @@ with almost no configuration.
 | **FRED** | Verified market metrics, Market Pulse strip | **Keyless CSV endpoint** for the outlook | Pulse strip renders nothing rather than a placeholder |
 | **Google News RSS** + publisher RSS | News feeds | Keyless | Falls back to GDELT |
 | **GDELT DOC 2.0** | News fallback when RSS yields under 15 items | Keyless | Feeds thin out |
+| **The Real Deal** REST API (`/wp-json/wp/v2/posts`) | The subscriber picks pinned above Industry-Specific News | Keyless; Cloudflare requires a browser user agent | The panel shows a one-line "unavailable today" note; the feeds are unaffected |
 | **Google Programmable Search** | Market Research search | `GOOGLE_API_KEY` + `GOOGLE_CSE_ID` | Research search unavailable |
 | **OpenFreeMap** | Basemap tiles for the stress map | Keyless | Map renders without a basemap |
 | **Census**, **FFIEC** | Analytics side panels | `CENSUS_API_KEY`, `FFIEC_USER_ID`, `FFIEC_TOKEN` | Sections report `configured: false` |
@@ -260,6 +261,8 @@ npm run test:legal-bills      # legal feed: bill numbers, and the fabricated bil
 npm run test:legal-legislation # legal feed: federal bills read from the record, and companion-bill dedupe
 npm run test:legal-govinfo    # legal feed: a federal bill's GPO record, text, report and CRS summary
 npm run test:legal-movement   # legal feed: what changed about a bill, and why re-running cannot consume it
+npm run test:news-trd         # The Real Deal picks: entity decoding, the ranking rules and their reasons, the gates, a 24-post fixture (tsx)
+npm run verify:news-trd       # live: the two Real Deal requests and the five picks with every rule that scored them (laptop only)
 npm run test:legal-fedreg     # legal feed: Federal Register rules, corrections, and full-text section selection
 npm run test:legal-florida    # legal feed: Florida bills, number formats, local and reviser bills, the rest of the record, staff analyses
 npm run test:legal-pages      # legal feed: reading the enforcement roundup pages the model cites
@@ -446,6 +449,14 @@ scripts/        One-off and ingestion scripts (TypeScript and Python)
 ## Maintenance notes
 
 ### Traps that have already caused incidents
+
+**The Real Deal and South Florida Business Journal sit behind Cloudflare, and it decides by user
+agent.** TRD answers 403 to the feed fetchers' `MarketIntelligence/1.0` string and to a bare
+`Mozilla/5.0`, and 200 to a full Chrome string; its RSS body is now a one-line pointer, while its
+public REST API carries the full post. The subscriber block reads the API with a browser string
+(`app/services/trd.ts`) and never logs in. SFBJ is the harder case: its feed host is gone and every
+page, the login page included, serves a JavaScript challenge a server cannot solve, so a stored
+password would buy nothing. The routes that do work are in `docs/NEWS_SUBSCRIBER_SOURCES_STATUS.md`.
 
 **SEC EDGAR ignores an unknown query parameter instead of rejecting it.** Full-text search takes
 `q`; a request built with `keys=` returns the entire form firehose, newest first, with the search

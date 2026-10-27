@@ -8,10 +8,74 @@ is it in now, and what is still open.
 
 ---
 
-## STOPPED HERE — 2026-10-27: everything released; Peers work HELD for a new integration
+## STOPPED HERE — 2026-10-27, afternoon: The Real Deal pinned in Industry-Specific News; SFBJ next; Peers still HELD
 
 Read `CLAUDE.md` first for orientation, then this block. Everything below it is the running record —
 reverse-chronological, and worth reading only when you need the reasoning behind something specific.
+
+**Production is `c2ea445`**, unchanged. **`dev` carries `d21f4c6`, unreleased:** The Real Deal as a
+subscriber source — its top five articles of the week pinned above the feed list in Industry-Specific
+News under a "Subscriber sources" header, each row's hover card listing the rules that ranked it.
+Confirm with `git log --oneline` rather than trusting a SHA written here.
+
+**The integration the user named.** The firm's users read two subscription sites every day, South
+Florida Business Journal and The Real Deal; the tool should pull the most pertinent articles from
+both, top five each, put them at the top of News and list the RSS items after them, ranked by the
+tool's existing relevance rules. The user offered both logins. **Neither is stored.** TRD needs
+none: its public WordPress REST API returns every post with its full body and taxonomy terms, and
+nothing marks a post subscriber-only — the paywall is applied in the reader's browser. SFBJ cannot be
+read by a server at all (its feed host is gone and every page, the login page included, is behind a
+Cloudflare JavaScript challenge), so a stored password would buy nothing; the user said "Handle the
+Real Deal, we will discuss South Florida Business Journal after we finish the other updates."
+
+**What was built in one paragraph.** `app/services/trd.ts` runs two requests a day against
+`therealdeal.com/wp-json/wp/v2/posts` — the Miami market (`market=9574`) and the commercial sector
+(`sector=27942`), seven days plus a day of slack, a browser user agent because Cloudflare answers
+403 to the feed fetchers' string. `lib/news/trd.ts` ranks the posts deterministically: the News
+tab's topic rules on the headline and standfirst with distress tested before residential
+(6/4/3/2/1), +2 for a distress term only the body carries, sector +2/+2/+1/−2, market +3 Miami /
++1 national, +1 original reporting and nothing for a blurb, promo and celebrity excluded, ties to
+the newer post; every rule applied is recorded on the pick. `app/actions/fetch-subscriber-sources.ts`
+caches the five under `subscriber-sources-v1` + ET day; a build that gets nothing throws inside the
+cache so no blank day is stored, and the panel shows "Subscriber sources unavailable today: …".
+`components/public-mentions.tsx` renders the header row, the five rows with a Subscriber badge, a
+"From the feeds" row and the feed list, dropping a feed item the block already shows. Read into the
+page with the rest of the tab (`initial-news-data.ts`) and warmed by `warm-cache`
+(`subscriberSources`, re-throwing a reported error). Full detail in
+`docs/NEWS_SUBSCRIBER_SOURCES_STATUS.md`.
+
+**Verification state.** Locally: `npm run test:news-trd` 13/13 on a 24-post fixture; `npm run
+verify:news-trd` live from the laptop — 49 + 97 posts, 110 candidates, five picks; `next build`
+clean. **On Vercel, the one unknown is whether Cloudflare accepts the request from Vercel's
+egress.** The preview of `d21f4c6` answers it: either the five rows render, or the panel's note names
+the status. The user opens the preview (Deployment Protection); after a production deploy the
+warm-cache log line `subscriber_sources: trd` carries each request's status.
+
+**Know before the user opens it.** The live run's third pick (2026-10-21) was TRD's report of an
+investor suing Safe Harbor Equity, Rafael Serrano and City National Bank of Florida over an alleged
+$47M debt-fund loan scheme — the firm's own name, ranked high because "foreclose" is in the
+standfirst and it is Miami-market commercial news. The tool shows what the publisher printed and
+why it ranked; it does not judge it.
+
+**Next, when the user raises it: SFBJ.** Two routes work, in `docs/NEWS_SUBSCRIBER_SOURCES_STATUS.md`
+§3: Google News `site:bizjournals.com/southflorida` for the week's headlines (immediate, no
+credentials), and the subscriber newsletters forwarded to an address the tool owns through Resend's
+inbound email (already on the account's free plan), parsed and stored; that one needs a sample
+newsletter from the user. Open on TRD: feeding the API body into a pinned article's Brief, and
+removing the dead TRD RSS entries from the feed list.
+
+**Still HELD, by the user, 2026-10-27:** all Peers and sponsor-stress work, until the integration is
+done. The open list is in the entry below this one; nothing there is to be picked up until the user
+says so.
+
+**Node.** 24.x everywhere; locally Homebrew's `node@24` at 24.22.1; the plain `node` formula is 26
+and unlinked — never `brew upgrade node`.
+
+---
+
+## 2026-10-27: everything released; Peers work HELD for a new integration
+
+*(Superseded by the block above; kept as the record of the release and of the Peers open list.)*
 
 **Production is `c2ea445`**, released 2026-10-27 after the user reviewed the preview: everything
 below — the fund rows, adviser CRDs, Form ADV in the drawer, continuation vehicles, the ADV

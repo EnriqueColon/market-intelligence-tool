@@ -8,7 +8,7 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
 | `main` | `c2ea445` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `c2ea445` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `dev` | `d21f4c6` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 This table names the newest commit on each branch that **changes behaviour**; documentation-only
 commits sit on top of it and are deliberately not tracked here, because amending one rotates its
@@ -43,6 +43,16 @@ key. **To roll back:** Vercel's dashboard can promote the previous production de
 which is the fastest route; in git, `git revert -m 1 8061ec2` on `main` returns the code to
 `9f8a1f9`. Reverting leaves the `behavior-signals-v2` and `peer-intel-v2` cache entries in place,
 harmlessly — the reverted code reads `v1` keys and recomputes.
+
+**`dev` carries `d21f4c6` as of 2026-10-27, afternoon — The Real Deal as a subscriber source, one
+commit past production.** The top five Real Deal articles of the week pinned above the feed list in
+Industry-Specific News, read from the site's public REST API with no login, ranked by recorded
+rules, cached as `subscriber-sources-v1` + ET day and warmed by `warm-cache`. Reverting `d21f4c6`
+removes the Subscriber sources rows, the `subscriberSources` warm entry and the page's initial read
+of it, `lib/news/`, `app/services/trd.ts`, `app/actions/fetch-subscriber-sources.ts` and the verify
+script; the `subscriber-sources-v1` cache entries stay, harmlessly. Nothing in it touches the bank
+analytics, the data API or production. Not yet verified on Vercel: whether Cloudflare accepts the
+request from Vercel's egress — the preview shows either the five rows or a one-line note.
 
 **`dev` carries `37c55b9` as of 2026-10-27, evening** — Form ADV history 2011–2024, sponsor-stress
 step 5, fourteen commits past production. Reverting `37c55b9` removes the year-by-year tables, the
