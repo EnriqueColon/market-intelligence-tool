@@ -7,13 +7,30 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
-| `main` | `8061ec2` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `37c55b9` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `main` | `c2ea445` | Production | https://market-intelligence-tool-gilt.vercel.app |
+| `dev` | `c2ea445` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 This table names the newest commit on each branch that **changes behaviour**; documentation-only
 commits sit on top of it and are deliberately not tracked here, because amending one rotates its
 SHA and the table then reads as stale when nothing has moved. Confirm with
 `git log --format='%h|%ci|%s'` rather than trusting the previous entry — this has drifted twice.
+
+**Production carries `c2ea445` as of 2026-10-27 — the release of sponsor-stress steps 2–5 and the
+fund rows.** A fast-forward of `main` to `dev` (fifteen commits past `8061ec2`), on the user's "commit
+to production — looks good" after reviewing the preview. It ships: each fund's row in the Raises
+table expanding to its structure, terms and people (`d3acaff`, `8e93ead`, `8aae1dc`); adviser
+CRDs in the registry (`04ccd88`); the Brotli CVE response and the Node 24 build line (`54371c4`,
+`95e5675`); Form ADV 7.B.(1) in the drawer with the committed extract (`3ec5e2e`); continuation,
+annex and extension vehicles (`b25f774`); and the 2011–2024 ADV history (`37c55b9`), plus their
+docs commits. Vercel deployed it (`success`); live after deploy: `/` redirects to login, `/login`
+serves, the data API answers 401 without a key. The signals size guard is unchanged, so AMO
+Tracker's whole-scope request is unaffected. The first visit to each Peers layer rebuilds its
+cache under the new `peer-intel-v5` key (about a minute nationally, including the continuation
+searches); the nightly warm handles it thereafter. **To roll back:** Vercel's dashboard can
+promote the previous production deployment instantly; in git, `git reset --hard 8061ec2` on
+`main` and a force push, or `git revert` of the individual commits newest first — each reverts
+cleanly on its own. Reverting leaves the `peer-intel-v3`/`v4`/`v5` cache entries in place,
+harmlessly.
 
 **Production carries `8061ec2` as of 2026-10-26, 13:08 UTC — the release of everything on `dev`.**
 A `--no-ff` merge of `dev` (`bee6aea`) into `main` (`9f8a1f9`); its tree is identical to `bee6aea`,

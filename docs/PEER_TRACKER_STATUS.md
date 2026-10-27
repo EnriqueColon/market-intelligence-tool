@@ -3,9 +3,9 @@
 *As of 2026-10-27: **in production as beta** since 2026-10-26, with `peer-intel` in production's
 `ENABLED_TABS`. Steps 1–6 are done, with step 7's developments feed, vintage pacing and interim-close
 labels; gating is assessed and its reader proven (`verify:peer-gating`) but not built, and the
-alerts digest is not started. On `dev` and unreleased: each fund's row expands to its structure,
-terms and people, adviser CRDs in the registry (sponsor-stress step 2), **Form ADV 7.B.(1) in the
-drawer (step 3)** and **continuation-vehicle detection (step 4)** — see §3.*
+alerts digest is not started. **Released 2026-10-27 (`c2ea445`):** each fund's row expands to its
+structure, terms and people, and sponsor-stress steps 2–5 — adviser CRDs, Form ADV 7.B.(1) in the
+drawer, continuation-vehicle detection, and the 2011–2024 ADV history — see §3.*
 
 **Resuming:** see the "STOPPED HERE" block at the top of `SESSION.md` for the ordered pick-up list.
 The item with an impact outside this repo is §3a: AMO Tracker's whole-scope signals request now has

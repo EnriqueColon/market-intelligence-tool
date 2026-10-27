@@ -13,20 +13,16 @@ is it in now, and what is still open.
 Read `CLAUDE.md` first for orientation, then this block. Everything below it is the running record —
 reverse-chronological, and worth reading only when you need the reasoning behind something specific.
 
-**Production is `8061ec2`** (2026-10-26 morning): Peers (beta), Seller Likelihood in the bank
-drawer, the nightly Peers cron warm, the Assignment of Mortgage removal, and the signals size guard
-at 4,480,000 bytes. The user has set `peer-intel` in production's `ENABLED_TABS` and confirmed the
-tab works there.
+**Production is `c2ea445`**, released 2026-10-27 after the user reviewed the preview: everything
+below — the fund rows, adviser CRDs, Form ADV in the drawer, continuation vehicles, the ADV
+history — plus the Node 24 build line and the Brotli CVE response. `main` and `dev` are level
+apart from documentation commits on `dev`. Live after deploy: `/` redirects to login, `/login`
+serves, the data API answers 401 without a key. `peer-intel` is in production's `ENABLED_TABS`.
 
-**`dev` is ahead of production by fourteen commits, none released:** `d3acaff` Structure & terms
-and People from Form D; `8e93ead` each fund's row expands to them; `8aae1dc` no row opens on its
-own; `04ccd88` adviser CRDs (sponsor-stress step 2); `54371c4` and `95e5675` the Brotli CVE
-response and Node 24; `3ec5e2e` **Form ADV in the drawer (step 3)**; `b25f774` **continuation,
-annex and extension vehicles (step 4)**; `37c55b9` **Form ADV history 2011–2024 (step 5)**; and
-their docs commits. Confirm the head with `git log --oneline -1` rather than trusting a SHA
-written here. Releasing is `git checkout main && git merge dev`, a fast-forward. **The user has
-not yet looked at any of the step 3–5 work in a preview** — the newest `dev` preview is the one
-to show.
+**Nothing on `dev` is unreleased** except this documentation. The step commits, for the record:
+`3ec5e2e` Form ADV in the drawer (step 3), `b25f774` continuation vehicles (step 4), `37c55b9`
+the ADV history (step 5); `04ccd88` adviser CRDs (step 2); `d3acaff`/`8e93ead`/`8aae1dc` the
+fund rows. Confirm with `git log --oneline` rather than trusting a SHA written here.
 
 **Step 3 in one paragraph.** `npm run refresh:peer-adv` downloads each adviser's Form ADV PDF from
 IAPD, reads it with pdf.js, parses Schedule D 7.B.(1) and commits `lib/peer-intel/adv-extract.json`
@@ -91,14 +87,13 @@ built lowest-hanging first: step 1 dropped as a verdict the data cannot support;
 and 5 done — **the sponsor-stress data layer is complete**; what remains is whether to build a
 read on top of it, which the user has not decided.
 
-**Pick up with, in order:** (1) the user looks at the newest `dev` preview — a fund row's ADV block
-with its year-by-year table, the Form ADV section's book by year, the continuation section for
-Bridge or Pretium, Safe Harbor's amber answers; (2) release, when the user says so; (3) the
-sponsor-stress question the five steps were building towards — whether a deterministic reading
-over these facts is wanted, and what it may and may not say — is the user's call and has not
-been asked for; (4) on the Peers list, the `non-traded` bucket split and gating on the reader
-`verify:peer-gating` already carries; (5) Bank Behaviour step 5 whenever deal sourcing should
-move.
+**Pick up with, in order:** (1) the sponsor-stress question the five steps were building towards —
+whether a deterministic reading over these facts is wanted, and what it may and may not say — is
+the user's call and has not been asked for; (2) on the Peers list, the `non-traded` bucket split
+and gating on the reader `verify:peer-gating` already carries; (3) Bank Behaviour step 5 whenever
+deal sourcing should move; (4) the ADV extract and history have no scheduled refresh — re-run
+`refresh:peer-adv` after the spring annual amendments, and `build:adv-history` when the SEC
+publishes the 2025 bulk data.
 
 **Node.** 24.x everywhere; locally Homebrew's `node@24` at 24.22.1 (CVE-2026-111497 fixed); the
 plain `node` formula is 26 and unlinked — never `brew upgrade node`. The build prints
@@ -118,7 +113,7 @@ responses, nearly all of it briefs of untracked funds (Bridge 148, H.I.G. 149, S
 | --- | --- |
 | Peers tab, steps 1–6 | Done, in production as beta |
 | Peers step 7 | Developments feed done; gating assessed and its reader proven, not built; alerts digest not started |
-| Sponsor stress | Steps 2–5 done on `dev` (CRDs, Form ADV, continuation vehicles, ADV history 2011–2024); whether to build a reading on top is undecided |
+| Sponsor stress | Steps 2–5 **in production** (CRDs, Form ADV, continuation vehicles, ADV history 2011–2024); whether to build a reading on top is undecided |
 | Bank Behaviour step 4 | Done — score, four states, backtest, cache, drawer |
 | Bank Behaviour steps 5–7 | Not started |
 
