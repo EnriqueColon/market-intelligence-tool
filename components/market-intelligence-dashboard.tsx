@@ -200,7 +200,7 @@ export function MarketIntelligenceDashboard({
               <TabsContent value="news" className={TAB_CONTENT_CLASS} {...keepMounted("news")}>
                 <IndustryOutlook initialText={initialNews?.outlook} />
                 <div>
-                  <PublicMentions initialByLevel={initialNews?.publicMentions} />
+                  <PublicMentions initialByLevel={initialNews?.publicMentions} initialSubscriber={initialNews?.subscriberSources} />
                 </div>
                 <div>
                   <InvestingBusinessMentions initialByLevel={initialNews?.investingNews} />

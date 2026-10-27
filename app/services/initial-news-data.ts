@@ -3,6 +3,7 @@ import { after } from "next/server"
 import { fetchInvestingNews } from "@/app/actions/fetch-investing-news"
 import { fetchMarketPulse, type PulseTile } from "@/app/actions/fetch-market-pulse"
 import { fetchPublicMentions, type PublicMentionItem } from "@/app/actions/fetch-public-mentions"
+import { fetchSubscriberSources, type SubscriberSourcesResponse } from "@/app/actions/fetch-subscriber-sources"
 import { getCachedIndustryOutlook } from "@/app/services/industry-outlook/getCachedOutlook"
 
 /**
@@ -36,6 +37,8 @@ export type InitialNewsData = {
   /** All three levels or nothing: a partial set would have the component fetch everything again. */
   publicMentions?: Record<NewsLevel, PublicMentionItem[]>
   investingNews?: Record<NewsLevel, PublicMentionItem[]>
+  /** The pinned subscriber picks above Industry-Specific News. Omitted on a failed build so the panel retries. */
+  subscriberSources?: SubscriberSourcesResponse
 }
 
 /** How long the page will wait for a cache to answer. Generous for a hit, far short of a miss. */
@@ -67,21 +70,24 @@ export async function readInitialNewsData(budgetMs = INITIAL_READ_BUDGET_MS): Pr
   const outlookRead = getCachedIndustryOutlook()
   const mentionReads = LEVELS.map((level) => fetchPublicMentions(level))
   const investingReads = LEVELS.map((level) => fetchInvestingNews(level))
-  const all = [pulseRead, outlookRead, ...mentionReads, ...investingReads]
+  const subscriberRead = fetchSubscriberSources()
+  const all = [pulseRead, outlookRead, ...mentionReads, ...investingReads, subscriberRead]
 
   // Whatever the budget abandons finishes after the response rather than being frozen with it.
   after(() => Promise.allSettled(all))
 
-  const [pulse, outlook, publicMentions, investingNews] = await Promise.all([
+  const [pulse, outlook, publicMentions, investingNews, subscriberSources] = await Promise.all([
     within(pulseRead, budgetMs),
     within(outlookRead, budgetMs),
     readLevels((level) => mentionReads[LEVELS.indexOf(level)], budgetMs),
     readLevels((level) => investingReads[LEVELS.indexOf(level)], budgetMs),
+    within(subscriberRead, budgetMs),
   ])
   return {
     pulse: pulse && pulse.length > 0 ? pulse : undefined,
     outlook: outlook && outlook.trim().length > 0 ? outlook : undefined,
     publicMentions,
     investingNews,
+    subscriberSources: subscriberSources && !subscriberSources.error ? subscriberSources : undefined,
   }
 }

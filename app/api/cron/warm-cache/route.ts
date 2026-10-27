@@ -4,6 +4,7 @@ import {
   getLastEvidenceGuardReport,
 } from "@/app/services/industry-outlook/getCachedOutlook"
 import { fetchPublicMentions } from "@/app/actions/fetch-public-mentions"
+import { fetchSubscriberSources } from "@/app/actions/fetch-subscriber-sources"
 import { fetchInvestingNews } from "@/app/actions/fetch-investing-news"
 import { fetchLegalUpdates } from "@/app/actions/fetch-legal-updates"
 import { fetchMarketResearch } from "@/app/actions/fetch-market-research"
@@ -67,6 +68,18 @@ export async function GET(request: Request) {
     warmWithLabel("publicMentions:national", () => fetchPublicMentions("national"), results),
     warmWithLabel("publicMentions:florida", () => fetchPublicMentions("florida"), results),
     warmWithLabel("publicMentions:miami", () => fetchPublicMentions("miami"), results),
+
+    // News tab — the subscriber picks pinned above Industry-Specific News (The Real Deal's
+    // API). The action reports a refused build in its return value rather than throwing, so
+    // it is re-thrown here or the cron would record a blank day as "ok".
+    warmWithLabel(
+      "subscriberSources",
+      async () => {
+        const r = await fetchSubscriberSources()
+        if (r.error) throw new Error(r.error)
+      },
+      results
+    ),
 
     // News tab — Investing & Finance News
     warmWithLabel("investingNews:national", () => fetchInvestingNews("national"), results),

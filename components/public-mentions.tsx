@@ -25,12 +25,48 @@ import {
   type PublicMentionItem,
 } from "@/app/actions/fetch-public-mentions"
 import { summarizeNewsItem, type NewsBrief, type NewsSummaryInput } from "@/app/actions/fetch-news-summary"
+import { fetchSubscriberSources, type SubscriberSourcesResponse } from "@/app/actions/fetch-subscriber-sources"
 
 type Level = "national" | "florida" | "miami"
 const LEVELS: Level[] = ["national", "florida", "miami"]
 
 /** Item annotated with the feed level it came from (matches warm-briefs cache keys). */
 type MergedItem = PublicMentionItem & { feedLevel: Level }
+
+/**
+ * A table row: a feed item, or a subscriber pick pinned above the feeds. A pick carries the rules
+ * that ranked it, shown in its hover card in place of a feed item's access flag.
+ */
+type Row = MergedItem & { pinned?: boolean; reasons?: string[]; score?: number }
+
+function canonicalUrl(url?: string) {
+  if (!url) return ""
+  try {
+    const u = new URL(url)
+    return `${u.hostname.replace(/^www\./, "")}${u.pathname.replace(/\/+$/, "")}`.toLowerCase()
+  } catch {
+    return url.trim().toLowerCase()
+  }
+}
+
+function pinnedRows(subscriber?: SubscriberSourcesResponse): Row[] {
+  return (subscriber?.items ?? []).map((item) => ({
+    id: item.id,
+    title: item.title,
+    source: item.source,
+    date: item.date,
+    url: item.url,
+    snippet: item.snippet,
+    region: item.region,
+    topic: item.topic,
+    // The tool read the standfirst and body from the publisher's API; the link opens a metered page.
+    access_status: "partial" as const,
+    feedLevel: item.region,
+    pinned: true,
+    reasons: item.reasons,
+    score: item.score,
+  }))
+}
 
 function mergeAllLevels(perLevel: Array<{ level: Level; items: PublicMentionItem[] }>): MergedItem[] {
   const seen = new Set<string>()
@@ -49,18 +85,28 @@ function mergeAllLevels(perLevel: Array<{ level: Level; items: PublicMentionItem
 const cache = new Map<string, MergedItem[]>()
 const inflight = new Map<string, Promise<MergedItem[]>>()
 const CACHE_VERSION = "public_mentions:v4"
+let subscriberCache: SubscriberSourcesResponse | undefined
+let subscriberInflight: Promise<SubscriberSourcesResponse> | undefined
 
 /**
  * `initialByLevel` is what the server read from the three per-level caches while rendering the
  * page. With it the list renders in the HTML and nothing is fetched on mount; the module cache is
- * filled from it so a remount behaves as it would after a fetch.
+ * filled from it so a remount behaves as it would after a fetch. `initialSubscriber` is the same
+ * for the pinned subscriber picks.
  */
-export function PublicMentions({ initialByLevel }: { initialByLevel?: Record<Level, PublicMentionItem[]> } = {}) {
+export function PublicMentions({
+  initialByLevel,
+  initialSubscriber,
+}: { initialByLevel?: Record<Level, PublicMentionItem[]>; initialSubscriber?: SubscriberSourcesResponse } = {}) {
   const [news, setNews] = useState<MergedItem[]>(() => {
     if (!initialByLevel) return []
     const merged = mergeAllLevels(LEVELS.map((level) => ({ level, items: initialByLevel[level] ?? [] })))
     if (merged.length > 0) cache.set(`all:${CACHE_VERSION}`, merged)
     return merged
+  })
+  const [subscriber, setSubscriber] = useState<SubscriberSourcesResponse | undefined>(() => {
+    if (initialSubscriber && !initialSubscriber.error) subscriberCache = initialSubscriber
+    return initialSubscriber
   })
   const [loading, setLoading] = useState(!initialByLevel)
   const [note, setNote] = useState<string | undefined>()
@@ -77,9 +123,53 @@ export function PublicMentions({ initialByLevel }: { initialByLevel?: Record<Lev
     return "National"
   }
 
-  const topics = ["All", ...Array.from(new Set(news.map((n) => n.topic).filter(Boolean))).sort()]
+  const pinned = pinnedRows(subscriber)
+  const pinnedUrls = new Set(pinned.map((p) => canonicalUrl(p.url)))
+  // A feed item the subscriber block already shows is not listed twice.
+  const feedRows: Row[] = news.filter((n) => !pinnedUrls.has(canonicalUrl(n.url)))
+  const allRows: Row[] = [...pinned, ...feedRows]
 
-  const visibleNews = activeTopic === "All" ? news : news.filter((n) => n.topic === activeTopic)
+  const topics = ["All", ...Array.from(new Set(allRows.map((n) => n.topic).filter(Boolean))).sort()]
+
+  const byTopic = (rows: Row[]) => (activeTopic === "All" ? rows : rows.filter((n) => n.topic === activeTopic))
+  const visiblePinned = byTopic(pinned)
+  const visibleNews = byTopic(feedRows).sort((a, b) => {
+    const accessOrder = { open: 0, partial: 1, paywalled: 2 } as const
+    const accessDiff = (accessOrder[a.access_status] ?? 1) - (accessOrder[b.access_status] ?? 1)
+    if (accessDiff !== 0) return accessDiff
+    // Within same access tier, newest first (undated last)
+    return (b.date || "").localeCompare(a.date || "")
+  })
+  const subscriberReport = subscriber?.sources.find((s) => s.source === "The Real Deal")
+
+  useEffect(() => {
+    let mounted = true
+    async function loadSubscriber() {
+      if (subscriberCache) {
+        setSubscriber(subscriberCache)
+        return
+      }
+      if (!subscriberInflight) subscriberInflight = fetchSubscriberSources()
+      try {
+        const result = await subscriberInflight
+        if (!mounted) return
+        if (!result.error) subscriberCache = result
+        setSubscriber(result)
+      } catch (err) {
+        if (!mounted) return
+        const message = err instanceof Error ? err.message : String(err)
+        setSubscriber({ items: [], notes: [], generatedAt: "", sources: [], error: message })
+      } finally {
+        subscriberInflight = undefined
+      }
+    }
+    if (!subscriber || subscriber.error) loadSubscriber()
+    return () => {
+      mounted = false
+    }
+    // Once per mount: a failed first read is retried on the next mount, not in a loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     let mounted = true
@@ -156,6 +246,97 @@ export function PublicMentions({ initialByLevel }: { initialByLevel?: Record<Lev
     }
   }, [summaryOpen, selected])
 
+  const renderRow = (item: Row, index: number) => (
+    <TableRow
+      key={`${item.id}-${item.url || "no-url"}-${item.date || "no-date"}-${index}`}
+      className={item.pinned ? "bg-[#006D95]/[0.03]" : undefined}
+    >
+      <TableCell className="max-w-[520px]">
+        <HoverCard openDelay={250}>
+          <HoverCardTrigger asChild>
+            <Button variant="link" className="h-auto p-0 text-left whitespace-normal">
+              {item.title}
+            </Button>
+          </HoverCardTrigger>
+          <HoverCardContent className="w-[420px] space-y-2">
+            <div className="text-xs font-semibold text-slate-900 uppercase">Preview</div>
+            <div className="text-sm text-slate-800">{item.snippet || "No preview available."}</div>
+            {item.pinned && item.reasons && item.reasons.length > 0 && (
+              <div className="rounded bg-[#006D95]/8 border border-[#006D95]/20 px-2 py-1.5">
+                <div className="text-xs font-semibold text-[#006D95]">
+                  Why it ranked{typeof item.score === "number" ? ` (score ${item.score})` : ""}
+                </div>
+                <ul className="mt-1 list-disc space-y-0.5 pl-4 text-xs text-slate-700">
+                  {item.reasons.map((r, i) => (
+                    <li key={`why-${i}`}>{r}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {!item.pinned && item.detection_reason && (
+              <div className="rounded bg-[#006D95]/8 border border-[#006D95]/20 px-2 py-1.5">
+                <span className="text-xs font-semibold text-[#006D95]">Why flagged: </span>
+                <span className="text-xs text-slate-700">{item.detection_reason}</span>
+              </div>
+            )}
+            <div className="text-xs text-slate-900">
+              {item.source || "—"}
+              {item.date ? ` • ${item.date}` : ""}
+              {item.url ? (
+                <>
+                  {" "}
+                  •{" "}
+                  <a className="text-primary underline" href={item.url} target="_blank" rel="noreferrer">
+                    Open
+                  </a>
+                </>
+              ) : null}
+            </div>
+          </HoverCardContent>
+        </HoverCard>
+      </TableCell>
+      <TableCell>
+        {item.source || "—"}
+        {item.pinned && (
+          <span className="ml-1.5 rounded-full border border-[#006D95]/30 bg-[#006D95]/10 px-1.5 py-0.5 text-[10px] font-medium uppercase text-[#006D95]">
+            Subscriber
+          </span>
+        )}
+      </TableCell>
+      <TableCell>{item.date || "—"}</TableCell>
+      <TableCell>{regionLabel(item.region)}</TableCell>
+      <TableCell>{item.topic}</TableCell>
+      <TableCell>
+        {item.url ? (
+          <a className="text-primary underline" href={item.resolved_url || item.url} target="_blank" rel="noreferrer">
+            View
+          </a>
+        ) : (
+          "—"
+        )}
+      </TableCell>
+      <TableCell>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => {
+            setSelected({
+              title: item.title,
+              url: item.resolved_url || item.url,
+              source: item.source,
+              date: item.date,
+              summary: item.snippet,
+              level: item.feedLevel,
+            })
+            setSummaryOpen(true)
+          }}
+        >
+          Brief
+        </Button>
+      </TableCell>
+    </TableRow>
+  )
+
   return (
     <Card className="p-6 border-slate-200/80 bg-slate-50/30">
       <div className="flex items-center justify-between">
@@ -167,6 +348,14 @@ export function PublicMentions({ initialByLevel }: { initialByLevel?: Record<Lev
         </div>
         {note && <p className="text-xs text-slate-900">{note}</p>}
       </div>
+      {subscriber?.error && (
+        <p className="mt-2 text-xs text-amber-700">
+          Subscriber sources unavailable today: {subscriber.error}
+        </p>
+      )}
+      {subscriber && !subscriber.error && subscriber.items.length === 0 && subscriber.notes.length > 0 && (
+        <p className="mt-2 text-xs text-slate-700">{subscriber.notes.join(" ")}</p>
+      )}
       {topics.length > 1 && (
         <div className="mt-3 flex flex-wrap gap-1.5">
           {topics.map((topic) => (
@@ -182,7 +371,7 @@ export function PublicMentions({ initialByLevel }: { initialByLevel?: Record<Lev
               {topic}
               {topic !== "All" && (
                 <span className="ml-1 opacity-60">
-                  {news.filter((n) => n.topic === topic).length}
+                  {allRows.filter((n) => n.topic === topic).length}
                 </span>
               )}
             </button>
@@ -203,87 +392,35 @@ export function PublicMentions({ initialByLevel }: { initialByLevel?: Record<Lev
             </TableRow>
           </TableHeader>
           <TableBody>
-            {news.length === 0 && (
+            {allRows.length === 0 && (
               <TableRow>
                 <TableCell colSpan={7} className="text-sm text-slate-900">
                   No qualifying mentions in past 7 days.
                 </TableCell>
               </TableRow>
             )}
-            {[...visibleNews].sort((a, b) => {
-              const accessOrder = { open: 0, partial: 1, paywalled: 2 } as const
-              const accessDiff = (accessOrder[a.access_status] ?? 1) - (accessOrder[b.access_status] ?? 1)
-              if (accessDiff !== 0) return accessDiff
-              // Within same access tier, newest first (undated last)
-              return (b.date || "").localeCompare(a.date || "")
-            }).map((item, index) => (
-              <TableRow key={`${item.id}-${item.url || "no-url"}-${item.date || "no-date"}-${index}`}>
-                <TableCell className="max-w-[520px]">
-                  <HoverCard openDelay={250}>
-                    <HoverCardTrigger asChild>
-                      <Button variant="link" className="h-auto p-0 text-left whitespace-normal">
-                        {item.title}
-                      </Button>
-                    </HoverCardTrigger>
-                    <HoverCardContent className="w-[420px] space-y-2">
-                      <div className="text-xs font-semibold text-slate-900 uppercase">Preview</div>
-                      <div className="text-sm text-slate-800">{item.snippet || "No preview available."}</div>
-                      {item.detection_reason && (
-                        <div className="rounded bg-[#006D95]/8 border border-[#006D95]/20 px-2 py-1.5">
-                          <span className="text-xs font-semibold text-[#006D95]">Why flagged: </span>
-                          <span className="text-xs text-slate-700">{item.detection_reason}</span>
-                        </div>
-                      )}
-                      <div className="text-xs text-slate-900">
-                        {item.source || "—"}
-                        {item.date ? ` • ${item.date}` : ""}
-                        {item.url ? (
-                          <>
-                            {" "}
-                            •{" "}
-                            <a className="text-primary underline" href={item.url} target="_blank" rel="noreferrer">
-                              Open
-                            </a>
-                          </>
-                        ) : null}
-                      </div>
-                    </HoverCardContent>
-                  </HoverCard>
-                </TableCell>
-                <TableCell>{item.source || "—"}</TableCell>
-                <TableCell>{item.date || "—"}</TableCell>
-                <TableCell>{regionLabel(item.region)}</TableCell>
-                <TableCell>{item.topic}</TableCell>
-                <TableCell>
-                  {item.url ? (
-                    <a className="text-primary underline" href={item.resolved_url || item.url} target="_blank" rel="noreferrer">
-                      View
-                    </a>
-                  ) : (
-                    "—"
-                  )}
-                </TableCell>
-                <TableCell>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => {
-                      setSelected({
-                        title: item.title,
-                        url: item.resolved_url || item.url,
-                        source: item.source,
-                        date: item.date,
-                        summary: item.snippet,
-                        level: item.feedLevel,
-                      })
-                      setSummaryOpen(true)
-                    }}
-                  >
-                    Brief
-                  </Button>
+            {visiblePinned.length > 0 && (
+              <TableRow className="bg-[#006D95]/5 hover:bg-[#006D95]/5">
+                <TableCell colSpan={7} className="py-1.5 text-xs text-[#006D95]">
+                  <span className="font-semibold uppercase">Subscriber sources</span>
+                  <span className="text-slate-700">
+                    {" "}
+                    — The Real Deal, the top {subscriber?.items.length ?? visiblePinned.length}
+                    {subscriberReport ? ` of ${subscriberReport.candidates} articles this week` : ""}
+                    {subscriber?.generatedAt ? `, read ${subscriber.generatedAt.slice(0, 10)}` : ""}. Hover a title for why it ranked.
+                  </span>
                 </TableCell>
               </TableRow>
-            ))}
+            )}
+            {visiblePinned.map((item, index) => renderRow(item, index))}
+            {visiblePinned.length > 0 && visibleNews.length > 0 && (
+              <TableRow className="bg-slate-100/70 hover:bg-slate-100/70">
+                <TableCell colSpan={7} className="py-1.5 text-xs font-semibold uppercase text-slate-600">
+                  From the feeds
+                </TableCell>
+              </TableRow>
+            )}
+            {visibleNews.map((item, index) => renderRow(item, index))}
           </TableBody>
         </Table>
       </div>
