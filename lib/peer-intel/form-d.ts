@@ -124,6 +124,11 @@ export type OfferingRecord = {
   formType: string
   /** `YYYY-MM-DD`, the filing date. */
   filedAt: string
+  /**
+   * The offering's SEC file number, `021-…`, from the EDGAR index rather than
+   * the document. Optional because entries cached before it was read lack it.
+   */
+  fileNumber?: string | null
   entityName: string
   /** Business address as `City, ST`, when given. */
   location: string | null
@@ -393,13 +398,21 @@ export function parseTerms(xml: string): OfferingTerms {
  */
 export function parseFormD(
   xml: string,
-  context: { cik: string; accession: string; formType: string; filedAt: string; location?: string | null }
+  context: {
+    cik: string
+    accession: string
+    formType: string
+    filedAt: string
+    fileNumber?: string | null
+    location?: string | null
+  }
 ): OfferingRecord {
   return {
     cik: String(Number(context.cik.replace(/\D/g, ""))),
     accession: context.accession,
     formType: context.formType,
     filedAt: context.filedAt,
+    fileNumber: context.fileNumber ?? null,
     entityName: tag(xml, "entityName") ?? "",
     location: context.location ?? null,
     jurisdiction: tag(xml, "jurisdictionOfInc") ?? tag(xml, "stateOrCountry"),
@@ -442,6 +455,11 @@ export type Raise = {
   firstSale: string | null
   firstFiled: string | null
   lastFiled: string | null
+  /**
+   * The offering's SEC file number, `021-…`, the key a Form ADV uses for the
+   * fund. Null for a trail cached before file numbers were read.
+   */
+  fileNumber: string | null
   /**
    * Sold as a share of target, 0–1. Null when the target is indefinite or
    * either side is missing — never a number computed against `"indefinite"`.
@@ -575,6 +593,7 @@ export function buildRaise(filings: OfferingRecord[], asOf: string): Raise | nul
     firstSale: ordered.map((f) => f.dateOfFirstSale).find((d) => d) ?? null,
     firstFiled: oldest.filedAt,
     lastFiled: newest.filedAt,
+    fileNumber: ordered.map((f) => f.fileNumber ?? null).filter((n): n is string => n != null).pop() ?? null,
     progress,
     averageTicket,
     soldLastYear,

@@ -46,7 +46,9 @@ function Pipeline({ cohort, diagnostics }: { cohort: PeerCohort; diagnostics: Pe
           stays open, which is what makes fundraising observable at all. <strong>XBRL company facts</strong> from
           quarterly and annual reports for the vehicles that file them, which is where redemptions, portfolio and
           income come from. Both are read directly from <span className="font-mono text-[10px]">sec.gov</span>. No
-          survey, no subscription data, no estimates.
+          survey, no subscription data, no estimates. <strong>Form ADV</strong>, the adviser&apos;s own registration
+          filing on IAPD, for the private funds it manages — gross assets, owners, and whether each is audited with a
+          clean opinion. Read offline and committed, because the PDFs run to tens of megabytes.
         </p>
       </div>
       <div className="rounded-md border border-slate-200/80 bg-white px-3 py-2">
@@ -122,10 +124,11 @@ export function DataSources({
       {open && (
         <div className="mt-5 space-y-5">
           <section>
-            <h4 className="text-sm font-semibold text-slate-800">Fundraising figures, from Form D</h4>
+            <h4 className="text-sm font-semibold text-slate-800">Fundraising figures, from Form D and Form ADV</h4>
             <p className="mt-1 text-xs text-slate-600">
               &ldquo;Reported&rdquo; is taken straight from the filing. &ldquo;Derived&rdquo; is computed here, and the
-              formula is given so it can be checked.
+              formula is given so it can be checked. Figures marked &ldquo;(ADV)&rdquo; come from the adviser&apos;s Form
+              ADV rather than the issuer&apos;s Form D, and the two can disagree.
             </p>
             <div className="mt-2 overflow-x-auto">
               <table className="w-full min-w-[760px] border-collapse">

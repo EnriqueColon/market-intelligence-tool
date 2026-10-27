@@ -5,6 +5,9 @@ import type { ManagerRaises } from "@/lib/peer-intel/cohort"
 import { money, percent } from "@/lib/peer-intel/panel"
 import { buildPeopleIndex, managerPeople, sharedPeople, type ManagerPerson } from "@/lib/peer-intel/people"
 import { formationLine, structureRows, type StructureRow } from "@/lib/peer-intel/structure"
+import { advForVehicle, type LinkedFund, type ManagerAdv } from "@/lib/peer-intel/adv-link"
+import type { AdvFund } from "@/lib/peer-intel/adv"
+import { peerById } from "@/lib/peer-intel/registry"
 
 /**
  * One fund's structure, terms and people, opened in place from its row in the
@@ -163,21 +166,192 @@ function PeopleList({ people }: { people: ManagerPerson[] }) {
   )
 }
 
+const WARN = "text-amber-800"
+
+/** A yes/no answer as filed, with "not answered" where neither box is ticked. */
+function yn(v: boolean | null, yes = "yes", no = "no"): string {
+  return v == null ? "not answered" : v ? yes : no
+}
+
+export function opinionLabel(o: AdvFund["opinion"]): { text: string; warn: boolean } {
+  switch (o) {
+    case "unqualified":
+      return { text: "unqualified (clean) opinion on every report since the last annual update", warn: false }
+    case "not-unqualified":
+      return { text: "at least one audit report was NOT unqualified", warn: true }
+    case "report-not-yet-received":
+      return { text: "audit report not yet received", warn: true }
+    default:
+      return { text: "opinion not answered", warn: false }
+  }
+}
+
+function Place({ city, state, country }: { city: string | null; state: string | null; country: string | null }) {
+  const parts = [city, state ?? (country && country !== "United States" ? country : null)].filter(Boolean)
+  return parts.length ? <span className="text-slate-500"> · {parts.join(", ")}</span> : null
+}
+
+/**
+ * One private fund as its adviser reported it on Form ADV Schedule D 7.B.(1).
+ * Every line is an answer on the form, labelled by the question it answers;
+ * nothing is inferred. Audit answers are shown in amber where they say less
+ * than "a clean opinion, distributed to every investor".
+ */
+function AdvFundBlock({ link, adv }: { link: LinkedFund; adv: ManagerAdv }) {
+  const f = link.fund
+  const filing = adv.filings.find((x) => x.crd === link.crd)
+  const op = opinionLabel(f.opinion)
+  const structure = [
+    f.isMasterFund ? `master fund${f.feeders.length ? ` of ${f.feeders.map((x) => x.name).join(", ")}` : ""}` : null,
+    f.isFeederFund ? `feeder into ${f.master?.name ?? "a master fund"}` : null,
+    f.fundOfFunds ? "fund of funds" : null,
+  ].filter(Boolean)
+  const pct = (v: number | null) => (v == null ? "not answered" : `${v}%`)
+  return (
+    <div className="mt-2 first:mt-0">
+      <div className="mb-1 text-[11px] text-slate-600">
+        <span className="font-medium text-slate-800">{f.name}</span>
+        {f.fundId && <span className="ml-1.5 font-mono text-[10px] text-slate-500">{f.fundId}</span>}
+        {(f.state || f.country) && (
+          <span className="text-slate-500"> · organised in {[f.state, f.country].filter(Boolean).join(", ")}</span>
+        )}
+        <span className="text-slate-400">
+          {" "}
+          · linked by {link.linkBasis === "file-number" ? `Form D file number ${f.formDFileNumber}` : "name"}
+        </span>
+      </div>
+      <div className="grid gap-x-6 md:grid-cols-2">
+        <div>
+          <Line label="General partner">{f.generalPartners.length ? f.generalPartners.join("; ") : "not listed"}</Line>
+          <Line label="Exclusion">
+            {f.exclusion3c1 && f.exclusion3c7
+              ? "3(c)(1) and 3(c)(7)"
+              : f.exclusion3c1
+                ? "3(c)(1) — up to 100 accredited investors"
+                : f.exclusion3c7
+                  ? "3(c)(7) — qualified purchasers only"
+                  : "not ticked"}
+            {f.salesLimitedToQualifiedClients != null && (
+              <span className="text-slate-500"> · sales limited to qualified clients: {yn(f.salesLimitedToQualifiedClients)}</span>
+            )}
+          </Line>
+          <Line label="Structure">
+            {structure.length ? structure.join("; ") : "stand-alone"}
+            {f.fundTypes.length > 0 && <span className="text-slate-500"> · {f.fundTypes.join(", ")}</span>}
+          </Line>
+          <Line label="Gross assets">
+            {f.grossAssetValue == null ? "not reported" : money(f.grossAssetValue)}
+            {filing?.filedOn && <span className="text-slate-500"> · per the ADV filed {filing.filedOn}</span>}
+          </Line>
+          <Line label="Owners">
+            {f.beneficialOwners == null ? "not reported" : `${f.beneficialOwners} beneficial owners`}
+            <span className="text-slate-500">
+              {" "}
+              · related persons {pct(f.pctOwnedByRelated)} · funds of funds {pct(f.pctOwnedByFundsOfFunds)} · non-US{" "}
+              {pct(f.pctOwnedByNonUs)}
+            </span>
+          </Line>
+          <Line label="Minimum">{f.minimumInvestment == null ? "not reported" : f.minimumInvestment === 0 ? "none stated" : money(f.minimumInvestment)}</Line>
+          <Line label="Regulation D">
+            {yn(f.reliedOnRegulationD, "relied on", "not relied on")}
+            {f.formDFileNumber && <span className="ml-1 font-mono text-[10px] text-slate-500">{f.formDFileNumber}</span>}
+          </Line>
+        </div>
+        <div>
+          <Line label="Annual audit">
+            <span className={f.annualAudit === false ? WARN : ""}>{yn(f.annualAudit, "yes", "NO — not audited annually")}</span>
+            {f.annualAudit && f.gaap != null && <span className="text-slate-500"> · US GAAP: {yn(f.gaap)}</span>}
+            {f.auditors.map((a) => (
+              <div key={a.name}>
+                {a.name}
+                <Place city={a.city} state={a.state} country={a.country} />
+                <span className="text-slate-500">
+                  {" "}
+                  · independent: {yn(a.independent)} · PCAOB-registered: {yn(a.pcaobRegistered)}
+                  {a.pcaobNumber && ` (no. ${a.pcaobNumber})`} · subject to PCAOB inspection: {yn(a.pcaobInspected)}
+                </span>
+              </div>
+            ))}
+            {f.annualAudit && f.auditors.length === 0 && <div className="text-slate-500">auditor not named</div>}
+          </Line>
+          {f.annualAudit !== false && (
+            <>
+              <Line label="Opinion">
+                <span className={op.warn ? WARN : ""}>{op.text}</span>
+              </Line>
+              <Line label="Statements">
+                <span className={f.statementsDistributed === false ? WARN : ""}>
+                  {yn(f.statementsDistributed, "audited statements distributed to all investors", "audited statements NOT distributed to all investors")}
+                </span>
+              </Line>
+            </>
+          )}
+          <Line label="Custody">
+            {f.usesCustodian === false ? (
+              "no custodian"
+            ) : f.custodians.length ? (
+              f.custodians.map((c) => (
+                <div key={c.name}>
+                  {c.name}
+                  <Place city={c.city} state={c.state} country={c.country} />
+                  {c.relatedPerson && <span className={`ml-1 ${WARN}`}>related person</span>}
+                </div>
+              ))
+            ) : (
+              yn(f.usesCustodian, "custodian used, none named", "no custodian")
+            )}
+            {f.usesPrimeBroker && (
+              <div className="text-slate-500">prime broker: {f.primeBrokers.length ? f.primeBrokers.join("; ") : "used, none named"}</div>
+            )}
+            {f.administrators.length > 0 && <div className="text-slate-500">administrator: {f.administrators.join("; ")}</div>}
+            {f.pctAssetsValuedByOthers != null && (
+              <div className="text-slate-500">{f.pctAssetsValuedByOthers}% of assets valued by someone other than the adviser</div>
+            )}
+          </Line>
+          {f.marketers.length > 0 && <Line label="Marketers">{f.marketers.join("; ")}</Line>}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** Why a fund row has no ADV record under it, in one sentence. */
+function advAbsence(manager: ManagerRaises, cik: string, adv: ManagerAdv | null): string {
+  const peer = peerById(manager.peerId)
+  const vehicle = manager.raises.find((r) => r.cik === cik)
+  if (vehicle?.kind === "registered") {
+    return "Form ADV Schedule D 7.B.(1) lists private funds only. This vehicle is registered and reports its own figures in its periodic filings."
+  }
+  if (!adv) {
+    if (peer?.noAdviser) return "No SEC-registered investment adviser is on file for this manager, so there is no Form ADV to read."
+    if (peer?.adviser) return `Its adviser (${peer.adviser.name}, CRD ${peer.adviser.crd}) is on file, but its Form ADV has not been read yet.`
+    return "No adviser has been recorded for this manager yet."
+  }
+  const filed = adv.filings.map((f) => f.adviserName).join(" / ")
+  const number = vehicle?.raise.fileNumber
+  if (adv.summary.funds === 0) return `${filed} reports no private funds on its Form ADV.`
+  return `Not on ${filed}'s Form ADV by ${number ? `Form D file number ${number} or ` : ""}name. The adviser may report it under a master fund with a different name, or not at all.`
+}
+
 /**
  * The expanded content of one fund's row: structure and terms beside its
- * people. People are this fund's only, with any same-name match elsewhere in
- * the layer; the manager-wide list is the union of its rows.
+ * people, then the fund as its adviser reported it on Form ADV. People are
+ * this fund's only, with any same-name match elsewhere in the layer; the
+ * manager-wide list is the union of its rows.
  */
 export function FundDetail({
   manager,
   cik,
   allManagers,
+  adv,
 }: {
   manager: ManagerRaises
   cik: string
   allManagers: readonly ManagerRaises[]
+  adv: ManagerAdv | null
 }) {
   const vehicle = manager.raises.find((r) => r.cik === cik)
+  const advLinks = useMemo(() => advForVehicle(adv, cik), [adv, cik])
   const index = useMemo(() => buildPeopleIndex(allManagers), [allManagers])
   const row = useMemo(
     () => (vehicle ? structureRows({ ...manager, raises: [vehicle] }, allManagers)[0] ?? null : null),
@@ -205,6 +379,22 @@ export function FundDetail({
         <Heading>People</Heading>
         <PeopleList people={people} />
       </div>
+      <div className="md:col-span-2 border-t border-slate-200/80 pt-2">
+        <Heading>
+          Form ADV
+          {advLinks.length > 0 && adv && (
+            <span className="font-normal normal-case tracking-normal text-slate-400">
+              {" "}
+              · {adv.filings.find((f) => f.crd === advLinks[0].crd)?.adviserName ?? "adviser"}
+            </span>
+          )}
+        </Heading>
+        {advLinks.length === 0 || !adv ? (
+          <p className="text-xs text-slate-600">{advAbsence(manager, cik, adv)}</p>
+        ) : (
+          advLinks.map((l) => <AdvFundBlock key={l.fund.fundId ?? l.fund.name} link={l} adv={adv} />)
+        )}
+      </div>
     </div>
   )
 }
@@ -219,7 +409,9 @@ export function FundDetailNote({ allManagers }: { allManagers: readonly ManagerR
       above; commissions are paid or expected for the whole offering. People are the issuer&apos;s executive officers,
       directors and promoters — usually the GP&apos;s principals and the GP and manager entities, not the whole team and
       never investors. Names are compared across managers by exact match only, because Form D carries no identifier for
-      a person, and a person filed under two forms of their name is not merged.{" "}
+      a person, and a person filed under two forms of their name is not merged. The Form ADV block is the fund as its
+      SEC-registered adviser reported it on Schedule D 7.B.(1): gross assets at the adviser&apos;s fiscal year end,
+      beneficial owners, and whether an independent auditor gave a clean opinion that reached every investor.{" "}
       {shared === 0
         ? "No name in this layer appears at more than one manager."
         : `${shared} ${shared === 1 ? "name appears" : "names appear"} at more than one manager in this layer.`}

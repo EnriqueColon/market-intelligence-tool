@@ -2,7 +2,7 @@
 
 import { unstable_cache } from "next/cache"
 import type { PeerLayer } from "@/lib/peer-intel/edgar-contract"
-import { buildPeerIntelPayload, type PeerIntelPayload } from "@/app/services/peer-intel"
+import { buildLayerAdv, buildPeerIntelPayload, type PeerIntelPayload } from "@/app/services/peer-intel"
 
 /**
  * A week. The inputs are quarterly reports and annual amendments, so nothing is
@@ -37,13 +37,19 @@ export async function getPeerIntel(layer: PeerLayer, asOf?: string): Promise<Pee
       // `day` is not in the key, so it is not a cache input; it only dates the
       // payload that gets stored. A rebuild a week later stamps the new date.
       async () => buildPeerIntelPayload(layer, day),
+      // v4 (2026-10-27): each raise carries its Form D `fileNumber`, the key
+      // that links it to the adviser's Form ADV record. A v3 entry has none, so
+      // its ADV links would fall back to name matching for up to a week.
       // v3 (2026-10-26): each raise carries `terms` and `exemptionChanges`, and
-      // related persons a `kind` and `clarification`. A v2 entry would show the
-      // Structure & terms section as "not yet read" for up to a week.
-      ["peer-intel-v3", layer],
+      // related persons a `kind` and `clarification`.
+      ["peer-intel-v4", layer],
       { revalidate: PEER_REVALIDATE_SECONDS, tags: [`peer-intel`, `peer-intel:${layer}`] }
     )
-    return { ok: true, payload: await cached() }
+    const payload = await cached()
+    // The ADV extract is a committed file, not a fetch: rebuilding its views
+    // here means a newly deployed extract shows at once, while the cached
+    // payload still carries the cohort it is linked against.
+    return { ok: true, payload: { ...payload, adv: buildLayerAdv(layer, payload.cohort) } }
   } catch (error) {
     return {
       ok: false,

@@ -20,6 +20,8 @@ import { peerSignalSpec, type ManagerSignals, type SignalState } from "@/lib/pee
 import { buildVintagePacing } from "@/lib/peer-intel/vintage"
 import { VintageLadder } from "@/components/peer-intel/vintage-pacing"
 import { FundDetail, FundDetailNote } from "@/components/peer-intel/structure-people"
+import { AdvSection } from "@/components/peer-intel/adv-section"
+import type { ManagerAdv } from "@/lib/peer-intel/adv-link"
 
 /**
  * One manager, in full.
@@ -84,11 +86,14 @@ export function ManagerDrawer({
   cohort,
   signals,
   peerId,
+  adv,
   onClose,
 }: {
   cohort: PeerCohort
   signals: ManagerSignals[]
   peerId: string | null
+  /** This manager's Form ADV view, or null where there is none to show. */
+  adv: ManagerAdv | null
   onClose: () => void
 }) {
   const [copied, setCopied] = useState(false)
@@ -119,7 +124,7 @@ export function ManagerDrawer({
   async function copySnapshot() {
     if (!manager || !managerSignalSet) return
     try {
-      await navigator.clipboard.writeText(buildManagerSnapshot(manager, managerSignalSet, cohort))
+      await navigator.clipboard.writeText(buildManagerSnapshot(manager, managerSignalSet, cohort, adv))
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch {
@@ -261,7 +266,7 @@ export function ManagerDrawer({
                           {open && (
                             <tr className="border-b border-slate-200 bg-slate-50">
                               <td colSpan={6} className="px-3 pb-3 pt-1">
-                                <FundDetail manager={manager} cik={r.cik} allManagers={cohort.managers} />
+                                <FundDetail manager={manager} cik={r.cik} allManagers={cohort.managers} adv={adv} />
                               </td>
                             </tr>
                           )}
@@ -280,6 +285,10 @@ export function ManagerDrawer({
                   <VintageLadder pacing={pacing} compact />
                 </Section>
               )}
+
+              <Section title="Form ADV — what its adviser manages">
+                <AdvSection manager={manager} adv={adv} />
+              </Section>
 
               <Section title="How it raises">
                 {(() => {
@@ -419,9 +428,9 @@ export function ManagerDrawer({
             </div>
 
             <p className="mt-4 text-[11px] leading-snug text-slate-500">
-              Source: SEC EDGAR Form D and XBRL company facts, as of {cohort.asOf}. Form D figures are self-reported by
-              the issuer and unaudited, and &ldquo;raised&rdquo; is cumulative since the offering opened rather than a
-              period figure.
+              Source: SEC EDGAR Form D and XBRL company facts, as of {cohort.asOf}, and the adviser&apos;s Form ADV
+              from IAPD. Form D figures are self-reported by the issuer and unaudited, and &ldquo;raised&rdquo; is
+              cumulative since the offering opened rather than a period figure.
             </p>
           </>
         )}

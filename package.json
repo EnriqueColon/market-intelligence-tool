@@ -86,7 +86,9 @@
     "verify:peer-structure": "tsx --conditions=react-server scripts/verify-peer-structure.ts",
     "test:peer-intel-iapd": "tsx --test --tsconfig tsconfig.json lib/peer-intel/iapd.test.ts",
     "resolve:peer-crds": "tsx --conditions=react-server scripts/resolve-peer-crds.ts",
-    "verify:peer-crds": "tsx --conditions=react-server scripts/resolve-peer-crds.ts --verify"
+    "verify:peer-crds": "tsx --conditions=react-server scripts/resolve-peer-crds.ts --verify",
+    "test:peer-intel-adv": "tsx --test --tsconfig tsconfig.json lib/peer-intel/adv.test.ts lib/peer-intel/adv-link.test.ts",
+    "refresh:peer-adv": "tsx scripts/refresh-peer-adv.mts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

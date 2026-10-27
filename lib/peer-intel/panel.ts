@@ -18,6 +18,7 @@ import { peerSignalSpec, type ManagerSignals, type PeerSignalKey } from "./signa
 import { UNRESOLVED_WATCH } from "./registry"
 import { structureRows } from "./structure"
 import { buildPeopleIndex, managerPeople } from "./people"
+import type { ManagerAdv } from "./adv-link"
 
 export function money(value: number | "indefinite" | null | undefined): string {
   if (value === "indefinite") return "no stated cap"
@@ -249,7 +250,8 @@ export function orderedSignals(signals: ManagerSignals): ManagerSignals["signals
 export function buildManagerSnapshot(
   manager: ManagerRaises,
   signals: ManagerSignals,
-  cohort: PeerCohort
+  cohort: PeerCohort,
+  adv: ManagerAdv | null = null
 ): string {
   const lines: string[] = [
     `${manager.manager} — ${manager.location}`,
@@ -317,6 +319,31 @@ export function buildManagerSnapshot(
         `  ${p.name}${p.kind === "entity" ? " [entity]" : ""} — ${p.roles.join(", ") || "role not stated"}` +
           `${p.elsewhere.length ? `; same name at ${p.elsewhere.map((o) => o.manager).join(", ")} (name match)` : ""}`
       )
+    }
+  }
+
+  if (adv) {
+    const s = adv.summary
+    lines.push("", "Form ADV (adviser's own filing, Schedule D 7.B.(1)):")
+    for (const f of adv.filings) {
+      lines.push(`  ${f.adviserName} CRD ${f.crd} — ${f.filingType ?? "Form ADV"}${f.filedOn ? ` filed ${f.filedOn}` : ""}, ${f.fundsParsed} private funds`)
+    }
+    if (s.funds > 0) {
+      lines.push(
+        `  ${s.funds} private funds${s.feeders ? ` (${s.feeders} feeders)` : ""}, gross assets ${money(s.grossAssetValue)} over ${s.grossAssetValueFunds} non-feeder funds; ` +
+          `audited ${s.audit.audited} of ${s.funds}, clean opinions ${s.opinions.unqualified}, not unqualified ${s.opinions.notUnqualified}, ` +
+          `report pending ${s.opinions.reportNotYetReceived}, statements not distributed ${s.statementsNotDistributed}`
+      )
+      for (const l of adv.linked) {
+        const vehicle = manager.raises.find((r) => r.cik === l.vehicleCik)
+        const f = l.fund
+        lines.push(
+          `  ${f.name}${vehicle ? ` [${vehicle.vehicleName}]` : ""} — gross assets ${money(f.grossAssetValue)}, ${f.beneficialOwners ?? "?"} owners` +
+            `${f.annualAudit === false ? ", NOT audited" : f.opinion ? `, ${f.opinion.replace(/-/g, " ")}` : ""}` +
+            `${f.statementsDistributed === false ? ", statements not distributed" : ""}` +
+            `${f.auditors.length ? `, auditor ${f.auditors.map((a) => a.name).join("; ")}` : ""}`
+        )
+      }
     }
   }
 

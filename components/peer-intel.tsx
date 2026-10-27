@@ -240,6 +240,7 @@ export function PeerIntel() {
             cohort={payload.cohort}
             signals={payload.signals}
             peerId={selectedManager}
+            adv={selectedManager ? payload.adv?.byManager[selectedManager] ?? null : null}
             onClose={() => setSelectedManager(null)}
           />
 

@@ -16,6 +16,8 @@ import {
   type PeerLayer,
 } from "@/lib/peer-intel/edgar-contract"
 import { parseFormD, type OfferingRecord } from "@/lib/peer-intel/form-d"
+import { layerAdv, type ManagerAdv, type VehicleKey } from "@/lib/peer-intel/adv-link"
+import { advExtract } from "@/lib/peer-intel/adv-extract"
 import { buildPeerCohort, type PeerCohort } from "@/lib/peer-intel/cohort"
 import { buildVehicleTrend, type VehicleTrend } from "@/lib/peer-intel/liquidity"
 import {
@@ -246,7 +248,18 @@ export async function discoverFilers(options: {
   return [...byCik.values()].sort((a, b) => (a.latestFiling.filedAt < b.latestFiling.filedAt ? 1 : -1))
 }
 
-export type FilingRef = { form: string; accession: string; filedAt: string }
+export type FilingRef = {
+  form: string
+  accession: string
+  filedAt: string
+  /**
+   * The SEC file number, `021-…` for a Form D. One per offering, so every
+   * amendment carries the original's — and it is the number an adviser's Form
+   * ADV quotes for each private fund (Schedule D 7.B.(1) question 22), which
+   * is what links a fund on the ADV to its vehicle here.
+   */
+  fileNumber: string | null
+}
 
 export type FilerProfile = {
   cik: string
@@ -268,7 +281,7 @@ export type FilerProfile = {
 type SubmissionsResponse = {
   name?: string
   addresses?: { business?: { city?: string; stateOrCountry?: string } }
-  filings?: { recent?: { form?: string[]; accessionNumber?: string[]; filingDate?: string[] } }
+  filings?: { recent?: { form?: string[]; accessionNumber?: string[]; filingDate?: string[]; fileNumber?: string[] } }
 }
 
 const PERIODIC_FORMS = ["10-Q", "10-K", "N-CSR", "N-CSRS", "N-CEN", "N-2"]
@@ -285,11 +298,17 @@ export async function fetchFilerProfile(cik: string): Promise<FilerProfile> {
   const forms = recent?.form ?? []
   const accessions = recent?.accessionNumber ?? []
   const dates = recent?.filingDate ?? []
+  const fileNumbers = recent?.fileNumber ?? []
 
   const formD: FilingRef[] = []
   const periodic: FilingRef[] = []
   for (let i = 0; i < forms.length; i++) {
-    const ref = { form: forms[i], accession: accessions[i] ?? "", filedAt: (dates[i] ?? "").slice(0, 10) }
+    const ref: FilingRef = {
+      form: forms[i],
+      accession: accessions[i] ?? "",
+      filedAt: (dates[i] ?? "").slice(0, 10),
+      fileNumber: fileNumbers[i]?.trim() || null,
+    }
     if (!ref.accession) continue
     if (ref.form === "D" || ref.form === "D/A") formD.push(ref)
     else if (PERIODIC_FORMS.includes(ref.form)) periodic.push(ref)
@@ -327,6 +346,7 @@ export async function fetchOffering(
     accession: filing.accession,
     formType: filing.form,
     filedAt: filing.filedAt,
+    fileNumber: filing.fileNumber,
     location: location ?? null,
   })
 }
@@ -581,6 +601,16 @@ export type PeerIntelPayload = {
    * layer with no non-traded vehicle.
    */
   gating: GatingResult
+  /**
+   * Each manager's private funds as its SEC-registered adviser reports them on
+   * Form ADV Schedule D 7.B.(1): gross asset value, owners, audit and
+   * custody. Read from the committed extract, not fetched — see
+   * `lib/peer-intel/adv-link.ts` — and attached again after the cache by the
+   * action, so a newly committed extract shows without waiting for a rebuild.
+   * Keyed by peer id; a manager with no adviser, or whose adviser has not
+   * been read, has no entry.
+   */
+  adv: LayerAdv
   /** What the fetch cost and what it could not read, so a panel can be honest. */
   diagnostics: {
     asOf: string
@@ -592,6 +622,24 @@ export type PeerIntelPayload = {
     registeredWithoutFormD: Array<{ cik: string; manager: string }>
     metricFailures: Array<{ cik: string; manager: string; reason: string }>
   }
+}
+
+export type LayerAdv = { refreshedOn: string | null; byManager: Record<string, ManagerAdv> }
+
+/**
+ * The ADV views for a layer, from the committed extract and the cohort's
+ * Form D file numbers. Pure and cheap, so the action calls it on every read
+ * rather than trusting the copy stored with the cached payload.
+ */
+export function buildLayerAdv(layer: PeerLayer, cohort: PeerCohort): LayerAdv {
+  const keys = new Map<string, VehicleKey[]>()
+  for (const m of cohort.managers) {
+    keys.set(
+      m.peerId,
+      m.raises.map((r) => ({ cik: r.cik, name: r.vehicleName, fileNumber: r.raise.fileNumber ?? null }))
+    )
+  }
+  return layerAdv(peersInScope(layer), advExtract(), keys)
 }
 
 /**
@@ -657,6 +705,7 @@ export async function buildPeerIntelPayload(layer: PeerLayer, asOf: string): Pro
     tier: tier.vehicles.map((v) => buildVehicleTrend(v, ownerOf.get(v.cik) ?? "")),
     developments,
     gating,
+    adv: buildLayerAdv(layer, cohort),
     diagnostics: {
       asOf,
       formDRequests: offerings.requests,

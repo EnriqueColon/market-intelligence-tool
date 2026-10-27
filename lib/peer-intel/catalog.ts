@@ -25,14 +25,16 @@ export type PeerFieldBasis =
   | "trail"
   /** Computed across the vehicles in a layer. */
   | "cohort"
+  /** Taken from the adviser's Form ADV, Schedule D section 7.B.(1), as of its filing date. */
+  | "adv"
 
 export type PeerFieldKind = "reported" | "derived"
 
 export type PeerFieldSpec = {
-  /** The property name on `OfferingRecord`, `Raise`, `ManagerRaises` or `PeerCohort`. */
+  /** The property name on `OfferingRecord`, `Raise`, `ManagerRaises`, `PeerCohort` or, prefixed `adv`, `AdvFund`. */
   key: string
   label: string
-  /** The Form D XML element, or the formula when derived. */
+  /** The Form D XML element, the Form ADV question, or the formula when derived. */
   source: string
   basis: PeerFieldBasis
   kind: PeerFieldKind
@@ -303,6 +305,75 @@ export const PEER_FIELD_CATALOG: readonly PeerFieldSpec[] = [
     "count of managers with at least one open fund-role raise",
     "Managers in market",
     "cohort"
+  ),
+
+  // ------------------------------------------- from the adviser's Form ADV
+  // Schedule D 7.B.(1) is the adviser's own list of the private funds it
+  // manages, one record each. Read from IAPD by `scripts/refresh-peer-adv.mts`
+  // and committed; the question numbers are the form's.
+  reported(
+    "advGrossAssetValue",
+    "Form ADV 7.B.(1) Q11 — gross asset value of the private fund",
+    "Gross assets (ADV)",
+    "adv",
+    "As of the adviser's fiscal year end and self-reported, so up to a year older than the filing date. Gross, not net: leverage is inside it."
+  ),
+  reported("advBeneficialOwners", "Form ADV 7.B.(1) Q13 — approximate number of beneficial owners", "Beneficial owners (ADV)", "adv"),
+  reported(
+    "advMinimumInvestment",
+    "Form ADV 7.B.(1) Q12 — minimum investment commitment",
+    "Minimum (ADV)",
+    "adv",
+    "Can differ from the Form D minimum: Form D states the minimum accepted from any outside investor, the ADV the fund's commitment minimum."
+  ),
+  reported("advFundTypes", "Form ADV 7.B.(1) Q10 — type of private fund", "Fund type (ADV)", "adv"),
+  reported(
+    "advExclusion",
+    "Form ADV 7.B.(1) Q4 — exclusion from the Investment Company Act relied on, 3(c)(1) and/or 3(c)(7)",
+    "Exclusion",
+    "adv",
+    "Can disagree with the Form D exemptions ticked by the issuer; the ADV is the adviser's answer and the Form D the issuer's."
+  ),
+  reported("advFormDFileNumber", "Form ADV 7.B.(1) Q22 — Form D file number", "Form D file number (ADV)", "adv"),
+  reported(
+    "advAnnualAudit",
+    "Form ADV 7.B.(1) Q23(a) — are the private fund's financial statements subject to an annual audit?",
+    "Audited annually",
+    "adv",
+    "No is a fact about the fund's governance, not a parse gap: a fund need not be audited."
+  ),
+  reported("advAuditor", "Form ADV 7.B.(1) Q23(b)–(f) — auditor, location, independence, PCAOB registration and inspection", "Auditor", "adv"),
+  reported(
+    "advStatementsDistributed",
+    "Form ADV 7.B.(1) Q23(g) — are the audited financial statements distributed to the private fund's investors?",
+    "Statements distributed",
+    "adv",
+    "No means investors did not all receive the audited statements. Read with Q23(h) before concluding anything."
+  ),
+  reported(
+    "advOpinion",
+    "Form ADV 7.B.(1) Q23(h) — do all audit reports since the last annual updating amendment contain unqualified opinions?",
+    "Audit opinion",
+    "adv",
+    "Three answers: yes (unqualified), no, or report not yet received. The last is routine for a fund whose year end is close to the filing date."
+  ),
+  reported("advCustodians", "Form ADV 7.B.(1) Q25 — custodians, and whether each is a related person", "Custodians", "adv"),
+  reported("advPrimeBrokers", "Form ADV 7.B.(1) Q24 — prime brokers", "Prime brokers", "adv"),
+  reported("advAdministrators", "Form ADV 7.B.(1) Q26 — administrators", "Administrators", "adv"),
+  reported("advMarketers", "Form ADV 7.B.(1) Q28 — marketers", "Marketers", "adv"),
+  derived(
+    "advLink",
+    "the fund whose Q22 Form D file number equals the vehicle's EDGAR file number; failing that, whose folded name equals the registry name",
+    "ADV record matched to vehicle",
+    "adv",
+    "A master and its feeder that filed one Form D between them both match the vehicle. A fund the adviser reports under a master with another name matches nothing, and is listed under 'not tracked here'."
+  ),
+  derived(
+    "advSummaryGrossAssetValue",
+    "sum of Q11 over the adviser's funds that are not feeders (Q6(c) not ticked) and report a value",
+    "Gross assets across the adviser's funds",
+    "adv",
+    "Feeders are excluded because a feeder's assets are its stake in the master, already inside the master's figure."
   ),
 ]
 
