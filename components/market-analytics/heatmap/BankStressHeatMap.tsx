@@ -1,4 +1,5 @@
 "use client"
+import { withBasePath } from "@/lib/base-path"
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import maplibregl from "maplibre-gl"
@@ -444,7 +445,7 @@ export function BankStressHeatMap() {
     // outlier state made the old check believe a flat metric had spread.
     setNoVariation(colorValues.length < 10 || !hasVariation)
 
-    fetch("/data/us-states.json")
+    fetch(withBasePath("/data/us-states.json"))
       .then((r) => r.json())
       .then((geojson) => {
         if (!map.current) return

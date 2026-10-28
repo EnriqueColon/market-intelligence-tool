@@ -1,4 +1,5 @@
 'use client';
+import { withBasePath } from "@/lib/base-path"
 
 import { useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -19,7 +20,7 @@ function LoginForm() {
     setError('');
 
     startTransition(async () => {
-      const res = await fetch('/api/auth', {
+      const res = await fetch(withBasePath('/api/auth'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password }),

@@ -8,7 +8,10 @@ export const AUTH_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 
 export const AUTH_COOKIE_OPTIONS = {
   httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
+  // COOKIE_SECURE=false lets a production build run over plain HTTP (the
+  // droplet until its certificate is installed); browsers drop a Secure cookie
+  // on http:// and every login would silently fail.
+  secure: process.env.NODE_ENV === 'production' && process.env.COOKIE_SECURE !== 'false',
   sameSite: 'lax' as const,
   path: '/',
 };

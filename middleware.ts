@@ -11,7 +11,8 @@ import {
 const PUBLIC_PATHS = ['/api/auth', '/api/cron', '/api/analytics'];
 
 export function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
+  // pathname excludes basePath; a redirect URL built from "/" must add it back.
+  const { pathname, basePath } = request.nextUrl;
 
   if (pathname.startsWith('/_next') || pathname.startsWith('/favicon')) {
     return NextResponse.next();
@@ -24,7 +25,7 @@ export function middleware(request: NextRequest) {
   if (pathname.startsWith('/login')) {
     if (!session) return NextResponse.next();
     const target = safeRedirectPath(request.nextUrl.searchParams.get('from'));
-    return NextResponse.redirect(new URL(target, request.url));
+    return NextResponse.redirect(new URL(`${basePath}${target}`, request.url));
   }
 
   if (PUBLIC_PATHS.some(p => pathname.startsWith(p))) {
@@ -32,7 +33,7 @@ export function middleware(request: NextRequest) {
   }
 
   if (!session) {
-    const loginUrl = new URL('/login', request.url);
+    const loginUrl = new URL(`${basePath}/login`, request.url);
     loginUrl.searchParams.set('from', pathname);
     return NextResponse.redirect(loginUrl);
   }
