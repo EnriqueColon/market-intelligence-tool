@@ -8,7 +8,7 @@ is it in now, and what is still open.
 
 ---
 
-## STOPPED HERE — 2026-10-28: the morning page on dev for review; The Real Deal in production; SFBJ being decided; Peers still HELD
+## STOPPED HERE — 2026-10-28: the morning page released behind news-v2; The Real Deal in production; SFBJ being decided; Peers still HELD
 
 Read `CLAUDE.md` first for orientation, then this block. Everything below it is the running record —
 reverse-chronological, and worth reading only when you need the reasoning behind something specific.
@@ -19,14 +19,15 @@ Real Deal as a subscriber source, its top articles of the week pinned above the 
 Industry-Specific News under a "Subscriber sources" header, each row's hover card listing the rules
 that ranked it) and `8b54ec3` (a **Read** button on every pinned row that opens the article's full
 text in the tool, and **ten** picks rather than five under cache key `subscriber-sources-v2`). Both
-post-deploy warm runs reported `subscriberSources: ok`. **`dev` carries `9cbffe8`, unreleased: the
+post-deploy warm runs reported `subscriberSources: ok`. **Production is `9cbffe8` since about 14:00 UTC** (a fast-forward of `main` to `dev`, `9831d59`,
+on the user's "I think it looks good - lets go ahead and push that layout to production"): **the
 News tab as one morning page behind the `news-v2` flag** (`7b207aa`, plus `9cbffe8` after the user's
 first look: Google News rows showed their headline twice, because the feed's description repeats the
 headline and the outlet; the outlet suffix is now dropped from the title and a snippet that only
 repeats the headline is not shown) — on in every preview, off in production
-until the user adds `news-v2` to `ENABLED_TABS`. The user said "lets push to dev, see how it looks
-and then we will go from there"; **the next conversation starts from their reaction to the
-preview.** Confirm with `git log --oneline` rather than trusting a SHA written here.
+until the user adds `news-v2` to `ENABLED_TABS`. The user reviewed the preview, had one fix made, and approved it. **Whether `news-v2` is
+actually in production's `ENABLED_TABS` yet is the first thing to confirm with the user**: the code
+is live, the variable is theirs to edit, and until it carries the key production shows the tables. Confirm with `git log --oneline` rather than trusting a SHA written here.
 
 **The morning page, in one paragraph.** Asked whether the tab could be more user-friendly, the user
 described the use: a morning scan on a phone or a desktop, not open through the day; unsure whether

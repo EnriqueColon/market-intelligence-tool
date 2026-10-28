@@ -7,7 +7,7 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
-| `main` | `8b54ec3` | Production | https://market-intelligence-tool-gilt.vercel.app |
+| `main` | `9cbffe8` | Production | https://market-intelligence-tool-gilt.vercel.app |
 | `dev` | `9cbffe8` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 This table names the newest commit on each branch that **changes behaviour**; documentation-only
@@ -15,9 +15,14 @@ commits sit on top of it and are deliberately not tracked here, because amending
 SHA and the table then reads as stale when nothing has moved. Confirm with
 `git log --format='%h|%ci|%s'` rather than trusting the previous entry — this has drifted twice.
 
-**`dev` carries `9cbffe8` as of 2026-10-28 — the News tab as one morning page behind `news-v2`
-(`7b207aa`) and its first review fix (`9cbffe8`: a Google News headline shown once, without the
-outlet suffix), two commits past production.** Shown only where the flag is on: every preview, and production once
+**Production carries `9cbffe8` as of 2026-10-28, about 14:00 UTC — the News tab as one morning page
+behind `news-v2` (`7b207aa`) and its first review fix (`9cbffe8`: a Google News headline shown once,
+without the outlet suffix).** A fast-forward of `main` to `dev` (`9831d59`) on the user's "push that
+layout to production" after reviewing the preview. **The layout appears in production only once
+`news-v2` is in the `ENABLED_TABS` variable in Vercel**, which the user sets; until then production
+renders the table layout exactly as before, so the deploy itself changed nothing visible. **To roll
+back the layout:** remove `news-v2` from the variable — no deploy. To roll back the code: Vercel's
+dashboard promotes the previous deployment, or `git revert 9cbffe8 7b207aa` on `main`. Shown only where the flag is on: every preview, and production once
 `news-v2` is in `ENABLED_TABS` (not yet). So releasing it to `main` changes nothing visible in
 production until the variable is edited, and turning it off again is removing the key from the
 variable, no deploy. Reverting `7b207aa` removes `components/news/` (the page and the two lifted
