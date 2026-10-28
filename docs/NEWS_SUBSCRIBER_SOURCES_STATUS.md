@@ -60,7 +60,7 @@ line carries each request's status on every run, which is where a future refusal
 - Topic matching is by word on the headline and standfirst; "default" in "by default" or "finance"
   in a mapping piece can score. The reasons on each pick make such a match visible.
 
-## 2b. The morning page — in production behind `news-v2` (code live 2026-10-28; the key in `ENABLED_TABS` is the user's to add)
+## 2b. The morning page — in production (`news-v2` added to `ENABLED_TABS` by the user, 2026-10-28)
 
 Built 2026-10-28 after the user asked whether the News tab could be presented in a more
 user-friendly way. What they told me: the team reads it once in the morning, on a phone or a
@@ -89,8 +89,8 @@ later piece; the tool has a Resend account).
 **Reviewed and approved 2026-10-28.** One fix from the review (`9cbffe8`): Google News rows showed
 their headline twice because the feed's description repeats the headline and the outlet; the outlet
 suffix is dropped from the title and a repeating snippet is hidden. Released to `main` as `9831d59`.
-**Next:** the user adds `news-v2` to production's `ENABLED_TABS` in Vercel (takes effect on the next
-request, no deploy); then retire `public-mentions.tsx`, `investing-business-mentions.tsx` and their
+The user added `news-v2` to production's `ENABLED_TABS` the same day, so production renders the
+morning page. **Next:** retire `public-mentions.tsx`, `investing-business-mentions.tsx` and their
 inline dialogs in a follow-up commit.
 
 ## 3. South Florida Business Journal — held
