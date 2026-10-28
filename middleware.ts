@@ -54,5 +54,8 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+  // '/' is listed on its own: under a basePath the pattern below compiles to
+  // basePath + '/(...)' and never matches the bare basePath, so the home page
+  // was served without a session check. Harmless without a basePath.
+  matcher: ['/', '/((?!_next/static|_next/image|favicon.ico).*)'],
 };
