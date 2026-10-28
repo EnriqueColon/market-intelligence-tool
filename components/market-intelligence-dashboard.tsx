@@ -1,4 +1,5 @@
 "use client"
+import { withBasePath } from "@/lib/base-path"
 
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
@@ -142,7 +143,7 @@ export function MarketIntelligenceDashboard({
   async function handleLogout() {
     setLoggingOut(true)
     try {
-      await fetch("/api/auth", { method: "DELETE" })
+      await fetch(withBasePath("/api/auth"), { method: "DELETE" })
       router.push("/login")
       router.refresh()
     } catch {

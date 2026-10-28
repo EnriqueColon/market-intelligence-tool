@@ -1,4 +1,5 @@
 "use client"
+import { withBasePath } from "@/lib/base-path"
 
 import { useEffect, useLayoutEffect, useState } from "react"
 import { Card } from "@/components/ui/card"
@@ -44,7 +45,7 @@ async function generateIndustryOutlookOnce(): Promise<string | null> {
   if (industryOutlookInFlight) return industryOutlookInFlight
 
   industryOutlookInFlight = (async () => {
-    const res = await fetch("/api/industry-outlook", { method: "POST" })
+    const res = await fetch(withBasePath("/api/industry-outlook"), { method: "POST" })
     if (!res.ok) throw new Error("Request failed")
     const json = (await res.json()) as { text?: string }
     const text = json.text?.trim() || null

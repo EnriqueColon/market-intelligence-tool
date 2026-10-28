@@ -1,4 +1,5 @@
 "use client"
+import { withBasePath } from "@/lib/base-path"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { upload } from "@vercel/blob/client"
@@ -118,7 +119,7 @@ export function MarketResearchLibrary() {
     if (q.trim()) params.set("q", q.trim())
     if (producer !== "all") params.set("producer", producer)
     try {
-      const res = await fetch(`/api/research/reports?${params.toString()}`, {
+      const res = await fetch(withBasePath(`/api/research/reports?${params.toString()}`), {
         cache: "no-store",
       })
       const data = await readJsonSafe<{
@@ -156,7 +157,7 @@ export function MarketResearchLibrary() {
       throw new Error("Admin token is required.")
     }
 
-    const res = await fetch("/api/blob/token-preflight", {
+    const res = await fetch(withBasePath("/api/blob/token-preflight"), {
       method: "POST",
       headers: {
         "x-admin-upload-token": token,
@@ -186,7 +187,7 @@ export function MarketResearchLibrary() {
       if (!token) {
         throw new Error("Admin token is required.")
       }
-      const res = await fetch("/api/blob/transfer-diagnostics", {
+      const res = await fetch(withBasePath("/api/blob/transfer-diagnostics"), {
         method: "POST",
         headers: {
           "x-admin-upload-token": token,
@@ -218,7 +219,7 @@ export function MarketResearchLibrary() {
       if (!token) {
         throw new Error("Admin token is required.")
       }
-      const res = await fetch("/api/research/summarize-report", {
+      const res = await fetch(withBasePath("/api/research/summarize-report"), {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -236,7 +237,7 @@ export function MarketResearchLibrary() {
 
   const fetchSummaryByReportId = useCallback(
     async (reportId: number): Promise<SummaryData> => {
-      const res = await fetch(`/api/research/summary?reportId=${reportId}`, {
+      const res = await fetch(withBasePath(`/api/research/summary?reportId=${reportId}`), {
         cache: "no-store",
       })
       const data = await readJsonSafe<{
@@ -426,7 +427,7 @@ export function MarketResearchLibrary() {
           setUploadStatus(`${filename}: registering metadata in database...`)
           const registerStartedAt = Date.now()
           const registerRes = await withTimeout(
-            fetch("/api/research/register-upload", {
+            fetch(withBasePath("/api/research/register-upload"), {
               method: "POST",
               headers: {
                 "content-type": "application/json",
@@ -531,7 +532,7 @@ export function MarketResearchLibrary() {
       setDeletingReportId(reportId)
       try {
         setDeleteStatus("")
-        const res = await fetch("/api/research/delete-report", {
+        const res = await fetch(withBasePath("/api/research/delete-report"), {
           method: "POST",
           headers: {
             "content-type": "application/json",

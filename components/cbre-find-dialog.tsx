@@ -1,4 +1,5 @@
 "use client"
+import { withBasePath } from "@/lib/base-path"
 
 import { useState, useEffect } from "react"
 import {
@@ -99,7 +100,7 @@ export function CbreFindDialog({ open, onOpenChange, report, isVercel = false }:
     setAutomating(true)
     setAutomateError(null)
     try {
-      const res = await fetch("/api/cbre-automate", {
+      const res = await fetch(withBasePath("/api/cbre-automate"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

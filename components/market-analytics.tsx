@@ -1,4 +1,5 @@
 "use client"
+import { withBasePath } from "@/lib/base-path"
 
 import { useEffect, useMemo, useState } from "react"
 import dynamic from "next/dynamic"
@@ -369,7 +370,7 @@ export function MarketAnalytics({
     setExporting(true)
     try {
       const scope = filters.region === "national" ? "National" : filters.region
-      const res = await fetch(`/api/export/market-analytics?scope=${encodeURIComponent(scope)}`)
+      const res = await fetch(withBasePath(`/api/export/market-analytics?scope=${encodeURIComponent(scope)}`))
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
         const detail = body?.detail ?? body?.error ?? "Export failed"
@@ -559,7 +560,7 @@ export function MarketAnalytics({
                     setExporting(true)
                     try {
                       const scope = filters.region === "national" ? "National" : filters.region
-                      const res = await fetch(`/api/report/market-analytics-pdf?scope=${encodeURIComponent(scope)}`)
+                      const res = await fetch(withBasePath(`/api/report/market-analytics-pdf?scope=${encodeURIComponent(scope)}`))
                       if (!res.ok) throw new Error("PDF generation failed")
                       const blob = await res.blob()
                       const url = URL.createObjectURL(blob)

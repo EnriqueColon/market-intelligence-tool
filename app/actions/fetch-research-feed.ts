@@ -170,9 +170,12 @@ async function runWithConcurrency<T>(
   return results
 }
 
-const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL
-  ? `https://${process.env.VERCEL_URL}`
-  : "http://localhost:3000"
+// NEXT_PUBLIC_APP_URL wins when set (the droplet: http://127.0.0.1:3100/intel);
+// the old `a || b ? x : y` read as `(a || b) ? x : y` and produced
+// "https://undefined" whenever APP_URL was set without VERCEL_URL.
+const BASE_URL =
+  process.env.NEXT_PUBLIC_APP_URL ||
+  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000")
 
 async function saveToArchive(reports: ResearchReport[]): Promise<void> {
   try {

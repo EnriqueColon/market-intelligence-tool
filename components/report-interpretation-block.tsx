@@ -1,4 +1,5 @@
 "use client"
+import { withBasePath } from "@/lib/base-path"
 
 import { useEffect, useState } from "react"
 
@@ -30,7 +31,7 @@ export function ReportInterpretationBlock({
   useEffect(() => {
     if (!enabled || !vizType || !scope) return
     setLoading(true)
-    fetch("/api/report/interpretation", {
+    fetch(withBasePath("/api/report/interpretation"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ vizType, scope, asOfQuarter, stats }),
