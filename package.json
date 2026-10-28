@@ -94,6 +94,7 @@
     "test:peer-intel-continuation": "tsx --test --tsconfig tsconfig.json lib/peer-intel/continuation.test.ts",
     "verify:peer-continuation": "tsx --conditions=react-server scripts/verify-peer-continuation.ts",
     "test:news-trd": "tsx --test --tsconfig tsconfig.json lib/news/trd.test.ts",
+    "test:news-morning": "tsx --test --tsconfig tsconfig.json lib/news/morning.test.ts",
     "verify:news-trd": "tsx --conditions=react-server scripts/verify-news-trd.ts"
   },
   "dependencies": {

@@ -32,6 +32,9 @@ export default async function Page() {
   // and everything under it are client components.
   const features = {
     bankStressMap: isFeatureEnabled("bank-stress-map"),
+    // The News tab as one morning page (cards and lists) in place of the two tables. On in every
+    // preview; production shows it once `news-v2` is added to ENABLED_TABS.
+    newsMorningPage: isFeatureEnabled("news-v2"),
   }
 
   // The default tab's data travels with the page when the caches have it — see

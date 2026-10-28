@@ -11,6 +11,7 @@ import { PublicMentions } from "@/components/public-mentions"
 import { InvestingBusinessMentions } from "@/components/investing-business-mentions"
 import { ArticleDigest } from "@/components/article-digest"
 import { IndustryOutlook } from "@/components/industry-outlook"
+import { NewsMorningPage } from "@/components/news/morning-page"
 import { MarketResearchFeed } from "@/components/market-research-feed"
 import { MarketPulseStrip } from "@/components/market-pulse-strip"
 import { PeerIntel } from "@/components/peer-intel"
@@ -34,6 +35,8 @@ export type EnabledTabs = {
 /** Flags for content inside a tab, as opposed to the tabs themselves. */
 export type DashboardFeatures = {
   bankStressMap: boolean
+  /** The News tab as one morning page (`news-v2`) in place of the two tables. */
+  newsMorningPage?: boolean
 }
 
 /**
@@ -198,16 +201,22 @@ export function MarketIntelligenceDashboard({
 
             {enabledTabs.news && (
               <TabsContent value="news" className={TAB_CONTENT_CLASS} {...keepMounted("news")}>
-                <IndustryOutlook initialText={initialNews?.outlook} />
-                <div>
-                  <PublicMentions initialByLevel={initialNews?.publicMentions} initialSubscriber={initialNews?.subscriberSources} />
-                </div>
-                <div>
-                  <InvestingBusinessMentions initialByLevel={initialNews?.investingNews} />
-                </div>
-                <div>
-                  <ArticleDigest />
-                </div>
+                {features.newsMorningPage ? (
+                  <NewsMorningPage initialNews={initialNews} />
+                ) : (
+                  <>
+                    <IndustryOutlook initialText={initialNews?.outlook} />
+                    <div>
+                      <PublicMentions initialByLevel={initialNews?.publicMentions} initialSubscriber={initialNews?.subscriberSources} />
+                    </div>
+                    <div>
+                      <InvestingBusinessMentions initialByLevel={initialNews?.investingNews} />
+                    </div>
+                    <div>
+                      <ArticleDigest />
+                    </div>
+                  </>
+                )}
               </TabsContent>
             )}
 

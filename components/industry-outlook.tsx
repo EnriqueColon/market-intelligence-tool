@@ -71,10 +71,12 @@ async function generateIndustryOutlookOnce(): Promise<string | null> {
  * nothing is fetched. It is kept in the session cache like a fetched one, so a tab that loses the
  * prop (client-side navigation back to the page) still has it.
  */
-export function IndustryOutlook({ initialText }: { initialText?: string } = {}) {
+export function IndustryOutlook({ initialText, condensed = false }: { initialText?: string; condensed?: boolean } = {}) {
   const [data, setData] = useState<string | null>(initialText ?? null)
   const [loading, setLoading] = useState(!initialText)
   const [error, setError] = useState(false)
+  // `condensed` (the morning page): the Key Signals show, the rest of the memo sits behind one line.
+  const [expanded, setExpanded] = useState(false)
 
   const cleanLine = (line: string) =>
     line
@@ -304,6 +306,9 @@ export function IndustryOutlook({ initialText }: { initialText?: string } = {}) 
             (s) => s !== execSummary && s !== nationalSection && s !== miamiSection && s !== investingSection
           )
 
+          const hasSignals = Boolean(execSummary && execSummary.bullets.length > 0)
+          const showRest = !condensed || expanded || !hasSignals
+
           return (
             <div className="space-y-5">
               {/* Key Signals Strip — Executive Summary bullets as callout cards */}
@@ -323,6 +328,19 @@ export function IndustryOutlook({ initialText }: { initialText?: string } = {}) 
                 </div>
               )}
 
+              {condensed && hasSignals && (
+                <button
+                  type="button"
+                  onClick={() => setExpanded((v) => !v)}
+                  className="text-sm font-medium text-[#006D95] underline-offset-2 hover:underline"
+                  aria-expanded={expanded}
+                >
+                  {expanded ? "Hide the full outlook" : "Read the full outlook"}
+                </button>
+              )}
+
+              {showRest && (
+              <>
               {/* 2-column: National | Miami/FL — only use grid when both are present */}
               {(nationalSection || miamiSection) && (
                 <div className={nationalSection && miamiSection ? "grid gap-4 sm:grid-cols-2" : ""}>
@@ -391,6 +409,8 @@ export function IndustryOutlook({ initialText }: { initialText?: string } = {}) 
               {/* Fallback if no sections parsed */}
               {sections.length === 0 && (
                 <p className="text-sm text-slate-900 leading-relaxed">{stripReferences(body)}</p>
+              )}
+              </>
               )}
 
             </div>
