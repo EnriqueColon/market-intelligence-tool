@@ -27,9 +27,10 @@ reasons in §2 and §3.
 | Credentials | **None.** Posts carry their full body, standfirst and taxonomy terms without a login; nothing on a post marks it subscriber-only. The metered paywall is applied in the reader's browser, so the firm's subscriptions matter when a user opens a link, not here |
 | Requests | Two a day: `market=9574` (Miami, TRD's South Florida desk) and `sector=27942` (commercial), each `after=` seven days plus a day of slack, `per_page=100`. 49 and 97 posts on 2026-10-27 |
 | Ranking | `lib/news/trd.ts`: the topic rules Industry-Specific News applies to feed items, on the headline and standfirst, distress before residential (6/4/3/2/1); +2 for a distress term only the body carries; sector +2 commercial, +2 finance, +1 development, −2 residential only; market +3 Miami, +1 national; +1 original reporting (news, breaking, data, reports), nothing for a blurb; promo and celebrity story types excluded; ties to the newer post. Every rule applied is recorded on the pick and shown in its hover card |
-| Cache | `subscriber-sources-v1` + ET day, 25 hours, warmed at 05:00 UTC by `warm-cache` (`subscriberSources`); read server-side into the page with the rest of the News tab. A build whose requests all fail throws inside the cache, so no blank day is stored; the panel shows "Subscriber sources unavailable today: …" |
-| Panel | `components/public-mentions.tsx`: a "Subscriber sources" header row, five rows with a Subscriber badge, then a "From the feeds" row and the feed list as before. A feed item whose URL is pinned is not listed twice. Topic chips count both |
-| Tests | `npm run test:news-trd` — 13 tests over a 24-post fixture captured 2026-10-27. `npm run verify:news-trd` — the live build from a laptop, printing each request's status and every pick's reasons |
+| Cache | `subscriber-sources-v2` + ET day (v1 held five picks), 25 hours, warmed at 05:00 UTC by `warm-cache` (`subscriberSources`); read server-side into the page with the rest of the News tab. A build whose requests all fail throws inside the cache, so no blank day is stored; the panel shows "Subscriber sources unavailable today: …" |
+| Panel | `components/public-mentions.tsx`: a "Subscriber sources" header row, **ten** rows with a Subscriber badge (five until the user asked for ten on 2026-10-27), then a "From the feeds" row and the feed list as before. A feed item whose URL is pinned is not listed twice. Topic chips count both |
+| Read | A **Read** button on each pinned row opens the article's full text in a dialog — title, published and updated dates, word count, the paragraphs, headings, quotes and lists, and a link to the article's page. `fetchTrdArticle(postId)` reads the post from the same API on demand, cached by post id for a day (`trd-article-v1`), never warmed; `articleBlocks` in `lib/news/trd.ts` strips the related-story cards, images, embeds and scripts and keeps the article's own text. Built at the user's request so anyone at the firm can read the piece without being signed in to the publisher; the View link still opens the publisher's page. Images, charts and embedded media are not shown, and the footer says so |
+| Tests | `npm run test:news-trd` — 16 tests over a 24-post fixture captured 2026-10-27, including the Read view on every fixture post. `npm run verify:news-trd` — the live build from a laptop, printing each request's status, every pick's reasons, and the first pick's Read view |
 
 **Verified 2026-10-27, locally:** tests pass, the live run returned 110 candidates and five picks
 (a discounted Fort Lauderdale office purchase, a $500M Miami refinance, a suit over a $47M debt
@@ -44,10 +45,14 @@ line carries each request's status on every run, which is where a future refusal
 
 **Known limits.**
 - The API is public but unofficial; TRD can close or change it without notice. The verify script
-  fails on a refused request, and the panel degrades to a note rather than a blank.
+  fails on a refused request, the panel degrades to a note rather than a blank, and the Read dialog
+  shows the error with the link to the publisher's page.
+- The Read view shows the publisher's full text inside the tool. The user chose this knowing it
+  sits closer to the subscription's terms than a link does (2026-10-27: "Add the Read button").
+  The firm holds a subscription; the text is shown to its own staff behind the tool's login.
 - The Brief button fetches the article URL with the feed user agent, which Cloudflare refuses, so
   a pinned article's brief is built from its standfirst (the "intelligence brief" mode) rather than
-  its body, which the API had already returned. Passing the API text into the brief is an open item.
+  its body, which the Read view now has. Passing the API text into the brief is an open item.
 - The TRD RSS entries in the feed list (`therealdeal.com/feed/`, `/miami/feed/`) still return 403
   on the feed user agent and now carry no text even when they load; they are harmless and redundant
   with the pinned block. Removing them is housekeeping.
@@ -111,6 +116,7 @@ not repeat it:
 | Verify TRD from Vercel (Cloudflare and the egress) | **Done** — `subscriberSources: ok` on the post-deploy warm run |
 | Release to production | **Done** — `d21f4c6`, 2026-10-27 20:26 UTC |
 | SFBJ | Being decided by the user; §3 has the routes and what has been discussed |
-| Feed the API body into a pinned article's Brief | Open |
+| Read button and ten picks | **Built 2026-10-27 evening**, after the first release; see §2 |
+| Feed the API body into a pinned article's Brief | Open — the Read view's blocks are the text to pass |
 | Remove the dead TRD RSS entries from the feed list | Housekeeping |
 | Refresh the test fixture when the ranking rules change | As needed (`lib/news/fixtures/trd-posts.json`, captured 2026-10-27) |

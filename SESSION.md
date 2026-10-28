@@ -8,7 +8,7 @@ is it in now, and what is still open.
 
 ---
 
-## STOPPED HERE — 2026-10-27, evening: The Real Deal released; SFBJ being decided; Peers still HELD
+## STOPPED HERE — 2026-10-27, night: The Real Deal released, Read button and ten picks on dev; SFBJ being decided; Peers still HELD
 
 Read `CLAUDE.md` first for orientation, then this block. Everything below it is the running record —
 reverse-chronological, and worth reading only when you need the reasoning behind something specific.
@@ -17,8 +17,24 @@ reverse-chronological, and worth reading only when you need the reasoning behind
 section" — a fast-forward of `main` to `dev` (`d52fc1a`). It ships The Real Deal as a subscriber
 source: its top five articles of the week pinned above the feed list in Industry-Specific News
 under a "Subscriber sources" header, each row's hover card listing the rules that ranked it.
-`main` and `dev` are level apart from this documentation commit. Confirm with `git log --oneline`
-rather than trusting a SHA written here.
+**`dev` carries `8b54ec3`, unreleased:** a **Read** button on every pinned row that opens the
+article's full text in the tool, and **ten** picks rather than five (cache key `subscriber-sources-v2`
+so production shows ten on deploy). Both at the user's request after the release; the user has not
+yet said to push them. Confirm with `git log --oneline` rather than trusting a SHA written here.
+
+**Why the Read button exists, in the user's words.** "How can we make it so that any of the users
+can reach the real deal articles. I have the login credentials for the firm… The same goes for
+SFBJ." The answer given: the login belongs in each person's browser (sign in once on each site with
+the firm's account, shared through a password manager; never put the credentials in the tool; both
+publishers cap devices per account and sell group subscriptions). Then, since TRD's API already
+returns the full text, a Read view was offered with the caveat that showing the whole article in the
+tool sits closer to the subscription's terms than a link does; the user said "Add the Read button".
+`fetchTrdArticle(postId)` reads one post on demand, cached by id for a day (`trd-article-v1`), never
+warmed; `articleBlocks` keeps the article's own paragraphs and drops the related-story cards, images
+and embeds; the dialog shows title, dates, word count, the text, a link to the publisher's page and a
+footer saying media is not shown. Verified live from the laptop (first pick: 11 blocks, 340 words);
+16 unit tests; `next build` clean. For SFBJ no such view is possible, since the tool cannot reach
+the site.
 
 **The integration the user named.** The firm's users read two subscription sites every day, South
 Florida Business Journal and The Real Deal; the tool should pull the most pertinent articles from

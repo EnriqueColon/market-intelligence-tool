@@ -124,8 +124,9 @@ happened with the CDATA regex.
 ### Subscriber sources: The Real Deal
 
 The firm's subscription publications, read by the tool and pinned above the feed list in
-Industry-Specific News under a "Subscriber sources" header — five rows, each with the rules that
-ranked it in its hover card. The Real Deal is the first and, as of 2026-10-27, the only one; South
+Industry-Specific News under a "Subscriber sources" header — ten rows (five until the user asked
+for ten on 2026-10-27), each with the rules that ranked it in its hover card and a **Read** button
+that opens the article's full text in the tool. The Real Deal is the first and, as of 2026-10-27, the only one; South
 Florida Business Journal is held by the user (`docs/NEWS_SUBSCRIBER_SOURCES_STATUS.md` §3 has what
 was found about it).
 
@@ -142,12 +143,24 @@ term the body carries and the headline omits; +2 commercial sector, +2 finance, 
 residential only; +3 Miami market, +1 national; +1 for original reporting (news, breaking, data,
 reports) and nothing for a blurb, which re-reports another outlet; promo and celebrity story types
 excluded. Ties go to the newer post. Region is the headline's named places, then the Miami market
-read as Florida. `fetch-subscriber-sources.ts` caches the five picks under `subscriber-sources-v1`
-+ ET day; a build whose requests all fail throws inside the cache so nothing is stored, and the
-action returns an `error` the panel shows as "Subscriber sources unavailable today". The panel
-drops a feed item whose URL the pinned block already shows. `npm run test:news-trd` covers the
-rules on a 24-post fixture; `npm run verify:news-trd` runs the live build from a laptop and prints
-every pick's reasons.
+read as Florida. `fetch-subscriber-sources.ts` caches the ten picks under `subscriber-sources-v2`
++ ET day (v1 held five); a build whose requests all fail throws inside the cache so nothing is
+stored, and the action returns an `error` the panel shows as "Subscriber sources unavailable
+today". The panel drops a feed item whose URL the pinned block already shows. `npm run
+test:news-trd` covers the rules on a 24-post fixture; `npm run verify:news-trd` runs the live build
+from a laptop and prints every pick's reasons.
+
+**The Read view.** Each pinned row's Read button calls `fetchTrdArticle(postId)`
+(`app/actions/fetch-trd-article.ts`), which reads that one post from the same API on demand and
+caches it by id for a day (`trd-article-v1`); it is never warmed, so the publisher is asked once per
+article someone actually opens. `articleBlocks` in `lib/news/trd.ts` removes the related-story cards
+(`<article>`, `<figure>`, `<section>` blocks), images, embeds and scripts whole, then keeps the
+paragraphs, headings, quotes and list items as text, so the dialog shows the article's own words and
+nothing from the page furniture; a footer says images and embedded media are on the article's page.
+The user asked for it so that anyone at the firm can read a piece without being signed in to the
+publisher, knowing that showing the full text in the tool sits closer to the subscription's terms
+than a link does; the View link beside it still opens the publisher's page. A refusal throws inside
+the cache and the dialog shows the message with that link.
 
 The one unknown is Vercel's egress: Cloudflare fronts TRD and answers 403 to any user agent it
 does not take for a browser — the tool's `MarketIntelligence/1.0` string included, which is why
@@ -1959,7 +1972,8 @@ above were produced and is the before/after instrument for further work on load 
   | --- | --- |
   | `industry-outlook-shared-v12` | The generated memo |
   | `industry-outlook-verified-metrics-v1` | Fetched FRED/FDIC figures |
-  | `subscriber-sources-v1` + ET day | The five Real Deal picks pinned above Industry-Specific News, with the reasons each ranked; never holds a failed build |
+  | `subscriber-sources-v2` + ET day | The ten Real Deal picks pinned above Industry-Specific News, with the reasons each ranked; never holds a failed build. v1 held five |
+  | `trd-article-v1` + post id | One Real Deal article's full text for the Read dialog, a day; written only when someone opens it |
   | `market-analytics-report-data-v3` + scope | Full screening cohort with scores, for the PDF and Visual Analysis |
   | `market-analytics-screening-v2` + scope | Reduced, scored rows for the Market Analytics **tab**, now with `capitalCategory` |
   | `market-analytics-watch-v1` + scope | Cohort Changes: deteriorating institutions and exits with their FDIC structure records |

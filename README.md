@@ -57,7 +57,7 @@ a tab is built on `dev` before being exposed to users.
 
 | Tab | Feature key | What it shows |
 | --- | --- | --- |
-| News | `news` | The Industry Outlook / Key Signals memo, industry-specific and general finance news feeds with the firm's subscriber picks (The Real Deal) pinned above the industry feed, and an on-demand article digest |
+| News | `news` | The Industry Outlook / Key Signals memo, industry-specific and general finance news feeds with the firm's subscriber picks (The Real Deal's top ten of the week, each readable in full from the tool) pinned above the industry feed, and an on-demand article digest |
 | Market Analytics | `market-analytics` | FDIC bank screening with a state filter, institution drawer and export; a Visual Analysis chart section; a Bank Stress Map behind `bank-stress-map`; and a nested FRED/Census indicator panel |
 | Market Research | `market-research` | A publisher-by-publisher research feed with a Postgres-backed archive, plus memo generation |
 | Legal Landscape | `legal` | Regulatory Watch, Legislative Tracker and Enforcement & Litigation, all AI-generated. Despite the name, no LegiScan data is involved |
@@ -168,7 +168,7 @@ with almost no configuration.
 | **FRED** | Verified market metrics, Market Pulse strip | **Keyless CSV endpoint** for the outlook | Pulse strip renders nothing rather than a placeholder |
 | **Google News RSS** + publisher RSS | News feeds | Keyless | Falls back to GDELT |
 | **GDELT DOC 2.0** | News fallback when RSS yields under 15 items | Keyless | Feeds thin out |
-| **The Real Deal** REST API (`/wp-json/wp/v2/posts`) | The subscriber picks pinned above Industry-Specific News | Keyless; Cloudflare requires a browser user agent | The panel shows a one-line "unavailable today" note; the feeds are unaffected |
+| **The Real Deal** REST API (`/wp-json/wp/v2/posts`) | The subscriber picks pinned above Industry-Specific News, and each pick's full text behind its Read button | Keyless; Cloudflare requires a browser user agent | The panel shows a one-line "unavailable today" note and the Read dialog shows the error with the publisher link; the feeds are unaffected |
 | **Google Programmable Search** | Market Research search | `GOOGLE_API_KEY` + `GOOGLE_CSE_ID` | Research search unavailable |
 | **OpenFreeMap** | Basemap tiles for the stress map | Keyless | Map renders without a basemap |
 | **Census**, **FFIEC** | Analytics side panels | `CENSUS_API_KEY`, `FFIEC_USER_ID`, `FFIEC_TOKEN` | Sections report `configured: false` |

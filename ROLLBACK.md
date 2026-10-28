@@ -8,12 +8,19 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
 | `main` | `d21f4c6` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `d21f4c6` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `dev` | `8b54ec3` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 This table names the newest commit on each branch that **changes behaviour**; documentation-only
 commits sit on top of it and are deliberately not tracked here, because amending one rotates its
 SHA and the table then reads as stale when nothing has moved. Confirm with
 `git log --format='%h|%ci|%s'` rather than trusting the previous entry — this has drifted twice.
+
+**`dev` carries `8b54ec3` as of 2026-10-27, night — the Read button on each Real Deal pick and ten
+picks rather than five, one commit past production.** Reverting `8b54ec3` removes the Read button
+and its dialog, `app/actions/fetch-trd-article.ts`, `fetchTrdPost` and `articleBlocks`, returns the
+block to five picks and the cache key to `subscriber-sources-v1` (whose entries for the day may
+still be present and would be served again); `trd-article-v1` entries stay, harmlessly. Nothing in
+it touches the bank analytics, the data API or production.
 
 **Production carries `d21f4c6` as of 2026-10-27, 20:26 UTC — The Real Deal as a subscriber source.**
 A fast-forward of `main` to `dev` (`d52fc1a`, four commits past `c2ea445`: two docs commits, the
