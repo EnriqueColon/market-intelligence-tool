@@ -19,8 +19,11 @@ Real Deal as a subscriber source, its top articles of the week pinned above the 
 Industry-Specific News under a "Subscriber sources" header, each row's hover card listing the rules
 that ranked it) and `8b54ec3` (a **Read** button on every pinned row that opens the article's full
 text in the tool, and **ten** picks rather than five under cache key `subscriber-sources-v2`). Both
-post-deploy warm runs reported `subscriberSources: ok`. **`dev` carries `7b207aa`, unreleased: the
-News tab as one morning page behind the `news-v2` flag** — on in every preview, off in production
+post-deploy warm runs reported `subscriberSources: ok`. **`dev` carries `9cbffe8`, unreleased: the
+News tab as one morning page behind the `news-v2` flag** (`7b207aa`, plus `9cbffe8` after the user's
+first look: Google News rows showed their headline twice, because the feed's description repeats the
+headline and the outlet; the outlet suffix is now dropped from the title and a snippet that only
+repeats the headline is not shown) — on in every preview, off in production
 until the user adds `news-v2` to `ENABLED_TABS`. The user said "lets push to dev, see how it looks
 and then we will go from there"; **the next conversation starts from their reaction to the
 preview.** Confirm with `git log --oneline` rather than trusting a SHA written here.
