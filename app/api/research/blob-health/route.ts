@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { reportStorageDriver } from "@/lib/report-storage"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -18,6 +19,7 @@ export async function GET() {
     runtime: process.release?.name,
     nodeEnv: process.env.NODE_ENV || null,
     vercelEnv: process.env.VERCEL_ENV || null,
+    storage: reportStorageDriver(),
     hasBlobReadWriteToken: Boolean(blobToken),
     blobTokenMasked: blobToken ? maskToken(blobToken) : null,
     hasAdminUploadToken: Boolean(adminToken),

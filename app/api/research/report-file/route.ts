@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { sql } from "@/lib/db"
+import { isLocalReportUrl, readLocalReport } from "@/lib/report-storage"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -33,6 +34,23 @@ export async function GET(request: NextRequest) {
     const report = row.rows[0]
     if (!report?.document_url) {
       return NextResponse.json({ ok: false, error: "Report not found." }, { status: 404 })
+    }
+
+    // Uploaded to this server's disk (REPORT_STORAGE=disk): stream the file.
+    if (isLocalReportUrl(report.document_url)) {
+      const bytes = await readLocalReport(report.document_url)
+      if (!bytes) {
+        return NextResponse.json({ ok: false, error: "Report file is missing on disk." }, { status: 404 })
+      }
+      const localFilename = safeFilename(report.title || `report-${id}.pdf`)
+      return new NextResponse(new Uint8Array(bytes), {
+        status: 200,
+        headers: {
+          "content-type": "application/pdf",
+          "content-disposition": `${asDownload ? "attachment" : "inline"}; filename="${localFilename}"`,
+          "cache-control": "private, no-store, max-age=0",
+        },
+      })
     }
 
     const blobToken = process.env.BLOB_READ_WRITE_TOKEN?.trim() || ""

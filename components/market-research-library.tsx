@@ -4,6 +4,10 @@ import { withBasePath } from "@/lib/base-path"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { upload } from "@vercel/blob/client"
 
+// Set at build time. "disk" (the droplet) posts the PDF to this server;
+// otherwise (Vercel) the browser uploads straight to Blob after a token handshake.
+const DISK_STORAGE = process.env.NEXT_PUBLIC_REPORT_STORAGE === "disk"
+
 type LibraryItem = {
   id: number
   producer: string
@@ -405,20 +409,41 @@ export function MarketResearchLibrary() {
             setUploadStatus(`${filename}: still waiting on Blob token or transfer...`)
           }, 8000)
 
-          setFileProgress(filename, "uploading_blob", "Uploading file bytes to Vercel Blob")
-          setUploadStatus(`${filename}: uploading bytes to Blob...`)
+          setFileProgress(
+            filename,
+            "uploading_blob",
+            DISK_STORAGE ? "Uploading file to the server" : "Uploading file bytes to Vercel Blob"
+          )
+          setUploadStatus(`${filename}: uploading${DISK_STORAGE ? "" : " bytes to Blob"}...`)
+          const uploadToDisk = async (): Promise<{ url: string; pathname: string }> => {
+            const form = new FormData()
+            form.append("file", file, filename)
+            form.append("pathname", pathname)
+            const res = await fetch(withBasePath("/api/research/upload-file"), {
+              method: "POST",
+              headers: { "x-admin-upload-token": uploadToken.trim() },
+              body: form,
+            })
+            const json = await readJsonSafe<{ ok: boolean; url?: string; pathname?: string; error?: string }>(res)
+            if (!res.ok || !json.ok || !json.url) {
+              throw new Error(json.error || `Upload failed (${res.status}).`)
+            }
+            return { url: json.url, pathname: json.pathname || pathname }
+          }
           const blob = await withTimeout(
-            upload(pathname, file, {
-              access: "private",
-              handleUploadUrl: "/api/blob/handle-upload",
-              headers: {
-                "x-admin-upload-token": uploadToken.trim(),
-              },
-              clientPayload: JSON.stringify({
-                originalFilename: filename,
-                title: humanizeFilename(filename) || "Untitled Report",
-              }),
-            }),
+            DISK_STORAGE
+              ? uploadToDisk()
+              : upload(pathname, file, {
+                  access: "private",
+                  handleUploadUrl: withBasePath("/api/blob/handle-upload"),
+                  headers: {
+                    "x-admin-upload-token": uploadToken.trim(),
+                  },
+                  clientPayload: JSON.stringify({
+                    originalFilename: filename,
+                    title: humanizeFilename(filename) || "Untitled Report",
+                  }),
+                }),
             120000,
             "Upload timed out after 120 seconds."
           )
@@ -638,7 +663,7 @@ export function MarketResearchLibrary() {
                     <td className="py-3">
                       <div className="flex gap-3">
                         <a
-                          href={`/api/research/report-file?id=${item.id}`}
+                          href={withBasePath(`/api/research/report-file?id=${item.id}`)}
                           target="_blank"
                           rel="noreferrer"
                           className="text-[#006D95] underline"
@@ -646,7 +671,7 @@ export function MarketResearchLibrary() {
                           Open PDF
                         </a>
                         <a
-                          href={`/api/research/report-file?id=${item.id}&download=1`}
+                          href={withBasePath(`/api/research/report-file?id=${item.id}&download=1`)}
                           target="_blank"
                           rel="noreferrer"
                           className="text-slate-700 underline"

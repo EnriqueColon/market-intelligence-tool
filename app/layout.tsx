@@ -28,7 +28,7 @@ export default function RootLayout({
         <RejectionHandler />
         {children}
         <Toaster />
-        <Analytics />
+        {process.env.VERCEL === "1" ? <Analytics /> : null}
       </body>
     </html>
   )

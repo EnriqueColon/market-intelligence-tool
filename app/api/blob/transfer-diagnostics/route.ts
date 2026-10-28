@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { put } from "@vercel/blob"
+import { probeDiskStorage, reportStorageDriver } from "@/lib/report-storage"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -18,6 +19,26 @@ export async function POST(request: NextRequest) {
   const expectedToken = process.env.ADMIN_UPLOAD_TOKEN?.trim() || ""
   if (!adminToken || !expectedToken || adminToken !== expectedToken) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 })
+  }
+
+  if (reportStorageDriver() === "disk") {
+    try {
+      const probe = await probeDiskStorage()
+      return NextResponse.json({
+        ok: true,
+        message: "Transfer diagnostics passed (disk).",
+        region: "local",
+        storage: "disk",
+        timings: { putMs: probe.ms, totalMs: Date.now() - startedAt },
+        probe: { dir: probe.dir },
+        ts: new Date().toISOString(),
+      })
+    } catch (err) {
+      return NextResponse.json(
+        { ok: false, error: err instanceof Error ? err.message : "Disk probe failed.", storage: "disk" },
+        { status: 500 }
+      )
+    }
   }
 
   const blobToken = process.env.BLOB_READ_WRITE_TOKEN?.trim() || ""

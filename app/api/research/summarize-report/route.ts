@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { isPrivateReportUrl, readReportPdf } from "@/lib/report-storage"
 import { isDbEnabled, sql } from "@/lib/db"
 import { resolveDocument } from "@/lib/document-resolver"
 import { summarizeReportPdfWithOpenAI, summarizeReportText, type ReportSummary } from "@/lib/report-summarizer"
@@ -18,8 +19,10 @@ function withTimeout<T>(task: Promise<T>, timeoutMs: number, message: string): P
   ])
 }
 
+// A report we hold ourselves (private Blob on Vercel, a disk file on the droplet)
+// rather than a producer's public page; see lib/report-storage.
 function isVercelBlobUrl(url: string): boolean {
-  return /blob\.vercel-storage\.com/i.test(url)
+  return isPrivateReportUrl(url)
 }
 
 async function extractPrivateBlobPdfText(pdfBytes: Buffer): Promise<string | null> {
@@ -53,20 +56,7 @@ async function extractPrivateBlobPdfText(pdfBytes: Buffer): Promise<string | nul
 }
 
 async function fetchPrivateBlobPdfBytes(url: string): Promise<Buffer | null> {
-  const blobToken = process.env.BLOB_READ_WRITE_TOKEN?.trim() || ""
-  if (!blobToken) return null
-  const response = await fetch(url, {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${blobToken}`,
-    },
-    cache: "no-store",
-  })
-  if (!response.ok) return null
-  const contentType = (response.headers.get("content-type") || "").toLowerCase()
-  if (!contentType.includes("pdf")) return null
-  const arrayBuffer = await response.arrayBuffer()
-  return Buffer.from(arrayBuffer)
+  return readReportPdf(url)
 }
 
 export async function POST(request: NextRequest) {

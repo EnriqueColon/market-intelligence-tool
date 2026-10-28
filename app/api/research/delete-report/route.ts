@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { sql } from "@/lib/db"
+import { deleteLocalReport } from "@/lib/report-storage"
 import { assertSafeToMutateProductionData, ProductionDataWriteError } from "@/lib/environment"
 
 export const runtime = "nodejs"
@@ -26,16 +27,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: false, error: "Invalid report id." }, { status: 400 })
     }
 
-    const deleted = await sql<{ id: number; title: string }>`
+    const deleted = await sql<{ id: number; title: string; document_url: string }>`
       DELETE FROM research_reports
       WHERE id = ${id}
-      RETURNING id, title
+      RETURNING id, title, document_url
     `
 
     const row = deleted.rows[0]
     if (!row) {
       return NextResponse.json({ ok: false, error: "Report not found." }, { status: 404 })
     }
+
+    // A file on this server's disk goes with its row; a Blob is left as before.
+    await deleteLocalReport(row.document_url || "")
 
     return NextResponse.json({ ok: true, id: row.id, title: row.title })
   } catch (err) {

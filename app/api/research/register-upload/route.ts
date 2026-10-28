@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { upsertResearchReport } from "@/app/ingestion/storage/upsert-report"
+import { readReportPdf } from "@/lib/report-storage"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -143,23 +144,9 @@ function detectPropertyType(text: string): string | undefined {
 }
 
 async function extractMetadataFromPrivatePdf(blobUrl: string): Promise<ExtractedMetadata | null> {
-  const blobToken = process.env.BLOB_READ_WRITE_TOKEN?.trim()
-  if (!blobToken) return null
-
-  const response = await fetch(blobUrl, {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${blobToken}`,
-    },
-    cache: "no-store",
-  })
-  if (!response.ok) return null
-
-  const contentType = (response.headers.get("content-type") || "").toLowerCase()
-  if (!contentType.includes("pdf")) return null
-
-  const arrayBuffer = await response.arrayBuffer()
-  const pdfBytes = Buffer.from(arrayBuffer)
+  // Blob on Vercel, a folder on the droplet — lib/report-storage decides.
+  const pdfBytes = await readReportPdf(blobUrl)
+  if (!pdfBytes) return null
   const { extractTextWithFallbacks } = require("../../../actions/pdf-text-extraction.js") as {
     extractTextWithFallbacks: (
       bytes: Buffer,

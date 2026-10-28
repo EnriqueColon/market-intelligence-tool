@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { reportStorageDriver } from "@/lib/report-storage"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -9,6 +10,15 @@ export async function POST(request: NextRequest) {
   const expectedToken = process.env.ADMIN_UPLOAD_TOKEN?.trim() || ""
   if (!adminToken || !expectedToken || adminToken !== expectedToken) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 })
+  }
+
+  if (reportStorageDriver() === "disk") {
+    return NextResponse.json({
+      ok: true,
+      message: "Disk storage is enabled; no Blob token needed.",
+      storage: "disk",
+      ts: new Date().toISOString(),
+    })
   }
 
   const hasBlobToken = Boolean(process.env.BLOB_READ_WRITE_TOKEN?.trim())
