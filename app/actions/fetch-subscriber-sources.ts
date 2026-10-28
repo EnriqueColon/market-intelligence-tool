@@ -35,7 +35,9 @@ export type SubscriberSourcesResponse = {
   error?: string
 }
 
-const CACHE_VERSION = "subscriber-sources-v1"
+// v2: ten picks rather than five (2026-10-27). Bumped so production shows ten on deploy rather than
+// at the next day's rollover.
+const CACHE_VERSION = "subscriber-sources-v2"
 
 async function buildSubscriberSources(): Promise<SubscriberSourcesResponse> {
   const now = new Date()

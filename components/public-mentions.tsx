@@ -26,6 +26,7 @@ import {
 } from "@/app/actions/fetch-public-mentions"
 import { summarizeNewsItem, type NewsBrief, type NewsSummaryInput } from "@/app/actions/fetch-news-summary"
 import { fetchSubscriberSources, type SubscriberSourcesResponse } from "@/app/actions/fetch-subscriber-sources"
+import { fetchTrdArticle, type TrdArticleResult } from "@/app/actions/fetch-trd-article"
 
 type Level = "national" | "florida" | "miami"
 const LEVELS: Level[] = ["national", "florida", "miami"]
@@ -87,6 +88,7 @@ const inflight = new Map<string, Promise<MergedItem[]>>()
 const CACHE_VERSION = "public_mentions:v4"
 let subscriberCache: SubscriberSourcesResponse | undefined
 let subscriberInflight: Promise<SubscriberSourcesResponse> | undefined
+const articleCache = new Map<number, TrdArticleResult>()
 
 /**
  * `initialByLevel` is what the server read from the three per-level caches while rendering the
@@ -115,6 +117,42 @@ export function PublicMentions({
   const [summaryLoading, setSummaryLoading] = useState(false)
   const [summaryError, setSummaryError] = useState<string | undefined>()
   const [brief, setBrief] = useState<NewsBrief | null>(null)
+  // The Read view of a pinned Real Deal row: the article's full text from the publisher's API.
+  const [readRow, setReadRow] = useState<Row | null>(null)
+  const [readOpen, setReadOpen] = useState(false)
+  const [readLoading, setReadLoading] = useState(false)
+  const [readResult, setReadResult] = useState<TrdArticleResult | null>(null)
+
+  const trdPostId = (row: Row) => {
+    const m = /^trd-(\d+)$/.exec(row.id)
+    return m ? Number(m[1]) : null
+  }
+
+  const openRead = async (row: Row) => {
+    const id = trdPostId(row)
+    setReadRow(row)
+    setReadOpen(true)
+    if (id === null) {
+      setReadResult({ ok: false, error: "No article id on this row." })
+      return
+    }
+    const cached = articleCache.get(id)
+    if (cached) {
+      setReadResult(cached)
+      return
+    }
+    setReadLoading(true)
+    setReadResult(null)
+    try {
+      const result = await fetchTrdArticle(id)
+      if (result.ok) articleCache.set(id, result)
+      setReadResult(result)
+    } catch (err) {
+      setReadResult({ ok: false, error: err instanceof Error ? err.message : String(err) })
+    } finally {
+      setReadLoading(false)
+    }
+  }
   const [activeTopic, setActiveTopic] = useState<string>("All")
 
   const regionLabel = (region?: PublicMentionItem["region"]) => {
@@ -316,23 +354,30 @@ export function PublicMentions({
         )}
       </TableCell>
       <TableCell>
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={() => {
-            setSelected({
-              title: item.title,
-              url: item.resolved_url || item.url,
-              source: item.source,
-              date: item.date,
-              summary: item.snippet,
-              level: item.feedLevel,
-            })
-            setSummaryOpen(true)
-          }}
-        >
-          Brief
-        </Button>
+        <div className="flex items-center gap-1.5">
+          {item.pinned && trdPostId(item) !== null && (
+            <Button variant="default" size="sm" className="bg-[#006D95] hover:bg-[#005a7a]" onClick={() => openRead(item)}>
+              Read
+            </Button>
+          )}
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              setSelected({
+                title: item.title,
+                url: item.resolved_url || item.url,
+                source: item.source,
+                date: item.date,
+                summary: item.snippet,
+                level: item.feedLevel,
+              })
+              setSummaryOpen(true)
+            }}
+          >
+            Brief
+          </Button>
+        </div>
       </TableCell>
     </TableRow>
   )
@@ -553,6 +598,99 @@ export function PublicMentions({
                   {brief.notes?.length ? <span className="ml-2">• {brief.notes.join(" ")}</span> : null}
                 </div>
               </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={readOpen}
+        onOpenChange={(open) => {
+          setReadOpen(open)
+          if (!open) {
+            setReadRow(null)
+            setReadResult(null)
+            setReadLoading(false)
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle>{readResult?.ok ? readResult.article.title : readRow?.title || "Article"}</DialogTitle>
+            <DialogDescription>
+              {readRow?.source || "The Real Deal"}
+              {readResult?.ok
+                ? ` • published ${readResult.article.date}${
+                    readResult.article.modified && readResult.article.modified !== readResult.article.date
+                      ? `, updated ${readResult.article.modified}`
+                      : ""
+                  } • ${readResult.article.wordCount.toLocaleString()} words`
+                : readRow?.date
+                  ? ` • ${readRow.date}`
+                  : ""}
+              {readRow?.url ? (
+                <>
+                  {" "}
+                  •{" "}
+                  <a className="text-primary underline" href={readRow.url} target="_blank" rel="noreferrer">
+                    Open on The Real Deal
+                  </a>
+                </>
+              ) : null}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex-1 space-y-3 overflow-y-auto pr-2">
+            {readLoading && (
+              <div className="space-y-3">
+                <p className="text-xs text-muted-foreground">Reading the article from The Real Deal…</p>
+                <Skeleton className="h-4 w-11/12" />
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-10/12" />
+                <Skeleton className="h-4 w-9/12" />
+              </div>
+            )}
+
+            {!readLoading && readResult && !readResult.ok && (
+              <div className="text-sm text-slate-800">
+                <p className="text-destructive">The article could not be read from the publisher: {readResult.error}</p>
+                {readRow?.url ? (
+                  <p className="mt-2">
+                    <a className="text-primary underline" href={readRow.url} target="_blank" rel="noreferrer">
+                      Open it on The Real Deal
+                    </a>{" "}
+                    while signed in with the firm's account.
+                  </p>
+                ) : null}
+              </div>
+            )}
+
+            {!readLoading && readResult?.ok && (
+              <article className="text-sm leading-relaxed text-slate-800">
+                {readResult.article.blocks.map((b, i) =>
+                  b.kind === "h" ? (
+                    <h3 key={`rb-${i}`} className="mt-4 mb-1 text-base font-semibold text-slate-900">
+                      {b.text}
+                    </h3>
+                  ) : b.kind === "quote" ? (
+                    <blockquote key={`rb-${i}`} className="my-3 border-l-2 border-[#006D95]/40 pl-3 italic text-slate-700">
+                      {b.text}
+                    </blockquote>
+                  ) : b.kind === "li" ? (
+                    <li key={`rb-${i}`} className="ml-5 list-disc">
+                      {b.text}
+                    </li>
+                  ) : (
+                    <p key={`rb-${i}`} className="my-3">
+                      {b.text}
+                    </p>
+                  )
+                )}
+                <p className="mt-5 border-t border-slate-200 pt-3 text-xs text-slate-600">
+                  Text as published by The Real Deal, read from its public API on {readResult.readAt.slice(0, 10)}. Images, charts
+                  and embedded media are not shown; the article's own page has them.
+                </p>
+              </article>
             )}
           </div>
         </DialogContent>

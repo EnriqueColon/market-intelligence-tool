@@ -9,6 +9,8 @@ import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import {
+  articleBlocks,
+  buildTrdArticleView,
   decodeEntities,
   normalizeTrdPost,
   regionOf,
@@ -146,12 +148,12 @@ test("selectTrdTop drops stale, promo and celebrity posts, dedupes, and keeps th
     post({ id: 13, sector: [27942], market: [9574] }), // duplicate id
     post({ id: 14, link: "https://www.therealdeal.com/miami/2026/10/27/post-13", sector: [27942] }), // duplicate url
     post({ id: 15, date_gmt: "2026-10-28T12:00:00" }), // in the future: stale
-    ...[16, 17, 18, 19, 20, 21].map((id) => post({ id, sector: [27942] })),
+    ...[16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26].map((id) => post({ id, sector: [27942] })),
   ]
   const sel = selectTrdTop(posts, { now: NOW })
-  assert.equal(sel.picks.length, 5)
+  assert.equal(sel.picks.length, 10)
   assert.deepEqual(sel.excluded, { stale: 2, promo: 1, celebrity: 1, missing: 0, duplicate: 2 })
-  assert.equal(sel.candidates, 7)
+  assert.equal(sel.candidates, 12)
   assert.equal(sel.picks[0].id, "trd-13", "the Miami-market post outranks the rest")
   for (const p of sel.picks) {
     assert.ok(p.title && p.url && p.date && p.reasons.length > 0)
@@ -172,9 +174,9 @@ test("ordering is score, then newest, then id", () => {
   )
 })
 
-test("fixture: five picks within the week, every one explained, loans and distress above a mansion", () => {
+test("fixture: ten picks within the week, every one explained, loans and distress above a mansion", () => {
   const sel = selectTrdTop(FIXTURE, { now: NOW })
-  assert.equal(sel.picks.length, 5)
+  assert.equal(sel.picks.length, 10)
   assert.equal(sel.excluded.stale, 0)
   for (const p of sel.picks) {
     assert.ok(p.date >= "2026-10-20" && p.date <= "2026-10-27", p.date)
@@ -183,13 +185,68 @@ test("fixture: five picks within the week, every one explained, loans and distre
     assert.ok(!/<|&#|&amp;/.test(p.title + p.snippet), "no markup leaks into the panel")
   }
   const ids = sel.picks.map((p) => p.id)
-  assert.ok(ids.includes("trd-1060123"), "the $463M St. Regis loan is a top-five story")
-  assert.ok(!ids.includes("trd-1060931") && !ids.includes("trd-1059931"), "the Jupiter mansion is not")
+  assert.ok(ids.includes("trd-1060123"), "the $463M St. Regis loan is a top-ten story")
+  assert.ok(!ids.includes("trd-1059931"), "the Jupiter mansion is not")
+  assert.equal(sel.picks.length, 10)
+  assert.ok(sel.candidates >= 10)
   const byId = new Map(sel.picks.map((p) => [p.id, p]))
   const loan = byId.get("trd-1060123")!
   assert.equal(loan.topic, "Debt/Financing")
   assert.equal(loan.region, "miami")
   assert.ok(sel.picks.every((p, i) => i === 0 || sel.picks[i - 1].score >= p.score), "sorted by score")
+})
+
+test("articleBlocks keeps the article's text and drops cards, images, embeds and scripts", () => {
+  const html = `
+    <p>The developers scored a <a href="/x">nine-figure</a> loan.</p>
+    <div class="related"><article><figure><img src="a.jpg"></figure><h4>Read more</h4><p>Dream Hotel to anchor project</p></article></div>
+    <h2>Terms</h2>
+    <p>Centennial Bank lent &#36;145 million &amp; more.</p>
+    <blockquote><p>“We are thrilled,” he said.</p></blockquote>
+    <ul><li>Item one</li><li>Item two</li></ul>
+    <section><p>Sign up for our newsletter</p></section>
+    <iframe src="https://example.com/embed"></iframe>
+    <script>track()</script>
+    <figure><img src="b.jpg"><figcaption>A caption</figcaption></figure>
+  `
+  assert.deepEqual(articleBlocks(html), [
+    { kind: "p", text: "The developers scored a nine-figure loan." },
+    { kind: "h", text: "Terms" },
+    { kind: "p", text: "Centennial Bank lent $145 million & more." },
+    { kind: "quote", text: "“We are thrilled,” he said." },
+    { kind: "li", text: "Item one" },
+    { kind: "li", text: "Item two" },
+  ])
+})
+
+test("buildTrdArticleView: title, dates, word count; null without a body", () => {
+  const view = buildTrdArticleView(
+    post({
+      id: 40,
+      title: { rendered: "Loan &#8216;closes&#8217;" },
+      modified_gmt: "2026-10-28T09:00:00",
+      content: { rendered: "<p>One two three.</p><p>Four five.</p>" },
+    })
+  )
+  assert.ok(view)
+  assert.equal(view.title, "Loan ‘closes’")
+  assert.equal(view.date, "2026-10-27")
+  assert.equal(view.modified, "2026-10-28")
+  assert.equal(view.wordCount, 5)
+  assert.equal(view.blocks.length, 2)
+  assert.equal(buildTrdArticleView(post({ id: 41 })), null)
+})
+
+test("fixture: every post's body reads as paragraphs with no markup and no card text", () => {
+  for (const p of FIXTURE) {
+    const view = buildTrdArticleView(p)
+    assert.ok(view, `no view for ${p.id}`)
+    assert.ok(view.blocks.length >= 1 && view.wordCount >= 20, `${p.id}: ${view.blocks.length} blocks, ${view.wordCount} words`)
+    for (const b of view.blocks) {
+      assert.ok(!/<|&#|&amp;|&nbsp;/.test(b.text), `${p.id}: markup in "${b.text.slice(0, 60)}"`)
+      assert.notEqual(b.text, "Read more")
+    }
+  }
 })
 
 test("query helpers: the window has a day of slack and the URL names every field", () => {

@@ -4,17 +4,17 @@
  *   npm run verify:news-trd
  *
  * Runs the two queries the daily build runs, ranks the posts exactly as the action does, and
- * prints each request's status and count, the exclusion counts, and the five picks with their
+ * prints each request's status and count, the exclusion counts, and the ten picks with their
  * score and every rule that produced it. Fails if any request was refused — a 403 here means
- * Cloudflare no longer accepts the user agent — or if fewer than five posts qualified, which
+ * Cloudflare no longer accepts the user agent — or if fewer than ten posts qualified, which
  * would mean the week's window or the taxonomy ids have moved.
  *
  * Run from a laptop. It says nothing about Vercel's egress; that is read from the warm-cache
  * cron's `subscriber_sources: trd` log line after a deploy.
  */
 
-import { selectTrdTop } from "../lib/news/trd"
-import { fetchTrdPosts } from "../app/services/trd"
+import { buildTrdArticleView, selectTrdTop } from "../lib/news/trd"
+import { fetchTrdPost, fetchTrdPosts } from "../app/services/trd"
 
 async function main() {
   const now = new Date()
@@ -41,10 +41,22 @@ async function main() {
     console.error("\nFAILED: a request was refused")
     process.exit(1)
   }
-  if (sel.picks.length < 5) {
+  if (sel.picks.length < 10) {
     console.error(`\nFAILED: only ${sel.picks.length} posts qualified`)
     process.exit(1)
   }
+
+  // The Read view: the first pick's full text, as the dialog would show it.
+  const firstId = Number(sel.picks[0].id.replace(/^trd-/, ""))
+  const { post, record } = await fetchTrdPost(firstId)
+  const view = buildTrdArticleView(post)
+  if (!view) {
+    console.error(`\nFAILED: post ${firstId} has no readable body`)
+    process.exit(1)
+  }
+  console.log(`\nRead view of ${firstId}: status ${record.status}, ${record.ms} ms, ${view.blocks.length} blocks, ${view.wordCount} words, modified ${view.modified ?? "—"}`)
+  console.log(`   first: "${view.blocks[0].text.slice(0, 140)}"`)
+  console.log(`   last:  "${view.blocks[view.blocks.length - 1].text.slice(0, 140)}"`)
   console.log("\nOK")
 }
 

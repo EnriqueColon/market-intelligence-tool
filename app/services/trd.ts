@@ -1,5 +1,5 @@
 import "server-only"
-import { TRD_QUERIES, trdQueryUrl, trdSinceParam, type TrdApiPost } from "@/lib/news/trd"
+import { TRD_QUERIES, trdPostUrl, trdQueryUrl, trdSinceParam, type TrdApiPost } from "@/lib/news/trd"
 
 /**
  * The Real Deal's WordPress REST API, fetched uncached. Two requests a day: the Miami market and
@@ -60,6 +60,37 @@ async function fetchQuery(name: string, url: string): Promise<{ posts: TrdApiPos
   } catch (err) {
     const message = err instanceof Error ? (err.name === "AbortError" ? `timeout after ${TIMEOUT_MS} ms` : err.message) : String(err)
     return { posts: [], record: { name, url, status: null, count: 0, ms: Date.now() - started, error: message } }
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/**
+ * One post with its full body, for the Read view. Throws on a refusal or a missing body so the
+ * caller's cache stores nothing; measured 0.4–1.4 s from a laptop.
+ */
+export async function fetchTrdPost(id: number): Promise<{ post: TrdApiPost; record: TrdRequestRecord }> {
+  if (!Number.isInteger(id) || id <= 0) throw new Error(`invalid post id ${id}`)
+  const url = trdPostUrl(id)
+  const started = Date.now()
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
+  try {
+    const res = await fetch(url, {
+      cache: "no-store",
+      signal: controller.signal,
+      headers: { "User-Agent": TRD_BROWSER_UA, Accept: "application/json, text/plain, */*", "Accept-Language": "en-US,en;q=0.9" },
+    })
+    if (!res.ok) throw new Error(`The Real Deal API answered HTTP ${res.status} for post ${id}`)
+    const body = (await res.json()) as unknown
+    if (!body || typeof body !== "object" || typeof (body as TrdApiPost).id !== "number") {
+      throw new Error(`The Real Deal API returned no post for ${id}`)
+    }
+    const post = body as TrdApiPost
+    return { post, record: { name: `post ${id}`, url, status: res.status, count: 1, ms: Date.now() - started } }
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") throw new Error(`The Real Deal API timed out after ${TIMEOUT_MS} ms for post ${id}`)
+    throw err
   } finally {
     clearTimeout(timer)
   }

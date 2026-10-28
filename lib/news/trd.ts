@@ -137,7 +137,8 @@ export type TrdSelection = {
 }
 
 const TEXT_CAP = 3_000
-const DEFAULT_LIMIT = 5
+/** Ten, at the user's request on 2026-10-27; it was five at first. */
+const DEFAULT_LIMIT = 10
 const DEFAULT_MAX_AGE_DAYS = 7
 
 const NAMED_ENTITIES: Record<string, string> = {
@@ -421,6 +422,73 @@ export function selectTrdTop(
   }))
 
   return { picks, candidates: scored.length, excluded }
+}
+
+// --- The Read view -----------------------------------------------------------------------------
+//
+// A post's `content.rendered` is WordPress HTML: the article's paragraphs and sub-headings, with
+// "related story" cards (`<article>`/`<figure>`/`<section>` blocks carrying an image, a headline and
+// a "Read more" h4) and the occasional embed spliced between them. The Read view shows the
+// article's own text and nothing else: cards, images, embeds and scripts are removed whole, and
+// what remains is split into paragraphs, headings, quotes and list items with inline markup
+// reduced to text. Links inside paragraphs are dropped with their text kept, so a sentence that
+// cites an earlier story still reads.
+
+export type ArticleBlock = { kind: "p" | "h" | "quote" | "li"; text: string }
+
+export type TrdArticleView = {
+  id: number
+  title: string
+  url: string
+  date: string
+  modified: string | null
+  blocks: ArticleBlock[]
+  wordCount: number
+}
+
+const REMOVED_BLOCKS = /<(article|figure|section|aside|script|style|iframe|noscript|svg|form|nav|footer|header)\b[\s\S]*?<\/\1>/gi
+
+export function articleBlocks(html: string): ArticleBlock[] {
+  let h = html || ""
+  // Nested cards: repeat until nothing more is removed.
+  for (let i = 0; i < 5; i += 1) {
+    const next = h.replace(REMOVED_BLOCKS, " ")
+    if (next === h) break
+    h = next
+  }
+  h = h.replace(/<img\b[^>]*>/gi, " ").replace(/<!--[\s\S]*?-->/g, " ")
+  const blocks: ArticleBlock[] = []
+  const re = /<(p|h[1-6]|blockquote|li)\b[^>]*>([\s\S]*?)<\/\1>/gi
+  let m: RegExpExecArray | null
+  while ((m = re.exec(h)) !== null) {
+    const tag = m[1].toLowerCase()
+    const inner = m[2]
+    // A blockquote holds its own paragraphs; take them as one quote.
+    const text = stripHtml(inner)
+    if (!text) continue
+    const kind: ArticleBlock["kind"] = tag === "p" ? "p" : tag === "li" ? "li" : tag === "blockquote" ? "quote" : "h"
+    blocks.push({ kind, text })
+  }
+  // A blockquote's inner <p>s also match on their own; drop a paragraph that repeats the quote.
+  const quotes = new Set(blocks.filter((b) => b.kind === "quote").map((b) => b.text))
+  return blocks.filter((b, i) => !(b.kind === "p" && quotes.has(b.text) && blocks.findIndex((q) => q.kind === "quote" && q.text === b.text) !== i))
+}
+
+/** The Read view of one post, or null when the API gave no usable body. */
+export function buildTrdArticleView(post: TrdApiPost): TrdArticleView | null {
+  const article = normalizeTrdPost(post)
+  if (!article) return null
+  const blocks = articleBlocks(post.content?.rendered || "")
+  if (blocks.length === 0) return null
+  const modified = post.modified_gmt ? toIsoDate(post.modified_gmt)?.date ?? null : null
+  const wordCount = blocks.reduce((n, b) => n + b.text.split(/\s+/).filter(Boolean).length, 0)
+  return { id: article.id, title: article.title, url: article.url, date: article.date, modified, blocks, wordCount }
+}
+
+export function trdPostUrl(id: number): string {
+  const u = new URL(`${TRD_API_URL}/${id}`)
+  u.searchParams.set("_fields", "id,date_gmt,modified_gmt,link,title,excerpt,content,market,sector,story_type")
+  return u.toString()
 }
 
 /** The `after=` value for the API: ISO 8601 without the zone, which WordPress reads as site time (ET for TRD). */
