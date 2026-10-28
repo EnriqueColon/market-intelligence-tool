@@ -60,6 +60,36 @@ line carries each request's status on every run, which is where a future refusal
 - Topic matching is by word on the headline and standfirst; "default" in "by default" or "finance"
   in a mapping piece can score. The reasons on each pick make such a match visible.
 
+## 2b. The morning page — on `dev` behind `news-v2`
+
+Built 2026-10-28 after the user asked whether the News tab could be presented in a more
+user-friendly way. What they told me: the team reads it once in the morning, on a phone or a
+desktop, not through the day; nobody is sure whether the Outlook memo is read past its bullets or
+whether Brief is used; the merged regional list is fine; nothing happens after reading, the tab is
+simply closed. The page is designed for that: one column to read top to bottom in a couple of
+minutes, the most important things first, nothing behind a hover.
+
+| | |
+| --- | --- |
+| Flag | `news-v2` through `isFeatureEnabled`, so it is **on in every preview and off in production** until the user adds it to `ENABLED_TABS`. The table layout is untouched behind the flag |
+| Component | `components/news/morning-page.tsx`, with the Brief and Read dialogs lifted into `components/news/news-brief-dialog.tsx` and `components/news/trd-read-dialog.tsx` (the tables keep their own copies until they are retired) |
+| Order | Header with the Eastern date and a **Summarize a link** button (the Article Digest, in a dialog) → the Outlook **condensed** (Key Signals cards, then "Read the full outlook"; a new `condensed` prop on `IndustryOutlook`) → one row of topic chips filtering everything below → **From the firm's subscriptions**: the ten Real Deal picks as cards, one wide on a phone, two on a desktop, each with source, date, region, topic, the headline, the standfirst in full, a "Why it ranked" disclosure, and Read / Open / Brief → **Industry news** and **Finance news** as lists: headline, a two-line snippet, a grey line with source, date, region and topic, Brief at the right; the first eight show, "Show all N" reveals the rest |
+| Newest first | Both lists sort by date descending, undated last, readable before paywalled within a day (`newestFirst`); the tables sorted by access tier first |
+| Since yesterday | A green pill on anything published on today's or yesterday's Eastern calendar day (`isSinceYesterday`). The tool has no user accounts, so this replaces read-tracking for a once-a-day reader |
+| Dedupe | A feed item whose URL is one of the ten cards is not listed again (`withoutUrls`) |
+| Phone | Everything stacks; the Read view fills the screen (`h-[100dvh]` below `sm`) |
+| Data | Unchanged: the same three per-level caches per feed, the subscriber snapshot and the outlook, read into the page by `initial-news-data.ts`; the page fetches only what the server did not hand it |
+| Tests | `npm run test:news-morning` — merging, dedupe, ordering, the date arithmetic, the pills, the chips |
+| Brief | Kept on every card and row as a secondary button, pending a month's use |
+
+**Not done, by design:** no region toggle (the user chose the merged list), no save or share (nothing
+happens after reading), no email edition yet (a morning email of the same page was floated as a
+later piece; the tool has a Resend account).
+
+**Next step:** the user scans the preview on a phone and a desktop and says what is wrong; once it
+reads right, `news-v2` goes into production's `ENABLED_TABS` and the two table components and their
+inline dialogs can be retired.
+
 ## 3. South Florida Business Journal — held
 
 What was established on 2026-10-27 from this laptop, before the user held the work:

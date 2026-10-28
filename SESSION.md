@@ -8,7 +8,7 @@ is it in now, and what is still open.
 
 ---
 
-## STOPPED HERE — 2026-10-28: The Real Deal in production with the Read button and ten picks; SFBJ being decided; Peers still HELD
+## STOPPED HERE — 2026-10-28: the morning page on dev for review; The Real Deal in production; SFBJ being decided; Peers still HELD
 
 Read `CLAUDE.md` first for orientation, then this block. Everything below it is the running record —
 reverse-chronological, and worth reading only when you need the reasoning behind something specific.
@@ -19,8 +19,31 @@ Real Deal as a subscriber source, its top articles of the week pinned above the 
 Industry-Specific News under a "Subscriber sources" header, each row's hover card listing the rules
 that ranked it) and `8b54ec3` (a **Read** button on every pinned row that opens the article's full
 text in the tool, and **ten** picks rather than five under cache key `subscriber-sources-v2`). Both
-post-deploy warm runs reported `subscriberSources: ok`. `main` and `dev` are level apart from this
-documentation commit. Confirm with `git log --oneline` rather than trusting a SHA written here.
+post-deploy warm runs reported `subscriberSources: ok`. **`dev` carries `7b207aa`, unreleased: the
+News tab as one morning page behind the `news-v2` flag** — on in every preview, off in production
+until the user adds `news-v2` to `ENABLED_TABS`. The user said "lets push to dev, see how it looks
+and then we will go from there"; **the next conversation starts from their reaction to the
+preview.** Confirm with `git log --oneline` rather than trusting a SHA written here.
+
+**The morning page, in one paragraph.** Asked whether the tab could be more user-friendly, the user
+described the use: a morning scan on a phone or a desktop, not open through the day; unsure whether
+the Outlook memo is read past its bullets or whether Brief is used; the merged regional list is
+fine; after reading, the tab is simply closed. `components/news/morning-page.tsx`: the Eastern date
+and a **Summarize a link** button (the Article Digest in a dialog); the Outlook condensed to its Key
+Signals with "Read the full outlook" (new `condensed` prop); one row of topic chips over everything;
+the ten Real Deal picks as cards (source, date, region, topic, headline, the standfirst in full, a
+"Why it ranked" disclosure, Read / Open / Brief), one wide on a phone and two on a desktop; then
+Industry news and Finance news as lists, newest first, eight shown then "Show all", a green "Since
+yesterday" pill on anything from today or yesterday in place of read-tracking. A feed item already
+on a card is not listed again. Same data and caches as the tables, which are untouched behind the
+flag; the Brief and Read dialogs are lifted into `components/news/`. Pure helpers and eight tests in
+`lib/news/morning.ts`; `next build` clean; Vercel preview built. Brief kept on every row pending a
+month's use. Not built by the user's answers: region toggle, save or share. Floated for later: the
+same page as a morning email. Full detail in `docs/NEWS_SUBSCRIBER_SOURCES_STATUS.md` §2b.
+
+**When the user approves it:** add `news-v2` to production's `ENABLED_TABS` in Vercel (no deploy
+needed — the flag is read per request), then retire `public-mentions.tsx`,
+`investing-business-mentions.tsx` and their inline dialogs in a follow-up commit.
 
 **Why the Read button exists, in the user's words.** "How can we make it so that any of the users
 can reach the real deal articles. I have the login credentials for the firm… The same goes for

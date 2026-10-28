@@ -8,12 +8,20 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
 | `main` | `8b54ec3` | Production | https://market-intelligence-tool-gilt.vercel.app |
-| `dev` | `8b54ec3` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
+| `dev` | `7b207aa` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 This table names the newest commit on each branch that **changes behaviour**; documentation-only
 commits sit on top of it and are deliberately not tracked here, because amending one rotates its
 SHA and the table then reads as stale when nothing has moved. Confirm with
 `git log --format='%h|%ci|%s'` rather than trusting the previous entry — this has drifted twice.
+
+**`dev` carries `7b207aa` as of 2026-10-28 — the News tab as one morning page behind `news-v2`, one
+commit past production.** Shown only where the flag is on: every preview, and production once
+`news-v2` is in `ENABLED_TABS` (not yet). So releasing it to `main` changes nothing visible in
+production until the variable is edited, and turning it off again is removing the key from the
+variable, no deploy. Reverting `7b207aa` removes `components/news/` (the page and the two lifted
+dialogs), `lib/news/morning.ts` and its test, the `condensed` prop on `IndustryOutlook`, the
+`newsMorningPage` feature and the `news-v2` key. The table layout is untouched either way.
 
 **Production carries `8b54ec3` as of 2026-10-28, 00:45 UTC — the Read button on each Real Deal
 pick and ten picks rather than five.** A fast-forward of `main` to `dev` (`c65468f`, the feature and

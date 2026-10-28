@@ -57,7 +57,7 @@ a tab is built on `dev` before being exposed to users.
 
 | Tab | Feature key | What it shows |
 | --- | --- | --- |
-| News | `news` | The Industry Outlook / Key Signals memo, industry-specific and general finance news feeds with the firm's subscriber picks (The Real Deal's top ten of the week, each readable in full from the tool) pinned above the industry feed, and an on-demand article digest |
+| News | `news` | The Industry Outlook / Key Signals memo, industry-specific and general finance news feeds with the firm's subscriber picks (The Real Deal's top ten of the week, each readable in full from the tool) pinned above the industry feed, and an on-demand article digest. Behind `news-v2`, the same data as one morning page: condensed outlook, subscriber cards, the feeds as lists, the digest behind a button |
 | Market Analytics | `market-analytics` | FDIC bank screening with a state filter, institution drawer and export; a Visual Analysis chart section; a Bank Stress Map behind `bank-stress-map`; and a nested FRED/Census indicator panel |
 | Market Research | `market-research` | A publisher-by-publisher research feed with a Postgres-backed archive, plus memo generation |
 | Legal Landscape | `legal` | Regulatory Watch, Legislative Tracker and Enforcement & Litigation, all AI-generated. Despite the name, no LegiScan data is involved |
@@ -262,7 +262,8 @@ npm run test:legal-legislation # legal feed: federal bills read from the record,
 npm run test:legal-govinfo    # legal feed: a federal bill's GPO record, text, report and CRS summary
 npm run test:legal-movement   # legal feed: what changed about a bill, and why re-running cannot consume it
 npm run test:news-trd         # The Real Deal picks: entity decoding, the ranking rules and their reasons, the gates, a 24-post fixture (tsx)
-npm run verify:news-trd       # live: the two Real Deal requests and the five picks with every rule that scored them (laptop only)
+npm run verify:news-trd       # live: the two Real Deal requests and the ten picks with every rule that scored them, and the first pick's Read view (laptop only)
+npm run test:news-morning     # the morning page's helpers: merging the regional feeds, newest-first order, the since-yesterday pill, topic chips (tsx)
 npm run test:legal-fedreg     # legal feed: Federal Register rules, corrections, and full-text section selection
 npm run test:legal-florida    # legal feed: Florida bills, number formats, local and reviser bills, the rest of the record, staff analyses
 npm run test:legal-pages      # legal feed: reading the enforcement roundup pages the model cites
@@ -365,7 +366,7 @@ Some checks need live data rather than fixtures, because they are calibrations r
 
   ```bash
   npm run build
-  ENABLED_TABS="news,market-analytics,market-research,legal,bank-stress-map" npm start -- --port 3100
+  ENABLED_TABS="news,market-analytics,market-research,legal,bank-stress-map,news-v2" npm start -- --port 3100
   BASE_URL=http://localhost:3100 npm run verify:tab-persistence
   ```
 - `npm run verify:fdic-hosts` — every FDIC endpoint against every configured host. Exists because

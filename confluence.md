@@ -70,7 +70,8 @@ without replacing it with something else that forces per-request rendering.
 
 The same list also gates content *inside* a tab. `app/page.tsx` resolves those into a `features`
 object passed down to the dashboard, because `isFeatureEnabled()` reads server-only env and
-everything below it is a client component. The only entry is now `bank-stress-map`.
+everything below it is a client component. Its entries are `bank-stress-map` and `news-v2` (the News
+tab as one morning page in place of the two tables; see "The morning page" under Feature areas).
 
 **The Executive Brief and Underwriter Workbench are unreachable, by decision.** They are not in
 `TAB_DEFS`, so no `ENABLED_TABS` value renders them — a flag is not the mechanism holding them back
@@ -166,7 +167,35 @@ The one unknown is Vercel's egress: Cloudflare fronts TRD and answers 403 to any
 does not take for a browser — the tool's `MarketIntelligence/1.0` string included, which is why
 the TRD RSS entries in the feed list have returned nothing. The service sends a Chrome string,
 which passes from a laptop; whether it passes from Vercel is read from the warm-cache cron's
-`subscriber_sources: trd` log line or from the panel itself.
+`subscriber_sources: trd` log line or from the panel itself. (Answered 2026-10-27: it passes; both
+post-deploy warm runs reported `subscriberSources: ok`.)
+
+### The morning page (`news-v2`)
+
+The News tab as one page for a once-a-day reader on a phone or a desktop, built 2026-10-28 when the
+user asked for a more user-friendly presentation and described how the team reads it: a morning
+scan, not open through the day; unsure whether the memo is read past its bullets or Brief used; the
+merged regional list is fine; after reading, the tab is closed. `components/news/morning-page.tsx`,
+shown when `isFeatureEnabled("news-v2")` — every preview, and production once the user adds
+`news-v2` to `ENABLED_TABS`; the table layout (`public-mentions.tsx`,
+`investing-business-mentions.tsx`, the Article Digest card) is untouched behind the flag.
+
+Top to bottom: the Eastern date and a **Summarize a link** button (the Article Digest in a dialog);
+the Outlook with a new `condensed` prop — the Key Signals cards, then "Read the full outlook"; one
+row of topic chips over everything below; **From the firm's subscriptions**, the ten Real Deal picks
+as cards (source, date, region, topic, headline, standfirst in full, a "Why it ranked" disclosure,
+Read / Open / Brief), one wide on a phone and two on a desktop; **Industry news** and **Finance
+news** as lists (headline, two-line snippet, source · date · region · topic, Brief), eight shown
+then "Show all". Lists are newest first, undated last, readable before paywalled within a day,
+where the tables sorted by access tier first. Anything published on today's or yesterday's Eastern
+day carries a green "Since yesterday" pill — the tool has no user accounts, so this stands in for
+read-tracking. A feed item whose URL is one of the cards is not listed again. The Read view fills a
+phone's screen. The data is unchanged: the same per-level caches, subscriber snapshot and outlook,
+handed to the page by `initial-news-data.ts`, with the page fetching only what the server did not.
+The Brief and Read dialogs were lifted into `components/news/news-brief-dialog.tsx` and
+`trd-read-dialog.tsx`; the tables keep their own copies until they are retired. Pure helpers in
+`lib/news/morning.ts`, `npm run test:news-morning`. Not built, by the user's answers: no region
+toggle, no save or share. Floated for later: the same page as a morning email.
 
 ### Legal Landscape: two prompts, one record, and five gates
 
@@ -2385,7 +2414,8 @@ npm run test:peer-intel-gating     # repurchase cap, table rows, shares outstand
 npm run test:seller-likelihood     # four states, confidence floor, cohort enrichment (tsx)
 npm run backtest:seller            # live: the score against the banks that actually failed
 npm run test:news-trd              # The Real Deal picks: entities, the ranking rules and reasons, the gates, a fixture (tsx)
-npm run verify:news-trd            # live, laptop only: the two Real Deal requests and the five picks with their reasons
+npm run verify:news-trd            # live, laptop only: the two Real Deal requests, the ten picks with their reasons, the first pick's Read view
+npm run test:news-morning          # the morning page: merging, dedupe, newest-first, since-yesterday, topic chips (tsx)
 npm run verify:peer-signals -- --all   # live: all three layers, firing rates, cache size, scope independence
 ```
 
