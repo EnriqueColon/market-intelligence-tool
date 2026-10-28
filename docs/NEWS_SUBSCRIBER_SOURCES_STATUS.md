@@ -1,10 +1,10 @@
 # News tab — subscriber sources: status and open items
 
-*As of 2026-10-27: **The Real Deal is built and on `dev` (`d21f4c6`), unreleased.** Its top five
+*As of 2026-10-27: **The Real Deal is in production (`d21f4c6`, released 20:26 UTC).** Its top five
 articles of the week sit above the feed list in Industry-Specific News under a "Subscriber
-sources" header. **South Florida Business Journal is held** by the user: "we will discuss South
-Florida Business Journal after we finish the other updates." Nothing for it is built; §3 records
-what was found so the discussion starts from facts.*
+sources" header, and the post-deploy warm run confirmed TRD's API accepts the request from Vercel.
+**South Florida Business Journal is being decided** by the user ("we will continue to brain storm
+on the SFBJ"). Nothing for it is built; §3 records what was found and what has been discussed.*
 
 The running list of what is still open. Update it at the end of every session alongside
 `SESSION.md`, `ROLLBACK.md`, `README.md` and `confluence.md`.
@@ -35,11 +35,12 @@ reasons in §2 and §3.
 (a discounted Fort Lauderdale office purchase, a $500M Miami refinance, a suit over a $47M debt
 fund, an $18M Deerfield Beach site, a Palm Beach County portfolio map), `next build` clean.
 
-**Not yet verified:** whether Cloudflare accepts the request from Vercel's egress. It fronts the
-site and answers 403 to any user agent it does not take for a browser; the service sends a Chrome
-string, which passes from a laptop. The preview deployment of `d21f4c6` answers this: either the
-five rows render, or the panel's one-line note names the status. The warm-cache cron's
-`subscriber_sources: trd` log line carries each request's status after a production deploy.
+**Verified on Vercel, 2026-10-27 evening:** production built `d52fc1a` on Node 24.22.1 and the
+post-deploy warm run (GitHub Actions 40577872730) reported `subscriberSources: ok`, which the action
+returns only when at least one TRD request succeeded and the picks were cached. So Cloudflare, which
+fronts the site and answers 403 to any user agent it does not take for a browser, accepts the
+service's Chrome string from Vercel's egress. The warm-cache cron's `subscriber_sources: trd` log
+line carries each request's status on every run, which is where a future refusal would first show.
 
 **Known limits.**
 - The API is public but unofficial; TRD can close or change it without notice. The verify script
@@ -81,13 +82,35 @@ What was established on 2026-10-27 from this laptop, before the user held the wo
 Proposed when the user returns to it: Google News headlines first (immediate), the newsletter
 route second, both ranked by the same rules as TRD and pinned beside it, five each.
 
+**Discussed with the user on 2026-10-27, after the TRD release**, so the next conversation does
+not repeat it:
+- *What is needed to start:* route 1 needs nothing from the user; route 2 needs one sample
+  newsletter (forwarded or pasted), the choice of newsletters (Morning Edition, Afternoon Edition,
+  topic letters), and a forwarding rule in the subscriber mailbox to an address the tool owns.
+- *Other ways round Cloudflare:* a licensed feed from the publisher (clean, paid); a paid news API
+  (headlines only, tidier than Google); a robot browser logging in with the password, or a scraping
+  service that "solves Cloudflare" — **declined**: outside the subscription's terms, risks the
+  account, breaks whenever the challenge changes; a browser extension on a team member's machine
+  (legitimate, manual, fragile); forwarding the weekly digital-edition PDF (weekly, same mechanism
+  as the newsletter).
+- *Does the newsletter carry all the data:* no — headlines, a sentence or two and a link, an
+  editor's selection of ten to fifteen stories, sent morning and afternoon; enough to rank and pin,
+  not enough for a full-text Brief. Full text only comes from a licensed feed.
+- *The licensed-feed process:* ACBJ publishes no licensing programme, pricing or feed documentation
+  (checked 2026-10-27); it is a sales conversation — ask the SFBJ rep, who routes it to corporate;
+  specify South Florida, headline/summary/full text/link, daily, RSS/JSON/email, internal users;
+  expect an annual fee, a user cap, internal-use-only and takedown clauses; it may be refused or
+  priced for data vendors, or answered with a group subscription rather than a feed.
+- *Recommendation given:* Google News headlines now, the newsletter forward when the sample and the
+  rule are in place, an email to the SFBJ rep about a licence in parallel.
+
 ## 4. Open items
 
 | Item | State |
 | --- | --- |
-| Verify TRD from Vercel (Cloudflare and the egress) | Open — the preview of `d21f4c6` shows it |
-| Release to production | Open — the user reviews the preview first |
-| SFBJ | Held by the user; §3 has the routes |
+| Verify TRD from Vercel (Cloudflare and the egress) | **Done** — `subscriberSources: ok` on the post-deploy warm run |
+| Release to production | **Done** — `d21f4c6`, 2026-10-27 20:26 UTC |
+| SFBJ | Being decided by the user; §3 has the routes and what has been discussed |
 | Feed the API body into a pinned article's Brief | Open |
 | Remove the dead TRD RSS entries from the feed list | Housekeeping |
 | Refresh the test fixture when the ranking rules change | As needed (`lib/news/fixtures/trd-posts.json`, captured 2026-10-27) |

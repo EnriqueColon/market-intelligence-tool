@@ -8,15 +8,17 @@ is it in now, and what is still open.
 
 ---
 
-## STOPPED HERE — 2026-10-27, afternoon: The Real Deal pinned in Industry-Specific News; SFBJ next; Peers still HELD
+## STOPPED HERE — 2026-10-27, evening: The Real Deal released; SFBJ being decided; Peers still HELD
 
 Read `CLAUDE.md` first for orientation, then this block. Everything below it is the running record —
 reverse-chronological, and worth reading only when you need the reasoning behind something specific.
 
-**Production is `c2ea445`**, unchanged. **`dev` carries `d21f4c6`, unreleased:** The Real Deal as a
-subscriber source — its top five articles of the week pinned above the feed list in Industry-Specific
-News under a "Subscriber sources" header, each row's hover card listing the rules that ranked it.
-Confirm with `git log --oneline` rather than trusting a SHA written here.
+**Production is `d21f4c6`**, released 2026-10-27 at 20:26 UTC on the user's "push the real deal
+section" — a fast-forward of `main` to `dev` (`d52fc1a`). It ships The Real Deal as a subscriber
+source: its top five articles of the week pinned above the feed list in Industry-Specific News
+under a "Subscriber sources" header, each row's hover card listing the rules that ranked it.
+`main` and `dev` are level apart from this documentation commit. Confirm with `git log --oneline`
+rather than trusting a SHA written here.
 
 **The integration the user named.** The firm's users read two subscription sites every day, South
 Florida Business Journal and The Real Deal; the tool should pull the most pertinent articles from
@@ -46,10 +48,12 @@ page with the rest of the tab (`initial-news-data.ts`) and warmed by `warm-cache
 
 **Verification state.** Locally: `npm run test:news-trd` 13/13 on a 24-post fixture; `npm run
 verify:news-trd` live from the laptop — 49 + 97 posts, 110 candidates, five picks; `next build`
-clean. **On Vercel, the one unknown is whether Cloudflare accepts the request from Vercel's
-egress.** The preview of `d21f4c6` answers it: either the five rows render, or the panel's note names
-the status. The user opens the preview (Deployment Protection); after a production deploy the
-warm-cache log line `subscriber_sources: trd` carries each request's status.
+clean. On Vercel: the production build on 24.22.1 compiled in 30.2 s; live, `/` redirects to login,
+`/login` serves, the data API answers 401 without a key. **The one unknown — whether Cloudflare
+accepts the request from Vercel's egress — is answered:** the post-deploy warm run (GitHub Actions
+40577872730) reported `subscriberSources: ok`, which the action only returns when at least one TRD
+request succeeded and the picks were cached. The user had not opened the preview before asking for
+the release; the first look at the rows is on production.
 
 **Know before the user opens it.** The live run's third pick (2026-10-21) was TRD's report of an
 investor suing Safe Harbor Equity, Rafael Serrano and City National Bank of Florida over an alleged
@@ -57,12 +61,18 @@ $47M debt-fund loan scheme — the firm's own name, ranked high because "foreclo
 standfirst and it is Miami-market commercial news. The tool shows what the publisher printed and
 why it ranked; it does not judge it.
 
-**Next, when the user raises it: SFBJ.** Two routes work, in `docs/NEWS_SUBSCRIBER_SOURCES_STATUS.md`
-§3: Google News `site:bizjournals.com/southflorida` for the week's headlines (immediate, no
-credentials), and the subscriber newsletters forwarded to an address the tool owns through Resend's
-inbound email (already on the account's free plan), parsed and stored; that one needs a sample
-newsletter from the user. Open on TRD: feeding the API body into a pinned article's Brief, and
-removing the dead TRD RSS entries from the feed list.
+**Next: SFBJ, which the user is still deciding.** The conversation so far, so it is not repeated:
+the user asked what starting it needs, whether there is any other way round Cloudflare, whether the
+newsletter carries all the data (no: headlines, a sentence or two and a link, an editor's selection,
+morning and afternoon), and what a licensed feed from the publisher involves (no public programme at
+ACBJ; a sales conversation through the SFBJ rep, routed to corporate, annual fee and internal-use
+licence; may be refused or priced for data vendors). The recommendation given, three times: Google
+News headlines now, the newsletter forward once the user sends a sample email and sets a forwarding
+rule, and an email to the SFBJ rep about a licensed feed in parallel; **no robot browser or
+Cloudflare bypass, which was declined on terms and fragility grounds.** The user's last word: "we
+will continue to brain storm on the SFBJ." Routes and findings in
+`docs/NEWS_SUBSCRIBER_SOURCES_STATUS.md` §3. Open on TRD: feeding the API body into a pinned
+article's Brief, and removing the dead TRD RSS entries from the feed list.
 
 **Still HELD, by the user, 2026-10-27:** all Peers and sponsor-stress work, until the integration is
 done. The open list is in the entry below this one; nothing there is to be picked up until the user

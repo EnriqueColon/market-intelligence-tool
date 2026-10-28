@@ -7,7 +7,7 @@ end of every session, alongside `README.md`, `SESSION.md` and `confluence.md`.
 
 | Branch | Commit | Environment | URL |
 | --- | --- | --- | --- |
-| `main` | `c2ea445` | Production | https://market-intelligence-tool-gilt.vercel.app |
+| `main` | `d21f4c6` | Production | https://market-intelligence-tool-gilt.vercel.app |
 | `dev` | `d21f4c6` | Preview (no database, no Blob) | build-specific `…vercel.app` preview URL |
 
 This table names the newest commit on each branch that **changes behaviour**; documentation-only
@@ -15,7 +15,21 @@ commits sit on top of it and are deliberately not tracked here, because amending
 SHA and the table then reads as stale when nothing has moved. Confirm with
 `git log --format='%h|%ci|%s'` rather than trusting the previous entry — this has drifted twice.
 
-**Production carries `c2ea445` as of 2026-10-27 — the release of sponsor-stress steps 2–5 and the
+**Production carries `d21f4c6` as of 2026-10-27, 20:26 UTC — The Real Deal as a subscriber source.**
+A fast-forward of `main` to `dev` (`d52fc1a`, four commits past `c2ea445`: two docs commits, the
+feature, its docs) on the user's "push the real deal section". It ships the Subscriber sources rows
+above the feed list in Industry-Specific News — The Real Deal's top five of the week from its public
+REST API, no login, each row's hover card listing the rules that ranked it — plus the
+`subscriberSources` warm entry and the page's initial read of it. Vercel built it on 24.22.1
+(`Compiled successfully in 30.2s`); live after deploy: `/` redirects to login, `/login` serves, the
+data API answers 401 without a key. **The Cloudflare question is answered:** the post-deploy warm
+run (GitHub Actions 40577872730) reported `subscriberSources: ok`, so TRD's API accepts the request
+from Vercel's egress with the browser user agent. **To roll back:** Vercel's dashboard can promote
+the previous production deployment instantly; in git, `git revert d21f4c6` on `main` reverts cleanly
+on its own, or `git reset --hard c2ea445` and a force push. Reverting leaves the
+`subscriber-sources-v1` cache entries in place, harmlessly.
+
+**Production carried `c2ea445` as of 2026-10-27 — the release of sponsor-stress steps 2–5 and the
 fund rows.** A fast-forward of `main` to `dev` (fifteen commits past `8061ec2`), on the user's "commit
 to production — looks good" after reviewing the preview. It ships: each fund's row in the Raises
 table expanding to its structure, terms and people (`d3acaff`, `8e93ead`, `8aae1dc`); adviser
@@ -44,15 +58,15 @@ which is the fastest route; in git, `git revert -m 1 8061ec2` on `main` returns 
 `9f8a1f9`. Reverting leaves the `behavior-signals-v2` and `peer-intel-v2` cache entries in place,
 harmlessly — the reverted code reads `v1` keys and recomputes.
 
-**`dev` carries `d21f4c6` as of 2026-10-27, afternoon — The Real Deal as a subscriber source, one
-commit past production.** The top five Real Deal articles of the week pinned above the feed list in
+**`dev` carried `d21f4c6` as of 2026-10-27, afternoon — The Real Deal as a subscriber source, one
+commit past production; released the same evening, see above.** The top five Real Deal articles of the week pinned above the feed list in
 Industry-Specific News, read from the site's public REST API with no login, ranked by recorded
 rules, cached as `subscriber-sources-v1` + ET day and warmed by `warm-cache`. Reverting `d21f4c6`
 removes the Subscriber sources rows, the `subscriberSources` warm entry and the page's initial read
 of it, `lib/news/`, `app/services/trd.ts`, `app/actions/fetch-subscriber-sources.ts` and the verify
 script; the `subscriber-sources-v1` cache entries stay, harmlessly. Nothing in it touches the bank
-analytics, the data API or production. Not yet verified on Vercel: whether Cloudflare accepts the
-request from Vercel's egress — the preview shows either the five rows or a one-line note.
+analytics or the data API. Cloudflare's acceptance of Vercel's egress was the open question; the
+production warm run answered it (`subscriberSources: ok`).
 
 **`dev` carries `37c55b9` as of 2026-10-27, evening** — Form ADV history 2011–2024, sponsor-stress
 step 5, fourteen commits past production. Reverting `37c55b9` removes the year-by-year tables, the
