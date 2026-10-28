@@ -8,19 +8,19 @@ is it in now, and what is still open.
 
 ---
 
-## STOPPED HERE — 2026-10-27, night: The Real Deal released, Read button and ten picks on dev; SFBJ being decided; Peers still HELD
+## STOPPED HERE — 2026-10-28: The Real Deal in production with the Read button and ten picks; SFBJ being decided; Peers still HELD
 
 Read `CLAUDE.md` first for orientation, then this block. Everything below it is the running record —
 reverse-chronological, and worth reading only when you need the reasoning behind something specific.
 
-**Production is `d21f4c6`**, released 2026-10-27 at 20:26 UTC on the user's "push the real deal
-section" — a fast-forward of `main` to `dev` (`d52fc1a`). It ships The Real Deal as a subscriber
-source: its top five articles of the week pinned above the feed list in Industry-Specific News
-under a "Subscriber sources" header, each row's hover card listing the rules that ranked it.
-**`dev` carries `8b54ec3`, unreleased:** a **Read** button on every pinned row that opens the
-article's full text in the tool, and **ten** picks rather than five (cache key `subscriber-sources-v2`
-so production shows ten on deploy). Both at the user's request after the release; the user has not
-yet said to push them. Confirm with `git log --oneline` rather than trusting a SHA written here.
+**Production is `8b54ec3`**, released 2026-10-28 at 00:45 UTC on the user's "Push to production"
+— a fast-forward of `main` to `dev` (`c65468f`). Two releases today: `d21f4c6` at 20:26 UTC (The
+Real Deal as a subscriber source, its top articles of the week pinned above the feed list in
+Industry-Specific News under a "Subscriber sources" header, each row's hover card listing the rules
+that ranked it) and `8b54ec3` (a **Read** button on every pinned row that opens the article's full
+text in the tool, and **ten** picks rather than five under cache key `subscriber-sources-v2`). Both
+post-deploy warm runs reported `subscriberSources: ok`. `main` and `dev` are level apart from this
+documentation commit. Confirm with `git log --oneline` rather than trusting a SHA written here.
 
 **Why the Read button exists, in the user's words.** "How can we make it so that any of the users
 can reach the real deal articles. I have the login credentials for the firm… The same goes for

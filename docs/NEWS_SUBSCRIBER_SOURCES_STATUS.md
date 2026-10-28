@@ -1,8 +1,9 @@
 # News tab — subscriber sources: status and open items
 
-*As of 2026-10-27: **The Real Deal is in production (`d21f4c6`, released 20:26 UTC).** Its top five
-articles of the week sit above the feed list in Industry-Specific News under a "Subscriber
-sources" header, and the post-deploy warm run confirmed TRD's API accepts the request from Vercel.
+*As of 2026-10-28: **The Real Deal is in production (`8b54ec3`, released 00:45 UTC, after `d21f4c6`
+the evening before).** Its top ten articles of the week sit above the feed list in Industry-Specific
+News under a "Subscriber sources" header, each with a Read button that opens the full text in the
+tool, and both post-deploy warm runs confirmed TRD's API accepts the request from Vercel.
 **South Florida Business Journal is being decided** by the user ("we will continue to brain storm
 on the SFBJ"). Nothing for it is built; §3 records what was found and what has been discussed.*
 
@@ -116,7 +117,7 @@ not repeat it:
 | Verify TRD from Vercel (Cloudflare and the egress) | **Done** — `subscriberSources: ok` on the post-deploy warm run |
 | Release to production | **Done** — `d21f4c6`, 2026-10-27 20:26 UTC |
 | SFBJ | Being decided by the user; §3 has the routes and what has been discussed |
-| Read button and ten picks | **Built 2026-10-27 evening**, after the first release; see §2 |
+| Read button and ten picks | **In production** — `8b54ec3`, 2026-10-28 00:45 UTC; see §2 |
 | Feed the API body into a pinned article's Brief | Open — the Read view's blocks are the text to pass |
 | Remove the dead TRD RSS entries from the feed list | Housekeeping |
 | Refresh the test fixture when the ranking rules change | As needed (`lib/news/fixtures/trd-posts.json`, captured 2026-10-27) |
