@@ -14,12 +14,14 @@ import type { InitialNewsData } from "@/app/services/initial-news-data"
 import { newsCalendarDayET } from "@/lib/news-tab-cache"
 import {
   byTopic,
+  cleanHeadline,
   isSinceYesterday,
   longDateET,
   mergeLevels,
   newestFirst,
   regionLabel,
   topicChips,
+  usefulSnippet,
   withoutUrls,
   MORNING_LEVELS,
   type MergedMorningItem,
@@ -162,7 +164,10 @@ export function NewsMorningPage({ initialNews }: { initialNews?: InitialNewsData
     return (
       <>
         <ul className="divide-y divide-slate-200">
-          {shown.map((item, i) => (
+          {shown.map((item, i) => {
+            const headline = cleanHeadline(item.title, item.source)
+            const snippet = usefulSnippet(item.title, item.snippet, item.source)
+            return (
             <li key={`${item.id}-${i}`} className="flex items-start justify-between gap-3 py-3">
               <div className="min-w-0 flex-1">
                 {item.url ? (
@@ -172,12 +177,12 @@ export function NewsMorningPage({ initialNews }: { initialNews?: InitialNewsData
                     rel="noreferrer"
                     className="text-[15px] font-medium leading-snug text-slate-900 hover:text-[#006D95] hover:underline"
                   >
-                    {item.title}
+                    {headline}
                   </a>
                 ) : (
-                  <span className="text-[15px] font-medium leading-snug text-slate-900">{item.title}</span>
+                  <span className="text-[15px] font-medium leading-snug text-slate-900">{headline}</span>
                 )}
-                {item.snippet ? <p className="mt-0.5 line-clamp-2 text-sm text-slate-600">{item.snippet}</p> : null}
+                {snippet ? <p className="mt-0.5 line-clamp-2 text-sm text-slate-600">{snippet}</p> : null}
                 <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-slate-500">
                   <span className="font-medium text-slate-700">{item.source || "—"}</span>
                   {item.date ? (
@@ -193,11 +198,12 @@ export function NewsMorningPage({ initialNews }: { initialNews?: InitialNewsData
                   {recentPill(item.date)}
                 </div>
               </div>
-              <Button variant="ghost" size="sm" className="shrink-0 text-slate-700" onClick={() => briefFor(item, item.feedLevel)}>
+              <Button variant="ghost" size="sm" className="shrink-0 text-slate-700" onClick={() => briefFor({ ...item, title: headline, snippet }, item.feedLevel)}>
                 Brief
               </Button>
             </li>
-          ))}
+            )
+          })}
         </ul>
         {!showAll && rows.length > LIST_PREVIEW ? (
           <button type="button" onClick={onShowAll} className="mt-2 text-sm font-medium text-[#006D95] hover:underline">

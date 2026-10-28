@@ -116,6 +116,40 @@ export function regionLabel(region?: MorningLevel): string {
   return "National"
 }
 
+function normalizeForCompare(s: string): string {
+  return (s || "").toLowerCase().replace(/[^a-z0-9]+/g, "")
+}
+
+/**
+ * Google News RSS titles end in " - Outlet". The outlet is already on the grey line, so the suffix
+ * goes when it names the item's source; a dash inside a real headline stays.
+ */
+export function cleanHeadline(title: string, source?: string): string {
+  const t = (title || "").trim()
+  if (!source) return t
+  const m = /^(.*\S)\s+[-–—]\s+([^-–—]+)$/.exec(t)
+  if (!m) return t
+  return normalizeForCompare(m[2]) === normalizeForCompare(source) ? m[1].trim() : t
+}
+
+/**
+ * A snippet that only repeats the headline (Google News's description is the headline plus the
+ * outlet) is nothing to read twice; return undefined so the row shows the headline once.
+ */
+export function usefulSnippet(title: string, snippet: string | undefined, source?: string): string | undefined {
+  const s = (snippet || "").replace(/\s+/g, " ").trim()
+  if (!s) return undefined
+  const ns = normalizeForCompare(s)
+  const nt = normalizeForCompare(title)
+  const nbase = normalizeForCompare(cleanHeadline(title, source))
+  const nsrc = normalizeForCompare(source || "")
+  if (ns === nt || ns === nbase) return undefined
+  if (nsrc && (ns === nbase + nsrc || ns === nt + nsrc || ns === nsrc + nbase)) return undefined
+  // The headline followed by nothing but the outlet, however punctuated.
+  if (ns.startsWith(nbase) && nsrc && ns.slice(nbase.length) === nsrc) return undefined
+  return s
+}
+
 /** A long date for the page header, in Eastern time: "Tuesday, October 28, 2026". */
 export function longDateET(todayET: string): string {
   const [y, m, d] = todayET.split("-").map(Number)

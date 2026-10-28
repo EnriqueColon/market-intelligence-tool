@@ -4,12 +4,14 @@ import { test } from "node:test"
 import assert from "node:assert/strict"
 import {
   byTopic,
+  cleanHeadline,
   daysBeforeET,
   isSinceYesterday,
   longDateET,
   mergeLevels,
   newestFirst,
   topicChips,
+  usefulSnippet,
   withoutUrls,
   type MorningItem,
 } from "./morning"
@@ -95,6 +97,25 @@ test("topicChips counts across sections, All first, then alphabetical; byTopic f
   assert.deepEqual(
     byTopic(items, "Debt/Financing").map((i) => i.id),
     ["a", "c"]
+  )
+})
+
+test("cleanHeadline drops a trailing outlet that matches the source and keeps other dashes", () => {
+  assert.equal(cleanHeadline("Corporate bond market liquidity expands across US and Europe - Livemint", "Livemint"), "Corporate bond market liquidity expands across US and Europe")
+  assert.equal(cleanHeadline("Soffer could rebuild Broward casino - The Business Journals", "The Business Journals"), "Soffer could rebuild Broward casino")
+  assert.equal(cleanHeadline("Office loan sale - a first for the lender", "GlobeSt"), "Office loan sale - a first for the lender")
+  assert.equal(cleanHeadline("Plain headline", undefined), "Plain headline")
+})
+
+test("usefulSnippet hides a description that only repeats the headline", () => {
+  const title = "Corporate bond market liquidity expands across US and Europe - Livemint"
+  assert.equal(usefulSnippet(title, "Corporate bond market liquidity expands across US and Europe Livemint", "Livemint"), undefined)
+  assert.equal(usefulSnippet(title, "Corporate bond market liquidity expands across US and Europe - Livemint", "Livemint"), undefined)
+  assert.equal(usefulSnippet(title, "Corporate bond market liquidity expands across US and Europe", "Livemint"), undefined)
+  assert.equal(usefulSnippet(title, "   ", "Livemint"), undefined)
+  assert.equal(
+    usefulSnippet(title, "Dealers report tighter spreads and deeper order books in both markets.", "Livemint"),
+    "Dealers report tighter spreads and deeper order books in both markets."
   )
 })
 
